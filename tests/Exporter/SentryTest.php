@@ -1,0 +1,96 @@
+<?php
+
+namespace Utopia\Span\Tests\Exporter;
+
+use PHPUnit\Framework\TestCase;
+use Utopia\Span\Exporter\Sentry;
+use Utopia\Span\Span;
+
+class SentryTest extends TestCase
+{
+    public function testConstructorParsesDsn(): void
+    {
+        $exporter = new Sentry('https://publickey@sentry.io/123456');
+
+        $this->assertInstanceOf(Sentry::class, $exporter);
+    }
+
+    public function testConstructorThrowsOnInvalidDsn(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid Sentry DSN');
+
+        new Sentry('http:///invalid');
+    }
+
+    public function testConstructorHandlesDsnWithPort(): void
+    {
+        $exporter = new Sentry('https://publickey@sentry.example.com:9000/123');
+
+        $this->assertInstanceOf(Sentry::class, $exporter);
+    }
+
+    public function testConstructorHandlesHttpDsn(): void
+    {
+        $exporter = new Sentry('http://publickey@localhost/123');
+
+        $this->assertInstanceOf(Sentry::class, $exporter);
+    }
+
+    public function testExportDoesNotThrowWithValidSpan(): void
+    {
+        $exporter = new Sentry('https://key@sentry.io/123');
+        $span = new Span();
+        $span->set('action', 'test');
+        $span->finish();
+
+        // Export will fail to connect but should not throw
+        // (curl will timeout but we catch that)
+        $exporter->export($span);
+
+        $this->assertTrue(true);
+    }
+
+    public function testExportHandlesSpanWithParentId(): void
+    {
+        $exporter = new Sentry('https://key@sentry.io/123');
+        $span = new Span();
+        $span->set('span.parent_id', 'abc123def456');
+        $span->finish();
+
+        // Should not throw
+        $exporter->export($span);
+
+        $this->assertTrue(true);
+    }
+
+    public function testExportHandlesSpanWithError(): void
+    {
+        $exporter = new Sentry('https://key@sentry.io/123');
+        $span = new Span();
+        $span->setError(new \RuntimeException('Test error'));
+        $span->finish();
+
+        // Should not throw
+        $exporter->export($span);
+
+        $this->assertTrue(true);
+    }
+
+    public function testExportHandlesSpanWithAllAttributes(): void
+    {
+        $exporter = new Sentry('https://key@sentry.io/123');
+        $span = new Span();
+        $span->set('action', 'http.request');
+        $span->set('user.id', '123');
+        $span->set('request.method', 'POST');
+        $span->set('response.status', 200);
+        $span->set('span.parent_id', 'parent123');
+        $span->finish();
+
+        // Should not throw
+        $exporter->export($span);
+
+        $this->assertTrue(true);
+    }
+}
