@@ -84,23 +84,13 @@ Propagate trace context across services using W3C Trace Context headers:
 
 ```php
 // Service A: outgoing request
-$span = Span::current();
-$traceparent = sprintf(
-    '00-%s-%s-01',
-    $span->get('span.trace_id'),
-    $span->get('span.id')
-);
 $client->post('/api/downstream', $payload, [
-    'traceparent' => $traceparent,
+    'traceparent' => Span::traceparent(),
 ]);
 
 // Service B: incoming request
-$traceparent = $request->getHeader('traceparent');
-[$version, $traceId, $parentId, $flags] = explode('-', $traceparent);
-
 $span = Span::init();
-$span->set('span.trace_id', $traceId);   // continue the trace
-$span->set('span.parent_id', $parentId); // link to parent span
+$span->setTraceparent($request->getHeader('traceparent'));
 ```
 
 ### Sampling
@@ -187,16 +177,19 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `current(): ?Span`                                   | Get the current span                  |
 | `add(string $key, scalar $value)`                    | Set attribute on current span         |
 | `error(Throwable $e)`                                | Capture exception on current span     |
+| `traceparent(): ?string`                             | Get traceparent header from current span |
 
 ### Span (instance)
 
-| Method                                  | Description               |
-| --------------------------------------- | ------------------------- |
-| `set(string $key, scalar $value): self` | Set an attribute          |
-| `get(string $key): scalar`              | Get an attribute          |
-| `getAttributes(): array`                | Get all attributes        |
-| `setError(Throwable $e): self`          | Capture exception details |
-| `finish(): void`                        | End span and export       |
+| Method                                  | Description                        |
+| --------------------------------------- | ---------------------------------- |
+| `set(string $key, scalar $value): self` | Set an attribute                   |
+| `get(string $key): scalar`              | Get an attribute                   |
+| `getAttributes(): array`                | Get all attributes                 |
+| `setError(Throwable $e): self`          | Capture exception details          |
+| `getTraceparent(): string`              | Get W3C traceparent header value   |
+| `setTraceparent(string $tp): self`      | Parse and apply traceparent header |
+| `finish(): void`                        | End span and export                |
 
 ### Attribute Conventions
 

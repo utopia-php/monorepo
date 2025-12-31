@@ -2,6 +2,7 @@
 
 namespace Utopia\Span\Tests;
 
+use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Utopia\Span\Exporter\Exporter;
@@ -478,6 +479,159 @@ class SpanTest extends TestCase
         $slowSpan->finish();
 
         $this->assertCount(1, $exported);
+    }
+
+    public function testGetTraceparentReturnsValidFormat(): void
+    {
+        $span = new Span();
+
+        $traceparent = $span->getTraceparent();
+
+        $parts = explode('-', $traceparent);
+        $this->assertCount(4, $parts);
+        $this->assertEquals('00', $parts[0]);
+        $this->assertEquals(32, strlen($parts[1]));
+        $this->assertEquals(16, strlen($parts[2]));
+        $this->assertEquals('01', $parts[3]);
+    }
+
+    public function testGetTraceparentUsesSpanAttributes(): void
+    {
+        $span = new Span();
+        $traceId = $span->get('span.trace_id');
+        $spanId = $span->get('span.id');
+
+        $traceparent = $span->getTraceparent();
+
+        $this->assertEquals("00-{$traceId}-{$spanId}-01", $traceparent);
+    }
+
+    public function testSetTraceparentSetsTraceIdAndParentId(): void
+    {
+        $span = new Span();
+        $traceparent = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01';
+
+        $span->setTraceparent($traceparent);
+
+        $this->assertEquals('0af7651916cd43dd8448eb211c80319c', $span->get('span.trace_id'));
+        $this->assertEquals('b7ad6b7169203331', $span->get('span.parent_id'));
+    }
+
+    public function testSetTraceparentReturnsSelf(): void
+    {
+        $span = new Span();
+        $traceparent = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01';
+
+        $result = $span->setTraceparent($traceparent);
+
+        $this->assertSame($span, $result);
+    }
+
+    public function testSetTraceparentWithDifferentFlags(): void
+    {
+        $span = new Span();
+        $traceparent = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-00';
+
+        $span->setTraceparent($traceparent);
+
+        $this->assertEquals('0af7651916cd43dd8448eb211c80319c', $span->get('span.trace_id'));
+        $this->assertEquals('b7ad6b7169203331', $span->get('span.parent_id'));
+    }
+
+    public function testSetTraceparentThrowsOnInvalidPartCount(): void
+    {
+        $span = new Span();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid traceparent format: expected 4 parts separated by hyphens');
+
+        $span->setTraceparent('00-abc-def');
+    }
+
+    public function testSetTraceparentThrowsOnInvalidVersion(): void
+    {
+        $span = new Span();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid traceparent version: only version 00 is supported');
+
+        $span->setTraceparent('01-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01');
+    }
+
+    public function testSetTraceparentThrowsOnInvalidTraceIdLength(): void
+    {
+        $span = new Span();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid traceparent trace_id: must be 32 hex characters');
+
+        $span->setTraceparent('00-0af7651916cd43dd-b7ad6b7169203331-01');
+    }
+
+    public function testSetTraceparentThrowsOnInvalidTraceIdChars(): void
+    {
+        $span = new Span();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid traceparent trace_id: must be 32 hex characters');
+
+        $span->setTraceparent('00-0af7651916cd43dd8448eb211c80319z-b7ad6b7169203331-01');
+    }
+
+    public function testSetTraceparentThrowsOnInvalidParentIdLength(): void
+    {
+        $span = new Span();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid traceparent parent_id: must be 16 hex characters');
+
+        $span->setTraceparent('00-0af7651916cd43dd8448eb211c80319c-b7ad6b71-01');
+    }
+
+    public function testSetTraceparentThrowsOnInvalidParentIdChars(): void
+    {
+        $span = new Span();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid traceparent parent_id: must be 16 hex characters');
+
+        $span->setTraceparent('00-0af7651916cd43dd8448eb211c80319c-b7ad6b716920333z-01');
+    }
+
+    public function testSetTraceparentThrowsOnInvalidFlags(): void
+    {
+        $span = new Span();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid traceparent flags: must be 2 hex characters');
+
+        $span->setTraceparent('00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-xyz');
+    }
+
+    public function testTraceparentRoundTrip(): void
+    {
+        $span1 = new Span();
+        $traceparent = $span1->getTraceparent();
+
+        $span2 = new Span();
+        $span2->setTraceparent($traceparent);
+
+        $this->assertEquals($span1->get('span.trace_id'), $span2->get('span.trace_id'));
+        $this->assertEquals($span1->get('span.id'), $span2->get('span.parent_id'));
+    }
+
+    public function testStaticTraceparentReturnsCurrentSpanTraceparent(): void
+    {
+        $span = Span::init();
+
+        $traceparent = Span::traceparent();
+
+        $this->assertEquals($span->getTraceparent(), $traceparent);
+    }
+
+    public function testStaticTraceparentReturnsNullWhenNoCurrentSpan(): void
+    {
+        $this->assertNull(Span::traceparent());
     }
 
     /**
