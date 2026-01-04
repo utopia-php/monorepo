@@ -136,27 +136,26 @@ class Sentry implements Exporter
         if ($error !== null) {
             $frames = [];
             foreach (array_reverse($error->getTrace()) as $frame) {
-                $sentryFrame = [];
-                if (isset($frame['file'])) {
-                    $sentryFrame['filename'] = $frame['file'];
+                if (!isset($frame['file'])) {
+                    continue;
                 }
-                if (isset($frame['line'])) {
-                    $sentryFrame['lineno'] = $frame['line'];
-                }
+                $sentryFrame = [
+                    'filename' => $frame['file'],
+                    'lineno' => $frame['line'] ?? 0,
+                    'in_app' => !str_contains($frame['file'], '/vendor/'),
+                ];
                 if (isset($frame['function'])) {
-                    $sentryFrame['function'] = $frame['function'];
+                    $sentryFrame['function'] = isset($frame['class'])
+                        ? $frame['class'] . $frame['type'] . $frame['function']
+                        : $frame['function'];
                 }
-                if (isset($frame['class'])) {
-                    $sentryFrame['module'] = $frame['class'];
-                }
-                if (!empty($sentryFrame)) {
-                    $frames[] = $sentryFrame;
-                }
+                $frames[] = $sentryFrame;
             }
 
             $frames[] = [
                 'filename' => $error->getFile(),
                 'lineno' => $error->getLine(),
+                'in_app' => !str_contains($error->getFile(), '/vendor/'),
             ];
 
             $payloadData['exception'] = [
