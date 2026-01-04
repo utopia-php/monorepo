@@ -111,18 +111,14 @@ class SpanTest extends TestCase
         $this->assertArrayHasKey('span.started_at', $attributes);
     }
 
-    public function testSetErrorSetsErrorAttributes(): void
+    public function testSetErrorStoresThrowable(): void
     {
         $span = new Span();
         $error = new RuntimeException('Test error', 42);
 
         $span->setError($error);
 
-        $this->assertSame(RuntimeException::class, $span->get('error.type'));
-        $this->assertSame('Test error', $span->get('error.message'));
-        $this->assertSame(42, $span->get('error.code'));
-        $this->assertIsString($span->get('error.file'));
-        $this->assertIsInt($span->get('error.line'));
+        $this->assertSame($error, $span->getError());
     }
 
     public function testSetErrorReturnsSelf(): void
@@ -222,10 +218,11 @@ class SpanTest extends TestCase
     public function testErrorSetsErrorOnCurrentSpan(): void
     {
         $span = Span::init();
+        $error = new RuntimeException('Test');
 
-        Span::error(new RuntimeException('Test'));
+        Span::error($error);
 
-        $this->assertSame(RuntimeException::class, $span->get('error.type'));
+        $this->assertSame($error, $span->getError());
     }
 
     public function testErrorDoesNothingWhenNoCurrentSpan(): void
@@ -242,7 +239,7 @@ class SpanTest extends TestCase
         $exporter = $this->createExporter($exported);
 
         // Only export spans with errors
-        Span::addExporter($exporter, fn (Span $s) => $s->get('error.type') !== null);
+        Span::addExporter($exporter, fn (Span $s) => $s->getError() !== null);
 
         $span1 = Span::init();
         $span1->finish();

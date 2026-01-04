@@ -66,17 +66,18 @@ Span::error($exception);
 
 ### Error Handling
 
-The `setError()` helper extracts exception details into scalar attributes:
+The `setError()` method captures the exception for exporters to process:
 
 ```php
 try {
     // ...
 } catch (Throwable $e) {
     $span->setError($e);
-    // Sets: error.type, error.message, error.code, error.file, error.line
     throw $e;
 }
 ```
+
+Exporters access the exception via `$span->getError()` and extract what they need (message, trace, etc.).
 
 ### Distributed Tracing
 
@@ -89,8 +90,7 @@ $client->post('/api/downstream', $payload, [
 ]);
 
 // Service B: incoming request
-$span = Span::init();
-$span->setTraceparent($request->getHeader('traceparent'));
+$span = Span::init($request->getHeader('traceparent'));
 ```
 
 ### Sampling
@@ -99,9 +99,9 @@ Add a sampler to control which spans get exported:
 
 ```php
 Span::addExporter(
-    new Exporter\Sentry(dsn: 'https://key@sentry.io/123'),
+    new Exporter\Sentry('https://key@sentry.io/123'),
     sampler: fn(Span $s) =>
-        $s->get('error.type') !== null ||   // errors
+        $s->getError() !== null ||          // errors
         $s->get('span.duration') > 5.0 ||   // slow requests (>5s)
         $s->get('plan') === 'enterprise'    // enterprise customers
 );
@@ -117,11 +117,32 @@ Span::addExporter(
 
 ## Exporters
 
-| Exporter          | Description           |
-| ----------------- | --------------------- |
-| `Exporter\Stdout` | JSON to stdout        |
-| `Exporter\Sentry` | Sentry transactions   |
-| `Exporter\None`   | Discard (for testing) |
+| Exporter          | Description                          |
+| ----------------- | ------------------------------------ |
+| `Exporter\Stdout` | JSON to stdout/stderr                |
+| `Exporter\Sentry` | Sentry events (Issues)               |
+| `Exporter\None`   | Discard (for testing)                |
+
+### Stdout Exporter
+
+```php
+Span::addExporter(new Exporter\Stdout(
+    maxTraceFrames: 3  // default, limits error stacktrace length
+));
+```
+
+Outputs JSON to stdout (info) or stderr (errors).
+
+### Sentry Exporter
+
+```php
+Span::addExporter(new Exporter\Sentry(
+    dsn: 'https://key@sentry.io/123',
+    environment: 'production'  // optional
+));
+```
+
+Sends error spans with full stacktraces, info spans as messages.
 
 ### Custom Exporter
 
@@ -133,8 +154,8 @@ class MyExporter implements Exporter
 {
     public function export(Span $span): void
     {
-        // All data is in getAttributes()
         $data = $span->getAttributes();
+        $error = $span->getError();
         // Send to your backend
     }
 }
@@ -173,7 +194,7 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `setStorage(Storage $storage)`                       | Set the storage backend               |
 | `addExporter(Exporter $exporter, ?Closure $sampler)` | Add an exporter with optional sampler |
 | `resetExporters()`                                   | Remove all exporters                  |
-| `init(): Span`                                       | Create and store a new span           |
+| `init(?string $traceparent = null): Span`            | Create and store a new span           |
 | `current(): ?Span`                                   | Get the current span                  |
 | `add(string $key, scalar $value)`                    | Set attribute on current span         |
 | `error(Throwable $e)`                                | Capture exception on current span     |
@@ -186,18 +207,17 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `set(string $key, scalar $value): self` | Set an attribute                   |
 | `get(string $key): scalar`              | Get an attribute                   |
 | `getAttributes(): array`                | Get all attributes                 |
-| `setError(Throwable $e): self`          | Capture exception details          |
+| `setError(Throwable $e): self`          | Capture exception                  |
+| `getError(): ?Throwable`                | Get captured exception             |
 | `getTraceparent(): string`              | Get W3C traceparent header value   |
-| `setTraceparent(string $tp): self`      | Parse and apply traceparent header |
 | `finish(): void`                        | End span and export                |
 
 ### Attribute Conventions
 
-| Prefix    | Description                             |
-| --------- | --------------------------------------- |
-| `span.*`  | Built-in span metadata                  |
-| `error.*` | Exception details (set by `setError()`) |
-| `*`       | User-defined attributes                 |
+| Prefix   | Description            |
+| -------- | ---------------------- |
+| `span.*` | Built-in span metadata |
+| `*`      | User-defined           |
 
 ## License
 

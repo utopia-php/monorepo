@@ -5,7 +5,10 @@ namespace Utopia\Span\Exporter;
 use Utopia\Span\Span;
 
 /**
- * Exports spans to Sentry
+ * Exports spans to Sentry as events.
+ *
+ * Sends error spans with full stacktraces (level: error) and
+ * non-error spans as messages (level: info) to Sentry Issues.
  */
 class Sentry implements Exporter
 {
@@ -15,6 +18,12 @@ class Sentry implements Exporter
     private string $projectId;
     private ?string $environment;
 
+    /**
+     * Create a new Sentry exporter.
+     *
+     * @param string $dsn Sentry DSN (e.g., https://key@sentry.io/123)
+     * @param string|null $environment Optional environment name (e.g., 'production')
+     */
     public function __construct(string $dsn, ?string $environment = null)
     {
         $this->dsn = $dsn;
@@ -87,16 +96,15 @@ class Sentry implements Exporter
 
         $traceId = (string) ($attributes['span.trace_id'] ?? '');
         $spanId = (string) ($attributes['span.id'] ?? '');
-        $startedAt = (float) ($attributes['span.started_at'] ?? 0);
-        $finishedAt = (float) ($attributes['span.finished_at'] ?? microtime(true));
-
-        $action = $attributes['action'] ?? 'unknown';
         $parentId = $attributes['span.parent_id'] ?? null;
+        $finishedAt = (float) ($attributes['span.finished_at'] ?? microtime(true));
+        $action = (string) ($attributes['action'] ?? 'unknown');
+
+        $error = $span->getError();
 
         $traceContext = [
             'trace_id' => $traceId,
             'span_id' => $spanId,
-            'op' => $action,
         ];
 
         if (\is_string($parentId)) {
@@ -110,21 +118,55 @@ class Sentry implements Exporter
         ]);
 
         $itemHeader = json_encode([
-            'type' => 'transaction',
+            'type' => 'event',
             'content_type' => 'application/json',
         ]);
 
         $payloadData = [
-            'type' => 'transaction',
-            'transaction' => $action,
-            'start_timestamp' => $startedAt,
+            'level' => $error !== null ? 'error' : 'info',
+            'platform' => 'php',
             'timestamp' => $finishedAt,
+            'message' => $action,
             'contexts' => [
                 'trace' => $traceContext,
             ],
-            'spans' => [],
             'extra' => $attributes,
         ];
+
+        if ($error !== null) {
+            $frames = [];
+            foreach (array_reverse($error->getTrace()) as $frame) {
+                $sentryFrame = [];
+                if (isset($frame['file'])) {
+                    $sentryFrame['filename'] = $frame['file'];
+                }
+                if (isset($frame['line'])) {
+                    $sentryFrame['lineno'] = $frame['line'];
+                }
+                if (isset($frame['function'])) {
+                    $sentryFrame['function'] = $frame['function'];
+                }
+                if (isset($frame['class'])) {
+                    $sentryFrame['module'] = $frame['class'];
+                }
+                if (!empty($sentryFrame)) {
+                    $frames[] = $sentryFrame;
+                }
+            }
+
+            $frames[] = [
+                'filename' => $error->getFile(),
+                'lineno' => $error->getLine(),
+            ];
+
+            $payloadData['exception'] = [
+                'values' => [[
+                    'type' => $error::class,
+                    'value' => $error->getMessage(),
+                    'stacktrace' => ['frames' => $frames],
+                ]],
+            ];
+        }
 
         if ($this->environment !== null) {
             $payloadData['environment'] = $this->environment;

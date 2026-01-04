@@ -21,6 +21,8 @@ class Span
      */
     private array $attributes = [];
 
+    private ?Throwable $error = null;
+
     public function __construct()
     {
         $this->attributes['span.trace_id'] = bin2hex(random_bytes(16));
@@ -29,7 +31,11 @@ class Span
     }
 
     /**
-     * Set the storage backend for span context
+     * Set the storage backend for span context.
+     *
+     * Call once at application startup before creating spans.
+     *
+     * @param Storage $storage Use Storage\Auto for automatic detection
      */
     public static function setStorage(Storage $storage): void
     {
@@ -37,10 +43,12 @@ class Span
     }
 
     /**
-     * Add an exporter with optional sampler
+     * Add an exporter with optional sampler.
+     *
+     * Exporters receive finished spans. Use a sampler to filter which spans are exported.
      *
      * @param Exporter $exporter The exporter to add
-     * @param Closure|null $sampler Optional sampler function: fn(Span): bool
+     * @param Closure|null $sampler Filter function: fn(Span $s): bool. Return true to export.
      */
     public static function addExporter(Exporter $exporter, ?Closure $sampler = null): void
     {
@@ -76,9 +84,13 @@ class Span
     }
 
     /**
-     * Initialize a new span and set it as current
+     * Initialize a new span and set it as current.
      *
-     * @param string|null $traceparent Optional W3C traceparent header to continue an existing trace
+     * Creates a new span with unique trace and span IDs. If a traceparent header
+     * is provided, the span will continue that trace (for distributed tracing).
+     *
+     * @param string|null $traceparent W3C traceparent header from incoming request
+     * @return self The new span instance
      */
     public static function init(?string $traceparent = null): self
     {
@@ -107,7 +119,9 @@ class Span
     }
 
     /**
-     * Get the current span from storage
+     * Get the current span from storage.
+     *
+     * @return self|null The current span, or null if no span is active
      */
     public static function current(): ?self
     {
@@ -115,7 +129,13 @@ class Span
     }
 
     /**
-     * Set an attribute on the current span (static convenience method)
+     * Set an attribute on the current span.
+     *
+     * Convenience method to add attributes without holding a span reference.
+     * Does nothing if no span is active.
+     *
+     * @param string $key Attribute name (e.g., 'user.id', 'http.status')
+     * @param string|int|float|bool|null $value Attribute value (scalars only)
      */
     public static function add(string $key, string|int|float|bool|null $value): void
     {
@@ -123,7 +143,12 @@ class Span
     }
 
     /**
-     * Capture exception details and set on the current span
+     * Capture an exception on the current span.
+     *
+     * Convenience method to record errors without holding a span reference.
+     * Does nothing if no span is active.
+     *
+     * @param Throwable $error The exception to capture
      */
     public static function error(Throwable $error): void
     {
@@ -131,7 +156,11 @@ class Span
     }
 
     /**
-     * Get the traceparent header value from the current span
+     * Get the traceparent header value from the current span.
+     *
+     * Use this to propagate trace context to downstream services.
+     *
+     * @return string|null W3C traceparent header value, or null if no span is active
      */
     public static function traceparent(): ?string
     {
@@ -139,7 +168,11 @@ class Span
     }
 
     /**
-     * Set an attribute on this span
+     * Set an attribute on this span.
+     *
+     * @param string $key Attribute name (e.g., 'user.id', 'http.status')
+     * @param string|int|float|bool|null $value Attribute value (scalars only)
+     * @return self For method chaining
      */
     public function set(string $key, string|int|float|bool|null $value): self
     {
@@ -148,20 +181,34 @@ class Span
     }
 
     /**
-     * Capture exception details on this span
+     * Capture an exception on this span.
+     *
+     * Exporters can access the full exception including stacktrace via getError().
+     *
+     * @param Throwable $error The exception to capture
+     * @return self For method chaining
      */
     public function setError(Throwable $error): self
     {
-        $this->attributes['error.type'] = $error::class;
-        $this->attributes['error.message'] = $error->getMessage();
-        $this->attributes['error.code'] = $error->getCode();
-        $this->attributes['error.file'] = $error->getFile();
-        $this->attributes['error.line'] = $error->getLine();
+        $this->error = $error;
         return $this;
     }
 
     /**
-     * Get an attribute value
+     * Get the captured exception.
+     *
+     * @return Throwable|null The captured exception, or null if none
+     */
+    public function getError(): ?Throwable
+    {
+        return $this->error;
+    }
+
+    /**
+     * Get an attribute value.
+     *
+     * @param string $key Attribute name
+     * @return string|int|float|bool|null The value, or null if not set
      */
     public function get(string $key): string|int|float|bool|null
     {
@@ -194,7 +241,10 @@ class Span
     }
 
     /**
-     * Finish this span and export it
+     * Finish this span and export it.
+     *
+     * Sets span.finished_at and span.duration, then sends to all exporters
+     * that pass their sampler (if any). Clears the current span from storage.
      */
     public function finish(): void
     {
