@@ -5,7 +5,9 @@ namespace Utopia\Span\Exporter;
 use Utopia\Span\Span;
 
 /**
- * Exports spans to stdout as JSON
+ * Exports spans as newline-delimited JSON (NDJSON)
+ *
+ * Spans with errors are written to stderr, all others to stdout.
  */
 class Stdout implements Exporter
 {
@@ -17,6 +19,8 @@ class Stdout implements Exporter
             return;
         }
 
-        fwrite(STDOUT, $output . PHP_EOL);
+        $stream = $span->get('error.type') !== null ? STDERR : STDOUT;
+
+        fwrite($stream, $output . PHP_EOL);
     }
 }
