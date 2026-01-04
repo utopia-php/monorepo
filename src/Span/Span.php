@@ -77,10 +77,27 @@ class Span
 
     /**
      * Initialize a new span and set it as current
+     *
+     * @param string|null $traceparent Optional W3C traceparent header to continue an existing trace
      */
-    public static function init(): self
+    public static function init(?string $traceparent = null): self
     {
         $span = new self();
+
+        if ($traceparent !== null) {
+            $parts = explode('-', $traceparent);
+
+            if (
+                count($parts) === 4
+                && $parts[0] === '00'
+                && strlen($parts[1]) === 32 && ctype_xdigit($parts[1])
+                && strlen($parts[2]) === 16 && ctype_xdigit($parts[2])
+                && strlen($parts[3]) === 2 && ctype_xdigit($parts[3])
+            ) {
+                $span->attributes['span.trace_id'] = $parts[1];
+                $span->attributes['span.parent_id'] = $parts[2];
+            }
+        }
 
         if (self::$storage !== null) {
             self::$storage->set($span);
@@ -164,46 +181,6 @@ class Span
             $this->attributes['span.trace_id'],
             $this->attributes['span.id']
         );
-    }
-
-    /**
-     * Parse and apply a W3C Trace Context traceparent header
-     *
-     * Sets span.trace_id to continue the trace and span.parent_id to link to the parent span.
-     *
-     * @param string $traceparent The traceparent header value (e.g., "00-{trace_id}-{parent_id}-{flags}")
-     * @throws \InvalidArgumentException If the traceparent format is invalid
-     */
-    public function setTraceparent(string $traceparent): self
-    {
-        $parts = explode('-', $traceparent);
-
-        if (count($parts) !== 4) {
-            throw new \InvalidArgumentException('Invalid traceparent format: expected 4 parts separated by hyphens');
-        }
-
-        [$version, $traceId, $parentId, $flags] = $parts;
-
-        if ($version !== '00') {
-            throw new \InvalidArgumentException('Invalid traceparent version: only version 00 is supported');
-        }
-
-        if (strlen($traceId) !== 32 || !ctype_xdigit($traceId)) {
-            throw new \InvalidArgumentException('Invalid traceparent trace_id: must be 32 hex characters');
-        }
-
-        if (strlen($parentId) !== 16 || !ctype_xdigit($parentId)) {
-            throw new \InvalidArgumentException('Invalid traceparent parent_id: must be 16 hex characters');
-        }
-
-        if (strlen($flags) !== 2 || !ctype_xdigit($flags)) {
-            throw new \InvalidArgumentException('Invalid traceparent flags: must be 2 hex characters');
-        }
-
-        $this->attributes['span.trace_id'] = $traceId;
-        $this->attributes['span.parent_id'] = $parentId;
-
-        return $this;
     }
 
     /**
