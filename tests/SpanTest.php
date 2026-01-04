@@ -167,7 +167,7 @@ class SpanTest extends TestCase
         Span::addExporter($exporter1);
         Span::addExporter($exporter2);
 
-        $span = Span::init();
+        $span = Span::init('test');
         $span->finish();
 
         $this->assertCount(1, $exported1);
@@ -176,7 +176,7 @@ class SpanTest extends TestCase
 
     public function testFinishClearsCurrentSpan(): void
     {
-        $span = Span::init();
+        $span = Span::init('test');
 
         $this->assertSame($span, Span::current());
 
@@ -187,7 +187,7 @@ class SpanTest extends TestCase
 
     public function testInitCreatesAndStoresSpan(): void
     {
-        $span = Span::init();
+        $span = Span::init('test');
 
         $this->assertInstanceOf(Span::class, $span);
         $this->assertSame($span, Span::current());
@@ -200,7 +200,7 @@ class SpanTest extends TestCase
 
     public function testAddSetsAttributeOnCurrentSpan(): void
     {
-        $span = Span::init();
+        $span = Span::init('test');
 
         Span::add('key', 'value');
 
@@ -217,7 +217,7 @@ class SpanTest extends TestCase
 
     public function testErrorSetsErrorOnCurrentSpan(): void
     {
-        $span = Span::init();
+        $span = Span::init('test');
         $error = new RuntimeException('Test');
 
         Span::error($error);
@@ -241,10 +241,10 @@ class SpanTest extends TestCase
         // Only export spans with errors
         Span::addExporter($exporter, fn (Span $s) => $s->getError() !== null);
 
-        $span1 = Span::init();
+        $span1 = Span::init('test');
         $span1->finish();
 
-        $span2 = Span::init();
+        $span2 = Span::init('test');
         $span2->setError(new RuntimeException('Error'));
         $span2->finish();
 
@@ -262,7 +262,7 @@ class SpanTest extends TestCase
             return true;
         });
 
-        $span = Span::init();
+        $span = Span::init('test');
         $span->finish();
 
         $this->assertSame($span, $sampledSpan);
@@ -276,7 +276,7 @@ class SpanTest extends TestCase
         Span::addExporter($exporter);
         Span::resetExporters();
 
-        $span = Span::init();
+        $span = Span::init('test');
         $span->finish();
 
         $this->assertCount(0, $exported);
@@ -300,7 +300,7 @@ class SpanTest extends TestCase
         $exporter = $this->createExporter($exported);
 
         Span::addExporter($exporter);
-        $span = Span::init();
+        $span = Span::init('test');
 
         $this->assertSame($span, Span::current());
 
@@ -308,7 +308,7 @@ class SpanTest extends TestCase
 
         $this->assertNull(Span::current());
 
-        $span2 = Span::init();
+        $span2 = Span::init('test');
         $span2->finish();
 
         $this->assertCount(0, $exported);
@@ -320,14 +320,14 @@ class SpanTest extends TestCase
         $exporter = $this->createExporter($exported);
 
         Span::addExporter($exporter);
-        Span::init();
+        Span::init('test');
 
         Span::resetStorage();
 
         $this->assertNull(Span::current());
 
         Span::setStorage(new Memory());
-        $span = Span::init();
+        $span = Span::init('test');
         $span->finish();
 
         $this->assertCount(1, $exported);
@@ -337,7 +337,7 @@ class SpanTest extends TestCase
     {
         Span::resetStorage();
 
-        $span = Span::init();
+        $span = Span::init('test');
 
         $this->assertInstanceOf(Span::class, $span);
     }
@@ -364,11 +364,11 @@ class SpanTest extends TestCase
         $exporter = $this->createExporter($exported);
         Span::addExporter($exporter);
 
-        $span1 = Span::init();
+        $span1 = Span::init('test');
         $span1->set('name', 'first');
         $span1->finish();
 
-        $span2 = Span::init();
+        $span2 = Span::init('test');
         $span2->set('name', 'second');
         $span2->finish();
 
@@ -381,7 +381,7 @@ class SpanTest extends TestCase
     {
         Span::resetExporters();
 
-        $span = Span::init();
+        $span = Span::init('test');
         $span->finish();
 
         $this->assertNull(Span::current());
@@ -431,7 +431,7 @@ class SpanTest extends TestCase
 
     public function testAddWithAllScalarTypes(): void
     {
-        $span = Span::init();
+        $span = Span::init('test');
 
         Span::add('string', 'value');
         Span::add('int', 42);
@@ -454,7 +454,7 @@ class SpanTest extends TestCase
         Span::addExporter($exporter, fn (Span $s) => true);
         Span::addExporter($exporter, fn (Span $s) => false);
 
-        $span = Span::init();
+        $span = Span::init('test');
         $span->finish();
 
         $this->assertCount(1, $exported);
@@ -467,10 +467,10 @@ class SpanTest extends TestCase
 
         Span::addExporter($exporter, fn (Span $s) => $s->get('span.duration') > 0.005);
 
-        $fastSpan = Span::init();
+        $fastSpan = Span::init('test');
         $fastSpan->finish();
 
-        $slowSpan = Span::init();
+        $slowSpan = Span::init('test');
         usleep(6000);
         $slowSpan->finish();
 
@@ -507,7 +507,7 @@ class SpanTest extends TestCase
         $span1 = new Span();
         $traceparent = $span1->getTraceparent();
 
-        $span2 = Span::init($traceparent);
+        $span2 = Span::init('test', $traceparent);
 
         $this->assertSame($span1->get('span.trace_id'), $span2->get('span.trace_id'));
         $this->assertSame($span1->get('span.id'), $span2->get('span.parent_id'));
@@ -515,7 +515,7 @@ class SpanTest extends TestCase
 
     public function testStaticTraceparentReturnsCurrentSpanTraceparent(): void
     {
-        $span = Span::init();
+        $span = Span::init('test');
 
         $traceparent = Span::traceparent();
 
@@ -531,7 +531,7 @@ class SpanTest extends TestCase
     {
         $traceparent = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01';
 
-        $span = Span::init($traceparent);
+        $span = Span::init('test', $traceparent);
 
         $this->assertSame('0af7651916cd43dd8448eb211c80319c', $span->get('span.trace_id'));
         $this->assertSame('b7ad6b7169203331', $span->get('span.parent_id'));
@@ -540,7 +540,7 @@ class SpanTest extends TestCase
 
     public function testInitWithNullTraceparentGeneratesNewTraceId(): void
     {
-        $span = Span::init(null);
+        $span = Span::init('test');
 
         $traceId = $span->get('span.trace_id');
         $this->assertIsString($traceId);
@@ -550,7 +550,7 @@ class SpanTest extends TestCase
 
     public function testInitWithInvalidTraceparentCreatesNewTrace(): void
     {
-        $span = Span::init('invalid-traceparent');
+        $span = Span::init('test', 'invalid-traceparent');
 
         $traceId = $span->get('span.trace_id');
         $this->assertIsString($traceId);

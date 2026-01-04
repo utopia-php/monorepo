@@ -98,7 +98,7 @@ class Sentry implements Exporter
         $spanId = (string) ($attributes['span.id'] ?? '');
         $parentId = $attributes['span.parent_id'] ?? null;
         $finishedAt = (float) ($attributes['span.finished_at'] ?? microtime(true));
-        $action = (string) ($attributes['action'] ?? 'unknown');
+        $action = $span->getAction();
 
         $error = $span->getError();
 

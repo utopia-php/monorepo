@@ -20,8 +20,7 @@ Span::setStorage(new Storage\Auto());
 Span::addExporter(new Exporter\Stdout());
 
 // Create a span
-$span = Span::init();
-$span->set('action', 'http.request');
+$span = Span::init('http.request');
 $span->set('user.id', '123');
 $span->finish();
 ```
@@ -33,7 +32,7 @@ $span->finish();
 Everything is a flat key-value attribute. Only scalar types are allowed (string, int, float, bool, null):
 
 ```php
-$span = Span::init();
+$span = Span::init('api.request');
 $span->set('service.name', 'api');
 $span->set('request.duration_ms', 42.5);
 $span->set('request.cached', true);
@@ -90,7 +89,7 @@ $client->post('/api/downstream', $payload, [
 ]);
 
 // Service B: incoming request
-$span = Span::init($request->getHeader('traceparent'));
+$span = Span::init('http.request', $request->getHeader('traceparent'));
 ```
 
 ### Sampling
@@ -194,7 +193,7 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `setStorage(Storage $storage)`                       | Set the storage backend               |
 | `addExporter(Exporter $exporter, ?Closure $sampler)` | Add an exporter with optional sampler |
 | `resetExporters()`                                   | Remove all exporters                  |
-| `init(?string $traceparent = null): Span`            | Create and store a new span           |
+| `init(string $action, ?string $traceparent): Span`   | Create and store a new span           |
 | `current(): ?Span`                                   | Get the current span                  |
 | `add(string $key, scalar $value)`                    | Set attribute on current span         |
 | `error(Throwable $e)`                                | Capture exception on current span     |
@@ -207,6 +206,7 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `set(string $key, scalar $value): self` | Set an attribute                   |
 | `get(string $key): scalar`              | Get an attribute                   |
 | `getAttributes(): array`                | Get all attributes                 |
+| `getAction(): string`                   | Get the span action                |
 | `setError(Throwable $e): self`          | Capture exception                  |
 | `getError(): ?Throwable`                | Get captured exception             |
 | `getTraceparent(): string`              | Get W3C traceparent header value   |

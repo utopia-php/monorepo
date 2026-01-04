@@ -21,10 +21,13 @@ class Span
      */
     private array $attributes = [];
 
+    private string $action;
+
     private ?Throwable $error = null;
 
-    public function __construct()
+    public function __construct(string $action = 'unknown')
     {
+        $this->action = $action;
         $this->attributes['span.trace_id'] = bin2hex(random_bytes(16));
         $this->attributes['span.id'] = bin2hex(random_bytes(8));
         $this->attributes['span.started_at'] = microtime(true);
@@ -89,12 +92,13 @@ class Span
      * Creates a new span with unique trace and span IDs. If a traceparent header
      * is provided, the span will continue that trace (for distributed tracing).
      *
+     * @param string $action What this span represents (e.g., 'http.request', 'db.query')
      * @param string|null $traceparent W3C traceparent header from incoming request
      * @return self The new span instance
      */
-    public static function init(?string $traceparent = null): self
+    public static function init(string $action, ?string $traceparent = null): self
     {
-        $span = new self();
+        $span = new self($action);
 
         if ($traceparent !== null) {
             $parts = explode('-', $traceparent);
@@ -202,6 +206,16 @@ class Span
     public function getError(): ?Throwable
     {
         return $this->error;
+    }
+
+    /**
+     * Get the span action.
+     *
+     * @return string What this span represents
+     */
+    public function getAction(): string
+    {
+        return $this->action;
     }
 
     /**

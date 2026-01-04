@@ -23,7 +23,7 @@ class Stdout implements Exporter
 
     public function export(Span $span): void
     {
-        $data = $span->getAttributes();
+        $data = ['action' => $span->getAction()] + $span->getAttributes();
         $error = $span->getError();
 
         if ($error !== null) {
