@@ -51,6 +51,7 @@ class Sentry implements Exporter
         $ch = curl_init($this->endpoint);
 
         if ($ch === false) {
+            error_log('Sentry exporter: Failed to initialize curl');
             return;
         }
 
@@ -66,7 +67,18 @@ class Sentry implements Exporter
             CURLOPT_CONNECTTIMEOUT_MS => 500,
         ]);
 
-        curl_exec($ch);
+        $result = curl_exec($ch);
+
+        if ($result === false) {
+            error_log('Sentry exporter: ' . curl_error($ch));
+        } else {
+            $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($statusCode >= 400) {
+                error_log("Sentry exporter: HTTP {$statusCode} - {$result}");
+            }
+        }
+
+        curl_close($ch);
     }
 
     private function buildEnvelope(Span $span): ?string
