@@ -141,7 +141,7 @@ Span::addExporter(new Exporter\Sentry(
 ));
 ```
 
-Sends error spans with full stacktraces, info spans as messages.
+Only exports error spans with full stacktraces. Non-error spans are skipped.
 
 ### Custom Exporter
 

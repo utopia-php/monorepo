@@ -5,10 +5,10 @@ namespace Utopia\Span\Exporter;
 use Utopia\Span\Span;
 
 /**
- * Exports spans to Sentry as events.
+ * Exports error spans to Sentry Issues.
  *
- * Sends error spans with full stacktraces (level: error) and
- * non-error spans as messages (level: info) to Sentry Issues.
+ * Only spans with errors are sent. Non-error spans are silently skipped.
+ * Use the Stdout exporter for non-error spans.
  */
 class Sentry implements Exporter
 {
@@ -92,6 +92,12 @@ class Sentry implements Exporter
 
     private function buildEnvelope(Span $span): ?string
     {
+        $error = $span->getError();
+
+        if ($error === null) {
+            return null;
+        }
+
         $attributes = $span->getAttributes();
 
         $traceId = (string) ($attributes['span.trace_id'] ?? '');
@@ -99,8 +105,6 @@ class Sentry implements Exporter
         $parentId = $attributes['span.parent_id'] ?? null;
         $finishedAt = (float) ($attributes['span.finished_at'] ?? microtime(true));
         $action = $span->getAction();
-
-        $error = $span->getError();
 
         $traceContext = [
             'trace_id' => $traceId,
@@ -122,50 +126,48 @@ class Sentry implements Exporter
             'content_type' => 'application/json',
         ]);
 
+        $frames = [];
+        foreach (array_reverse($error->getTrace()) as $frame) {
+            if (!isset($frame['file'])) {
+                continue;
+            }
+            $sentryFrame = [
+                'filename' => $frame['file'],
+                'lineno' => $frame['line'] ?? 0,
+                'in_app' => !str_contains($frame['file'], '/vendor/'),
+            ];
+            if (isset($frame['function'])) {
+                $sentryFrame['function'] = isset($frame['class'])
+                    ? $frame['class'] . $frame['type'] . $frame['function']
+                    : $frame['function'];
+            }
+            $frames[] = $sentryFrame;
+        }
+
+        $frames[] = [
+            'filename' => $error->getFile(),
+            'lineno' => $error->getLine(),
+            'in_app' => !str_contains($error->getFile(), '/vendor/'),
+        ];
+
         $payloadData = [
-            'level' => $error !== null ? 'error' : 'info',
+            'level' => 'error',
             'platform' => 'php',
             'timestamp' => $finishedAt,
-            'message' => $action,
+            'transaction' => $action,
+            'message' => $error->getMessage(),
             'contexts' => [
                 'trace' => $traceContext,
             ],
-            'extra' => $attributes,
-        ];
-
-        if ($error !== null) {
-            $frames = [];
-            foreach (array_reverse($error->getTrace()) as $frame) {
-                if (!isset($frame['file'])) {
-                    continue;
-                }
-                $sentryFrame = [
-                    'filename' => $frame['file'],
-                    'lineno' => $frame['line'] ?? 0,
-                    'in_app' => !str_contains($frame['file'], '/vendor/'),
-                ];
-                if (isset($frame['function'])) {
-                    $sentryFrame['function'] = isset($frame['class'])
-                        ? $frame['class'] . $frame['type'] . $frame['function']
-                        : $frame['function'];
-                }
-                $frames[] = $sentryFrame;
-            }
-
-            $frames[] = [
-                'filename' => $error->getFile(),
-                'lineno' => $error->getLine(),
-                'in_app' => !str_contains($error->getFile(), '/vendor/'),
-            ];
-
-            $payloadData['exception'] = [
+            'exception' => [
                 'values' => [[
                     'type' => $error::class,
                     'value' => $error->getMessage(),
                     'stacktrace' => ['frames' => $frames],
                 ]],
-            ];
-        }
+            ],
+            'extra' => $attributes,
+        ];
 
         if ($this->environment !== null) {
             $payloadData['environment'] = $this->environment;
