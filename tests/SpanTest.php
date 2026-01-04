@@ -27,8 +27,8 @@ class SpanTest extends TestCase
         $this->assertIsString($traceId);
         $this->assertIsString($spanId);
         $this->assertIsFloat($startedAt);
-        $this->assertEquals(32, strlen($traceId));
-        $this->assertEquals(16, strlen($spanId));
+        $this->assertSame(32, strlen($traceId));
+        $this->assertSame(16, strlen($spanId));
     }
 
     public function testSetAndGet(): void
@@ -37,7 +37,7 @@ class SpanTest extends TestCase
 
         $span->set('key', 'value');
 
-        $this->assertEquals('value', $span->get('key'));
+        $this->assertSame('value', $span->get('key'));
     }
 
     public function testSetReturnsself(): void
@@ -61,7 +61,7 @@ class SpanTest extends TestCase
         $span = new Span();
         $span->set('key', 'string value');
 
-        $this->assertEquals('string value', $span->get('key'));
+        $this->assertSame('string value', $span->get('key'));
     }
 
     public function testSetAcceptsInt(): void
@@ -69,7 +69,7 @@ class SpanTest extends TestCase
         $span = new Span();
         $span->set('key', 42);
 
-        $this->assertEquals(42, $span->get('key'));
+        $this->assertSame(42, $span->get('key'));
     }
 
     public function testSetAcceptsFloat(): void
@@ -77,7 +77,7 @@ class SpanTest extends TestCase
         $span = new Span();
         $span->set('key', 3.14);
 
-        $this->assertEquals(3.14, $span->get('key'));
+        $this->assertSame(3.14, $span->get('key'));
     }
 
     public function testSetAcceptsBool(): void
@@ -85,7 +85,7 @@ class SpanTest extends TestCase
         $span = new Span();
         $span->set('key', true);
 
-        $this->assertEquals(true, $span->get('key'));
+        $this->assertSame(true, $span->get('key'));
     }
 
     public function testSetAcceptsNull(): void
@@ -104,8 +104,8 @@ class SpanTest extends TestCase
 
         $attributes = $span->getAttributes();
 
-        $this->assertEquals('value1', $attributes['key1']);
-        $this->assertEquals('value2', $attributes['key2']);
+        $this->assertSame('value1', $attributes['key1']);
+        $this->assertSame('value2', $attributes['key2']);
         $this->assertArrayHasKey('span.trace_id', $attributes);
         $this->assertArrayHasKey('span.id', $attributes);
         $this->assertArrayHasKey('span.started_at', $attributes);
@@ -118,9 +118,9 @@ class SpanTest extends TestCase
 
         $span->setError($error);
 
-        $this->assertEquals(RuntimeException::class, $span->get('error.type'));
-        $this->assertEquals('Test error', $span->get('error.message'));
-        $this->assertEquals(42, $span->get('error.code'));
+        $this->assertSame(RuntimeException::class, $span->get('error.type'));
+        $this->assertSame('Test error', $span->get('error.message'));
+        $this->assertSame(42, $span->get('error.code'));
         $this->assertIsString($span->get('error.file'));
         $this->assertIsInt($span->get('error.line'));
     }
@@ -208,7 +208,7 @@ class SpanTest extends TestCase
 
         Span::add('key', 'value');
 
-        $this->assertEquals('value', $span->get('key'));
+        $this->assertSame('value', $span->get('key'));
     }
 
     public function testAddDoesNothingWhenNoCurrentSpan(): void
@@ -225,7 +225,7 @@ class SpanTest extends TestCase
 
         Span::error(new RuntimeException('Test'));
 
-        $this->assertEquals(RuntimeException::class, $span->get('error.type'));
+        $this->assertSame(RuntimeException::class, $span->get('error.type'));
     }
 
     public function testErrorDoesNothingWhenNoCurrentSpan(): void
@@ -358,7 +358,7 @@ class SpanTest extends TestCase
         $span->set('key', 'value1');
         $span->set('key', 'value2');
 
-        $this->assertEquals('value2', $span->get('key'));
+        $this->assertSame('value2', $span->get('key'));
     }
 
     public function testMultipleSpansInSequence(): void
@@ -376,8 +376,8 @@ class SpanTest extends TestCase
         $span2->finish();
 
         $this->assertCount(2, $exported);
-        $this->assertEquals('first', $exported[0]->get('name'));
-        $this->assertEquals('second', $exported[1]->get('name'));
+        $this->assertSame('first', $exported[0]->get('name'));
+        $this->assertSame('second', $exported[1]->get('name'));
     }
 
     public function testFinishWithoutExportersDoesNotThrow(): void
@@ -419,7 +419,7 @@ class SpanTest extends TestCase
 
         $span->set('span.trace_id', $customTraceId);
 
-        $this->assertEquals($customTraceId, $span->get('span.trace_id'));
+        $this->assertSame($customTraceId, $span->get('span.trace_id'));
     }
 
     public function testSetParentId(): void
@@ -429,7 +429,7 @@ class SpanTest extends TestCase
 
         $span->set('span.parent_id', $parentId);
 
-        $this->assertEquals($parentId, $span->get('span.parent_id'));
+        $this->assertSame($parentId, $span->get('span.parent_id'));
     }
 
     public function testAddWithAllScalarTypes(): void
@@ -442,9 +442,9 @@ class SpanTest extends TestCase
         Span::add('bool', false);
         Span::add('null', null);
 
-        $this->assertEquals('value', $span->get('string'));
-        $this->assertEquals(42, $span->get('int'));
-        $this->assertEquals(3.14, $span->get('float'));
+        $this->assertSame('value', $span->get('string'));
+        $this->assertSame(42, $span->get('int'));
+        $this->assertSame(3.14, $span->get('float'));
         $this->assertFalse($span->get('bool'));
         $this->assertNull($span->get('null'));
     }
@@ -488,10 +488,10 @@ class SpanTest extends TestCase
 
         $parts = explode('-', $traceparent);
         $this->assertCount(4, $parts);
-        $this->assertEquals('00', $parts[0]);
-        $this->assertEquals(32, strlen($parts[1]));
-        $this->assertEquals(16, strlen($parts[2]));
-        $this->assertEquals('01', $parts[3]);
+        $this->assertSame('00', $parts[0]);
+        $this->assertSame(32, strlen($parts[1]));
+        $this->assertSame(16, strlen($parts[2]));
+        $this->assertSame('01', $parts[3]);
     }
 
     public function testGetTraceparentUsesSpanAttributes(): void
@@ -502,7 +502,7 @@ class SpanTest extends TestCase
 
         $traceparent = $span->getTraceparent();
 
-        $this->assertEquals("00-{$traceId}-{$spanId}-01", $traceparent);
+        $this->assertSame("00-{$traceId}-{$spanId}-01", $traceparent);
     }
 
     public function testTraceparentRoundTrip(): void
@@ -512,8 +512,8 @@ class SpanTest extends TestCase
 
         $span2 = Span::init($traceparent);
 
-        $this->assertEquals($span1->get('span.trace_id'), $span2->get('span.trace_id'));
-        $this->assertEquals($span1->get('span.id'), $span2->get('span.parent_id'));
+        $this->assertSame($span1->get('span.trace_id'), $span2->get('span.trace_id'));
+        $this->assertSame($span1->get('span.id'), $span2->get('span.parent_id'));
     }
 
     public function testStaticTraceparentReturnsCurrentSpanTraceparent(): void
@@ -522,7 +522,7 @@ class SpanTest extends TestCase
 
         $traceparent = Span::traceparent();
 
-        $this->assertEquals($span->getTraceparent(), $traceparent);
+        $this->assertSame($span->getTraceparent(), $traceparent);
     }
 
     public function testStaticTraceparentReturnsNullWhenNoCurrentSpan(): void
@@ -536,8 +536,8 @@ class SpanTest extends TestCase
 
         $span = Span::init($traceparent);
 
-        $this->assertEquals('0af7651916cd43dd8448eb211c80319c', $span->get('span.trace_id'));
-        $this->assertEquals('b7ad6b7169203331', $span->get('span.parent_id'));
+        $this->assertSame('0af7651916cd43dd8448eb211c80319c', $span->get('span.trace_id'));
+        $this->assertSame('b7ad6b7169203331', $span->get('span.parent_id'));
         $this->assertSame($span, Span::current());
     }
 
@@ -547,7 +547,7 @@ class SpanTest extends TestCase
 
         $traceId = $span->get('span.trace_id');
         $this->assertIsString($traceId);
-        $this->assertEquals(32, strlen($traceId));
+        $this->assertSame(32, strlen($traceId));
         $this->assertNull($span->get('span.parent_id'));
     }
 
@@ -557,7 +557,7 @@ class SpanTest extends TestCase
 
         $traceId = $span->get('span.trace_id');
         $this->assertIsString($traceId);
-        $this->assertEquals(32, strlen($traceId));
+        $this->assertSame(32, strlen($traceId));
         $this->assertNull($span->get('span.parent_id'));
     }
 
