@@ -13,10 +13,12 @@ class Sentry implements Exporter
     private string $endpoint;
     private string $publicKey;
     private string $projectId;
+    private ?string $environment;
 
-    public function __construct(string $dsn)
+    public function __construct(string $dsn, ?string $environment = null)
     {
         $this->dsn = $dsn;
+        $this->environment = $environment;
         $this->parseDsn($dsn);
     }
 
@@ -100,7 +102,7 @@ class Sentry implements Exporter
             'content_type' => 'application/json',
         ]);
 
-        $payload = json_encode([
+        $payloadData = [
             'type' => 'transaction',
             'transaction' => $action,
             'start_timestamp' => $startedAt,
@@ -110,7 +112,13 @@ class Sentry implements Exporter
             ],
             'spans' => [],
             'extra' => $attributes,
-        ]);
+        ];
+
+        if ($this->environment !== null) {
+            $payloadData['environment'] = $this->environment;
+        }
+
+        $payload = json_encode($payloadData);
 
         if ($header === false || $itemHeader === false || $payload === false) {
             return null;
