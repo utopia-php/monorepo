@@ -136,11 +136,9 @@ class Sentry implements Exporter
                 'lineno' => $frame['line'] ?? 0,
                 'in_app' => !str_contains($frame['file'], '/vendor/'),
             ];
-            if (isset($frame['function'])) {
-                $sentryFrame['function'] = isset($frame['class'])
-                    ? $frame['class'] . $frame['type'] . $frame['function']
-                    : $frame['function'];
-            }
+            $sentryFrame['function'] = isset($frame['class'])
+                ? $frame['class'] . ($frame['type'] ?? '::') . $frame['function']
+                : $frame['function'];
             $frames[] = $sentryFrame;
         }
 

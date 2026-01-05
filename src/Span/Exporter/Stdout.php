@@ -19,7 +19,8 @@ class Stdout implements Exporter
      */
     public function __construct(
         private int $maxTraceFrames = 3
-    ) {}
+    ) {
+    }
 
     public function export(Span $span): void
     {
@@ -38,7 +39,7 @@ class Stdout implements Exporter
             $data['error.trace'] = array_map(fn ($frame) => [
                 'file' => $frame['file'] ?? null,
                 'line' => $frame['line'] ?? null,
-                'function' => $frame['function'] ?? null,
+                'function' => $frame['function'],
             ], $limited);
 
             if (count($trace) > $this->maxTraceFrames) {
