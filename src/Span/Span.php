@@ -21,13 +21,10 @@ class Span
      */
     private array $attributes = [];
 
-    private string $action;
-
     private ?Throwable $error = null;
 
-    public function __construct(string $action = 'unknown')
+    public function __construct(private readonly string $action = 'unknown')
     {
-        $this->action = $action;
         $this->attributes['span.trace_id'] = bin2hex(random_bytes(16));
         $this->attributes['span.id'] = bin2hex(random_bytes(8));
         $this->attributes['span.started_at'] = microtime(true);
@@ -115,7 +112,7 @@ class Span
             }
         }
 
-        if (self::$storage !== null) {
+        if (self::$storage instanceof \Utopia\Span\Storage\Storage) {
             self::$storage->set($span);
         }
 
@@ -282,7 +279,7 @@ class Span
             }
         }
 
-        if (self::$storage !== null) {
+        if (self::$storage instanceof \Utopia\Span\Storage\Storage) {
             self::$storage->set(null);
         }
     }

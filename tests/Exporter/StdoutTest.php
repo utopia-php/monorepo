@@ -17,7 +17,7 @@ class StdoutTest extends TestCase
 
         ob_start();
         $exporter->export($span);
-        $output = ob_get_clean();
+        ob_get_clean();
 
         // Output goes to STDOUT, not output buffer in CLI
         // Just verify no exception is thrown
@@ -65,7 +65,7 @@ class StdoutTest extends TestCase
 
     public function testExportIncludesSpanMetadata(): void
     {
-        $exporter = new Stdout();
+        new Stdout();
         $span = new Span();
         $span->finish();
 

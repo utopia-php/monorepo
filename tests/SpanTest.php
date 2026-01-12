@@ -239,7 +239,7 @@ class SpanTest extends TestCase
         $exporter = $this->createExporter($exported);
 
         // Only export spans with errors
-        Span::addExporter($exporter, fn (Span $s) => $s->getError() !== null);
+        Span::addExporter($exporter, fn (Span $s): bool => $s->getError() instanceof \Throwable);
 
         $span1 = Span::init('test');
         $span1->finish();
@@ -257,7 +257,7 @@ class SpanTest extends TestCase
         $exporter = $this->createExporter($exported);
         $sampledSpan = null;
 
-        Span::addExporter($exporter, function (Span $s) use (&$sampledSpan) {
+        Span::addExporter($exporter, function (Span $s) use (&$sampledSpan): bool {
             $sampledSpan = $s;
             return true;
         });
@@ -451,8 +451,8 @@ class SpanTest extends TestCase
         $exported = [];
         $exporter = $this->createExporter($exported);
 
-        Span::addExporter($exporter, fn (Span $s) => true);
-        Span::addExporter($exporter, fn (Span $s) => false);
+        Span::addExporter($exporter, fn (Span $s): bool => true);
+        Span::addExporter($exporter, fn (Span $s): bool => false);
 
         $span = Span::init('test');
         $span->finish();
@@ -465,7 +465,7 @@ class SpanTest extends TestCase
         $exported = [];
         $exporter = $this->createExporter($exported);
 
-        Span::addExporter($exporter, fn (Span $s) => $s->get('span.duration') > 0.005);
+        Span::addExporter($exporter, fn (Span $s): bool => $s->get('span.duration') > 0.005);
 
         $fastSpan = Span::init('test');
         $fastSpan->finish();

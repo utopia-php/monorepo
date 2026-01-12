@@ -11,7 +11,7 @@ use Utopia\Span\Span;
  */
 class Auto implements Storage
 {
-    private Memory $memory;
+    private readonly Memory $memory;
     private ?Coroutine $coroutine = null;
 
     public function __construct()
@@ -25,7 +25,7 @@ class Auto implements Storage
 
     public function get(): ?Span
     {
-        if ($this->coroutine !== null && $this->isInCoroutine()) {
+        if ($this->coroutine instanceof \Utopia\Span\Storage\Coroutine && $this->isInCoroutine()) {
             return $this->coroutine->get();
         }
 
@@ -34,7 +34,7 @@ class Auto implements Storage
 
     public function set(?Span $span): void
     {
-        if ($this->coroutine !== null && $this->isInCoroutine()) {
+        if ($this->coroutine instanceof \Utopia\Span\Storage\Coroutine && $this->isInCoroutine()) {
             $this->coroutine->set($span);
             return;
         }

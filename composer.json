@@ -20,13 +20,16 @@
         "laravel/pint": "^1.0",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^10.0",
-        "swoole/ide-helper": "^5.0"
+        "swoole/ide-helper": "^5.0",
+        "rector/rector": "^2.3"
     },
     "scripts": {
         "format": "pint --test",
         "format:fix": "pint",
         "test": "phpunit",
-        "analyse": "phpstan analyse"
+        "analyze": "phpstan analyze",
+        "refactor": "rector",
+        "refactor:check": "rector --dry-run"
     },
     "suggest": {
         "ext-swoole": "Required for coroutine-based storage"

@@ -10,7 +10,7 @@ use Utopia\Span\Span;
  * Writes error spans to stderr and non-error spans to stdout.
  * Error stacktraces are truncated to keep output readable.
  */
-class Stdout implements Exporter
+readonly class Stdout implements Exporter
 {
     /**
      * Create a new Stdout exporter.
@@ -27,7 +27,7 @@ class Stdout implements Exporter
         $data = ['action' => $span->getAction()] + $span->getAttributes();
         $error = $span->getError();
 
-        if ($error !== null) {
+        if ($error instanceof \Throwable) {
             $data['error.type'] = $error::class;
             $data['error.message'] = $error->getMessage();
             $data['error.code'] = $error->getCode();
@@ -36,7 +36,7 @@ class Stdout implements Exporter
 
             $trace = $error->getTrace();
             $limited = array_slice($trace, 0, $this->maxTraceFrames);
-            $data['error.trace'] = array_map(fn ($frame) => [
+            $data['error.trace'] = array_map(fn (array $frame): array => [
                 'file' => $frame['file'] ?? null,
                 'line' => $frame['line'] ?? null,
                 'function' => $frame['function'],
@@ -53,7 +53,7 @@ class Stdout implements Exporter
             return;
         }
 
-        $stream = $error !== null ? STDERR : STDOUT;
+        $stream = $error instanceof \Throwable ? STDERR : STDOUT;
 
         fwrite($stream, $output . PHP_EOL);
     }
