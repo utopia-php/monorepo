@@ -264,6 +264,13 @@ class Sentry implements Exporter
      * @param array<string, mixed> $attributes
      * @return array{array<string, string>, array<string, mixed>, array<string, mixed>}
      */
+    private const HANDLED_HTTP_KEYS = [
+        'http.url',
+        'http.method',
+        'http.query',
+        'http.response.status_code',
+    ];
+
     private function classifyAttributes(array $attributes): array
     {
         $tags = [];
@@ -276,8 +283,8 @@ class Sentry implements Exporter
                 continue;
             }
 
-            // Skip HTTP attributes (handled separately)
-            if (str_starts_with($key, 'http.')) {
+            // Skip only the HTTP attributes we handle in buildRequest/buildResponse
+            if (\in_array($key, self::HANDLED_HTTP_KEYS, true)) {
                 continue;
             }
 
