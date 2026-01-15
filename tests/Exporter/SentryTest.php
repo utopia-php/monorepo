@@ -4,6 +4,7 @@ namespace Utopia\Span\Tests\Exporter;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Span\Exporter\Sentry;
+use Utopia\Span\Exporter\SentryField;
 use Utopia\Span\Span;
 
 class SentryTest extends TestCase
@@ -89,6 +90,48 @@ class SentryTest extends TestCase
         $span->finish();
 
         // Should not throw
+        $exporter->export($span);
+
+        $this->assertTrue(true);
+    }
+
+    public function testExportHandlesHttpConventionAttributes(): void
+    {
+        $exporter = new Sentry('https://key@sentry.io/123');
+        $span = new Span('http.request');
+        $span->set('http.url', 'https://api.example.com/users');
+        $span->set('http.method', 'POST');
+        $span->set('http.query', 'page=1&limit=10');
+        $span->set('http.response.status_code', 201);
+        $span->setError(new \RuntimeException('Request failed'));
+        $span->finish();
+
+        // Should not throw - HTTP attributes are mapped to Sentry request/response
+        $exporter->export($span);
+
+        $this->assertTrue(true);
+    }
+
+    public function testExportWithClassifier(): void
+    {
+        $exporter = new Sentry(
+            'https://key@sentry.io/123',
+            classifier: fn (string $key): SentryField => match (true) {
+                str_starts_with($key, 'tenant.') => SentryField::Tag,
+                str_starts_with($key, 'user.') => SentryField::Context,
+                default => SentryField::Extra,
+            }
+        );
+
+        $span = new Span('api.request');
+        $span->set('tenant.id', 'acme-corp');
+        $span->set('user.id', '12345');
+        $span->set('user.email', 'test@example.com');
+        $span->set('debug.info', 'some debug data');
+        $span->setError(new \RuntimeException('Test error'));
+        $span->finish();
+
+        // Should not throw - classifier distributes attributes correctly
         $exporter->export($span);
 
         $this->assertTrue(true);

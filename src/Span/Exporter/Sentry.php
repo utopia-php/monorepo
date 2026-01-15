@@ -2,6 +2,8 @@
 
 namespace Utopia\Span\Exporter;
 
+use Closure;
+use Composer\InstalledVersions;
 use Utopia\Span\Span;
 
 /**
@@ -9,12 +11,43 @@ use Utopia\Span\Span;
  *
  * Only spans with errors are sent. Non-error spans are silently skipped.
  * Use the Stdout exporter for non-error spans.
+ *
+ * ## HTTP Attribute Conventions
+ *
+ * The following span attributes are mapped to Sentry's request/response structures:
+ *
+ * Request attributes:
+ * - `http.url` - Full request URL
+ * - `http.method` - HTTP method (GET, POST, etc.)
+ * - `http.query` - Query string
+ *
+ * Response attributes:
+ * - `http.response.status_code` - HTTP response status code
+ *
+ * ## Attribute Classification
+ *
+ * By default, all unhandled attributes go to `context` (recommended by Sentry).
+ * Use the `$classifier` callback to control where attributes are placed:
+ *
+ * ```php
+ * $exporter = new Sentry($dsn, classifier: function(string $key): SentryField {
+ *     return match(true) {
+ *         str_starts_with($key, 'tenant.') => SentryField::Tag,
+ *         default => SentryField::Context,
+ *     };
+ * });
+ * ```
  */
-readonly class Sentry implements Exporter
+class Sentry implements Exporter
 {
-    private string $endpoint;
-    private string $publicKey;
-    private string $projectId;
+    private static ?string $sdkVersion = null;
+
+    private readonly string $endpoint;
+    private readonly string $publicKey;
+    private readonly string $projectId;
+
+    /** @var Closure(string): SentryField */
+    private readonly Closure $classifier;
 
     /**
      * Create a new Sentry exporter.
@@ -23,13 +56,16 @@ readonly class Sentry implements Exporter
      * @param string|null $environment Optional environment name (e.g., 'production')
      * @param string|null $release Optional release/version identifier (e.g., commit hash)
      * @param string|null $serverName Optional server name/identifier
+     * @param Closure(string): SentryField|null $classifier Optional callback to classify attributes
      */
     public function __construct(
-        private string $dsn,
-        private ?string $environment = null,
-        private ?string $release = null,
-        private ?string $serverName = null
+        private readonly string $dsn,
+        private readonly ?string $environment = null,
+        private readonly ?string $release = null,
+        private readonly ?string $serverName = null,
+        ?Closure $classifier = null,
     ) {
+        $this->classifier = $classifier ?? static fn (string $key): SentryField => SentryField::Context;
         $parsed = parse_url($dsn);
 
         if ($parsed === false) {
@@ -146,22 +182,40 @@ readonly class Sentry implements Exporter
             'in_app' => !str_contains($error->getFile(), '/vendor/'),
         ];
 
+        $contexts = [
+            'trace' => $traceContext,
+            'runtime' => [
+                'name' => 'php',
+                'version' => PHP_VERSION,
+                'sapi' => PHP_SAPI,
+            ],
+        ];
+
+        $request = $this->buildRequest($attributes);
+        $response = $this->buildResponse($attributes);
+
+        if ($response !== []) {
+            $contexts['response'] = $response;
+        }
+
+        [$tags, $customContexts, $extra] = $this->classifyAttributes($attributes);
+
+        if ($customContexts !== []) {
+            $contexts['custom'] = $customContexts;
+        }
+
         $payloadData = [
             'level' => 'error',
             'platform' => 'php',
-            'sdk' => ['name' => 'utopia-php/span'],
+            'sdk' => [
+                'name' => 'utopia-php/span',
+                'version' => self::$sdkVersion ??= InstalledVersions::getVersion('utopia-php/span') ?? 'unknown',
+            ],
             'start_timestamp' => $startedAt,
             'timestamp' => $finishedAt,
             'transaction' => $action,
             'message' => $error->getMessage(),
-            'contexts' => [
-                'trace' => $traceContext,
-                'runtime' => [
-                    'name' => 'php',
-                    'version' => PHP_VERSION,
-                    'sapi' => PHP_SAPI,
-                ],
-            ],
+            'contexts' => $contexts,
             'exception' => [
                 'values' => [[
                     'type' => $error::class,
@@ -169,8 +223,16 @@ readonly class Sentry implements Exporter
                     'stacktrace' => ['frames' => $frames],
                 ]],
             ],
-            'extra' => $attributes,
+            'extra' => $extra,
         ];
+
+        if ($tags !== []) {
+            $payloadData['tags'] = $tags;
+        }
+
+        if ($request !== []) {
+            $payloadData['request'] = $request;
+        }
 
         if ($this->environment !== null) {
             $payloadData['environment'] = $this->environment;
@@ -191,5 +253,87 @@ readonly class Sentry implements Exporter
         }
 
         return "{$header}\n{$itemHeader}\n{$payload}";
+    }
+
+    /**
+     * Classify attributes into tags, contexts, and extra based on the classifier.
+     *
+     * @param array<string, mixed> $attributes
+     * @return array{array<string, string>, array<string, mixed>, array<string, mixed>}
+     */
+    private function classifyAttributes(array $attributes): array
+    {
+        $tags = [];
+        $contexts = [];
+        $extra = [];
+
+        foreach ($attributes as $key => $value) {
+            // Skip internal span attributes
+            if (str_starts_with($key, 'span.')) {
+                continue;
+            }
+
+            // Skip HTTP attributes (handled separately)
+            if (str_starts_with($key, 'http.')) {
+                continue;
+            }
+
+            $field = ($this->classifier)($key);
+
+            switch ($field) {
+                case SentryField::Tag:
+                    // Tags must be strings, max 200 chars
+                    if (\is_scalar($value) || $value === null) {
+                        $tags[$key] = substr((string) $value, 0, 200);
+                    }
+                    break;
+                case SentryField::Context:
+                    $contexts[$key] = $value;
+                    break;
+                case SentryField::Extra:
+                    $extra[$key] = $value;
+                    break;
+            }
+        }
+
+        return [$tags, $contexts, $extra];
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     * @return array<string, mixed>
+     */
+    private function buildRequest(array $attributes): array
+    {
+        $request = [];
+
+        if (isset($attributes['http.url']) && \is_string($attributes['http.url'])) {
+            $request['url'] = $attributes['http.url'];
+        }
+
+        if (isset($attributes['http.method']) && \is_string($attributes['http.method'])) {
+            $request['method'] = $attributes['http.method'];
+        }
+
+        if (isset($attributes['http.query']) && \is_string($attributes['http.query'])) {
+            $request['query_string'] = $attributes['http.query'];
+        }
+
+        return $request;
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     * @return array<string, mixed>
+     */
+    private function buildResponse(array $attributes): array
+    {
+        $response = [];
+
+        if (isset($attributes['http.response.status_code']) && \is_int($attributes['http.response.status_code'])) {
+            $response['status_code'] = $attributes['http.response.status_code'];
+        }
+
+        return $response;
     }
 }
