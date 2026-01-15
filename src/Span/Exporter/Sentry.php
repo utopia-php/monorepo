@@ -223,11 +223,14 @@ class Sentry implements Exporter
                     'stacktrace' => ['frames' => $frames],
                 ]],
             ],
-            'extra' => $extra,
         ];
 
         if ($tags !== []) {
             $payloadData['tags'] = $tags;
+        }
+
+        if ($extra !== []) {
+            $payloadData['extra'] = $extra;
         }
 
         if ($request !== []) {
