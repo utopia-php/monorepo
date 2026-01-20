@@ -258,12 +258,6 @@ class Sentry implements Exporter
         return "{$header}\n{$itemHeader}\n{$payload}";
     }
 
-    /**
-     * Classify attributes into tags, contexts, and extra based on the classifier.
-     *
-     * @param array<string, mixed> $attributes
-     * @return array{array<string, string>, array<string, mixed>, array<string, mixed>}
-     */
     private const HANDLED_HTTP_KEYS = [
         'http.url',
         'http.method',
@@ -271,6 +265,12 @@ class Sentry implements Exporter
         'http.response.status_code',
     ];
 
+    /**
+     * Classify attributes into tags, contexts, and extra based on the classifier.
+     *
+     * @param array<string, mixed> $attributes
+     * @return array{array<string, string>, array<string, mixed>, array<string, mixed>}
+     */
     private function classifyAttributes(array $attributes): array
     {
         $tags = [];
@@ -279,7 +279,7 @@ class Sentry implements Exporter
 
         foreach ($attributes as $key => $value) {
             // Skip internal span attributes
-            if (str_starts_with($key, 'span.')) {
+            if (str_starts_with((string) $key, 'span.')) {
                 continue;
             }
 
