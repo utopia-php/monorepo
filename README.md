@@ -116,11 +116,12 @@ Span::addExporter(
 
 ## Exporters
 
-| Exporter          | Description                          |
-| ----------------- | ------------------------------------ |
-| `Exporter\Stdout` | JSON to stdout/stderr                |
-| `Exporter\Sentry` | Sentry events (Issues)               |
-| `Exporter\None`   | Discard (for testing)                |
+| Exporter           | Description                          |
+| ------------------ | ------------------------------------ |
+| `Exporter\Stdout`  | JSON to stdout/stderr                |
+| `Exporter\Pretty`  | Colourful human-readable output      |
+| `Exporter\Sentry`  | Sentry events (Issues)               |
+| `Exporter\None`    | Discard (for testing)                |
 
 ### Stdout Exporter
 
@@ -131,6 +132,27 @@ Span::addExporter(new Exporter\Stdout(
 ```
 
 Outputs JSON to stdout (info) or stderr (errors).
+
+### Pretty Exporter
+
+```php
+Span::addExporter(new Exporter\Pretty(
+    maxTraceFrames: 3,  // default, limits error stacktrace length
+    width: 60           // default, separator line width
+));
+```
+
+Colourful, multi-line output for local development. Attributes are displayed with aligned values, duration is colour-coded (green < 100ms, yellow < 1s, red >= 1s), and errors are highlighted in red. Writes to stdout (info) or stderr (errors).
+
+```
+http.request · 12.3ms · abc12345
+
+  http.method GET
+  http.url    /api/users
+  user.id     42
+
+────────────────────────────────────────────────────────────
+```
 
 ### Sentry Exporter
 
