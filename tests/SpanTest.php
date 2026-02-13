@@ -558,6 +558,40 @@ class SpanTest extends TestCase
         $this->assertNull($span->get('span.parent_id'));
     }
 
+    public function testFinishSetsLevelInfoByDefault(): void
+    {
+        $span = new Span();
+        $span->finish();
+
+        $this->assertSame('info', $span->get('level'));
+    }
+
+    public function testFinishSetsLevelErrorWhenErrorSet(): void
+    {
+        $span = new Span();
+        $span->setError(new RuntimeException('Test'));
+        $span->finish();
+
+        $this->assertSame('error', $span->get('level'));
+    }
+
+    public function testFinishDoesNotOverrideExplicitLevel(): void
+    {
+        $span = new Span();
+        $span->set('level', 'warning');
+        $span->setError(new RuntimeException('Test'));
+        $span->finish();
+
+        $this->assertSame('warning', $span->get('level'));
+    }
+
+    public function testLevelNotSetBeforeFinish(): void
+    {
+        $span = new Span();
+
+        $this->assertNull($span->get('level'));
+    }
+
     /**
      * @param array<Span> $exported
      */
