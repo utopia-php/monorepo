@@ -120,7 +120,6 @@ class Sentry implements Exporter
             }
         }
 
-        curl_close($ch);
     }
 
     private function buildEnvelope(Span $span): ?string
@@ -205,7 +204,7 @@ class Sentry implements Exporter
         }
 
         $payloadData = [
-            'level' => 'error',
+            'level' => (string) $attributes['level'],
             'platform' => 'php',
             'sdk' => [
                 'name' => 'utopia-php/span',
@@ -278,11 +277,13 @@ class Sentry implements Exporter
         $extra = [];
 
         foreach ($attributes as $key => $value) {
-            // Skip internal span attributes
+            // Skip internal span attributes and level (handled in payload)
             if (str_starts_with((string) $key, 'span.')) {
                 continue;
             }
-
+            if ($key === 'level') {
+                continue;
+            }
             // Skip only the HTTP attributes we handle in buildRequest/buildResponse
             if (\in_array($key, self::HANDLED_HTTP_KEYS, true)) {
                 continue;

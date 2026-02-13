@@ -50,6 +50,7 @@ Spans automatically include these attributes:
 | `span.started_at`  | Start timestamp in seconds (float)  |
 | `span.finished_at` | End timestamp in seconds (float)    |
 | `span.duration`    | Duration in seconds (float)         |
+| `level`            | `error` if error set, `info` otherwise |
 
 ### Static Helpers
 
@@ -77,6 +78,13 @@ try {
 ```
 
 Exporters access the exception via `$span->getError()` and extract what they need (message, trace, etc.).
+
+The `level` attribute is automatically set to `error` when an error is captured. You can override it:
+
+```php
+$span->setError($e);
+$span->set('level', 'warning'); // override auto-detected level
+```
 
 ### Distributed Tracing
 

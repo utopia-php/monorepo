@@ -266,6 +266,10 @@ class Span
         $this->attributes['span.finished_at'] = $finishedAt;
         $this->attributes['span.duration'] = $finishedAt - $startedAt;
 
+        if (!isset($this->attributes['level'])) {
+            $this->attributes['level'] = $this->error instanceof \Throwable ? 'error' : 'info';
+        }
+
         foreach (self::$exporters as $config) {
             try {
                 $exporter = $config['exporter'];
