@@ -12,8 +12,6 @@ use Utopia\Span\Span;
  */
 readonly class Pretty implements Exporter
 {
-    private const ESC = "\033[";
-
     private const RESET = "\033[0m";
     private const BOLD = "\033[1m";
     private const DIM = "\033[2m";
@@ -21,7 +19,6 @@ readonly class Pretty implements Exporter
     private const RED = "\033[31m";
     private const GREEN = "\033[32m";
     private const YELLOW = "\033[33m";
-    private const BLUE = "\033[34m";
     private const CYAN = "\033[36m";
     private const WHITE = "\033[37m";
 
@@ -54,7 +51,7 @@ readonly class Pretty implements Exporter
         }
 
         $maxKeyLen = 0;
-        foreach ($attributes as $key => $_) {
+        foreach (array_keys($attributes) as $key) {
             $maxKeyLen = max($maxKeyLen, strlen($key));
         }
 
