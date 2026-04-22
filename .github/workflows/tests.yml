@@ -44,7 +44,6 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
-          extensions: opentelemetry, protobuf
           coverage: none
 
       - name: Run Docker E2E tests
