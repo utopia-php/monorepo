@@ -1,0 +1,24 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      BREAKER_REDIS_HOST: redis
+      BREAKER_REDIS_PORT: "6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: sh -lc "composer install --no-interaction --prefer-dist && composer test:e2e"
