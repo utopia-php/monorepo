@@ -144,19 +144,6 @@ class Span
     }
 
     /**
-     * Capture an exception on the current span.
-     *
-     * Convenience method to record errors without holding a span reference.
-     * Does nothing if no span is active.
-     *
-     * @param Throwable $error The exception to capture
-     */
-    public static function error(Throwable $error): void
-    {
-        self::current()?->setError($error);
-    }
-
-    /**
      * Get the traceparent header value from the current span.
      *
      * Use this to propagate trace context to downstream services.
@@ -256,9 +243,15 @@ class Span
      *
      * Sets span.finished_at and span.duration, then sends to all exporters
      * that pass their sampler (if any). Clears the current span from storage.
+     *
+     * @param Throwable|null $error Exception that caused the span to fail
      */
-    public function finish(): void
+    public function finish(?Throwable $error = null): void
     {
+        if ($error instanceof Throwable) {
+            $this->error = $error;
+        }
+
         $finishedAt = microtime(true);
         /** @var float $startedAt */
         $startedAt = $this->attributes['span.started_at'];

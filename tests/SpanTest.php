@@ -215,22 +215,38 @@ class SpanTest extends TestCase
         $this->assertNull(Span::current());
     }
 
-    public function testErrorSetsErrorOnCurrentSpan(): void
+    public function testFinishAcceptsError(): void
     {
-        $span = Span::init('test');
+        $span = new Span();
         $error = new RuntimeException('Test');
 
-        Span::error($error);
+        $span->finish($error);
 
         $this->assertSame($error, $span->getError());
     }
 
-    public function testErrorDoesNothingWhenNoCurrentSpan(): void
+    public function testFinishWithErrorSetsLevelError(): void
     {
-        // Should not throw
-        Span::error(new RuntimeException('Test'));
+        $span = new Span();
 
-        $this->assertNull(Span::current());
+        $span->finish(new RuntimeException('Test'));
+
+        $this->assertSame('error', $span->get('level'));
+    }
+
+    public function testFinishWithErrorExportsErrorSpan(): void
+    {
+        $exported = [];
+        $exporter = $this->createExporter($exported);
+        $error = new RuntimeException('Test');
+
+        Span::addExporter($exporter);
+
+        $span = Span::init('test');
+        $span->finish($error);
+
+        $this->assertCount(1, $exported);
+        $this->assertSame($error, $exported[0]->getError());
     }
 
     public function testSamplerFiltersExport(): void
