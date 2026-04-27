@@ -249,7 +249,7 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `setError(Throwable $e): self`          | Capture exception                  |
 | `getError(): ?Throwable`                | Get captured exception             |
 | `getTraceparent(): string`              | Get W3C traceparent header value   |
-| `finish(?string $level = null, ?Throwable $e = null): void` | End span and export |
+| `finish(?string $level = null, ?Throwable $error = null): void` | End span and export |
 
 ### Attribute Conventions
 
