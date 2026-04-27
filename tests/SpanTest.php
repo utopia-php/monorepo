@@ -220,7 +220,7 @@ class SpanTest extends TestCase
         $span = new Span();
         $error = new RuntimeException('Test');
 
-        $span->finish($error);
+        $span->finish(error: $error);
 
         $this->assertSame($error, $span->getError());
     }
@@ -229,7 +229,7 @@ class SpanTest extends TestCase
     {
         $span = new Span();
 
-        $span->finish(new RuntimeException('Test'));
+        $span->finish(error: new RuntimeException('Test'));
 
         $this->assertSame('error', $span->get('level'));
     }
@@ -243,7 +243,7 @@ class SpanTest extends TestCase
         Span::addExporter($exporter);
 
         $span = Span::init('test');
-        $span->finish($error);
+        $span->finish(error: $error);
 
         $this->assertCount(1, $exported);
         $this->assertSame($error, $exported[0]->getError());
@@ -594,7 +594,7 @@ class SpanTest extends TestCase
     public function testFinishAcceptsLevelOverride(): void
     {
         $span = new Span();
-        $span->finish(new RuntimeException('Test'), level: 'warning');
+        $span->finish(level: 'warning', error: new RuntimeException('Test'));
 
         $this->assertSame('warning', $span->get('level'));
     }

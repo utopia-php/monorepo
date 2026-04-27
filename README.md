@@ -60,8 +60,8 @@ Use static methods anywhere in your codebase without passing the span around:
 // Set attribute on current span
 Span::add('db.query_count', 5);
 
-// Add error details as attributes
-Span::add('error', $details);
+// Add warning details as attributes
+Span::add('warning', 'retry scheduled');
 ```
 
 ### Error Handling
@@ -74,7 +74,7 @@ $span = Span::init('api.request');
 try {
     // ...
 } catch (Throwable $e) {
-    $span->finish($e);
+    $span->finish(error: $e);
     throw $e;
 }
 ```
@@ -86,14 +86,14 @@ Use `setError()` when you need to record the error before the span ends, such as
 The `level` attribute is set when the span finishes. It defaults to `error` when an error is captured and `info` otherwise. Pass a level to `finish()` to override it:
 
 ```php
-$span->finish($e, level: 'warning');
+$span->finish(level: 'warning', error: $e);
 ```
 
-Use attributes for error-like details that do not end the span:
+Use attributes for warning details that do not end the span:
 
 ```php
-Span::add('error', $details);
-Span::add('error.message', $message);
+Span::add('warning', 'retry scheduled');
+Span::add('warning.message', $message);
 ```
 
 ### Distributed Tracing
@@ -249,7 +249,7 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `setError(Throwable $e): self`          | Capture exception                  |
 | `getError(): ?Throwable`                | Get captured exception             |
 | `getTraceparent(): string`              | Get W3C traceparent header value   |
-| `finish(?Throwable $e = null, ?string $level = null): void` | End span and export |
+| `finish(?string $level = null, ?Throwable $e = null): void` | End span and export |
 
 ### Attribute Conventions
 

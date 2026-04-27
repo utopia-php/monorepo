@@ -246,10 +246,10 @@ class Span
      * Sets span.finished_at and span.duration, then sends to all exporters
      * that pass their sampler (if any). Clears the current span from storage.
      *
-     * @param Throwable|null $error Exception that caused the span to fail
      * @param string|null $level Level to export for this span
+     * @param Throwable|null $error Exception that caused the span to fail
      */
-    public function finish(?Throwable $error = null, ?string $level = null): void
+    public function finish(?string $level = null, ?Throwable $error = null): void
     {
         if ($error instanceof \Throwable) {
             $this->setError($error);
