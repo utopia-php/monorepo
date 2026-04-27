@@ -247,8 +247,9 @@ class Span
      * that pass their sampler (if any). Clears the current span from storage.
      *
      * @param Throwable|null $error Exception that caused the span to fail
+     * @param string|null $level Level to export for this span
      */
-    public function finish(?Throwable $error = null): void
+    public function finish(?Throwable $error = null, ?string $level = null): void
     {
         if ($error instanceof \Throwable) {
             $this->setError($error);
@@ -261,9 +262,7 @@ class Span
         $this->attributes['span.finished_at'] = $finishedAt;
         $this->attributes['span.duration'] = $finishedAt - $startedAt;
 
-        if (!isset($this->attributes['level'])) {
-            $this->attributes['level'] = $this->error instanceof \Throwable ? 'error' : 'info';
-        }
+        $this->attributes['level'] = $level ?? ($this->error instanceof \Throwable ? 'error' : 'info');
 
         foreach (self::$exporters as $config) {
             try {

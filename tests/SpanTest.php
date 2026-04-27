@@ -591,14 +591,21 @@ class SpanTest extends TestCase
         $this->assertSame('error', $span->get('level'));
     }
 
-    public function testFinishDoesNotOverrideExplicitLevel(): void
+    public function testFinishAcceptsLevelOverride(): void
+    {
+        $span = new Span();
+        $span->finish(new RuntimeException('Test'), level: 'warning');
+
+        $this->assertSame('warning', $span->get('level'));
+    }
+
+    public function testFinishOwnsLevelAttribute(): void
     {
         $span = new Span();
         $span->set('level', 'warning');
-        $span->setError(new RuntimeException('Test'));
         $span->finish();
 
-        $this->assertSame('warning', $span->get('level'));
+        $this->assertSame('info', $span->get('level'));
     }
 
     public function testLevelNotSetBeforeFinish(): void
