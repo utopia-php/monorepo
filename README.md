@@ -81,6 +81,8 @@ try {
 
 Exporters access the exception via `$span->getError()` and extract what they need (message, trace, etc.).
 
+Use `setError()` when you need to record the error before the span ends, such as before cleanup work that should still be included in the same span.
+
 The `level` attribute is automatically set to `error` when an error is captured. You can override it:
 
 ```php

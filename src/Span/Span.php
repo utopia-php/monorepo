@@ -248,8 +248,8 @@ class Span
      */
     public function finish(?Throwable $error = null): void
     {
-        if ($error instanceof Throwable) {
-            $this->error = $error;
+        if ($error instanceof \Throwable) {
+            $this->setError($error);
         }
 
         $finishedAt = microtime(true);
