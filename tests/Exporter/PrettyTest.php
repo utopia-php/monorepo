@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Span\Tests\Exporter;
 
 use PHPUnit\Framework\TestCase;

@@ -60,30 +60,40 @@ Use static methods anywhere in your codebase without passing the span around:
 // Set attribute on current span
 Span::add('db.query_count', 5);
 
-// Capture an exception
-Span::error($exception);
+// Add warning details as attributes
+Span::add('warning', 'retry scheduled');
 ```
 
 ### Error Handling
 
-The `setError()` method captures the exception for exporters to process:
+Pass the exception to `finish()` when the span ends because of an error:
 
 ```php
+$span = Span::init('api.request');
+
 try {
     // ...
 } catch (Throwable $e) {
-    $span->setError($e);
+    $span->finish(error: $e);
     throw $e;
 }
 ```
 
 Exporters access the exception via `$span->getError()` and extract what they need (message, trace, etc.).
 
-The `level` attribute is automatically set to `error` when an error is captured. You can override it:
+Use `setError()` when you need to record the error before the span ends, such as before cleanup work that should still be included in the same span.
+
+The `level` attribute is set when the span finishes. It defaults to `error` when an error is captured and `info` otherwise. Pass a level to `finish()` to override it:
 
 ```php
-$span->setError($e);
-$span->set('level', 'warning'); // override auto-detected level
+$span->finish(level: 'warning', error: $e);
+```
+
+Use attributes for warning details that do not end the span:
+
+```php
+Span::add('warning', 'retry scheduled');
+Span::add('warning.message', $message);
 ```
 
 ### Distributed Tracing
@@ -226,7 +236,6 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `init(string $action, ?string $traceparent): Span`   | Create and store a new span           |
 | `current(): ?Span`                                   | Get the current span                  |
 | `add(string $key, scalar $value)`                    | Set attribute on current span         |
-| `error(Throwable $e)`                                | Capture exception on current span     |
 | `traceparent(): ?string`                             | Get traceparent header from current span |
 
 ### Span (instance)
@@ -240,7 +249,7 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `setError(Throwable $e): self`          | Capture exception                  |
 | `getError(): ?Throwable`                | Get captured exception             |
 | `getTraceparent(): string`              | Get W3C traceparent header value   |
-| `finish(): void`                        | End span and export                |
+| `finish(?string $level = null, ?Throwable $error = null): void` | End span and export |
 
 ### Attribute Conventions
 

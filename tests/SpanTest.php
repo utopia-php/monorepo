@@ -215,22 +215,38 @@ class SpanTest extends TestCase
         $this->assertNull(Span::current());
     }
 
-    public function testErrorSetsErrorOnCurrentSpan(): void
+    public function testFinishAcceptsError(): void
     {
-        $span = Span::init('test');
+        $span = new Span();
         $error = new RuntimeException('Test');
 
-        Span::error($error);
+        $span->finish(error: $error);
 
         $this->assertSame($error, $span->getError());
     }
 
-    public function testErrorDoesNothingWhenNoCurrentSpan(): void
+    public function testFinishWithErrorSetsLevelError(): void
     {
-        // Should not throw
-        Span::error(new RuntimeException('Test'));
+        $span = new Span();
 
-        $this->assertNull(Span::current());
+        $span->finish(error: new RuntimeException('Test'));
+
+        $this->assertSame('error', $span->get('level'));
+    }
+
+    public function testFinishWithErrorExportsErrorSpan(): void
+    {
+        $exported = [];
+        $exporter = $this->createExporter($exported);
+        $error = new RuntimeException('Test');
+
+        Span::addExporter($exporter);
+
+        $span = Span::init('test');
+        $span->finish(error: $error);
+
+        $this->assertCount(1, $exported);
+        $this->assertSame($error, $exported[0]->getError());
     }
 
     public function testSamplerFiltersExport(): void
@@ -575,14 +591,21 @@ class SpanTest extends TestCase
         $this->assertSame('error', $span->get('level'));
     }
 
-    public function testFinishDoesNotOverrideExplicitLevel(): void
+    public function testFinishAcceptsLevelOverride(): void
+    {
+        $span = new Span();
+        $span->finish(level: 'warning', error: new RuntimeException('Test'));
+
+        $this->assertSame('warning', $span->get('level'));
+    }
+
+    public function testFinishOwnsLevelAttribute(): void
     {
         $span = new Span();
         $span->set('level', 'warning');
-        $span->setError(new RuntimeException('Test'));
         $span->finish();
 
-        $this->assertSame('warning', $span->get('level'));
+        $this->assertSame('info', $span->get('level'));
     }
 
     public function testLevelNotSetBeforeFinish(): void
