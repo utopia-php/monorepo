@@ -404,4 +404,15 @@ class CircuitBreaker
     {
         return $this->getState() === CircuitState::HALF_OPEN;
     }
+
+    /**
+     * Force the breaker into the open state. Idempotent: re-tripping refreshes
+     * openedAt and re-emits gauges, but does not record a transition.
+     */
+    public function trip(): void
+    {
+        $this->syncFromCache();
+        $this->transitionToOpen();
+        $this->recordState();
+    }
 }

@@ -328,6 +328,67 @@ final class CircuitBreakerTest extends TestCase
         new CircuitBreaker(cache: $this->createArrayAdapter(), cacheKey: '');
     }
 
+    public function testTripTransitionsToOpen(): void
+    {
+        $breaker = new CircuitBreaker();
+
+        self::assertSame(CircuitState::CLOSED, $breaker->getState());
+
+        $breaker->trip();
+
+        self::assertSame(CircuitState::OPEN, $breaker->getState());
+        self::assertTrue($breaker->isOpen());
+    }
+
+    public function testTrippedBreakerShortCircuitsCalls(): void
+    {
+        $breaker = new CircuitBreaker(threshold: 100, timeout: 30, successThreshold: 1);
+        $breaker->trip();
+
+        $result = $breaker->call(
+            open: static fn () => 'fallback',
+            close: function (): void {
+                self::fail('Closed callback should not run when the breaker has been tripped.');
+            }
+        );
+
+        self::assertSame('fallback', $result);
+        self::assertTrue($breaker->isOpen());
+    }
+
+    public function testTripIsIdempotent(): void
+    {
+        $breaker = new CircuitBreaker();
+
+        $breaker->trip();
+        $breaker->trip();
+        $breaker->trip();
+
+        self::assertSame(CircuitState::OPEN, $breaker->getState());
+    }
+
+    public function testTripPersistsStateThroughCacheAdapter(): void
+    {
+        $cache = $this->createArrayAdapter();
+        $first = new CircuitBreaker(cache: $cache, cacheKey: 'users-api');
+        $first->trip();
+
+        $second = new CircuitBreaker(cache: $cache, cacheKey: 'users-api');
+
+        self::assertTrue($second->isOpen());
+    }
+
+    public function testTripEmitsTransitionTelemetry(): void
+    {
+        $telemetry = new TestTelemetry();
+        $breaker = new CircuitBreaker(telemetry: $telemetry);
+
+        $breaker->trip();
+
+        self::assertSame([1], $telemetry->counters['breaker.transitions']->values);
+        self::assertSame([1], $telemetry->gauges['breaker.state']->values);
+    }
+
     private function createArrayAdapter(): Adapter
     {
         return new class () implements Adapter {
