@@ -96,7 +96,7 @@ $data = $breaker->call(
 
 ### Shared cache state
 
-By default, each `CircuitBreaker` instance keeps state in memory. To share circuit state between PHP workers, pass a cache adapter and a stable `cacheKey`.
+By default, each `CircuitBreaker` instance keeps state in memory. To share circuit state between PHP workers, pass a cache adapter and a stable `key`.
 
 #### Redis
 
@@ -112,7 +112,7 @@ $breaker = new CircuitBreaker(
     timeout: 60,
     successThreshold: 2,
     cache: new RedisAdapter($redis),
-    cacheKey: 'users-api'
+    key: 'users-api'
 );
 ```
 
@@ -132,7 +132,7 @@ $breaker = new CircuitBreaker(
     timeout: 60,
     successThreshold: 2,
     cache: $cache,
-    cacheKey: 'users-api'
+    key: 'users-api'
 );
 ```
 
@@ -159,7 +159,7 @@ $breaker = new CircuitBreaker(
     threshold: 5,
     timeout: 60,
     successThreshold: 2,
-    cacheKey: 'orders-api',
+    key: 'orders-api',
     telemetry: $telemetry,
     metricPrefix: 'backend'
 );
@@ -189,7 +189,7 @@ $breaker->setTelemetry($telemetry);
 - `timeout` (int, default `30`) — seconds to wait before transitioning to half-open
 - `successThreshold` (int, default `2`) — consecutive half-open successes required to close
 - `cache` (`?Utopia\CircuitBreaker\Adapter`, default `null`) — optional shared cache adapter
-- `cacheKey` (string, default `default`) — cache namespace for one circuit's state
+- `key` (string, default `default`) — cache namespace for one circuit's state
 - `telemetry` (`?Utopia\Telemetry\Adapter`, default `null`) — optional telemetry adapter
 - `metricPrefix` (string, default `''`) — optional prefix for telemetry metric names (e.g. `edge`)
 

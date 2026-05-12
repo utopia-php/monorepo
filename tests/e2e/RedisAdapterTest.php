@@ -68,8 +68,8 @@ final class RedisAdapterTest extends TestCase
     public function testCircuitBreakerSharesStateThroughRedis(): void
     {
         $cache = new RedisAdapter($this->redis, $this->prefix);
-        $first = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2, cache: $cache, cacheKey: 'users-api');
-        $second = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2, cache: $cache, cacheKey: 'users-api');
+        $first = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2, cache: $cache, key: 'users-api');
+        $second = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2, cache: $cache, key: 'users-api');
 
         $first->call(
             open: static fn () => 'fallback',

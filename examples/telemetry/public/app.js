@@ -10,7 +10,7 @@ let runningScenario = false;
 
 const els = {
     stateBadge: document.querySelector('#stateBadge'),
-    activeCacheKey: document.querySelector('#activeCacheKey'),
+    activeKey: document.querySelector('#activeKey'),
     failures: document.querySelector('#failures'),
     successes: document.querySelector('#successes'),
     threshold: document.querySelector('#threshold'),
@@ -20,7 +20,7 @@ const els = {
     burstCalls: document.querySelector('#burstCalls'),
     failureRate: document.querySelector('#failureRate'),
     autoInterval: document.querySelector('#autoInterval'),
-    cacheKey: document.querySelector('#cacheKey'),
+    key: document.querySelector('#key'),
     configThreshold: document.querySelector('#configThreshold'),
     configTimeout: document.querySelector('#configTimeout'),
     configSuccessThreshold: document.querySelector('#configSuccessThreshold'),
@@ -48,7 +48,7 @@ function latency() {
 
 function configPayload() {
     return {
-        cacheKey: els.cacheKey.value.trim() || 'local-api',
+        key: els.key.value.trim() || 'local-api',
         threshold: numberValue(els.configThreshold, 3),
         timeout: numberValue(els.configTimeout, 8),
         successThreshold: numberValue(els.configSuccessThreshold, 2),
@@ -89,7 +89,7 @@ function addEvent(title, detail) {
 function render(payload) {
     els.stateBadge.dataset.state = payload.state;
     els.stateBadge.textContent = payload.stateLabel;
-    els.activeCacheKey.textContent = payload.config?.cacheKey ?? configPayload().cacheKey;
+    els.activeKey.textContent = payload.config?.key ?? configPayload().key;
     els.failures.textContent = payload.failures;
     els.successes.textContent = payload.successes;
     els.threshold.textContent = payload.threshold;
@@ -297,7 +297,7 @@ els.latency.addEventListener('input', () => {
     els.latencyValue.textContent = `${latency()}ms`;
 });
 
-[els.cacheKey, els.configThreshold, els.configTimeout, els.configSuccessThreshold].forEach((input) => {
+[els.key, els.configThreshold, els.configTimeout, els.configSuccessThreshold].forEach((input) => {
     input.addEventListener('change', () => {
         refresh().catch((error) => addEvent('error', error.message));
     });

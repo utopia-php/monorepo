@@ -33,12 +33,12 @@ class CircuitBreaker
         private int $timeout = 30,
         private int $successThreshold = 2,
         private ?Adapter $cache = null,
-        private string $cacheKey = 'default',
+        private string $key = 'default',
         ?Telemetry $telemetry = null,
         private string $metricPrefix = ''
     ) {
-        if ($this->cache !== null && $this->cacheKey === '') {
-            throw new \InvalidArgumentException('Cache key must not be empty when a cache adapter is configured.');
+        if ($this->cache !== null && $this->key === '') {
+            throw new \InvalidArgumentException('Key must not be empty when a cache adapter is configured.');
         }
 
         if ($telemetry !== null) {
@@ -307,7 +307,7 @@ class CircuitBreaker
 
     private function cacheField(string $field): string
     {
-        return $this->cacheKey . ':' . $field;
+        return $this->key . ':' . $field;
     }
 
     private function metricName(string $name): string
@@ -323,7 +323,7 @@ class CircuitBreaker
      */
     private function telemetryAttributes(array $attributes = []): array
     {
-        return ['circuit_breaker.name' => $this->cacheKey] + $attributes;
+        return ['circuit_breaker.name' => $this->key] + $attributes;
     }
 
     private function recordTransition(CircuitState $from, CircuitState $to): void

@@ -114,7 +114,7 @@ function createTelemetry(): Telemetry
 }
 
 /**
- * @param array{threshold: int, timeout: int, successThreshold: int, cacheKey: string, prefix: string} $options
+ * @param array{threshold: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
  */
 function createBreaker(Telemetry $telemetry, array $options): CircuitBreaker
 {
@@ -123,7 +123,7 @@ function createBreaker(Telemetry $telemetry, array $options): CircuitBreaker
         timeout: $options['timeout'],
         successThreshold: $options['successThreshold'],
         cache: new RedisAdapter(redis(), $options['prefix']),
-        cacheKey: $options['cacheKey'],
+        key: $options['key'],
         telemetry: $telemetry
     );
 }
@@ -164,7 +164,7 @@ function runDependency(string $mode, int $latency, string $state): array
 }
 
 /**
- * @param array{threshold: int, timeout: int, successThreshold: int, cacheKey: string, prefix: string} $options
+ * @param array{threshold: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
  */
 function statusPayload(CircuitBreaker $breaker, array $options): array
 {
@@ -184,7 +184,7 @@ function statusPayload(CircuitBreaker $breaker, array $options): array
         'successThreshold' => $options['successThreshold'],
         'nextRetryIn' => $nextRetryIn,
         'config' => [
-            'cacheKey' => $options['cacheKey'],
+            'key' => $options['key'],
             'threshold' => $options['threshold'],
             'timeout' => $options['timeout'],
             'successThreshold' => $options['successThreshold'],
@@ -205,21 +205,21 @@ function stateLabel(CircuitState $state): string
 }
 
 /**
- * @param array{threshold: int, timeout: int, successThreshold: int, cacheKey: string, prefix: string} $options
+ * @param array{threshold: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
  */
 function resetBreaker(array $options): void
 {
     $adapter = new RedisAdapter(redis(), $options['prefix']);
-    $cacheKey = $options['cacheKey'];
+    $key = $options['key'];
 
     foreach (['state', 'failures', 'successes', 'opened_at'] as $field) {
-        $adapter->delete($cacheKey . ':' . $field);
+        $adapter->delete($key . ':' . $field);
     }
 }
 
 /**
  * @param array<string, mixed> $payload
- * @return array{threshold: int, timeout: int, successThreshold: int, cacheKey: string, prefix: string}
+ * @return array{threshold: int, timeout: int, successThreshold: int, key: string, prefix: string}
  */
 function breakerOptions(array $payload): array
 {
@@ -227,7 +227,7 @@ function breakerOptions(array $payload): array
         'threshold' => intOption($payload, 'threshold', (int) (getenv('BREAKER_DEMO_THRESHOLD') ?: 3), 1, 20),
         'timeout' => intOption($payload, 'timeout', (int) (getenv('BREAKER_DEMO_TIMEOUT') ?: 8), 1, 120),
         'successThreshold' => intOption($payload, 'successThreshold', (int) (getenv('BREAKER_DEMO_SUCCESS_THRESHOLD') ?: 2), 1, 10),
-        'cacheKey' => cacheKey($payload['cacheKey'] ?? getenv('BREAKER_DEMO_CACHE_KEY') ?: 'local-api'),
+        'key' => normalizeKey($payload['key'] ?? getenv('BREAKER_DEMO_CACHE_KEY') ?: 'local-api'),
         'prefix' => getenv('BREAKER_DEMO_REDIS_PREFIX') ?: 'breaker-demo:',
     ];
 }
@@ -244,7 +244,7 @@ function intOption(array $payload, string $key, int $default, int $min, int $max
     return max($min, min($max, (int) $payload[$key]));
 }
 
-function cacheKey(mixed $value): string
+function normalizeKey(mixed $value): string
 {
     $key = is_scalar($value) ? (string) $value : 'local-api';
     $key = preg_replace('/[^A-Za-z0-9_.:-]+/', '-', $key) ?? 'local-api';
@@ -254,12 +254,12 @@ function cacheKey(mixed $value): string
 }
 
 /**
- * @param array{threshold: int, timeout: int, successThreshold: int, cacheKey: string, prefix: string} $options
+ * @param array{threshold: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
  */
 function openedAt(array $options): ?int
 {
     $adapter = new RedisAdapter(redis(), $options['prefix']);
-    $value = $adapter->get($options['cacheKey'] . ':opened_at');
+    $value = $adapter->get($options['key'] . ':opened_at');
 
     return is_numeric($value) ? (int) $value : null;
 }
