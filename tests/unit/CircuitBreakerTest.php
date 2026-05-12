@@ -37,8 +37,8 @@ final class CircuitBreakerTest extends TestCase
     public function testCachedStateIsSharedAcrossBreakerInstances(): void
     {
         $cache = $this->createArrayAdapter();
-        $first = new CircuitBreaker(threshold: 2, timeout: 30, successThreshold: 1, cache: $cache, cacheKey: 'users-api');
-        $second = new CircuitBreaker(threshold: 2, timeout: 30, successThreshold: 1, cache: $cache, cacheKey: 'users-api');
+        $first = new CircuitBreaker(threshold: 2, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
+        $second = new CircuitBreaker(threshold: 2, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
 
         $first->call(
             open: static fn () => 'fallback',
@@ -96,7 +96,7 @@ final class CircuitBreakerTest extends TestCase
                 $this->writes[] = ['delete', $key, null];
             }
         };
-        $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, cache: $cache, cacheKey: 'users-api');
+        $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
 
         self::assertSame('ok', $breaker->call(
             open: static fn () => 'fallback',
@@ -146,7 +146,7 @@ final class CircuitBreakerTest extends TestCase
                 unset($this->values[$key]);
             }
         };
-        $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, cache: $cache, cacheKey: 'users-api');
+        $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
 
         $breaker->call(
             open: static fn () => 'fallback',
@@ -305,7 +305,7 @@ final class CircuitBreakerTest extends TestCase
             timeout: 0,
             successThreshold: 1,
             cache: $cache,
-            cacheKey: 'users-api',
+            key: 'users-api',
             telemetry: $telemetry
         );
 
@@ -325,7 +325,7 @@ final class CircuitBreakerTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        new CircuitBreaker(cache: $this->createArrayAdapter(), cacheKey: '');
+        new CircuitBreaker(cache: $this->createArrayAdapter(), key: '');
     }
 
     public function testTripTransitionsToOpen(): void
@@ -370,10 +370,10 @@ final class CircuitBreakerTest extends TestCase
     public function testTripPersistsStateThroughCacheAdapter(): void
     {
         $cache = $this->createArrayAdapter();
-        $first = new CircuitBreaker(cache: $cache, cacheKey: 'users-api');
+        $first = new CircuitBreaker(cache: $cache, key: 'users-api');
         $first->trip();
 
-        $second = new CircuitBreaker(cache: $cache, cacheKey: 'users-api');
+        $second = new CircuitBreaker(cache: $cache, key: 'users-api');
 
         self::assertTrue($second->isOpen());
     }

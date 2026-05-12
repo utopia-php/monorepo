@@ -62,8 +62,8 @@ final class SwooleTableAdapterTest extends TestCase
     public function testCircuitBreakerSharesStateThroughSwooleTable(): void
     {
         $cache = new SwooleTable(SwooleTable::createTable(32), 'breaker-test:');
-        $first = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2, cache: $cache, cacheKey: 'billing-api');
-        $second = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2, cache: $cache, cacheKey: 'billing-api');
+        $first = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2, cache: $cache, key: 'billing-api');
+        $second = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2, cache: $cache, key: 'billing-api');
 
         $first->call(
             open: static fn () => 'fallback',

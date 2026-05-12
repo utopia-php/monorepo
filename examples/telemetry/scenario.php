@@ -12,7 +12,7 @@ require __DIR__ . '/../../vendor/autoload.php';
 
 $duration = duration($argv);
 $config = [
-    'cacheKey' => getenv('BREAKER_SCENARIO_CACHE_KEY') ?: 'checkout-api',
+    'key' => getenv('BREAKER_SCENARIO_CACHE_KEY') ?: 'checkout-api',
     'threshold' => (int) (getenv('BREAKER_SCENARIO_THRESHOLD') ?: 5),
     'timeout' => (int) (getenv('BREAKER_SCENARIO_TIMEOUT') ?: 12),
     'successThreshold' => (int) (getenv('BREAKER_SCENARIO_SUCCESS_THRESHOLD') ?: 3),
@@ -113,7 +113,7 @@ function createTelemetry(): Telemetry
 }
 
 /**
- * @param array{cacheKey: string, threshold: int, timeout: int, successThreshold: int, prefix: string} $config
+ * @param array{key: string, threshold: int, timeout: int, successThreshold: int, prefix: string} $config
  */
 function createBreaker(Telemetry $telemetry, array $config): CircuitBreaker
 {
@@ -122,20 +122,20 @@ function createBreaker(Telemetry $telemetry, array $config): CircuitBreaker
         timeout: $config['timeout'],
         successThreshold: $config['successThreshold'],
         cache: new RedisAdapter(redis(), $config['prefix']),
-        cacheKey: $config['cacheKey'],
+        key: $config['key'],
         telemetry: $telemetry
     );
 }
 
 /**
- * @param array{cacheKey: string, threshold: int, timeout: int, successThreshold: int, prefix: string} $config
+ * @param array{key: string, threshold: int, timeout: int, successThreshold: int, prefix: string} $config
  */
 function resetBreaker(array $config): void
 {
     $adapter = new RedisAdapter(redis(), $config['prefix']);
 
     foreach (['state', 'failures', 'successes', 'opened_at'] as $field) {
-        $adapter->delete($config['cacheKey'] . ':' . $field);
+        $adapter->delete($config['key'] . ':' . $field);
     }
 }
 
