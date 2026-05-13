@@ -17,7 +17,7 @@ use Utopia\Span\Exporter;
 
 // Bootstrap once at startup
 Span::setStorage(new Storage\Auto());
-Span::addExporter(new Exporter\Stdout());
+Span::setExporters(new Exporter\Stdout());
 
 // Create a span
 $span = Span::init('http.request');
@@ -112,17 +112,20 @@ $span = Span::init('http.request', $request->getHeader('traceparent'));
 
 ### Sampling
 
-Add a sampler to control which spans get exported:
+Each exporter decides which spans it accepts via its `sample()` method. Most built-in exporters accept a `sampler` closure as their first constructor argument:
 
 ```php
-Span::addExporter(
-    new Exporter\Sentry('https://key@sentry.io/123'),
-    sampler: fn(Span $s) =>
-        $s->getError() !== null ||          // errors
-        $s->get('span.duration') > 5.0 ||   // slow requests (>5s)
-        $s->get('plan') === 'enterprise'    // enterprise customers
+Span::setExporters(
+    new Exporter\Stdout(
+        sampler: fn(Span $s) =>
+            $s->getError() !== null ||          // errors
+            $s->get('span.duration') > 5.0 ||   // slow requests (>5s)
+            $s->get('plan') === 'enterprise'    // enterprise customers
+    ),
 );
 ```
+
+The Sentry exporter is hard-wired to error spans only; a custom sampler is composed with that filter and can further restrict — but not broaden — what is sent.
 
 ## Storage Backends
 
@@ -144,17 +147,17 @@ Span::addExporter(
 ### Stdout Exporter
 
 ```php
-Span::addExporter(new Exporter\Stdout(
+Span::setExporters(new Exporter\Stdout(
     maxTraceFrames: 3  // default, limits error stacktrace length
 ));
 ```
 
-Outputs JSON to stdout (info) or stderr (errors).
+Outputs JSON to stdout (info) or stderr (errors). Exports every span by default; pass `sampler:` to filter.
 
 ### Pretty Exporter
 
 ```php
-Span::addExporter(new Exporter\Pretty(
+Span::setExporters(new Exporter\Pretty(
     maxTraceFrames: 3,  // default, limits error stacktrace length
     width: 60           // default, separator line width
 ));
@@ -175,13 +178,13 @@ http.request · 12.3ms · abc12345
 ### Sentry Exporter
 
 ```php
-Span::addExporter(new Exporter\Sentry(
+Span::setExporters(new Exporter\Sentry(
     dsn: 'https://key@sentry.io/123',
     environment: 'production'  // optional
 ));
 ```
 
-Only exports error spans with full stacktraces. Non-error spans are skipped.
+Only exports error spans with full stacktraces. Non-error spans are skipped, even if you pass a custom `sampler`.
 
 ### Custom Exporter
 
@@ -191,6 +194,11 @@ use Utopia\Span\Span;
 
 class MyExporter implements Exporter
 {
+    public function sample(Span $span): bool
+    {
+        return true; // export every span
+    }
+
     public function export(Span $span): void
     {
         $data = $span->getAttributes();
@@ -206,13 +214,13 @@ Disable or capture spans in tests:
 
 ```php
 // Option 1: Discard all spans
-Span::resetExporters();
-Span::addExporter(new Exporter\None());
+Span::setExporters(new Exporter\None());
 
 // Option 2: Capture for assertions
 $spans = [];
-Span::addExporter(new class($spans) implements Exporter {
+Span::setExporters(new class($spans) implements Exporter {
     public function __construct(private array &$spans) {}
+    public function sample(Span $span): bool { return true; }
     public function export(Span $span): void {
         $this->spans[] = $span;
     }
@@ -230,9 +238,8 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 
 | Method                                               | Description                           |
 | ---------------------------------------------------- | ------------------------------------- |
-| `setStorage(Storage $storage)`                       | Set the storage backend               |
-| `addExporter(Exporter $exporter, ?Closure $sampler)` | Add an exporter with optional sampler |
-| `resetExporters()`                                   | Remove all exporters                  |
+| `setStorage(?Storage $storage)`                      | Set the storage backend (null clears) |
+| `setExporters(Exporter ...$exporters)`               | Replace all exporters                 |
 | `init(string $action, ?string $traceparent): Span`   | Create and store a new span           |
 | `current(): ?Span`                                   | Get the current span                  |
 | `add(string $key, scalar $value)`                    | Set attribute on current span         |

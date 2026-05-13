@@ -2,6 +2,7 @@
 
 namespace Utopia\Span\Exporter;
 
+use Closure;
 use Utopia\Span\Span;
 
 /**
@@ -22,14 +23,25 @@ readonly class Pretty implements Exporter
     private const CYAN = "\033[36m";
     private const WHITE = "\033[37m";
 
+    /** @var Closure(Span): bool */
+    private Closure $sampler;
+
     /**
+     * @param Closure(Span): bool|null $sampler Filter function. Defaults to exporting every span.
      * @param int $maxTraceFrames Maximum stacktrace frames to include for errors
      * @param int $width Line width for the separator
      */
     public function __construct(
+        ?Closure $sampler = null,
         private int $maxTraceFrames = 3,
         private int $width = 60,
     ) {
+        $this->sampler = $sampler ?? static fn (Span $span): bool => true;
+    }
+
+    public function sample(Span $span): bool
+    {
+        return ($this->sampler)($span);
     }
 
     public function export(Span $span): void

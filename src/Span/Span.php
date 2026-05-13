@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Utopia\Span;
 
-use Closure;
 use Throwable;
 use Utopia\Span\Exporter\Exporter;
 use Utopia\Span\Storage\Storage;
@@ -14,7 +13,7 @@ class Span
     private static ?Storage $storage = null;
 
     /**
-     * @var array<array{exporter: Exporter, sampler: ?Closure}>
+     * @var array<Exporter>
      */
     private static array $exporters = [];
 
@@ -33,56 +32,28 @@ class Span
     }
 
     /**
-     * Set the storage backend for span context.
+     * Set (or clear) the storage backend for span context.
      *
-     * Call once at application startup before creating spans.
+     * Call once at application startup before creating spans. Pass null to clear.
      *
-     * @param Storage $storage Use Storage\Auto for automatic detection
+     * @param Storage|null $storage Use Storage\Auto for automatic detection, or null to clear
      */
-    public static function setStorage(Storage $storage): void
+    public static function setStorage(?Storage $storage): void
     {
         self::$storage = $storage;
     }
 
     /**
-     * Add an exporter with optional sampler.
+     * Replace all exporters.
      *
-     * Exporters receive finished spans. Use a sampler to filter which spans are exported.
+     * Exporters receive finished spans. Each exporter decides whether to export
+     * via its own {@see Exporter::sample()} method.
      *
-     * @param Exporter $exporter The exporter to add
-     * @param Closure|null $sampler Filter function: fn(Span $s): bool. Return true to export.
+     * @param Exporter ...$exporters Exporters to register, replacing any previously set
      */
-    public static function addExporter(Exporter $exporter, ?Closure $sampler = null): void
+    public static function setExporters(Exporter ...$exporters): void
     {
-        self::$exporters[] = [
-            'exporter' => $exporter,
-            'sampler' => $sampler,
-        ];
-    }
-
-    /**
-     * Remove all exporters
-     */
-    public static function resetExporters(): void
-    {
-        self::$exporters = [];
-    }
-
-    /**
-     * Reset storage
-     */
-    public static function resetStorage(): void
-    {
-        self::$storage = null;
-    }
-
-    /**
-     * Reset all static state
-     */
-    public static function reset(): void
-    {
-        self::$storage = null;
-        self::$exporters = [];
+        self::$exporters = $exporters;
     }
 
     /**
@@ -264,12 +235,9 @@ class Span
 
         $this->attributes['level'] = $level ?? ($this->error instanceof \Throwable ? 'error' : 'info');
 
-        foreach (self::$exporters as $config) {
+        foreach (self::$exporters as $exporter) {
             try {
-                $exporter = $config['exporter'];
-                $sampler = $config['sampler'];
-
-                if ($sampler === null || $sampler($this)) {
+                if ($exporter->sample($this)) {
                     $exporter->export($this);
                 }
             } catch (\Throwable) {
