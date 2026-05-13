@@ -238,7 +238,7 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 
 | Method                                               | Description                           |
 | ---------------------------------------------------- | ------------------------------------- |
-| `setStorage(Storage $storage)`                       | Set the storage backend               |
+| `setStorage(?Storage $storage)`                      | Set the storage backend (null clears) |
 | `setExporters(Exporter ...$exporters)`               | Replace all exporters                 |
 | `init(string $action, ?string $traceparent): Span`   | Create and store a new span           |
 | `current(): ?Span`                                   | Get the current span                  |
