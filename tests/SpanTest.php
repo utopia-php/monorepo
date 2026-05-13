@@ -649,7 +649,7 @@ class SpanTest extends TestCase
             /** @var array<Span> */
             private array $exported;
 
-            private Closure $sampler;
+            private readonly Closure $sampler;
 
             /** @param array<Span> $exported */
             public function __construct(array &$exported, ?Closure $sampler)

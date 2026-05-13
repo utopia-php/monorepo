@@ -78,7 +78,7 @@ class Sentry implements Exporter
             if (!$span->getError() instanceof \Throwable) {
                 return false;
             }
-            return $sampler === null || $sampler($span);
+            return !$sampler instanceof \Closure || $sampler($span);
         };
         if ($dsn === '') {
             throw new \InvalidArgumentException('Sentry DSN is required');
