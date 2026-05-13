@@ -2,6 +2,7 @@
 
 namespace Utopia\Span\Tests;
 
+use Closure;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Utopia\Span\Exporter\Exporter;
@@ -12,7 +13,7 @@ class SpanTest extends TestCase
 {
     protected function setUp(): void
     {
-        Span::resetExporters();
+        Span::setExporters();
         Span::setStorage(new Memory());
     }
 
@@ -164,8 +165,7 @@ class SpanTest extends TestCase
         $exporter1 = $this->createExporter($exported1);
         $exporter2 = $this->createExporter($exported2);
 
-        Span::addExporter($exporter1);
-        Span::addExporter($exporter2);
+        Span::setExporters($exporter1, $exporter2);
 
         $span = Span::init('test');
         $span->finish();
@@ -240,7 +240,7 @@ class SpanTest extends TestCase
         $exporter = $this->createExporter($exported);
         $error = new RuntimeException('Test');
 
-        Span::addExporter($exporter);
+        Span::setExporters($exporter);
 
         $span = Span::init('test');
         $span->finish(error: $error);
@@ -252,10 +252,12 @@ class SpanTest extends TestCase
     public function testSamplerFiltersExport(): void
     {
         $exported = [];
-        $exporter = $this->createExporter($exported);
+        $exporter = $this->createExporter(
+            $exported,
+            fn (Span $s): bool => $s->getError() instanceof \Throwable,
+        );
 
-        // Only export spans with errors
-        Span::addExporter($exporter, fn (Span $s): bool => $s->getError() instanceof \Throwable);
+        Span::setExporters($exporter);
 
         $span1 = Span::init('test');
         $span1->finish();
@@ -270,13 +272,16 @@ class SpanTest extends TestCase
     public function testSamplerReceivesSpan(): void
     {
         $exported = [];
-        $exporter = $this->createExporter($exported);
         $sampledSpan = null;
+        $exporter = $this->createExporter(
+            $exported,
+            function (Span $s) use (&$sampledSpan): bool {
+                $sampledSpan = $s;
+                return true;
+            },
+        );
 
-        Span::addExporter($exporter, function (Span $s) use (&$sampledSpan): bool {
-            $sampledSpan = $s;
-            return true;
-        });
+        Span::setExporters($exporter);
 
         $span = Span::init('test');
         $span->finish();
@@ -284,13 +289,46 @@ class SpanTest extends TestCase
         $this->assertSame($span, $sampledSpan);
     }
 
-    public function testResetExportersRemovesAllExporters(): void
+    public function testSetExportersReplacesExistingExporters(): void
+    {
+        $firstExported = [];
+        $secondExported = [];
+        $first = $this->createExporter($firstExported);
+        $second = $this->createExporter($secondExported);
+
+        Span::setExporters($first);
+        Span::setExporters($second);
+
+        $span = Span::init('test');
+        $span->finish();
+
+        $this->assertCount(0, $firstExported);
+        $this->assertCount(1, $secondExported);
+    }
+
+    public function testSetExportersWithMultipleExporters(): void
+    {
+        $exportedA = [];
+        $exportedB = [];
+        $a = $this->createExporter($exportedA);
+        $b = $this->createExporter($exportedB);
+
+        Span::setExporters($a, $b);
+
+        $span = Span::init('test');
+        $span->finish();
+
+        $this->assertCount(1, $exportedA);
+        $this->assertCount(1, $exportedB);
+    }
+
+    public function testSetExportersWithNoArgumentsClearsExporters(): void
     {
         $exported = [];
         $exporter = $this->createExporter($exported);
 
-        Span::addExporter($exporter);
-        Span::resetExporters();
+        Span::setExporters($exporter);
+        Span::setExporters();
 
         $span = Span::init('test');
         $span->finish();
@@ -310,35 +348,15 @@ class SpanTest extends TestCase
         $this->assertSame($span, $result);
     }
 
-    public function testResetClearsStorageAndExporters(): void
+    public function testSetStorageNullClearsStorage(): void
     {
         $exported = [];
         $exporter = $this->createExporter($exported);
 
-        Span::addExporter($exporter);
-        $span = Span::init('test');
-
-        $this->assertSame($span, Span::current());
-
-        Span::reset();
-
-        $this->assertNull(Span::current());
-
-        $span2 = Span::init('test');
-        $span2->finish();
-
-        $this->assertCount(0, $exported);
-    }
-
-    public function testResetStorageClearsOnlyStorage(): void
-    {
-        $exported = [];
-        $exporter = $this->createExporter($exported);
-
-        Span::addExporter($exporter);
+        Span::setExporters($exporter);
         Span::init('test');
 
-        Span::resetStorage();
+        Span::setStorage(null);
 
         $this->assertNull(Span::current());
 
@@ -351,7 +369,7 @@ class SpanTest extends TestCase
 
     public function testInitWithoutStorageReturnsSpan(): void
     {
-        Span::resetStorage();
+        Span::setStorage(null);
 
         $span = Span::init('test');
 
@@ -360,7 +378,7 @@ class SpanTest extends TestCase
 
     public function testCurrentWithoutStorageReturnsNull(): void
     {
-        Span::resetStorage();
+        Span::setStorage(null);
 
         $this->assertNull(Span::current());
     }
@@ -378,7 +396,7 @@ class SpanTest extends TestCase
     {
         $exported = [];
         $exporter = $this->createExporter($exported);
-        Span::addExporter($exporter);
+        Span::setExporters($exporter);
 
         $span1 = Span::init('test');
         $span1->set('name', 'first');
@@ -395,7 +413,7 @@ class SpanTest extends TestCase
 
     public function testFinishWithoutExportersDoesNotThrow(): void
     {
-        Span::resetExporters();
+        Span::setExporters();
 
         $span = Span::init('test');
         $span->finish();
@@ -462,26 +480,32 @@ class SpanTest extends TestCase
         $this->assertNull($span->get('null'));
     }
 
-    public function testMultipleSamplersAllMustPass(): void
+    public function testMultipleExportersWithIndependentSamplers(): void
     {
-        $exported = [];
-        $exporter = $this->createExporter($exported);
+        $exportedYes = [];
+        $exportedNo = [];
 
-        Span::addExporter($exporter, fn (Span $s): bool => true);
-        Span::addExporter($exporter, fn (Span $s): bool => false);
+        $yes = $this->createExporter($exportedYes, fn (Span $s): bool => true);
+        $no = $this->createExporter($exportedNo, fn (Span $s): bool => false);
+
+        Span::setExporters($yes, $no);
 
         $span = Span::init('test');
         $span->finish();
 
-        $this->assertCount(1, $exported);
+        $this->assertCount(1, $exportedYes);
+        $this->assertCount(0, $exportedNo);
     }
 
     public function testSamplerCanFilterByDuration(): void
     {
         $exported = [];
-        $exporter = $this->createExporter($exported);
+        $exporter = $this->createExporter(
+            $exported,
+            fn (Span $s): bool => $s->get('span.duration') > 0.005,
+        );
 
-        Span::addExporter($exporter, fn (Span $s): bool => $s->get('span.duration') > 0.005);
+        Span::setExporters($exporter);
 
         $fastSpan = Span::init('test');
         $fastSpan->finish();
@@ -617,17 +641,26 @@ class SpanTest extends TestCase
 
     /**
      * @param array<Span> $exported
+     * @param Closure(Span): bool|null $sampler
      */
-    private function createExporter(array &$exported): Exporter
+    private function createExporter(array &$exported, ?Closure $sampler = null): Exporter
     {
-        return new class ($exported) implements Exporter {
+        return new class ($exported, $sampler) implements Exporter {
             /** @var array<Span> */
             private array $exported;
 
+            private Closure $sampler;
+
             /** @param array<Span> $exported */
-            public function __construct(array &$exported)
+            public function __construct(array &$exported, ?Closure $sampler)
             {
                 $this->exported = &$exported;
+                $this->sampler = $sampler ?? static fn (Span $span): bool => true;
+            }
+
+            public function sample(Span $span): bool
+            {
+                return ($this->sampler)($span);
             }
 
             public function export(Span $span): void

@@ -13,7 +13,7 @@ class SentryTest extends TestCase
 {
     public function testConstructorParsesDsn(): void
     {
-        $exporter = new Sentry('https://publickey@sentry.io/123456');
+        $exporter = new Sentry(dsn: 'https://publickey@sentry.io/123456');
 
         $this->assertInstanceOf(Sentry::class, $exporter);
     }
@@ -23,26 +23,26 @@ class SentryTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Invalid Sentry DSN');
 
-        new Sentry('http:///invalid');
+        new Sentry(dsn: 'http:///invalid');
     }
 
     public function testConstructorHandlesDsnWithPort(): void
     {
-        $exporter = new Sentry('https://publickey@sentry.example.com:9000/123');
+        $exporter = new Sentry(dsn: 'https://publickey@sentry.example.com:9000/123');
 
         $this->assertInstanceOf(Sentry::class, $exporter);
     }
 
     public function testConstructorHandlesHttpDsn(): void
     {
-        $exporter = new Sentry('http://publickey@localhost/123');
+        $exporter = new Sentry(dsn: 'http://publickey@localhost/123');
 
         $this->assertInstanceOf(Sentry::class, $exporter);
     }
 
     public function testExportDoesNotThrowWithValidSpan(): void
     {
-        $exporter = new Sentry('https://key@sentry.io/123');
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123');
         $span = new Span();
         $span->set('action', 'test');
         $span->finish();
@@ -56,7 +56,7 @@ class SentryTest extends TestCase
 
     public function testExportHandlesSpanWithParentId(): void
     {
-        $exporter = new Sentry('https://key@sentry.io/123');
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123');
         $span = new Span();
         $span->set('span.parent_id', 'abc123def456');
         $span->finish();
@@ -69,7 +69,7 @@ class SentryTest extends TestCase
 
     public function testExportHandlesSpanWithError(): void
     {
-        $exporter = new Sentry('https://key@sentry.io/123');
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123');
         $span = new Span();
         $span->setError(new \RuntimeException('Test error'));
         $span->finish();
@@ -82,7 +82,7 @@ class SentryTest extends TestCase
 
     public function testExportHandlesSpanWithAllAttributes(): void
     {
-        $exporter = new Sentry('https://key@sentry.io/123');
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123');
         $span = new Span();
         $span->set('action', 'http.request');
         $span->set('user.id', '123');
@@ -99,7 +99,7 @@ class SentryTest extends TestCase
 
     public function testExportHandlesHttpConventionAttributes(): void
     {
-        $exporter = new Sentry('https://key@sentry.io/123');
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123');
         $span = new Span('http.request');
         $span->set('http.url', 'https://api.example.com/users');
         $span->set('http.method', 'POST');
@@ -117,7 +117,7 @@ class SentryTest extends TestCase
     public function testExportWithClassifier(): void
     {
         $exporter = new Sentry(
-            'https://key@sentry.io/123',
+            dsn: 'https://key@sentry.io/123',
             classifier: fn (string $key): SentryField => match (true) {
                 str_starts_with($key, 'tenant.') => SentryField::Tag,
                 str_starts_with($key, 'user.') => SentryField::Context,

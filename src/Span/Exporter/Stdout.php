@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\Span\Exporter;
 
+use Closure;
 use Utopia\Span\Span;
 
 /**
@@ -14,14 +15,25 @@ use Utopia\Span\Span;
  */
 readonly class Stdout implements Exporter
 {
+    /** @var Closure(Span): bool */
+    private Closure $sampler;
+
     /**
      * Create a new Stdout exporter.
      *
+     * @param Closure(Span): bool|null $sampler Filter function. Defaults to exporting every span.
      * @param int $maxTraceFrames Maximum stacktrace frames to include for errors
      */
     public function __construct(
-        private int $maxTraceFrames = 3
+        ?Closure $sampler = null,
+        private int $maxTraceFrames = 3,
     ) {
+        $this->sampler = $sampler ?? static fn (Span $span): bool => true;
+    }
+
+    public function sample(Span $span): bool
+    {
+        return ($this->sampler)($span);
     }
 
     public function export(Span $span): void

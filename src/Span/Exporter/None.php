@@ -12,6 +12,11 @@ use Utopia\Span\Span;
  */
 class None implements Exporter
 {
+    public function sample(Span $span): bool
+    {
+        return false;
+    }
+
     public function export(Span $span): void
     {
         // Intentionally empty - discards all spans

@@ -49,9 +49,16 @@ class Sentry implements Exporter
     /** @var Closure(string): SentryField */
     private readonly Closure $classifier;
 
+    /** @var Closure(Span): bool */
+    private readonly Closure $sampler;
+
     /**
      * Create a new Sentry exporter.
      *
+     * Sentry only ever exports error spans; a custom sampler is composed (AND) with the
+     * built-in error filter, so it can further restrict — but not broaden — what is sent.
+     *
+     * @param Closure(Span): bool|null $sampler Optional additional filter, composed with the error-only filter.
      * @param string $dsn Sentry DSN (e.g., https://key@sentry.io/123)
      * @param string|null $environment Optional environment name (e.g., 'production')
      * @param string|null $release Optional release/version identifier (e.g., commit hash)
@@ -59,13 +66,20 @@ class Sentry implements Exporter
      * @param Closure(string): SentryField|null $classifier Optional callback to classify attributes
      */
     public function __construct(
-        private readonly string $dsn,
+        ?Closure $sampler = null,
+        private readonly string $dsn = '',
         private readonly ?string $environment = null,
         private readonly ?string $release = null,
         private readonly ?string $serverName = null,
         ?Closure $classifier = null,
     ) {
         $this->classifier = $classifier ?? static fn (string $key): SentryField => SentryField::Context;
+        $this->sampler = static function (Span $span) use ($sampler): bool {
+            if (!$span->getError() instanceof \Throwable) {
+                return false;
+            }
+            return $sampler === null || $sampler($span);
+        };
         $parsed = parse_url($dsn);
 
         if ($parsed === false) {
@@ -80,6 +94,11 @@ class Sentry implements Exporter
         $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
 
         $this->endpoint = "{$scheme}://{$host}{$port}/api/{$this->projectId}/envelope/";
+    }
+
+    public function sample(Span $span): bool
+    {
+        return ($this->sampler)($span);
     }
 
     public function export(Span $span): void
