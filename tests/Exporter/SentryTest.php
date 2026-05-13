@@ -26,6 +26,28 @@ class SentryTest extends TestCase
         new Sentry(dsn: 'http:///invalid');
     }
 
+    public function testConstructorThrowsOnEmptyDsn(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Sentry DSN is required');
+
+        new Sentry();
+    }
+
+    public function testConstructorThrowsOnDsnMissingPublicKey(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new Sentry(dsn: 'https://sentry.io/123');
+    }
+
+    public function testConstructorThrowsOnDsnMissingProjectId(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new Sentry(dsn: 'https://key@sentry.io');
+    }
+
     public function testConstructorHandlesDsnWithPort(): void
     {
         $exporter = new Sentry(dsn: 'https://publickey@sentry.example.com:9000/123');

@@ -80,17 +80,28 @@ class Sentry implements Exporter
             }
             return $sampler === null || $sampler($span);
         };
+        if ($dsn === '') {
+            throw new \InvalidArgumentException('Sentry DSN is required');
+        }
+
         $parsed = parse_url($dsn);
 
         if ($parsed === false) {
             throw new \InvalidArgumentException('Invalid Sentry DSN');
         }
 
-        $this->publicKey = $parsed['user'] ?? '';
-        $this->projectId = ltrim($parsed['path'] ?? '', '/');
+        $publicKey = $parsed['user'] ?? '';
+        $host = $parsed['host'] ?? '';
+        $projectId = ltrim($parsed['path'] ?? '', '/');
+
+        if ($publicKey === '' || $host === '' || $projectId === '') {
+            throw new \InvalidArgumentException('Invalid Sentry DSN: must include public key, host, and project ID');
+        }
+
+        $this->publicKey = $publicKey;
+        $this->projectId = $projectId;
 
         $scheme = $parsed['scheme'] ?? 'https';
-        $host = $parsed['host'] ?? '';
         $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
 
         $this->endpoint = "{$scheme}://{$host}{$port}/api/{$this->projectId}/envelope/";
