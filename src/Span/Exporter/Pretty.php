@@ -62,6 +62,12 @@ readonly class Pretty implements Exporter
             }
         }
 
+        if (array_key_exists('level', $attributes)) {
+            $level = $attributes['level'];
+            unset($attributes['level']);
+            $attributes = ['level' => $level] + $attributes;
+        }
+
         $maxKeyLen = 0;
         foreach (array_keys($attributes) as $key) {
             $maxKeyLen = max($maxKeyLen, strlen($key));
