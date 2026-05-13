@@ -38,7 +38,15 @@ readonly class Stdout implements Exporter
 
     public function export(Span $span): void
     {
-        $data = ['action' => $span->getAction()] + $span->getAttributes();
+        $attributes = $span->getAttributes();
+        $ordered = [];
+        if (array_key_exists('level', $attributes)) {
+            $ordered['level'] = $attributes['level'];
+            unset($attributes['level']);
+        }
+        $ordered['action'] = $span->getAction();
+
+        $data = $ordered + $attributes;
         $error = $span->getError();
 
         if ($error instanceof \Throwable) {
