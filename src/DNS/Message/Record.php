@@ -531,8 +531,43 @@ final readonly class Record
         [$serialNum, $refreshNum, $retryNum, $expireNum, $minimumNum] = $numbers;
 
         return Domain::encode($mname)
-            . Domain::encode($rname)
+            . self::encodeSoaRname($rname)
             . pack('NNNNN', $serialNum, $refreshNum, $retryNum, $expireNum, $minimumNum);
+    }
+
+    private static function encodeSoaRname(string $rname): string
+    {
+        if (!str_contains($rname, '@')) {
+            return Domain::encode($rname);
+        }
+
+        if (substr_count($rname, '@') > 1) {
+            throw new \InvalidArgumentException(
+                'SOA RNAME email must contain exactly one @ separator'
+            );
+        }
+
+        [$localPart, $domain] = explode('@', $rname, 2);
+
+        if ($localPart === '' || $domain === '') {
+            throw new \InvalidArgumentException(
+                'SOA RNAME email must have non-empty local part and domain'
+            );
+        }
+
+        $localLength = strlen($localPart);
+        if ($localLength > Domain::MAX_LABEL_LEN) {
+            throw new \InvalidArgumentException("Label too long: $localPart");
+        }
+
+        $encoded = chr($localLength) . $localPart . Domain::encode($domain);
+        if (strlen($encoded) > Domain::MAX_DOMAIN_NAME_LEN) {
+            throw new \InvalidArgumentException(
+                "Encoded domain exceeds maximum length of " . Domain::MAX_DOMAIN_NAME_LEN . ' bytes'
+            );
+        }
+
+        return $encoded;
     }
 
     private function encodeCaaRdata(): string
