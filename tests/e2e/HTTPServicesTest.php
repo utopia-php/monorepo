@@ -167,5 +167,22 @@ class HttpServicesTest extends TestCase
         // Verify params without aliases have empty array
         $this->assertArrayHasKey('aliases', $params['name'], 'Param name should have aliases key');
         $this->assertEquals([], $params['name']['aliases']);
+
+        // Verify enum is forwarded to Route params
+        $this->assertArrayHasKey('enum', $params['status'], 'Param status should have enum key on Route');
+        $this->assertInstanceOf(\Utopia\Platform\Enum::class, $params['status']['enum']);
+        $this->assertEquals('ArticleStatus', $params['status']['enum']->name);
+        $this->assertEquals(['draft' => 'Draft', 'published' => 'Published'], $params['status']['enum']->map);
+
+        // Verify enum is stored on Action params
+        $action = new TestActionWithParams();
+        $actionParams = $action->getParams();
+
+        $this->assertInstanceOf(\Utopia\Platform\Enum::class, $actionParams['status']['enum']);
+        $this->assertEquals('ArticleStatus', $actionParams['status']['enum']->name);
+        $this->assertEquals(['draft' => 'Draft', 'published' => 'Published'], $actionParams['status']['enum']->map);
+
+        // Verify params without enum are null on Action
+        $this->assertNull($actionParams['name']['enum']);
     }
 }

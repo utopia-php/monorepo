@@ -170,9 +170,10 @@ abstract class Action
      * @param  bool  $deprecated
      * @param  string  $example
      * @param  array  $aliases
+     * @param  Enum|null  $enum
      * @return self
      */
-    public function param(string $key, mixed $default, Validator|callable $validator, string $description = '', bool $optional = false, array $injections = [], bool $skipValidation = false, bool $deprecated = false, string $example = '', array $aliases = []): self
+    public function param(string $key, mixed $default, Validator|callable $validator, string $description = '', bool $optional = false, array $injections = [], bool $skipValidation = false, bool $deprecated = false, string $example = '', array $aliases = [], ?Enum $enum = null): self
     {
         $param = [
             'default' => $default,
@@ -184,6 +185,7 @@ abstract class Action
             'deprecated' => $deprecated, // TODO: @Meldiron implement tests
             'example' => $example,
             'aliases' => $aliases,
+            'enum' => $enum,
         ];
         $this->options['param:'.$key] = array_merge($param, ['type' => 'param']);
         $this->params[$key] = $param;
