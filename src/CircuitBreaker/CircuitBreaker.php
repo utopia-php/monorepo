@@ -50,14 +50,15 @@ class CircuitBreaker
     public function setTelemetry(Telemetry $telemetry): void
     {
         $this->calls = $telemetry->createCounter($this->metricName('breaker.calls'), '{call}');
-        $this->callbackFailures = $telemetry->createCounter($this->metricName('breaker.callback_failures'), '{failure}');
-        $this->fallbacks = $telemetry->createCounter($this->metricName('breaker.fallbacks'), '{fallback}');
-        $this->transitions = $telemetry->createCounter($this->metricName('breaker.transitions'), '{transition}');
         $this->activeCalls = $telemetry->createUpDownCounter($this->metricName('breaker.active_calls'), '{call}');
         $this->stateGauge = $telemetry->createGauge($this->metricName('breaker.state'));
         $this->failuresGauge = $telemetry->createGauge($this->metricName('breaker.failures'), '{failure}');
         $this->successesGauge = $telemetry->createGauge($this->metricName('breaker.successes'), '{success}');
-        $this->eventTimestamp = $telemetry->createGauge($this->metricName('breaker.event.timestamp'), 's');
+
+        $this->callbackFailures = Counter::lazy($telemetry, $this->metricName('breaker.callback_failures'), '{failure}');
+        $this->fallbacks = Counter::lazy($telemetry, $this->metricName('breaker.fallbacks'), '{fallback}');
+        $this->transitions = Counter::lazy($telemetry, $this->metricName('breaker.transitions'), '{transition}');
+        $this->eventTimestamp = Gauge::lazy($telemetry, $this->metricName('breaker.event.timestamp'), 's');
     }
 
     public function call(callable $open, callable $close, ?callable $halfOpen = null): mixed

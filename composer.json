@@ -25,7 +25,7 @@
         "phpunit/phpunit": "^10.0",
         "phpstan/phpstan": "^2.1",
         "laravel/pint": "^1.29",
-        "utopia-php/telemetry": "0.2.*"
+        "utopia-php/telemetry": "^0.4"
     },
     "suggest": {
         "utopia-php/telemetry": "Required when passing telemetry adapters or running the local telemetry demo.",
