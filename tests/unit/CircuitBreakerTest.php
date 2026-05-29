@@ -255,6 +255,45 @@ final class CircuitBreakerTest extends TestCase
         self::assertSame([], $telemetry->gauges['breaker.failures']->values);
         self::assertSame([], $telemetry->gauges['breaker.successes']->values);
         self::assertSame([], $telemetry->counters['breaker.calls']->values);
+        self::assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
+        self::assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
+        self::assertArrayNotHasKey('breaker.transitions', $telemetry->counters);
+        self::assertArrayNotHasKey('breaker.event.timestamp', $telemetry->gauges);
+    }
+
+    public function testRareTelemetryInstrumentsAreCreatedOnFirstRecord(): void
+    {
+        $telemetry = new TestTelemetry();
+        $breaker = new CircuitBreaker(telemetry: $telemetry);
+
+        self::assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
+        self::assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
+        self::assertArrayNotHasKey('breaker.transitions', $telemetry->counters);
+        self::assertArrayNotHasKey('breaker.event.timestamp', $telemetry->gauges);
+
+        $breaker->trip();
+
+        self::assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
+        self::assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
+        self::assertSame([1], $telemetry->counters['breaker.transitions']->values);
+        self::assertCount(1, $telemetry->gauges['breaker.event.timestamp']->values);
+    }
+
+    public function testSuccessfulCallsDoNotCreateRareTelemetryInstruments(): void
+    {
+        $telemetry = new TestTelemetry();
+        $breaker = new CircuitBreaker(telemetry: $telemetry);
+
+        self::assertSame('ok', $breaker->call(
+            open: static fn () => 'fallback',
+            close: static fn () => 'ok',
+        ));
+
+        self::assertSame([1], $telemetry->counters['breaker.calls']->values);
+        self::assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
+        self::assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
+        self::assertArrayNotHasKey('breaker.transitions', $telemetry->counters);
+        self::assertArrayNotHasKey('breaker.event.timestamp', $telemetry->gauges);
     }
 
     public function testActiveCallTelemetryUsesPostUpdateState(): void
