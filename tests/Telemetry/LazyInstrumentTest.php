@@ -6,6 +6,8 @@ use PHPUnit\Framework\TestCase;
 use Utopia\Telemetry\Adapter\Test;
 use Utopia\Telemetry\Counter;
 use Utopia\Telemetry\Gauge;
+use Utopia\Telemetry\Histogram;
+use Utopia\Telemetry\UpDownCounter;
 
 class LazyInstrumentTest extends TestCase
 {
@@ -45,5 +47,43 @@ class LazyInstrumentTest extends TestCase
 
         $this->assertSame($inner, $telemetry->gauges['event.timestamp']);
         $this->assertSame([123.45, 456.78], $telemetry->gauges['event.timestamp']->values);
+    }
+
+    public function testLazyHistogramCreatesInnerHistogramOnFirstRecord(): void
+    {
+        $telemetry = new Test();
+        $histogram = Histogram::lazy($telemetry, 'request.duration', 'ms', 'Request duration');
+
+        $this->assertSame([], $telemetry->histograms);
+
+        $histogram->record(12.3, ['route' => '/v1/health']);
+
+        $this->assertArrayHasKey('request.duration', $telemetry->histograms);
+        $this->assertSame([12.3], $telemetry->histograms['request.duration']->values);
+
+        $inner = $telemetry->histograms['request.duration'];
+        $histogram->record(45.6);
+
+        $this->assertSame($inner, $telemetry->histograms['request.duration']);
+        $this->assertSame([12.3, 45.6], $telemetry->histograms['request.duration']->values);
+    }
+
+    public function testLazyUpDownCounterCreatesInnerCounterOnFirstAdd(): void
+    {
+        $telemetry = new Test();
+        $counter = UpDownCounter::lazy($telemetry, 'active.requests', '{request}', 'Active requests');
+
+        $this->assertSame([], $telemetry->upDownCounters);
+
+        $counter->add(1, ['route' => '/v1/health']);
+
+        $this->assertArrayHasKey('active.requests', $telemetry->upDownCounters);
+        $this->assertSame([1], $telemetry->upDownCounters['active.requests']->values);
+
+        $inner = $telemetry->upDownCounters['active.requests'];
+        $counter->add(-1);
+
+        $this->assertSame($inner, $telemetry->upDownCounters['active.requests']);
+        $this->assertSame([1, -1], $telemetry->upDownCounters['active.requests']->values);
     }
 }
