@@ -1,0 +1,59 @@
+{
+    "name": "utopia-php/client",
+    "description": "A lightweight PSR-18 HTTP client with cURL and Swoole coroutine backends",
+    "type": "library",
+    "keywords": [
+        "php",
+        "http",
+        "client",
+        "psr-18",
+        "curl",
+        "swoole",
+        "utopia"
+    ],
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Utopia\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Utopia\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "format": "vendor/bin/pint",
+        "format:check": "vendor/bin/pint --test",
+        "analyze": "vendor/bin/phpstan analyse -c phpstan.neon --memory-limit 512M",
+        "refactor": "vendor/bin/rector process",
+        "refactor:check": "vendor/bin/rector process --dry-run",
+        "test": "vendor/bin/phpunit --configuration phpunit.xml"
+    },
+    "require": {
+        "php": ">=8.4",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.0",
+        "psr/http-message": "^1.1 || ^2.0"
+    },
+    "suggest": {
+        "ext-curl": "Required to use the cURL HTTP client adapter.",
+        "ext-swoole": "Required to use the Swoole coroutine HTTP client adapter."
+    },
+    "require-dev": {
+        "laravel/pint": "1.*",
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^10.5 || ^11.0 || ^12.0",
+        "rector/rector": "^2.4",
+        "swoole/ide-helper": "^5.1"
+    },
+    "config": {
+        "platform": {
+            "php": "8.4"
+        },
+        "allow-plugins": {
+            "php-http/discovery": true,
+            "tbachert/spi": true
+        }
+    }
+}
