@@ -81,6 +81,31 @@ class Client implements Adapter
      */
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
+        return $this->perform($request, null);
+    }
+
+    /**
+     * @param callable(string): void $sink
+     *
+     * @throws ClientExceptionInterface
+     */
+    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    {
+        return $this->perform($request, $sink);
+    }
+
+    /**
+     * Execute the request. When $sink is given, Swoole's write callback forwards
+     * each body chunk to it as data arrives, so the body is never fully held in
+     * memory and the returned response has an empty body; otherwise the body is
+     * buffered onto the response.
+     *
+     * @param (callable(string): void)|null $sink
+     *
+     * @throws ClientExceptionInterface
+     */
+    private function perform(RequestInterface $request, ?callable $sink): ResponseInterface
+    {
         if (!\extension_loaded('swoole')) {
             throw new AdapterPreconditionException($request, 'The swoole extension is required.');
         }
@@ -107,10 +132,17 @@ class Client implements Adapter
             throw new AdapterInitializationException($request, $throwable->getMessage(), (int) $throwable->getCode(), $throwable);
         }
 
+        $settings = $this->settings + [self::SETTING_HTTP2 => false];
+
+        if ($sink !== null) {
+            $settings['write_func'] = static function (SwooleClient $cli, string $chunk) use ($sink): void {
+                unset($cli);
+                $sink($chunk);
+            };
+        }
+
         try {
-            if ($client->set($this->settings + [
-                self::SETTING_HTTP2 => false,
-            ]) === false) {
+            if ($client->set($settings) === false) {
                 throw new InvalidArgumentException('Unable to configure Swoole client settings.');
             }
 
@@ -121,6 +153,12 @@ class Client implements Adapter
             if ($client->setHeaders($this->requestHeaders($request)) === false) {
                 throw new InvalidArgumentException('Unable to configure Swoole request headers.');
             }
+
+            $body = (string) $request->getBody();
+
+            if ($body !== '' && $client->setData($body) === false) {
+                throw new InvalidArgumentException('Unable to configure Swoole request body.');
+            }
         } catch (InvalidArgumentException $invalidArgumentException) {
             $client->close();
 
@@ -129,24 +167,6 @@ class Client implements Adapter
             $client->close();
 
             throw new InvalidArgumentException($throwable->getMessage(), (int) $throwable->getCode(), $throwable);
-        }
-
-        $body = (string) $request->getBody();
-
-        if ($body !== '') {
-            try {
-                if ($client->setData($body) === false) {
-                    throw new InvalidArgumentException('Unable to configure Swoole request body.');
-                }
-            } catch (InvalidArgumentException $invalidArgumentException) {
-                $client->close();
-
-                throw $invalidArgumentException;
-            } catch (Throwable $throwable) {
-                $client->close();
-
-                throw new InvalidArgumentException($throwable->getMessage(), (int) $throwable->getCode(), $throwable);
-            }
         }
 
         try {
@@ -184,7 +204,7 @@ class Client implements Adapter
             $headers = [];
         }
 
-        $responseBody = $client->body;
+        $responseBody = $sink === null ? $client->body : '';
 
         if (!\is_string($responseBody)) {
             $responseBody = '';

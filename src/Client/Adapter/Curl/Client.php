@@ -75,6 +75,53 @@ class Client implements Adapter
      */
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
+        $body = '';
+
+        $parsed = $this->transfer($request, static function (string $chunk) use (&$body): void {
+            $body .= $chunk;
+        });
+
+        return $this->responseBuilder->build(
+            $parsed['status'],
+            $parsed['reason'],
+            $parsed['headers'],
+            $body,
+            $parsed['protocol'],
+        );
+    }
+
+    /**
+     * @param callable(string): void $sink
+     *
+     * @throws ClientExceptionInterface
+     */
+    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    {
+        $parsed = $this->transfer($request, $sink);
+
+        return $this->responseBuilder->build(
+            $parsed['status'],
+            $parsed['reason'],
+            $parsed['headers'],
+            '',
+            $parsed['protocol'],
+        );
+    }
+
+    /**
+     * Run the transfer, forwarding each body chunk to $sink, and return the
+     * parsed status line and headers. cURL invokes the write callback as data
+     * arrives, so a streaming $sink sees the body chunk-by-chunk and the body
+     * is never fully held in memory.
+     *
+     * @param callable(string): void $sink
+     *
+     * @return array{protocol: string, status: int, reason: string, headers: array<string, array<int, string>>}
+     *
+     * @throws ClientExceptionInterface
+     */
+    private function transfer(RequestInterface $request, callable $sink): array
+    {
         if (!\extension_loaded('curl')) {
             throw new AdapterPreconditionException($request, 'The curl extension is required.');
         }
@@ -87,14 +134,13 @@ class Client implements Adapter
         }
 
         $headers = '';
-        $body = '';
         $handle = curl_init($url);
 
         if (!$handle instanceof CurlHandle) {
             throw new AdapterInitializationException($request, 'Unable to initialize curl.');
         }
 
-        $options = $this->options($request, $headers, $body);
+        $options = $this->options($request, $headers, $sink);
 
         try {
             if (curl_setopt_array($handle, $options) === false) {
@@ -123,22 +169,16 @@ class Client implements Adapter
             throw new InvalidResponseException($request, 'Received an invalid HTTP response.');
         }
 
-        return $this->responseBuilder->build(
-            $parsed['status'],
-            $parsed['reason'],
-            $parsed['headers'],
-            $body,
-            $parsed['protocol'],
-        );
+        return $parsed;
     }
 
     /**
-     * @param-out string $headers
-     * @param-out string $body
+     * @param-out string             $headers
+     * @param callable(string): void $sink
      *
      * @return array<int, mixed>
      */
-    private function options(RequestInterface $request, string &$headers, string &$body): array
+    private function options(RequestInterface $request, string &$headers, callable $sink): array
     {
         $options = [
             \CURLOPT_CUSTOMREQUEST => $request->getMethod(),
@@ -153,9 +193,9 @@ class Client implements Adapter
                 return \strlen($line);
             },
             \CURLOPT_RETURNTRANSFER => false,
-            \CURLOPT_WRITEFUNCTION => static function (CurlHandle $handle, string $chunk) use (&$body): int {
+            \CURLOPT_WRITEFUNCTION => static function (CurlHandle $handle, string $chunk) use ($sink): int {
                 unset($handle);
-                $body .= $chunk;
+                $sink($chunk);
 
                 return \strlen($chunk);
             },

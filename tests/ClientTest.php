@@ -117,6 +117,26 @@ final class ClientTest extends TestCase
 
         $client->withBaseUri('/api');
     }
+
+    public function testItStreamsThroughTheAdapterApplyingBaseUriAndHeaders(): void
+    {
+        $requestFactory = new Request\Factory();
+        $received = '';
+        $client = new Client(new RecordingAdapter())
+            ->withBaseUri('https://api.example.com/v1')
+            ->withHeaders(['Accept' => 'application/json']);
+
+        $response = $client->streamRequest(
+            $requestFactory->createRequest('GET', 'users'),
+            function (string $chunk) use (&$received): void {
+                $received .= $chunk;
+            },
+        );
+
+        $this->assertSame('chunk', $received);
+        $this->assertSame('https://api.example.com/v1/users', $response->getHeaderLine('X-Request-Uri'));
+        $this->assertSame('application/json', $response->getHeaderLine('X-Request-Accept'));
+    }
 }
 
 final class RecordingAdapter implements Adapter
@@ -172,5 +192,17 @@ final class RecordingAdapter implements Adapter
         }
 
         return $response;
+    }
+
+    /**
+     * @param callable(string): void $sink
+     *
+     * @throws ClientExceptionInterface
+     */
+    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    {
+        $sink('chunk');
+
+        return $this->sendRequest($request);
     }
 }

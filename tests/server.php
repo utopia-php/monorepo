@@ -139,6 +139,45 @@ if ($path === '/large-response') {
     return;
 }
 
+if ($path === '/stream') {
+    http_response_code(200);
+    header('Content-Type: text/plain;charset=UTF-8');
+
+    while (ob_get_level() > 0) {
+        ob_end_flush();
+    }
+
+    for ($i = 0; $i < 5; $i++) {
+        echo 'chunk' . $i . "\n";
+        flush();
+        usleep(20_000);
+    }
+
+    return;
+}
+
+if ($path === '/stream-large') {
+    $chunkSize = 65_536;
+    $chunkCount = 128;
+
+    http_response_code(200);
+    header('Content-Type: application/octet-stream');
+    header('Content-Length: ' . ($chunkSize * $chunkCount));
+
+    while (ob_get_level() > 0) {
+        ob_end_flush();
+    }
+
+    $chunk = str_repeat('a', $chunkSize);
+
+    for ($i = 0; $i < $chunkCount; $i++) {
+        echo $chunk;
+        flush();
+    }
+
+    return;
+}
+
 if ($path === '/slow') {
     sleep(1);
     http_response_code(200);

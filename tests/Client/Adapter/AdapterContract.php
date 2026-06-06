@@ -29,6 +29,11 @@ use ValueError;
 abstract class AdapterContract extends TestCase
 {
     /**
+     * Payload size exercised by the request and response payload-size contracts.
+     */
+    private const int PAYLOAD_SIZE = 8 * 1024 * 1024;
+
+    /**
      * @param array<string|int, mixed> $transportOptions
      */
     abstract protected function createAdapter(array $transportOptions = []): Adapter;
@@ -123,6 +128,25 @@ abstract class AdapterContract extends TestCase
             $this->assertSame(302, $response->getStatusCode());
             $this->assertSame('/final', $response->getHeaderLine(Header::LOCATION));
             $this->assertSame('redirect', (string) $response->getBody());
+        });
+    }
+
+    public function testItDoesNotFollowRedirectsWhenStreaming(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect');
+            $client = $this->createAdapter();
+
+            $received = '';
+
+            $response = $this->sendStream($client, $request, function (string $chunk) use (&$received): void {
+                $received .= $chunk;
+            });
+
+            $this->assertSame(302, $response->getStatusCode());
+            $this->assertSame('/final', $response->getHeaderLine(Header::LOCATION));
+            $this->assertSame('redirect', $received);
+            $this->assertSame('', (string) $response->getBody());
         });
     }
 
@@ -356,6 +380,23 @@ abstract class AdapterContract extends TestCase
         });
     }
 
+    public function testItSendsLargeRequestPayloads(): void
+    {
+        Http::serve(function (int $port): void {
+            $body = str_repeat('a', self::PAYLOAD_SIZE);
+            $streamFactory = new Stream\Factory();
+            $request = new Request\Factory()
+                ->createRequest(Method::POST, 'http://127.0.0.1:' . $port . '/body-info')
+                ->withHeader(Header::CONTENT_TYPE, ContentType::OCTET_STREAM)
+                ->withBody($streamFactory->createStream($body));
+            $client = $this->createAdapter();
+
+            $response = $this->send($client, $request);
+
+            $this->assertSame(self::PAYLOAD_SIZE . ':' . hash('sha256', $body), (string) $response->getBody());
+        });
+    }
+
     public function testTimeoutHelpersReturnConfiguredClones(): void
     {
         $client = $this->createAdapter();
@@ -542,6 +583,49 @@ abstract class AdapterContract extends TestCase
         });
     }
 
+    public function testItStreamsResponseBodiesToASink(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/stream');
+            $client = $this->createAdapter();
+
+            $received = '';
+
+            $response = $this->sendStream($client, $request, function (string $chunk) use (&$received): void {
+                $received .= $chunk;
+            });
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame("chunk0\nchunk1\nchunk2\nchunk3\nchunk4\n", $received);
+            $this->assertSame('', (string) $response->getBody());
+        });
+    }
+
+    public function testItStreamsLargeResponsesWithBoundedMemory(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/stream-large');
+            $client = $this->createAdapter();
+
+            $expected = self::PAYLOAD_SIZE;
+            $hash = hash_init('sha256');
+            $read = 0;
+            $baseline = memory_get_usage();
+            $peak = 0;
+
+            $response = $this->sendStream($client, $request, function (string $chunk) use ($hash, &$read, $baseline, &$peak): void {
+                hash_update($hash, $chunk);
+                $read += \strlen($chunk);
+                $peak = max($peak, memory_get_usage() - $baseline);
+            });
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame($expected, $read);
+            $this->assertSame(hash('sha256', str_repeat('a', $expected)), hash_final($hash));
+            $this->assertLessThan(2 * 1_048_576, $peak, 'Streaming must not buffer the whole body.');
+        });
+    }
+
     private function send(Adapter $client, RequestInterface $request): ResponseInterface
     {
         $response = null;
@@ -550,6 +634,33 @@ abstract class AdapterContract extends TestCase
         $this->runAdapter(function () use ($client, $request, &$response, &$thrown): void {
             try {
                 $response = $client->sendRequest($request);
+            } catch (Throwable $throwable) {
+                $thrown = $throwable;
+            }
+        });
+
+        if ($thrown instanceof Throwable) {
+            throw $thrown;
+        }
+
+        if (!$response instanceof ResponseInterface) {
+            self::fail('Adapter did not return a response.');
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param callable(string): void $sink
+     */
+    private function sendStream(Adapter $client, RequestInterface $request, callable $sink): ResponseInterface
+    {
+        $response = null;
+        $thrown = null;
+
+        $this->runAdapter(function () use ($client, $request, $sink, &$response, &$thrown): void {
+            try {
+                $response = $client->streamRequest($request, $sink);
             } catch (Throwable $throwable) {
                 $thrown = $throwable;
             }

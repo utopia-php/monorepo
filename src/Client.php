@@ -100,6 +100,24 @@ final class Client implements ClientInterface
         );
     }
 
+    /**
+     * Send a request and pass each response body chunk to $sink as it arrives.
+     * The returned response carries the status and headers; its body is empty.
+     *
+     * @param callable(string): void $sink
+     *
+     * @throws ClientExceptionInterface
+     */
+    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    {
+        return $this->adapter->streamRequest(
+            $this->applyHeaders(
+                $this->applyBaseUri($request),
+            ),
+            $sink,
+        );
+    }
+
     private function applyBaseUri(RequestInterface $request): RequestInterface
     {
         if (!$this->baseUri instanceof \Psr\Http\Message\UriInterface) {
