@@ -28,6 +28,7 @@ Use `ext-curl` for the cURL adapter and `ext-swoole` for the Swoole coroutine ad
 
 use Utopia\Client;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
+use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
 
 require __DIR__ . '/vendor/autoload.php';
@@ -35,7 +36,7 @@ require __DIR__ . '/vendor/autoload.php';
 $client = new Client(new CurlAdapter());
 $requestFactory = new Request\Factory();
 
-$request = $requestFactory->json('POST', 'https://example.com/users', [
+$request = $requestFactory->json(Method::POST, 'https://example.com/users', [
     'name' => 'Ada',
 ]);
 
@@ -56,11 +57,14 @@ Client defaults are immutable. Each `with*()` method returns a configured clone.
 ```php
 <?php
 
+use Utopia\Psr7\Header;
+use Utopia\Psr7\ContentType;
+
 $client = $client
     ->withBaseUri('https://api.example.com/v1')
     ->withHeaders([
-        'Accept' => 'application/json',
-        'User-Agent' => 'Acme API Client',
+        Header::ACCEPT => ContentType::JSON,
+        Header::USER_AGENT => 'Acme API Client',
     ])
     ->withBearerAuth('token');
 ```
@@ -70,9 +74,13 @@ Configured headers are defaults. If a request already has the same header, the r
 ```php
 <?php
 
+use Utopia\Psr7\ContentType;
+use Utopia\Psr7\Header;
+use Utopia\Psr7\Method;
+
 $request = $requestFactory
-    ->createRequest('GET', 'users')
-    ->withHeader('Accept', 'application/xml');
+    ->createRequest(Method::GET, 'users')
+    ->withHeader(Header::ACCEPT, ContentType::XML);
 ```
 
 Authentication helpers set the default `Authorization` header:
@@ -92,25 +100,26 @@ $client = $client->withBearerAuth('token');
 <?php
 
 use Utopia\Psr7\Request\Multipart\Part;
+use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
 
 $requestFactory = new Request\Factory();
 
-$json = $requestFactory->json('POST', 'https://api.example.com/users', [
+$json = $requestFactory->json(Method::POST, 'https://api.example.com/users', [
     'name' => 'Ada',
 ]);
 
-$form = $requestFactory->form('POST', 'https://api.example.com/sessions', [
+$form = $requestFactory->form(Method::POST, 'https://api.example.com/sessions', [
     'email' => 'ada@example.com',
     'password' => 'secret',
 ]);
 
-$query = $requestFactory->query('GET', 'https://api.example.com/users?active=1', [
+$query = $requestFactory->query(Method::GET, 'https://api.example.com/users?active=1', [
     'page' => 2,
     'search' => 'Ada Lovelace',
 ]);
 
-$upload = $requestFactory->multipart('POST', 'https://api.example.com/uploads', [
+$upload = $requestFactory->multipart(Method::POST, 'https://api.example.com/uploads', [
     'name' => 'Ada',
     'avatar' => Part::file('avatar', '/tmp/avatar.png', 'avatar.png', 'image/png'),
 ]);
@@ -121,11 +130,15 @@ Header overrides are explicit:
 ```php
 <?php
 
-$request = $requestFactory->json('PATCH', 'https://api.example.com/users/1', [
+use Utopia\Psr7\ContentType;
+use Utopia\Psr7\Header;
+use Utopia\Psr7\Method;
+
+$request = $requestFactory->json(Method::PATCH, 'https://api.example.com/users/1', [
     'name' => 'Ada',
 ], [
-    'Accept' => 'application/vnd.api+json',
-    'Content-Type' => 'application/merge-patch+json',
+    Header::ACCEPT => 'application/vnd.api+json',
+    Header::CONTENT_TYPE => ContentType::MERGE_PATCH_JSON,
 ]);
 ```
 
@@ -191,6 +204,7 @@ The Swoole adapter must run inside a coroutine.
 use Swoole\Coroutine;
 use Utopia\Client;
 use Utopia\Client\Adapter\SwooleCoroutine\Client as SwooleAdapter;
+use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
 
 require __DIR__ . '/vendor/autoload.php';
@@ -206,7 +220,7 @@ Coroutine\run(static function (): void {
     );
 
     $response = $client->sendRequest(
-        $requestFactory->query('GET', 'https://example.com', [
+        $requestFactory->query(Method::GET, 'https://example.com', [
             'ping' => '1',
         ]),
     );
@@ -225,9 +239,34 @@ Both adapters throw PSR-18 exceptions.
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\NetworkExceptionInterface;
 use Psr\Http\Client\RequestExceptionInterface;
+use Utopia\Client\Exception\AdapterPreconditionException;
+use Utopia\Client\Exception\ConnectionException;
+use Utopia\Client\Exception\DnsException;
+use Utopia\Client\Exception\InvalidResponseException;
+use Utopia\Client\Exception\InvalidUriException;
+use Utopia\Client\Exception\ProtocolException;
+use Utopia\Client\Exception\ProxyException;
+use Utopia\Client\Exception\TlsException;
+use Utopia\Client\Exception\TimeoutException;
 
 try {
     $response = $client->sendRequest($request);
+} catch (TimeoutException $error) {
+    // Transport timeout.
+} catch (DnsException $error) {
+    // DNS resolution failure.
+} catch (TlsException $error) {
+    // TLS handshake or certificate failure.
+} catch (ProxyException $error) {
+    // Proxy transport failure.
+} catch (ProtocolException $error) {
+    // HTTP protocol transport failure.
+} catch (ConnectionException $error) {
+    // Connection refused, reset, unreachable, or broken.
+} catch (InvalidResponseException $error) {
+    // Malformed or invalid HTTP response.
+} catch (InvalidUriException | AdapterPreconditionException $error) {
+    // Request or runtime precondition failure.
 } catch (NetworkExceptionInterface $error) {
     // DNS, connection, timeout, or transport failure.
 } catch (RequestExceptionInterface $error) {

@@ -96,7 +96,7 @@ final class Response extends Message implements ResponseInterface
 
     private function boundary(): string
     {
-        $contentType = $this->getHeaderLine('Content-Type');
+        $contentType = $this->getHeaderLine(Header::CONTENT_TYPE);
 
         if (preg_match('/(?:^|;\s*)boundary=(?:"(?P<quoted>[^"]+)"|(?P<plain>[^;\s]+))/', $contentType, $matches) !== 1) {
             throw new InvalidArgumentException('Multipart response is missing a boundary.');

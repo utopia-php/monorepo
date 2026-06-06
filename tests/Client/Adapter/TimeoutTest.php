@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Utopia\Tests\Client\Adapter;
 
 use PHPUnit\Framework\TestCase;
-use ReflectionProperty;
 use Utopia\Client\Adapter\Curl\Client as CurlClient;
 use Utopia\Client\Adapter\SwooleCoroutine\Client as SwooleClient;
 use Utopia\Psr7\Response;
@@ -14,31 +13,7 @@ use ValueError;
 
 final class TimeoutTest extends TestCase
 {
-    public function testCurlTimeoutsAreMappedToMillisecondsImmutably(): void
-    {
-        $adapter = new CurlClient(new Response\Factory(), new Stream\Factory());
-        $configured = $adapter
-            ->withTimeout(2.5)
-            ->withConnectTimeout(1.25);
-
-        $this->assertSame([], $this->property($adapter, 'options'));
-        $this->assertSame(2500, $this->property($configured, 'options')[\CURLOPT_TIMEOUT_MS]);
-        $this->assertSame(1250, $this->property($configured, 'options')[\CURLOPT_CONNECTTIMEOUT_MS]);
-    }
-
-    public function testSwooleTimeoutsAreMappedToSettingsImmutably(): void
-    {
-        $adapter = new SwooleClient(new Response\Factory(), new Stream\Factory());
-        $configured = $adapter
-            ->withTimeout(2.5)
-            ->withConnectTimeout(1.25);
-
-        $this->assertSame([], $this->property($adapter, 'settings'));
-        $this->assertEqualsWithDelta(2.5, $this->property($configured, 'settings')['timeout'], PHP_FLOAT_EPSILON);
-        $this->assertEqualsWithDelta(1.25, $this->property($configured, 'settings')['connect_timeout'], PHP_FLOAT_EPSILON);
-    }
-
-    public function testInvalidAdapterTimeoutsAreRejected(): void
+    public function testCurlTimeoutsRejectInvalidValues(): void
     {
         $adapter = new CurlClient(new Response\Factory(), new Stream\Factory());
 
@@ -47,16 +22,12 @@ final class TimeoutTest extends TestCase
         $adapter->withTimeout(\INF);
     }
 
-    /**
-     * @return array<array-key, mixed>
-     */
-    private function property(object $object, string $property): array
+    public function testSwooleTimeoutsRejectInvalidValues(): void
     {
-        $reflection = new ReflectionProperty($object, $property);
-        $value = $reflection->getValue($object);
+        $adapter = new SwooleClient(new Response\Factory(), new Stream\Factory());
 
-        $this->assertIsArray($value);
+        $this->expectException(ValueError::class);
 
-        return $value;
+        $adapter->withConnectTimeout(-0.001);
     }
 }

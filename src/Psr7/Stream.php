@@ -30,7 +30,9 @@ final class Stream implements StreamInterface
         try {
             $this->seek(0);
 
-            return stream_get_contents($this->resource()) ?: '';
+            $contents = stream_get_contents($this->resource());
+
+            return $contents === false ? '' : $contents;
         } catch (RuntimeException) {
             return '';
         }

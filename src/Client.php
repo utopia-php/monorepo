@@ -11,6 +11,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\UriInterface;
 use Utopia\Client\Adapter;
+use Utopia\Psr7\Header;
 use Utopia\Psr7\Uri;
 
 final class Client implements ClientInterface
@@ -76,14 +77,14 @@ final class Client implements ClientInterface
     public function withBasicAuth(string $username, string $password): self
     {
         return $this->withHeaders([
-            'Authorization' => 'Basic ' . base64_encode($username . ':' . $password),
+            Header::AUTHORIZATION => 'Basic ' . base64_encode($username . ':' . $password),
         ]);
     }
 
     public function withBearerAuth(string $token): self
     {
         return $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            Header::AUTHORIZATION => 'Bearer ' . $token,
         ]);
     }
 

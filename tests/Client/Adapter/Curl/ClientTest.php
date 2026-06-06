@@ -4,258 +4,66 @@ declare(strict_types=1);
 
 namespace Utopia\Tests\Client\Adapter\Curl;
 
-use PHPUnit\Framework\TestCase;
-use Psr\Http\Client\ClientExceptionInterface;
-use Psr\Http\Client\NetworkExceptionInterface;
-use ReflectionMethod;
+use Utopia\Client\Adapter;
 use Utopia\Client\Adapter\Curl\Client;
-use Utopia\Client\Exception\TimeoutException;
-use Utopia\Psr7\Request;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
+use Utopia\Tests\Client\Adapter\AdapterContract;
 
-final class ClientTest extends TestCase
+final class ClientTest extends AdapterContract
 {
-    public function testItRequiresAbsoluteUris(): void
+    /**
+     * @param array<int, mixed> $transportOptions
+     */
+    protected function createAdapter(array $transportOptions = []): Adapter
     {
-        $requestFactory = new Request\Factory();
-        $client = new Client(new Response\Factory(), new Stream\Factory());
-
-        $this->expectException(ClientExceptionInterface::class);
-
-        $client->sendRequest($requestFactory->createRequest('GET', '/relative'));
+        return new Client(new Response\Factory(), new Stream\Factory(), $transportOptions);
     }
 
-    public function testItSendsRequestWithCurl(): void
+    protected function runAdapter(callable $callback): void
     {
-        if (!\extension_loaded('curl')) {
-            self::markTestSkipped('The curl extension is not installed.');
-        }
-
-        $port = $this->availablePort();
-        $server = $this->startServer($port);
-
-        try {
-            $requestFactory = new Request\Factory();
-            $streamFactory = new Stream\Factory();
-            $client = new Client(new Response\Factory(), $streamFactory);
-            $request = $requestFactory->createRequest('POST', 'http://127.0.0.1:' . $port . '/echo')
-                ->withHeader('Content-Type', 'text/plain')
-                ->withHeader('X-Custom', 'sent')
-                ->withBody($streamFactory->createStream('hello'));
-            $response = $client->sendRequest($request);
-
-            $this->assertSame(202, $response->getStatusCode());
-            $this->assertSame('text/plain;charset=UTF-8', $response->getHeaderLine('Content-Type'));
-            $this->assertSame('POST:/echo:sent:hello', (string) $response->getBody());
-        } finally {
-            proc_terminate($server);
-            proc_close($server);
-        }
+        $callback();
     }
 
-    public function testItReturnsClientAndServerErrorResponsesWithoutThrowing(): void
+    protected function requireAdapterAvailable(): void
     {
-        if (!\extension_loaded('curl')) {
-            self::markTestSkipped('The curl extension is not installed.');
-        }
-
-        $port = $this->availablePort();
-        $server = $this->startServer($port);
-
-        try {
-            $requestFactory = new Request\Factory();
-            $client = new Client(new Response\Factory(), new Stream\Factory());
-
-            $notFound = $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/not-found'));
-            $serverError = $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/server-error'));
-
-            $this->assertSame(404, $notFound->getStatusCode());
-            $this->assertSame('missing', (string) $notFound->getBody());
-            $this->assertSame(500, $serverError->getStatusCode());
-            $this->assertSame('failed', (string) $serverError->getBody());
-        } finally {
-            proc_terminate($server);
-            proc_close($server);
-        }
-    }
-
-    public function testItDoesNotFollowRedirectsByDefault(): void
-    {
-        if (!\extension_loaded('curl')) {
-            self::markTestSkipped('The curl extension is not installed.');
-        }
-
-        $port = $this->availablePort();
-        $server = $this->startServer($port);
-
-        try {
-            $requestFactory = new Request\Factory();
-            $client = new Client(new Response\Factory(), new Stream\Factory());
-
-            $response = $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/redirect'));
-
-            $this->assertSame(302, $response->getStatusCode());
-            $this->assertSame('/final', $response->getHeaderLine('Location'));
-            $this->assertSame('redirect', (string) $response->getBody());
-        } finally {
-            proc_terminate($server);
-            proc_close($server);
-        }
-    }
-
-    public function testItPreservesDuplicateMixedCaseHeadersAndBinaryBodies(): void
-    {
-        if (!\extension_loaded('curl')) {
-            self::markTestSkipped('The curl extension is not installed.');
-        }
-
-        $port = $this->availablePort();
-        $server = $this->startServer($port);
-
-        try {
-            $requestFactory = new Request\Factory();
-            $client = new Client(new Response\Factory(), new Stream\Factory());
-
-            $headers = $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/headers'));
-            $binary = $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/binary'));
-
-            $this->assertSame(204, $headers->getStatusCode());
-            $this->assertSame(['one', 'two'], $headers->getHeader('x-trace'));
-            $this->assertSame('Value', $headers->getHeaderLine('X-Mixed-Case'));
-            $this->assertSame('application/octet-stream', $binary->getHeaderLine('Content-Type'));
-            $this->assertSame("\x00\x01hello\xff", (string) $binary->getBody());
-        } finally {
-            proc_terminate($server);
-            proc_close($server);
-        }
-    }
-
-    public function testItThrowsNetworkExceptionsForTransportFailures(): void
-    {
-        if (!\extension_loaded('curl')) {
-            self::markTestSkipped('The curl extension is not installed.');
-        }
-
-        $requestFactory = new Request\Factory();
-        $port = $this->availablePort();
-        $client = new Client(new Response\Factory(), new Stream\Factory(), [
-            \CURLOPT_CONNECTTIMEOUT_MS => 100,
-            \CURLOPT_TIMEOUT_MS => 100,
-        ]);
-
-        $this->expectException(NetworkExceptionInterface::class);
-
-        $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port));
-    }
-
-    public function testItThrowsTimeoutExceptionsForTimedOutRequests(): void
-    {
-        if (!\extension_loaded('curl')) {
-            self::markTestSkipped('The curl extension is not installed.');
-        }
-
-        $port = $this->availablePort();
-        $server = $this->startServer($port);
-
-        try {
-            $requestFactory = new Request\Factory();
-            $client = new Client(new Response\Factory(), new Stream\Factory(), [
-                \CURLOPT_TIMEOUT_MS => 100,
-            ]);
-
-            $this->expectException(TimeoutException::class);
-
-            $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/slow'));
-        } finally {
-            proc_terminate($server);
-            proc_close($server);
-        }
-    }
-
-    public function testItParsesTheFinalCurlHeaderBlock(): void
-    {
-        $client = new Client(new Response\Factory(), new Stream\Factory());
-        $method = new ReflectionMethod($client, 'parseHeaderBlock');
-
-        $parsed = $method->invoke($client, "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200\r\nX-Trace: one\r\nX-Trace: two\r\n\r\n");
-
-        $this->assertSame([
-            'protocol' => '1.1',
-            'status' => 200,
-            'reason' => '',
-            'headers' => [
-                'X-Trace' => ['one', 'two'],
-            ],
-        ], $parsed);
+        $this->assertTrue(\extension_loaded('curl'), 'The curl extension is required.');
     }
 
     /**
-     * @return resource
+     * @return array<int, mixed>
      */
-    private function startServer(int $port): mixed
+    protected function invalidTransportOptions(): array
     {
-        $server = proc_open(
-            [\PHP_BINARY, '-S', '127.0.0.1:' . $port, \dirname(__DIR__, 3) . '/server.php'],
-            [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes,
-        );
-
-        if (!\is_resource($server)) {
-            self::fail('Unable to start PHP test server.');
-        }
-
-        unset($pipes);
-        $this->waitForServer($port);
-
-        return $server;
+        return [
+            999_999_999 => true,
+        ];
     }
 
-    private function waitForServer(int $port): void
+    /**
+     * @return array<int, int>
+     */
+    protected function timeoutOptions(float $timeout, ?float $connectTimeout = null): array
     {
-        $deadline = microtime(true) + 5;
+        $options = [
+            \CURLOPT_TIMEOUT_MS => (int) round($timeout * 1000),
+        ];
 
-        do {
-            $connection = @fsockopen('127.0.0.1', $port);
+        if ($connectTimeout !== null) {
+            $options[\CURLOPT_CONNECTTIMEOUT_MS] = (int) round($connectTimeout * 1000);
+        }
 
-            if (\is_resource($connection)) {
-                fclose($connection);
-
-                return;
-            }
-
-            usleep(50_000);
-        } while (microtime(true) < $deadline);
-
-        self::fail('PHP test server did not start.');
+        return $options;
     }
 
-    private function availablePort(): int
+    /**
+     * @return array<int, mixed>
+     */
+    protected function proxyOptions(int $port): array
     {
-        $server = stream_socket_server('tcp://127.0.0.1:0', $errorCode, $errorMessage);
-
-        if (!\is_resource($server)) {
-            self::fail('Unable to find an available TCP port: ' . $errorCode . ' ' . $errorMessage);
-        }
-
-        $name = stream_socket_get_name($server, false);
-
-        fclose($server);
-
-        if ($name === false) {
-            self::fail('Unable to read TCP port.');
-        }
-
-        $port = parse_url('tcp://' . $name, PHP_URL_PORT);
-
-        if (!\is_int($port)) {
-            self::fail('Unable to parse TCP port.');
-        }
-
-        return $port;
+        return [
+            \CURLOPT_PROXY => '127.0.0.1:' . $port,
+            \CURLOPT_PROXYTYPE => \CURLPROXY_SOCKS5,
+        ];
     }
 }

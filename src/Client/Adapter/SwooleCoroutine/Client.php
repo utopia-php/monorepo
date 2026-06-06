@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\Client\Adapter\SwooleCoroutine;
 
+use InvalidArgumentException;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
@@ -13,9 +14,17 @@ use Swoole\Coroutine;
 use Swoole\Coroutine\Http\Client as SwooleClient;
 use Throwable;
 use Utopia\Client\Adapter;
+use Utopia\Client\Exception\AdapterInitializationException;
+use Utopia\Client\Exception\AdapterPreconditionException;
+use Utopia\Client\Exception\ConnectionException;
+use Utopia\Client\Exception\DnsException;
+use Utopia\Client\Exception\InvalidResponseException;
+use Utopia\Client\Exception\InvalidUriException;
 use Utopia\Client\Exception\NetworkException;
-use Utopia\Client\Exception\RequestException;
+use Utopia\Client\Exception\ProtocolException;
+use Utopia\Client\Exception\ProxyException;
 use Utopia\Client\Exception\TimeoutException;
+use Utopia\Client\Exception\TlsException;
 use Utopia\Client\Response\Builder as ResponseBuilder;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
@@ -23,6 +32,10 @@ use ValueError;
 
 class Client implements Adapter
 {
+    private const float DEFAULT_CONNECT_TIMEOUT = 5.0;
+
+    private const float DEFAULT_TIMEOUT = 30.0;
+
     private const string SETTING_CONNECT_TIMEOUT = 'connect_timeout';
 
     private const string SETTING_HTTP2 = 'http2';
@@ -39,6 +52,11 @@ class Client implements Adapter
         StreamFactoryInterface $streamFactory = new Stream\Factory(),
         private array $settings = [],
     ) {
+        $this->settings += [
+            self::SETTING_CONNECT_TIMEOUT => self::DEFAULT_CONNECT_TIMEOUT,
+            self::SETTING_TIMEOUT => self::DEFAULT_TIMEOUT,
+        ];
+
         $this->responseBuilder = new ResponseBuilder($responseFactory, $streamFactory);
     }
 
@@ -64,36 +82,71 @@ class Client implements Adapter
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
         if (!\extension_loaded('swoole')) {
-            throw new RequestException($request, 'The swoole extension is required.');
+            throw new AdapterPreconditionException($request, 'The swoole extension is required.');
         }
 
         if (Coroutine::getCid() < 0) {
-            throw new RequestException($request, 'Swoole coroutine HTTP requests must run inside a coroutine.');
+            throw new AdapterPreconditionException($request, 'Swoole coroutine HTTP requests must run inside a coroutine.');
         }
 
         $uri = $request->getUri();
 
-        if ($uri->getScheme() === '' || $uri->getHost() === '') {
-            throw new RequestException($request, 'Requests must use an absolute URI.');
+        if (!\in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
+            throw new InvalidUriException($request, 'Requests must use an absolute URI.');
         }
 
-        $client = new SwooleClient(
-            $uri->getHost(),
-            $this->port($request),
-            $uri->getScheme() === 'https',
-        );
+        $this->validateSettings();
 
-        $client->set($this->settings + [
-            self::SETTING_HTTP2 => false,
-        ]);
+        try {
+            $client = new SwooleClient(
+                $uri->getHost(),
+                $this->port($request),
+                $uri->getScheme() === 'https',
+            );
+        } catch (Throwable $throwable) {
+            throw new AdapterInitializationException($request, $throwable->getMessage(), (int) $throwable->getCode(), $throwable);
+        }
 
-        $client->setMethod($request->getMethod());
-        $client->setHeaders($this->requestHeaders($request));
+        try {
+            if ($client->set($this->settings + [
+                self::SETTING_HTTP2 => false,
+            ]) === false) {
+                throw new InvalidArgumentException('Unable to configure Swoole client settings.');
+            }
+
+            if ($client->setMethod($request->getMethod()) === false) {
+                throw new InvalidArgumentException('Unable to configure Swoole request method.');
+            }
+
+            if ($client->setHeaders($this->requestHeaders($request)) === false) {
+                throw new InvalidArgumentException('Unable to configure Swoole request headers.');
+            }
+        } catch (InvalidArgumentException $invalidArgumentException) {
+            $client->close();
+
+            throw $invalidArgumentException;
+        } catch (Throwable $throwable) {
+            $client->close();
+
+            throw new InvalidArgumentException($throwable->getMessage(), (int) $throwable->getCode(), $throwable);
+        }
 
         $body = (string) $request->getBody();
 
         if ($body !== '') {
-            $client->setData($body);
+            try {
+                if ($client->setData($body) === false) {
+                    throw new InvalidArgumentException('Unable to configure Swoole request body.');
+                }
+            } catch (InvalidArgumentException $invalidArgumentException) {
+                $client->close();
+
+                throw $invalidArgumentException;
+            } catch (Throwable $throwable) {
+                $client->close();
+
+                throw new InvalidArgumentException($throwable->getMessage(), (int) $throwable->getCode(), $throwable);
+            }
         }
 
         try {
@@ -101,7 +154,7 @@ class Client implements Adapter
         } catch (Throwable $throwable) {
             $client->close();
 
-            throw new NetworkException($request, $throwable->getMessage(), (int) $throwable->getCode(), $throwable);
+            throw $this->networkException($request, $throwable->getMessage(), (int) $throwable->getCode(), null, $throwable);
         }
 
         if ($result === false) {
@@ -114,7 +167,7 @@ class Client implements Adapter
                 throw new TimeoutException($request, $message, $code);
             }
 
-            throw new NetworkException($request, $message, $code);
+            throw $this->networkException($request, $message, $code, $statusCode, null, $client->headers);
         }
 
         $statusCode = $client->statusCode;
@@ -122,7 +175,7 @@ class Client implements Adapter
         if (!\is_int($statusCode) || $statusCode < 100 || $statusCode > 599) {
             $client->close();
 
-            throw new RequestException($request, 'Received an invalid HTTP response.');
+            throw new InvalidResponseException($request, 'Received an invalid HTTP response.');
         }
 
         $headers = $client->headers;
@@ -170,6 +223,29 @@ class Client implements Adapter
         return $seconds;
     }
 
+    private function validateSettings(): void
+    {
+        foreach ([self::SETTING_TIMEOUT, self::SETTING_CONNECT_TIMEOUT] as $setting) {
+            if (!\array_key_exists($setting, $this->settings)) {
+                continue;
+            }
+
+            $value = $this->settings[$setting];
+
+            if (!\is_int($value) && !\is_float($value)) {
+                throw new InvalidArgumentException('Swoole setting "' . $setting . '" must be a finite number greater than or equal to zero.');
+            }
+
+            if ($value < 0 || !is_finite((float) $value)) {
+                throw new InvalidArgumentException('Swoole setting "' . $setting . '" must be a finite number greater than or equal to zero.');
+            }
+        }
+
+        if (\array_key_exists(self::SETTING_HTTP2, $this->settings) && !\is_bool($this->settings[self::SETTING_HTTP2])) {
+            throw new InvalidArgumentException('Swoole setting "' . self::SETTING_HTTP2 . '" must be a boolean.');
+        }
+    }
+
     private function path(RequestInterface $request): string
     {
         $uri = $request->getUri();
@@ -185,15 +261,133 @@ class Client implements Adapter
 
     private function isTimeout(string $message, int $code, mixed $statusCode): bool
     {
-        if (\is_int($statusCode) && $statusCode === -2) {
+        unset($message);
+
+        if ($this->statusCodeIs($statusCode, 'SWOOLE_HTTP_CLIENT_ESTATUS_REQUEST_TIMEOUT', -2)) {
             return true;
         }
 
-        if ($code === 110) {
+        return \in_array($code, $this->nativeCodes([
+            'SOCKET_ETIMEDOUT',
+            'SWOOLE_ERROR_SOCKET_POLL_TIMEOUT',
+        ], [110]), true);
+    }
+
+    private function networkException(RequestInterface $request, string $message, int $code, mixed $statusCode = null, ?Throwable $previous = null, mixed $headers = null): NetworkException
+    {
+        if ($this->isTimeout($message, $code, $statusCode)) {
+            return new TimeoutException($request, $message, $code, $previous);
+        }
+
+        if (\in_array($code, $this->nativeCodes([
+            'SWOOLE_ERROR_DNSLOOKUP_RESOLVE_FAILED',
+            'SWOOLE_ERROR_DNSLOOKUP_RESOLVE_TIMEOUT',
+            'SWOOLE_ERROR_DNSLOOKUP_NO_SERVER',
+        ]), true)) {
+            return new DnsException($request, $message, $code, $previous);
+        }
+
+        if (\in_array($code, $this->nativeCodes([
+            'SWOOLE_ERROR_SSL_NOT_READY',
+            'SWOOLE_ERROR_SSL_EMPTY_PEER_CERTIFICATE',
+            'SWOOLE_ERROR_SSL_VERIFY_FAILED',
+            'SWOOLE_ERROR_SSL_BAD_CLIENT',
+            'SWOOLE_ERROR_SSL_BAD_PROTOCOL',
+            'SWOOLE_ERROR_SSL_RESET',
+            'SWOOLE_ERROR_SSL_HANDSHAKE_FAILED',
+            'SWOOLE_ERROR_SSL_CREATE_CONTEXT_FAILED',
+            'SWOOLE_ERROR_SSL_CREATE_SESSION_FAILED',
+        ]), true)) {
+            return new TlsException($request, $message, $code, $previous);
+        }
+
+        if (\in_array($code, $this->nativeCodes([
+            'SWOOLE_ERROR_HTTP_PROXY_HANDSHAKE_ERROR',
+            'SWOOLE_ERROR_HTTP_PROXY_HANDSHAKE_FAILED',
+            'SWOOLE_ERROR_HTTP_PROXY_BAD_RESPONSE',
+            'SWOOLE_ERROR_SOCKS5_UNSUPPORT_VERSION',
+            'SWOOLE_ERROR_SOCKS5_UNSUPPORT_METHOD',
+            'SWOOLE_ERROR_SOCKS5_AUTH_FAILED',
+            'SWOOLE_ERROR_SOCKS5_SERVER_ERROR',
+            'SWOOLE_ERROR_SOCKS5_HANDSHAKE_FAILED',
+        ]), true)) {
+            return new ProxyException($request, $message, $code, $previous);
+        }
+
+        if (\in_array($code, $this->nativeCodes([
+            'SWOOLE_ERROR_PROTOCOL_ERROR',
+            'SWOOLE_ERROR_HTTP_INVALID_PROTOCOL',
+            'SWOOLE_ERROR_PACKAGE_MALFORMED_DATA',
+            'SWOOLE_ERROR_HTTP2_STREAM_NO_HEADER',
+            'SWOOLE_ERROR_HTTP2_SEND_CONTROL_FRAME_FAILED',
+            'SWOOLE_ERROR_HTTP2_INTERNAL_ERROR',
+        ]), true)) {
+            return new ProtocolException($request, $message, $code, $previous);
+        }
+
+        if (\is_array($headers) && \in_array($code, $this->nativeCodes([
+            'SOCKET_ECONNRESET',
+        ], [104]), true)) {
+            return new ProtocolException($request, $message, $code, $previous);
+        }
+
+        if (\in_array($code, $this->nativeCodes([
+            'SOCKET_EPIPE',
+            'SOCKET_ENETUNREACH',
+            'SOCKET_ECONNRESET',
+            'SOCKET_ECONNREFUSED',
+            'SOCKET_EHOSTUNREACH',
+            'SWOOLE_ERROR_CLIENT_NO_CONNECTION',
+            'SWOOLE_ERROR_SESSION_CLOSED_BY_SERVER',
+            'SWOOLE_ERROR_SESSION_CLOSED_BY_CLIENT',
+            'SWOOLE_ERROR_SESSION_CLOSED',
+        ], [32, 101, 104, 111, 113]), true)) {
+            return new ConnectionException($request, $message, $code, $previous);
+        }
+
+        if ($this->statusCodeIs($statusCode, 'SWOOLE_HTTP_CLIENT_ESTATUS_CONNECT_FAILED', -1) || $this->statusCodeIs($statusCode, 'SWOOLE_HTTP_CLIENT_ESTATUS_SERVER_RESET', -3) || $this->statusCodeIs($statusCode, 'SWOOLE_HTTP_CLIENT_ESTATUS_SEND_FAILED', -4)) {
+            return new ConnectionException($request, $message, $code, $previous);
+        }
+
+        return new NetworkException($request, $message, $code, $previous);
+    }
+
+    /**
+     * @param array<int, string> $names
+     * @param array<int, int> $fallbacks
+     *
+     * @return array<int, int>
+     */
+    private function nativeCodes(array $names, array $fallbacks = []): array
+    {
+        $codes = $fallbacks;
+
+        foreach ($names as $name) {
+            if (!\defined($name)) {
+                continue;
+            }
+
+            $code = \constant($name);
+
+            if (\is_int($code)) {
+                $codes[] = $code;
+            }
+        }
+
+        return array_values(array_unique($codes));
+    }
+
+    private function statusCodeIs(mixed $statusCode, string $constant, int $fallback): bool
+    {
+        if (!\is_int($statusCode)) {
+            return false;
+        }
+
+        if (\defined($constant) && \constant($constant) === $statusCode) {
             return true;
         }
 
-        return str_contains(strtolower($message), 'timeout');
+        return $statusCode === $fallback;
     }
 
     /**

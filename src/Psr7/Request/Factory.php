@@ -10,6 +10,8 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\UriFactoryInterface;
 use Psr\Http\Message\UriInterface;
+use Utopia\Psr7\ContentType;
+use Utopia\Psr7\Header;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Request\Multipart\Part;
 use Utopia\Psr7\Stream;
@@ -17,16 +19,6 @@ use Utopia\Psr7\Uri;
 
 final readonly class Factory implements RequestFactoryInterface
 {
-    private const string HEADER_ACCEPT = 'Accept';
-
-    private const string HEADER_CONTENT_TYPE = 'Content-Type';
-
-    private const string CONTENT_TYPE_FORM = 'application/x-www-form-urlencoded';
-
-    private const string CONTENT_TYPE_JSON = 'application/json';
-
-    private const string CONTENT_TYPE_MULTIPART = 'multipart/form-data';
-
     public function __construct(
         private UriFactoryInterface $uriFactory = new Uri\Factory(),
         private StreamFactoryInterface $streamFactory = new Stream\Factory(),
@@ -47,10 +39,10 @@ final readonly class Factory implements RequestFactoryInterface
      */
     public function json(string $method, UriInterface|string $uri, mixed $data, array $headers = []): RequestInterface
     {
-        $request = $this->body($method, $uri, json_encode($data, JSON_THROW_ON_ERROR), self::CONTENT_TYPE_JSON, $headers);
+        $request = $this->body($method, $uri, json_encode($data, JSON_THROW_ON_ERROR), ContentType::JSON, $headers);
 
-        if (!$request->hasHeader(self::HEADER_ACCEPT)) {
-            return $request->withHeader(self::HEADER_ACCEPT, self::CONTENT_TYPE_JSON);
+        if (!$request->hasHeader(Header::ACCEPT)) {
+            return $request->withHeader(Header::ACCEPT, ContentType::JSON);
         }
 
         return $request;
@@ -66,7 +58,7 @@ final readonly class Factory implements RequestFactoryInterface
             $method,
             $uri,
             http_build_query($data, '', '&', PHP_QUERY_RFC3986),
-            self::CONTENT_TYPE_FORM,
+            ContentType::FORM_URLENCODED,
             $headers,
         );
     }
@@ -81,8 +73,8 @@ final readonly class Factory implements RequestFactoryInterface
             $headers,
         )->withBody($this->streamFactory->createStream($body));
 
-        if (!$request->hasHeader(self::HEADER_CONTENT_TYPE)) {
-            return $request->withHeader(self::HEADER_CONTENT_TYPE, $contentType);
+        if (!$request->hasHeader(Header::CONTENT_TYPE)) {
+            return $request->withHeader(Header::CONTENT_TYPE, $contentType);
         }
 
         return $request;
@@ -125,8 +117,8 @@ final readonly class Factory implements RequestFactoryInterface
             $headers,
         )->withBody($this->streamFactory->createStream($this->multipartBody($boundary, $parts)));
 
-        if (!$request->hasHeader(self::HEADER_CONTENT_TYPE)) {
-            return $request->withHeader(self::HEADER_CONTENT_TYPE, self::CONTENT_TYPE_MULTIPART . '; boundary=' . $boundary);
+        if (!$request->hasHeader(Header::CONTENT_TYPE)) {
+            return $request->withHeader(Header::CONTENT_TYPE, ContentType::MULTIPART_FORM_DATA . '; boundary=' . $boundary);
         }
 
         return $request;
@@ -170,15 +162,15 @@ final readonly class Factory implements RequestFactoryInterface
     private function multipartHeaders(Part $part): string
     {
         $headers = [
-            'Content-Disposition' => 'form-data; name="' . $this->escapeQuotedString($part->name()) . '"',
+            Header::CONTENT_DISPOSITION => 'form-data; name="' . $this->escapeQuotedString($part->name()) . '"',
         ];
 
         if ($part->filename() !== null) {
-            $headers['Content-Disposition'] .= '; filename="' . $this->escapeQuotedString($part->filename()) . '"';
+            $headers[Header::CONTENT_DISPOSITION] .= '; filename="' . $this->escapeQuotedString($part->filename()) . '"';
         }
 
         if ($part->contentType() !== null) {
-            $headers['Content-Type'] = $part->contentType();
+            $headers[Header::CONTENT_TYPE] = $part->contentType();
         }
 
         foreach ($part->headers() as $name => $value) {

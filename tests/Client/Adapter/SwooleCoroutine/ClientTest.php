@@ -4,237 +4,80 @@ declare(strict_types=1);
 
 namespace Utopia\Tests\Client\Adapter\SwooleCoroutine;
 
-use PHPUnit\Framework\TestCase;
-use Psr\Http\Client\ClientExceptionInterface;
-use Psr\Http\Client\NetworkExceptionInterface;
 use Swoole\Coroutine;
-use Throwable;
+use Utopia\Client\Adapter;
 use Utopia\Client\Adapter\SwooleCoroutine\Client;
-use Utopia\Client\Exception\TimeoutException;
+use Utopia\Client\Exception\AdapterPreconditionException;
+use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
+use Utopia\Tests\Client\Adapter\AdapterContract;
 
-final class ClientTest extends TestCase
+final class ClientTest extends AdapterContract
 {
-    public function testItRequiresSwooleExtensionOrCoroutineContext(): void
+    /**
+     * @param array<string, mixed> $transportOptions
+     */
+    protected function createAdapter(array $transportOptions = []): Adapter
     {
-        $requestFactory = new Request\Factory();
-        $client = new Client(new Response\Factory(), new Stream\Factory());
-
-        $this->expectException(ClientExceptionInterface::class);
-
-        $client->sendRequest($requestFactory->createRequest('GET', 'https://example.com'));
+        return new Client(new Response\Factory(), new Stream\Factory(), $transportOptions);
     }
 
-    public function testItSendsRequestsInsideSwooleCoroutines(): void
+    protected function runAdapter(callable $callback): void
     {
-        if (!\extension_loaded('swoole')) {
-            self::markTestSkipped('The swoole extension is not installed.');
-        }
-
-        $port = $this->availablePort();
-        $server = $this->startServer($port);
-
-        try {
-            Coroutine\run(function () use ($port): void {
-                $requestFactory = new Request\Factory();
-                $streamFactory = new Stream\Factory();
-                $client = new Client(new Response\Factory(), $streamFactory);
-                $request = $requestFactory->createRequest('POST', 'http://127.0.0.1:' . $port . '/echo')
-                    ->withHeader('Content-Type', 'text/plain')
-                    ->withHeader('X-Custom', 'sent')
-                    ->withBody($streamFactory->createStream('hello'));
-
-                $response = $client->sendRequest($request);
-
-                $this->assertSame(202, $response->getStatusCode());
-                $this->assertSame('text/plain;charset=UTF-8', $response->getHeaderLine('Content-Type'));
-                $this->assertSame('POST:/echo:sent:hello', (string) $response->getBody());
-            });
-        } finally {
-            proc_terminate($server);
-            proc_close($server);
-        }
+        Coroutine\run($callback);
     }
 
-    public function testItReturnsErrorResponsesInsideSwooleCoroutinesWithoutThrowing(): void
+    public function testItRequiresCoroutineContext(): void
     {
-        if (!\extension_loaded('swoole')) {
-            self::markTestSkipped('The swoole extension is not installed.');
-        }
+        $client = $this->createAdapter();
+        $request = new Request\Factory()->createRequest(Method::GET, 'https://example.com');
 
-        $port = $this->availablePort();
-        $server = $this->startServer($port);
+        $this->expectException(AdapterPreconditionException::class);
 
-        try {
-            Coroutine\run(function () use ($port): void {
-                $requestFactory = new Request\Factory();
-                $client = new Client(new Response\Factory(), new Stream\Factory());
-
-                $notFound = $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/not-found'));
-                $serverError = $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/server-error'));
-
-                $this->assertSame(404, $notFound->getStatusCode());
-                $this->assertSame('missing', (string) $notFound->getBody());
-                $this->assertSame(500, $serverError->getStatusCode());
-                $this->assertSame('failed', (string) $serverError->getBody());
-            });
-        } finally {
-            proc_terminate($server);
-            proc_close($server);
-        }
+        $client->sendRequest($request);
     }
 
-    public function testItNormalizesSwooleResponseHeadersAndBinaryBodies(): void
+    protected function requireAdapterAvailable(): void
     {
-        if (!\extension_loaded('swoole')) {
-            self::markTestSkipped('The swoole extension is not installed.');
-        }
-
-        $port = $this->availablePort();
-        $server = $this->startServer($port);
-
-        try {
-            Coroutine\run(function () use ($port): void {
-                $requestFactory = new Request\Factory();
-                $client = new Client(new Response\Factory(), new Stream\Factory());
-
-                $headers = $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/headers'));
-                $binary = $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/binary'));
-
-                $this->assertSame(204, $headers->getStatusCode());
-                $this->assertSame('Value', $headers->getHeaderLine('X-Mixed-Case'));
-                $this->assertSame('application/octet-stream', $binary->getHeaderLine('Content-Type'));
-                $this->assertSame("\x00\x01hello\xff", (string) $binary->getBody());
-            });
-        } finally {
-            proc_terminate($server);
-            proc_close($server);
-        }
-    }
-
-    public function testItThrowsNetworkExceptionsForSwooleTransportFailures(): void
-    {
-        if (!\extension_loaded('swoole')) {
-            self::markTestSkipped('The swoole extension is not installed.');
-        }
-
-        $port = $this->availablePort();
-        $thrown = null;
-
-        Coroutine\run(function () use ($port, &$thrown): void {
-            $requestFactory = new Request\Factory();
-            $client = new Client(new Response\Factory(), new Stream\Factory(), [
-                'connect_timeout' => 0.1,
-                'timeout' => 0.1,
-            ]);
-
-            try {
-                $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port));
-            } catch (Throwable $throwable) {
-                $thrown = $throwable;
-            }
-        });
-
-        $this->assertInstanceOf(NetworkExceptionInterface::class, $thrown);
-    }
-
-    public function testItThrowsTimeoutExceptionsForTimedOutRequests(): void
-    {
-        if (!\extension_loaded('swoole')) {
-            self::markTestSkipped('The swoole extension is not installed.');
-        }
-
-        $port = $this->availablePort();
-        $server = $this->startServer($port);
-
-        try {
-            Coroutine\run(function () use ($port): void {
-                $requestFactory = new Request\Factory();
-                $client = new Client(new Response\Factory(), new Stream\Factory(), [
-                    'timeout' => 0.1,
-                ]);
-
-                try {
-                    $client->sendRequest($requestFactory->createRequest('GET', 'http://127.0.0.1:' . $port . '/slow'));
-                    self::fail('Expected a timeout exception.');
-                } catch (Throwable $throwable) {
-                    $this->assertInstanceOf(TimeoutException::class, $throwable);
-                }
-            });
-        } finally {
-            proc_terminate($server);
-            proc_close($server);
-        }
+        $this->assertTrue(\extension_loaded('swoole'), 'The swoole extension is required.');
     }
 
     /**
-     * @return resource
+     * @return array<string, mixed>
      */
-    private function startServer(int $port): mixed
+    protected function invalidTransportOptions(): array
     {
-        $server = proc_open(
-            [\PHP_BINARY, '-S', '127.0.0.1:' . $port, \dirname(__DIR__, 3) . '/server.php'],
-            [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes,
-        );
-
-        if (!\is_resource($server)) {
-            self::fail('Unable to start PHP test server.');
-        }
-
-        unset($pipes);
-        $this->waitForServer($port);
-
-        return $server;
+        return [
+            'timeout' => [],
+        ];
     }
 
-    private function waitForServer(int $port): void
+    /**
+     * @return array<string, float>
+     */
+    protected function timeoutOptions(float $timeout, ?float $connectTimeout = null): array
     {
-        $deadline = microtime(true) + 5;
+        $options = [
+            'timeout' => $timeout,
+        ];
 
-        do {
-            $connection = @fsockopen('127.0.0.1', $port);
+        if ($connectTimeout !== null) {
+            $options['connect_timeout'] = $connectTimeout;
+        }
 
-            if (\is_resource($connection)) {
-                fclose($connection);
-
-                return;
-            }
-
-            usleep(50_000);
-        } while (microtime(true) < $deadline);
-
-        self::fail('PHP test server did not start.');
+        return $options;
     }
 
-    private function availablePort(): int
+    /**
+     * @return array<string, mixed>
+     */
+    protected function proxyOptions(int $port): array
     {
-        $server = stream_socket_server('tcp://127.0.0.1:0', $errorCode, $errorMessage);
-
-        if (!\is_resource($server)) {
-            self::fail('Unable to find an available TCP port: ' . $errorCode . ' ' . $errorMessage);
-        }
-
-        $name = stream_socket_get_name($server, false);
-
-        fclose($server);
-
-        if ($name === false) {
-            self::fail('Unable to read TCP port.');
-        }
-
-        $port = parse_url('tcp://' . $name, PHP_URL_PORT);
-
-        if (!\is_int($port)) {
-            self::fail('Unable to parse TCP port.');
-        }
-
-        return $port;
+        return [
+            'socks5_host' => '127.0.0.1',
+            'socks5_port' => $port,
+        ];
     }
 }
