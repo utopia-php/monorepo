@@ -11,6 +11,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\UriInterface;
 use Utopia\Client\Adapter;
+use Utopia\Client\Tls;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Uri;
 
@@ -39,6 +40,38 @@ final class Client implements ClientInterface
     {
         $clone = clone $this;
         $clone->adapter = $this->adapter->withConnectTimeout($seconds);
+
+        return $clone;
+    }
+
+    public function withSslVerification(bool $enabled = true): self
+    {
+        $clone = clone $this;
+        $clone->adapter = $this->adapter->withSslVerification($enabled);
+
+        return $clone;
+    }
+
+    public function withCustomCA(string $path): self
+    {
+        $clone = clone $this;
+        $clone->adapter = $this->adapter->withCustomCA($path);
+
+        return $clone;
+    }
+
+    public function withCertificate(string $certPath, string $keyPath, ?string $passphrase = null): self
+    {
+        $clone = clone $this;
+        $clone->adapter = $this->adapter->withCertificate($certPath, $keyPath, $passphrase);
+
+        return $clone;
+    }
+
+    public function withMinTlsVersion(Tls $version): self
+    {
+        $clone = clone $this;
+        $clone->adapter = $this->adapter->withMinTlsVersion($version);
 
         return $clone;
     }

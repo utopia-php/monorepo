@@ -24,6 +24,7 @@ use Utopia\Client\Exception\ProxyException;
 use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
 use Utopia\Client\Response\Builder as ResponseBuilder;
+use Utopia\Client\Tls;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
 use ValueError;
@@ -66,6 +67,49 @@ class Client implements Adapter
     {
         $clone = clone $this;
         $clone->options[\CURLOPT_CONNECTTIMEOUT_MS] = $this->milliseconds($seconds);
+
+        return $clone;
+    }
+
+    public function withSslVerification(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->options[\CURLOPT_SSL_VERIFYPEER] = $enabled;
+        $clone->options[\CURLOPT_SSL_VERIFYHOST] = $enabled ? 2 : 0;
+
+        return $clone;
+    }
+
+    public function withCustomCA(string $path): static
+    {
+        $clone = clone $this;
+        $clone->options[\CURLOPT_CAINFO] = $path;
+
+        return $clone;
+    }
+
+    public function withCertificate(string $certPath, string $keyPath, ?string $passphrase = null): static
+    {
+        $clone = clone $this;
+        $clone->options[\CURLOPT_SSLCERT] = $certPath;
+        $clone->options[\CURLOPT_SSLKEY] = $keyPath;
+
+        if ($passphrase !== null) {
+            $clone->options[\CURLOPT_KEYPASSWD] = $passphrase;
+        }
+
+        return $clone;
+    }
+
+    public function withMinTlsVersion(Tls $version): static
+    {
+        $clone = clone $this;
+        $clone->options[\CURLOPT_SSLVERSION] = match ($version) {
+            Tls::V1_0 => \CURL_SSLVERSION_TLSv1_0,
+            Tls::V1_1 => \CURL_SSLVERSION_TLSv1_1,
+            Tls::V1_2 => \CURL_SSLVERSION_TLSv1_2,
+            Tls::V1_3 => \CURL_SSLVERSION_TLSv1_3,
+        };
 
         return $clone;
     }

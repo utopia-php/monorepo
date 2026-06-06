@@ -26,6 +26,7 @@ use Utopia\Client\Exception\ProxyException;
 use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
 use Utopia\Client\Response\Builder as ResponseBuilder;
+use Utopia\Client\Tls;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
 use ValueError;
@@ -41,6 +42,18 @@ class Client implements Adapter
     private const string SETTING_HTTP2 = 'http2';
 
     private const string SETTING_TIMEOUT = 'timeout';
+
+    private const string SETTING_SSL_VERIFY_PEER = 'ssl_verify_peer';
+
+    private const string SETTING_SSL_CAFILE = 'ssl_cafile';
+
+    private const string SETTING_SSL_CERT_FILE = 'ssl_cert_file';
+
+    private const string SETTING_SSL_KEY_FILE = 'ssl_key_file';
+
+    private const string SETTING_SSL_PASSPHRASE = 'ssl_passphrase';
+
+    private const string SETTING_SSL_PROTOCOLS = 'ssl_protocols';
 
     private readonly ResponseBuilder $responseBuilder;
 
@@ -72,6 +85,48 @@ class Client implements Adapter
     {
         $clone = clone $this;
         $clone->settings[self::SETTING_CONNECT_TIMEOUT] = $this->seconds($seconds);
+
+        return $clone;
+    }
+
+    public function withSslVerification(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->settings[self::SETTING_SSL_VERIFY_PEER] = $enabled;
+
+        return $clone;
+    }
+
+    public function withCustomCA(string $path): static
+    {
+        $clone = clone $this;
+        $clone->settings[self::SETTING_SSL_CAFILE] = $path;
+
+        return $clone;
+    }
+
+    public function withCertificate(string $certPath, string $keyPath, ?string $passphrase = null): static
+    {
+        $clone = clone $this;
+        $clone->settings[self::SETTING_SSL_CERT_FILE] = $certPath;
+        $clone->settings[self::SETTING_SSL_KEY_FILE] = $keyPath;
+
+        if ($passphrase !== null) {
+            $clone->settings[self::SETTING_SSL_PASSPHRASE] = $passphrase;
+        }
+
+        return $clone;
+    }
+
+    public function withMinTlsVersion(Tls $version): static
+    {
+        $clone = clone $this;
+        $clone->settings[self::SETTING_SSL_PROTOCOLS] = $this->sslProtocols(match ($version) {
+            Tls::V1_0 => ['SWOOLE_SSL_TLSv1', 'SWOOLE_SSL_TLSv1_1', 'SWOOLE_SSL_TLSv1_2', 'SWOOLE_SSL_TLSv1_3'],
+            Tls::V1_1 => ['SWOOLE_SSL_TLSv1_1', 'SWOOLE_SSL_TLSv1_2', 'SWOOLE_SSL_TLSv1_3'],
+            Tls::V1_2 => ['SWOOLE_SSL_TLSv1_2', 'SWOOLE_SSL_TLSv1_3'],
+            Tls::V1_3 => ['SWOOLE_SSL_TLSv1_3'],
+        });
 
         return $clone;
     }
@@ -370,6 +425,31 @@ class Client implements Adapter
         }
 
         return new NetworkException($request, $message, $code, $previous);
+    }
+
+    /**
+     * OR the given SWOOLE_SSL_* protocol constants into the bitmask Swoole's
+     * ssl_protocols setting expects, skipping any the runtime does not define.
+     *
+     * @param array<int, string> $names
+     */
+    private function sslProtocols(array $names): int
+    {
+        $mask = 0;
+
+        foreach ($names as $name) {
+            if (!\defined($name)) {
+                continue;
+            }
+
+            $value = \constant($name);
+
+            if (\is_int($value)) {
+                $mask |= $value;
+            }
+        }
+
+        return $mask;
     }
 
     /**

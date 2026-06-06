@@ -15,6 +15,14 @@ interface Adapter extends ClientInterface
 
     public function withConnectTimeout(float $seconds): static;
 
+    public function withSslVerification(bool $enabled = true): static;
+
+    public function withCustomCA(string $path): static;
+
+    public function withCertificate(string $certPath, string $keyPath, ?string $passphrase = null): static;
+
+    public function withMinTlsVersion(Tls $version): static;
+
     /**
      * Send a request and pass each response body chunk to $sink as it arrives,
      * keeping memory bounded regardless of body size. The returned response

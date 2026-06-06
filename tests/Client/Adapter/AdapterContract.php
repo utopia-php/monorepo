@@ -18,6 +18,7 @@ use Utopia\Client\Exception\ProtocolException;
 use Utopia\Client\Exception\ProxyException;
 use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
+use Utopia\Client\Tls;
 use Utopia\Psr7\ContentType;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Method;
@@ -403,6 +404,17 @@ abstract class AdapterContract extends TestCase
 
         $this->assertNotSame($client, $client->withTimeout(1));
         $this->assertNotSame($client, $client->withConnectTimeout(1));
+    }
+
+    public function testTlsHelpersReturnConfiguredClones(): void
+    {
+        $client = $this->createAdapter();
+
+        $this->assertNotSame($client, $client->withSslVerification(false));
+        $this->assertNotSame($client, $client->withCustomCA('/etc/ssl/ca.pem'));
+        $this->assertNotSame($client, $client->withCertificate('/etc/ssl/client.pem', '/etc/ssl/client.key'));
+        $this->assertNotSame($client, $client->withCertificate('/etc/ssl/client.pem', '/etc/ssl/client.key', 'secret'));
+        $this->assertNotSame($client, $client->withMinTlsVersion(Tls::V1_2));
     }
 
     public function testDefaultTimeoutsAllowReasonablySlowResponses(): void

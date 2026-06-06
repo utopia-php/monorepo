@@ -11,6 +11,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Utopia\Client;
 use Utopia\Client\Adapter;
+use Utopia\Client\Tls;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Response;
 use ValueError;
@@ -31,6 +32,25 @@ final class ClientTest extends TestCase
         $this->assertSame('', $client->sendRequest($request)->getHeaderLine('X-Timeout'));
         $this->assertSame('5.5', $response->getHeaderLine('X-Timeout'));
         $this->assertSame('1.25', $response->getHeaderLine('X-Connect-Timeout'));
+    }
+
+    public function testItDecoratesTlsConfiguration(): void
+    {
+        $request = new Request\Factory()->createRequest('GET', 'https://example.com');
+        $client = new Client(new RecordingAdapter());
+        $configured = $client
+            ->withSslVerification(false)
+            ->withCustomCA('/etc/ssl/ca.pem')
+            ->withCertificate('/etc/ssl/client.pem', '/etc/ssl/client.key', 'secret')
+            ->withMinTlsVersion(Tls::V1_2);
+
+        $response = $configured->sendRequest($request);
+
+        $this->assertSame('', $client->sendRequest($request)->getHeaderLine('X-Tls-Verify'));
+        $this->assertSame('off', $response->getHeaderLine('X-Tls-Verify'));
+        $this->assertSame('/etc/ssl/ca.pem', $response->getHeaderLine('X-Tls-Ca'));
+        $this->assertSame('/etc/ssl/client.pem:/etc/ssl/client.key:secret', $response->getHeaderLine('X-Tls-Cert'));
+        $this->assertSame('V1_2', $response->getHeaderLine('X-Tls-Min-Version'));
     }
 
     public function testItRejectsInvalidTimeouts(): void
@@ -144,6 +164,10 @@ final class RecordingAdapter implements Adapter
     public function __construct(
         private ?float $timeout = null,
         private ?float $connectTimeout = null,
+        private ?bool $sslVerification = null,
+        private ?string $customCA = null,
+        private ?string $certificate = null,
+        private ?Tls $minTlsVersion = null,
     ) {}
 
     public function withTimeout(float $seconds): static
@@ -170,6 +194,38 @@ final class RecordingAdapter implements Adapter
         return $clone;
     }
 
+    public function withSslVerification(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->sslVerification = $enabled;
+
+        return $clone;
+    }
+
+    public function withCustomCA(string $path): static
+    {
+        $clone = clone $this;
+        $clone->customCA = $path;
+
+        return $clone;
+    }
+
+    public function withCertificate(string $certPath, string $keyPath, ?string $passphrase = null): static
+    {
+        $clone = clone $this;
+        $clone->certificate = $certPath . ':' . $keyPath . ($passphrase === null ? '' : ':' . $passphrase);
+
+        return $clone;
+    }
+
+    public function withMinTlsVersion(Tls $version): static
+    {
+        $clone = clone $this;
+        $clone->minTlsVersion = $version;
+
+        return $clone;
+    }
+
     /**
      * @throws ClientExceptionInterface
      */
@@ -185,6 +241,22 @@ final class RecordingAdapter implements Adapter
 
         if ($this->timeout !== null) {
             $response = $response->withHeader('X-Timeout', (string) $this->timeout);
+        }
+
+        if ($this->sslVerification !== null) {
+            $response = $response->withHeader('X-Tls-Verify', $this->sslVerification ? 'on' : 'off');
+        }
+
+        if ($this->customCA !== null) {
+            $response = $response->withHeader('X-Tls-Ca', $this->customCA);
+        }
+
+        if ($this->certificate !== null) {
+            $response = $response->withHeader('X-Tls-Cert', $this->certificate);
+        }
+
+        if ($this->minTlsVersion instanceof \Utopia\Client\Tls) {
+            $response = $response->withHeader('X-Tls-Min-Version', $this->minTlsVersion->name);
         }
 
         if ($this->connectTimeout !== null) {
