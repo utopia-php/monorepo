@@ -415,7 +415,7 @@ abstract class AdapterContract extends TestCase
 
     public function testItThrowsConnectionExceptionsForPartialResponseHeaders(): void
     {
-        Http::raw("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n", function (int $port): void {
+        Http::raw("HTTP/1.1 200 OK\r\nX-Partial: value", function (int $port): void {
             $client = $this->createAdapter($this->timeoutOptions(1, 1));
             $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/partial-headers');
 
