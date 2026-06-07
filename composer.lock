@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7732004aa2671415906ca3cc6950da8e",
+    "content-hash": "326929c0d5fd258432f2441f06801968",
     "packages": [
         {
             "name": "brick/math",
@@ -2108,16 +2108,16 @@
         },
         {
             "name": "utopia-php/span",
-            "version": "1.1.5",
+            "version": "3.0.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/utopia-php/span.git",
-                "reference": "028406940ca92bdc88099f0b1a123a3b2cbdd4e5"
+                "reference": "97f0ab6e9125c000262f8b5b007423d11fd1a9b3"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/utopia-php/span/zipball/028406940ca92bdc88099f0b1a123a3b2cbdd4e5",
-                "reference": "028406940ca92bdc88099f0b1a123a3b2cbdd4e5",
+                "url": "https://api.github.com/repos/utopia-php/span/zipball/97f0ab6e9125c000262f8b5b007423d11fd1a9b3",
+                "reference": "97f0ab6e9125c000262f8b5b007423d11fd1a9b3",
                 "shasum": ""
             },
             "require": {
@@ -2146,9 +2146,9 @@
             "description": "Simple span tracing library for PHP with coroutine support",
             "support": {
                 "issues": "https://github.com/utopia-php/span/issues",
-                "source": "https://github.com/utopia-php/span/tree/1.1.5"
+                "source": "https://github.com/utopia-php/span/tree/3.0.1"
             },
-            "time": "2026-02-13T18:00:11+00:00"
+            "time": "2026-05-13T11:53:06+00:00"
         },
         {
             "name": "utopia-php/telemetry",
