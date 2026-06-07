@@ -19,7 +19,7 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') !== __FILE__) {
 }
 
 Span::setStorage(new Storage\Coroutine());
-Span::addExporter(new Exporter\Stdout());
+Span::setExporters(new Exporter\Stdout());
 
 $port = (int) (getenv('PORT') ?: 5300);
 $server = new Swoole('0.0.0.0', $port);

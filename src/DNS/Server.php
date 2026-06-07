@@ -170,6 +170,7 @@ class Server
 
         $question = null;
         $response = null;
+        $level = null;
 
         try {
             // 1. Parse Message.
@@ -179,7 +180,7 @@ class Server
             } catch (PartialDecodingException $e) {
                 $this->handleError($e);
 
-                $span->set('level', 'warn');
+                $level = 'warn';
                 $response = Message::response(
                     $e->getHeader(),
                     Message::RCODE_FORMERR,
@@ -208,7 +209,7 @@ class Server
 
             $question = $query->questions[0] ?? null;
             if ($question === null) {
-                $span->set('level', 'warn');
+                $level = 'warn';
                 $response = Message::response(
                     $query->header,
                     Message::RCODE_FORMERR,
@@ -281,7 +282,7 @@ class Server
                 $span->set('dns.response.code', $response->header->responseCode);
                 $span->set('dns.response.answer_count', $response->header->answerCount);
             }
-            $span->finish();
+            $span->finish($level);
         }
     }
 
