@@ -28,7 +28,10 @@
         "analyze": "vendor/bin/phpstan analyse -c phpstan.neon --memory-limit 512M",
         "refactor": "vendor/bin/rector process",
         "refactor:check": "vendor/bin/rector process --dry-run",
-        "test": "vendor/bin/phpunit --configuration phpunit.xml"
+        "test": [
+            "@php vendor/bin/phpunit --configuration phpunit.xml --testsuite default",
+            "@php vendor/bin/phpunit --configuration phpunit.xml --testsuite swoole"
+        ]
     },
     "require": {
         "php": ">=8.4",

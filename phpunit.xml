@@ -1,8 +1,15 @@
 <?xml version="1.0"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd" backupGlobals="false" bootstrap="vendor/autoload.php" colors="true" processIsolation="false" stopOnFailure="false" cacheDirectory=".phpunit.cache" backupStaticProperties="false">
   <testsuites>
-    <testsuite name="unit">
+    <!-- Swoole coroutine tests run in their own process: with the
+         utopia-php/pools dependency tree also loaded, sharing a process with
+         later tests segfaults the runtime on PHP 8.4. -->
+    <testsuite name="swoole">
+      <directory>./tests/Client/Adapter/SwooleCoroutine</directory>
+    </testsuite>
+    <testsuite name="default">
       <directory>./tests</directory>
+      <exclude>./tests/Client/Adapter/SwooleCoroutine</exclude>
     </testsuite>
   </testsuites>
   <source>
