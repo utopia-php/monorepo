@@ -6,7 +6,6 @@ namespace Utopia;
 
 use InvalidArgumentException;
 use Psr\Http\Client\ClientExceptionInterface;
-use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\UriInterface;
@@ -16,7 +15,7 @@ use Utopia\Psr7\Header;
 use Utopia\Psr7\Uri;
 use Utopia\Span\Span;
 
-final class Client implements ClientInterface
+final class Client implements Adapter
 {
     /**
      * @var array<string, array{name: string, values: array<int, string>}>
@@ -75,6 +74,14 @@ final class Client implements ClientInterface
     {
         $clone = clone $this;
         $clone->adapter = $this->adapter->withMinTlsVersion($version);
+
+        return $clone;
+    }
+
+    public function withConnectionReuse(bool $enabled = true): self
+    {
+        $clone = clone $this;
+        $clone->adapter = $this->adapter->withConnectionReuse($enabled);
 
         return $clone;
     }
@@ -152,9 +159,9 @@ final class Client implements ClientInterface
      *
      * @throws ClientExceptionInterface
      */
-    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink): ResponseInterface
     {
-        return $this->adapter->streamRequest($this->prepare($request), $sink);
+        return $this->adapter->stream($this->prepare($request), $sink);
     }
 
     private function prepare(RequestInterface $request): RequestInterface

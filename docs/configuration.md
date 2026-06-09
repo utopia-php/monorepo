@@ -40,6 +40,27 @@ Peer verification is on by default. `withSslVerification(false)` disables certif
 $client = $client->withSslVerification(false); // insecure: disables certificate checks
 ```
 
+## Connection reuse
+
+Off by default, each request opens a fresh connection. `withConnectionReuse()`
+keeps the underlying connection alive and reuses it for further requests to the
+same origin, so the TCP/TLS handshake is paid once.
+
+```php
+<?php
+
+$client = $client->withConnectionReuse();        // or ->withConnectionReuse(false)
+```
+
+It maps to the right transport primitive on each adapter: the cURL adapter keeps
+a single persisted handle (reset between requests, connection cache preserved),
+and the Swoole adapter keeps a kept-alive coroutine client. A connection is bound
+to its origin, so a request to a different host transparently gets a new one.
+
+Reuse is most useful when one adapter sends many requests to the same host — see
+[pooling](pooling.md) for spreading a bounded set of reused connections across
+concurrent callers.
+
 ## Native cURL options
 
 Pass native cURL options with the `options` constructor argument. Options override adapter defaults when keys overlap.

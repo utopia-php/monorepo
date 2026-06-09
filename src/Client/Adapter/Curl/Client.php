@@ -37,6 +37,10 @@ class Client implements Adapter
 
     private readonly ResponseBuilder $responseBuilder;
 
+    private bool $reuseConnections = false;
+
+    private ?CurlHandle $handle = null;
+
     /**
      * Native cURL options. Values override adapter defaults when keys overlap.
      *
@@ -53,6 +57,12 @@ class Client implements Adapter
         ];
 
         $this->responseBuilder = new ResponseBuilder($responseFactory, $streamFactory);
+    }
+
+    public function __clone(): void
+    {
+        // Clones get their own handle and connection cache.
+        $this->handle = null;
     }
 
     public function withTimeout(float $seconds): static
@@ -114,6 +124,14 @@ class Client implements Adapter
         return $clone;
     }
 
+    public function withConnectionReuse(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->reuseConnections = $enabled;
+
+        return $clone;
+    }
+
     /**
      * @throws ClientExceptionInterface
      */
@@ -139,7 +157,7 @@ class Client implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink): ResponseInterface
     {
         $parsed = $this->transfer($request, $sink);
 
@@ -171,19 +189,13 @@ class Client implements Adapter
         }
 
         $uri = $request->getUri();
-        $url = (string) $uri;
 
         if (!\in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
             throw new InvalidUriException($request, 'Requests must use an absolute URI.');
         }
 
         $headers = '';
-        $handle = curl_init($url);
-
-        if (!$handle instanceof CurlHandle) {
-            throw new AdapterInitializationException($request, 'Unable to initialize curl.');
-        }
-
+        $handle = $this->handle($request);
         $options = $this->options($request, $headers, $sink);
 
         try {
@@ -217,6 +229,33 @@ class Client implements Adapter
     }
 
     /**
+     * curl_reset() clears per-request options but keeps the handle's connection
+     * cache, so a kept handle reuses the socket; a fresh handle starts anew.
+     *
+     * @throws ClientExceptionInterface
+     */
+    private function handle(RequestInterface $request): CurlHandle
+    {
+        if ($this->reuseConnections && $this->handle instanceof CurlHandle) {
+            curl_reset($this->handle);
+
+            return $this->handle;
+        }
+
+        $handle = curl_init();
+
+        if (!$handle instanceof CurlHandle) {
+            throw new AdapterInitializationException($request, 'Unable to initialize curl.');
+        }
+
+        if ($this->reuseConnections) {
+            $this->handle = $handle;
+        }
+
+        return $handle;
+    }
+
+    /**
      * @param-out string             $headers
      * @param callable(string): void $sink
      *
@@ -225,6 +264,7 @@ class Client implements Adapter
     private function options(RequestInterface $request, string &$headers, callable $sink): array
     {
         $options = [
+            \CURLOPT_URL => (string) $request->getUri(),
             \CURLOPT_CUSTOMREQUEST => $request->getMethod(),
             \CURLOPT_FOLLOWLOCATION => false,
             \CURLOPT_HEADER => false,
@@ -268,7 +308,12 @@ class Client implements Adapter
             }
         }
 
-        return $this->options + $options;
+        $merged = $this->options + $options;
+
+        // Authoritative over any caller-supplied CURLOPT_FORBID_REUSE.
+        $merged[\CURLOPT_FORBID_REUSE] = !$this->reuseConnections;
+
+        return $merged;
     }
 
     private function milliseconds(float $seconds): int

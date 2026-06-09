@@ -28,7 +28,7 @@ final class DecoratorTest extends TestCase
         $decorator = new PassthroughDecorator(new SwappableAdapter(200));
         $received = '';
 
-        $response = $decorator->streamRequest($this->request(), function (string $chunk) use (&$received): void {
+        $response = $decorator->stream($this->request(), function (string $chunk) use (&$received): void {
             $received .= $chunk;
         });
 
@@ -92,12 +92,17 @@ final class SwappableAdapter implements Adapter
         return $this;
     }
 
+    public function withConnectionReuse(bool $enabled = true): static
+    {
+        return $this;
+    }
+
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
         return new Response($this->status);
     }
 
-    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink): ResponseInterface
     {
         $sink('chunk');
 

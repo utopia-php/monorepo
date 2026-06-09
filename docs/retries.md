@@ -103,6 +103,6 @@ $retry = new Retry(
 
 `Retry` extends `Utopia\Client\Decorator`, the base for any adapter that wraps
 another. It forwards every configuration helper to the inner adapter and delegates
-sending; a subclass overrides only `sendRequest()` / `streamRequest()`. Because each
+sending; a subclass overrides only `sendRequest()` / `stream()`. Because each
 decorator is itself an `Adapter`, they stack in any order — for example
 `new Client(new Retry(new SomeOtherDecorator(new CurlAdapter())))`.

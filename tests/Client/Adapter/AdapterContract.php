@@ -738,7 +738,7 @@ abstract class AdapterContract extends TestCase
 
         $this->runAdapter(function () use ($client, $request, $sink, &$response, &$thrown): void {
             try {
-                $response = $client->streamRequest($request, $sink);
+                $response = $client->stream($request, $sink);
             } catch (Throwable $throwable) {
                 $thrown = $throwable;
             }

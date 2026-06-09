@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Utopia\Client;
 
-use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
-use Psr\Http\Message\RequestInterface;
-use Psr\Http\Message\ResponseInterface;
+use Utopia\Psr18\StreamingClientInterface;
 
-interface Adapter extends ClientInterface
+/**
+ * A transport that can both buffer (PSR-18) and stream responses, configured
+ * through immutable withX helpers. Decorators implement this too, so they compose.
+ */
+interface Adapter extends ClientInterface, StreamingClientInterface
 {
     public function withTimeout(float $seconds): static;
 
@@ -24,14 +26,10 @@ interface Adapter extends ClientInterface
     public function withMinTlsVersion(Tls $version): static;
 
     /**
-     * Send a request and pass each response body chunk to $sink as it arrives,
-     * keeping memory bounded regardless of body size. The returned response
-     * carries the status and headers; its body is empty because the body was
-     * delivered to $sink.
-     *
-     * @param callable(string): void $sink
-     *
-     * @throws ClientExceptionInterface
+     * Reuse the underlying connection across requests to the same origin so the
+     * TCP/TLS handshake is paid once, rather than dialling afresh every request.
+     * Off by default. Each adapter maps this to its own transport: a persisted
+     * cURL handle, a kept-alive Swoole client, and so on.
      */
-    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface;
+    public function withConnectionReuse(bool $enabled = true): static;
 }

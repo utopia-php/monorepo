@@ -11,7 +11,7 @@ use Psr\Http\Message\ResponseInterface;
 /**
  * Base class for adapters that decorate another adapter. It forwards every
  * configuration helper to the inner adapter (returning a reconfigured clone) and
- * delegates sending unchanged; subclasses override sendRequest()/streamRequest()
+ * delegates sending unchanged; subclasses override sendRequest()/stream()
  * to add behaviour. Because a decorator is itself an Adapter, decorators compose.
  */
 abstract class Decorator implements Adapter
@@ -50,6 +50,11 @@ abstract class Decorator implements Adapter
         return $this->wrap($this->adapter->withMinTlsVersion($version));
     }
 
+    public function withConnectionReuse(bool $enabled = true): static
+    {
+        return $this->wrap($this->adapter->withConnectionReuse($enabled));
+    }
+
     /**
      * @throws ClientExceptionInterface
      */
@@ -63,9 +68,9 @@ abstract class Decorator implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink): ResponseInterface
     {
-        return $this->adapter->streamRequest($request, $sink);
+        return $this->adapter->stream($request, $sink);
     }
 
     protected function wrap(Adapter $adapter): static

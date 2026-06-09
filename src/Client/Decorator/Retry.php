@@ -62,7 +62,7 @@ final class Retry extends Decorator
     }
 
     #[\Override]
-    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink): ResponseInterface
     {
         for ($attempt = 1; ; $attempt++) {
             $delivered = 0;
@@ -72,7 +72,7 @@ final class Retry extends Decorator
             };
 
             try {
-                $response = $this->adapter->streamRequest($request, $countingSink);
+                $response = $this->adapter->stream($request, $countingSink);
 
                 // Once bytes have reached the sink, replaying would duplicate them.
                 if ($delivered > 0) {

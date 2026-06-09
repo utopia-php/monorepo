@@ -115,7 +115,7 @@ final class RetryTest extends TestCase
         $delays = [];
         $received = '';
 
-        $response = $this->retry($inner, $delays)->streamRequest($request, function (string $chunk) use (&$received): void {
+        $response = $this->retry($inner, $delays)->stream($request, function (string $chunk) use (&$received): void {
             $received .= $chunk;
         });
 
@@ -138,7 +138,7 @@ final class RetryTest extends TestCase
         $received = '';
 
         try {
-            $this->retry($inner, $delays)->streamRequest($request, function (string $chunk) use (&$received): void {
+            $this->retry($inner, $delays)->stream($request, function (string $chunk) use (&$received): void {
                 $received .= $chunk;
             });
             $this->fail('Expected the failure to be rethrown without retrying.');
@@ -224,12 +224,17 @@ final class QueueAdapter implements Adapter
         return $this;
     }
 
+    public function withConnectionReuse(bool $enabled = true): static
+    {
+        return $this;
+    }
+
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
         return $this->next(static function (string $chunk): void {});
     }
 
-    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink): ResponseInterface
     {
         return $this->next($sink);
     }

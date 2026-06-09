@@ -42,6 +42,8 @@ class Client implements Adapter
 
     private const string SETTING_HTTP2 = 'http2';
 
+    private const string SETTING_KEEP_ALIVE = 'keep_alive';
+
     private const string SETTING_TIMEOUT = 'timeout';
 
     private const string SETTING_SSL_VERIFY_PEER = 'ssl_verify_peer';
@@ -58,6 +60,12 @@ class Client implements Adapter
 
     private readonly ResponseBuilder $responseBuilder;
 
+    private bool $reuseConnections = false;
+
+    private ?SwooleClient $connection = null;
+
+    private string $connectionKey = '';
+
     /**
      * @param array<string, mixed> $settings
      */
@@ -72,6 +80,13 @@ class Client implements Adapter
         ];
 
         $this->responseBuilder = new ResponseBuilder($responseFactory, $streamFactory);
+    }
+
+    public function __clone(): void
+    {
+        // Clones get their own connection; Swoole closes the dropped one on GC.
+        $this->connection = null;
+        $this->connectionKey = '';
     }
 
     public function withTimeout(float $seconds): static
@@ -132,6 +147,14 @@ class Client implements Adapter
         return $clone;
     }
 
+    public function withConnectionReuse(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->reuseConnections = $enabled;
+
+        return $clone;
+    }
+
     /**
      * @throws ClientExceptionInterface
      */
@@ -145,7 +168,7 @@ class Client implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink): ResponseInterface
     {
         return $this->perform($request, $sink);
     }
@@ -178,17 +201,12 @@ class Client implements Adapter
 
         $this->validateSettings();
 
-        try {
-            $client = new SwooleClient(
-                $uri->getHost(),
-                $this->port($request),
-                $uri->getScheme() === 'https',
-            );
-        } catch (Throwable $throwable) {
-            throw new AdapterInitializationException($request, $throwable->getMessage(), (int) $throwable->getCode(), $throwable);
-        }
+        $client = $this->connect($request);
 
         $settings = $this->settings + [self::SETTING_HTTP2 => false];
+
+        // Authoritative over any keep_alive passed in $settings.
+        $settings[self::SETTING_KEEP_ALIVE] = $this->reuseConnections;
 
         if ($sink !== null) {
             $settings['write_func'] = static function (SwooleClient $cli, string $chunk) use ($sink): void {
@@ -221,30 +239,30 @@ class Client implements Adapter
                 throw new InvalidArgumentException('Unable to configure Swoole request headers.');
             }
 
+            // Swoole never clears requestBody and only clears uploadFiles after a
+            // successful response, so clear whichever this request omits.
             if ($multipart instanceof \Utopia\Psr7\Request\Multipart\Body) {
+                $client->requestBody = null;
                 $this->attachMultipart($client, $multipart);
             } else {
+                $client->uploadFiles = null;
                 $data = (string) $body;
 
-                if ($data !== '' && $client->setData($data) === false) {
+                if ($data === '') {
+                    $client->requestBody = null;
+                } elseif ($client->setData($data) === false) {
                     throw new InvalidArgumentException('Unable to configure Swoole request body.');
                 }
             }
         } catch (InvalidArgumentException $invalidArgumentException) {
-            $client->close();
-
             throw $invalidArgumentException;
         } catch (Throwable $throwable) {
-            $client->close();
-
             throw new InvalidArgumentException($throwable->getMessage(), (int) $throwable->getCode(), $throwable);
         }
 
         try {
             $result = $client->execute($this->path($request));
         } catch (Throwable $throwable) {
-            $client->close();
-
             throw $this->networkException($request, $throwable->getMessage(), (int) $throwable->getCode(), null, $throwable);
         }
 
@@ -252,7 +270,6 @@ class Client implements Adapter
             $message = \is_string($client->errMsg) && $client->errMsg !== '' ? $client->errMsg : 'Swoole request failed.';
             $code = \is_int($client->errCode) ? $client->errCode : 0;
             $statusCode = $client->statusCode;
-            $client->close();
 
             if ($this->isTimeout($message, $code, $statusCode)) {
                 throw new TimeoutException($request, $message, $code);
@@ -264,8 +281,6 @@ class Client implements Adapter
         $statusCode = $client->statusCode;
 
         if (!\is_int($statusCode) || $statusCode < 100 || $statusCode > 599) {
-            $client->close();
-
             throw new InvalidResponseException($request, 'Received an invalid HTTP response.');
         }
 
@@ -281,16 +296,44 @@ class Client implements Adapter
             $responseBody = '';
         }
 
-        $response = $this->responseBuilder->build(
+        // Swoole keeps or closes the socket itself; never close it here.
+        return $this->responseBuilder->build(
             $statusCode,
             '',
             $this->headers($headers),
             $responseBody,
         );
+    }
 
-        $client->close();
+    /**
+     * Swoole binds a client to its origin at construction and re-checks the
+     * socket before each request, reconnecting if it was dropped — so a cached
+     * client is reused per origin and stays usable even after an error.
+     *
+     * @throws ClientExceptionInterface
+     */
+    private function connect(RequestInterface $request): SwooleClient
+    {
+        $uri = $request->getUri();
+        $secure = $uri->getScheme() === 'https';
+        $key = $uri->getHost() . ':' . $this->port($request) . ':' . ($secure ? 's' : 'p');
 
-        return $response;
+        if ($this->reuseConnections && $this->connection instanceof SwooleClient && $this->connectionKey === $key) {
+            return $this->connection;
+        }
+
+        try {
+            $client = new SwooleClient($uri->getHost(), $this->port($request), $secure);
+        } catch (Throwable $throwable) {
+            throw new AdapterInitializationException($request, $throwable->getMessage(), (int) $throwable->getCode(), $throwable);
+        }
+
+        if ($this->reuseConnections) {
+            $this->connection = $client;
+            $this->connectionKey = $key;
+        }
+
+        return $client;
     }
 
     private function port(RequestInterface $request): int

@@ -119,6 +119,7 @@ HTTP `4xx` and `5xx` responses are returned, not thrown, as required by PSR-18.
 
 - [Streaming](docs/streaming.md) — consume large downloads (SSE, LLM token streams) and upload large files, both with bounded memory.
 - [Retries](docs/retries.md) — the `Retry` decorator and its configurable best-practice backoff strategy.
-- [Configuration](docs/configuration.md) — timeouts, TLS, native cURL options, and the Swoole coroutine adapter.
+- [Pooling](docs/pooling.md) — share a bounded set of reused connections across concurrent callers with `Pool`.
+- [Configuration](docs/configuration.md) — timeouts, TLS, connection reuse, native cURL options, and the Swoole coroutine adapter.
 - [Error handling](docs/error-handling.md) — the PSR-18 exception hierarchy the adapters throw.
 - [Development](docs/development.md) — running the test suite and checks.

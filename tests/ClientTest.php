@@ -55,6 +55,17 @@ final class ClientTest extends TestCase
         $this->assertSame('V1_2', $response->getHeaderLine('X-Tls-Min-Version'));
     }
 
+    public function testItDecoratesConnectionReuse(): void
+    {
+        $request = new Request\Factory()->createRequest('GET', 'https://example.com');
+        $client = new Client(new RecordingAdapter());
+        $configured = $client->withConnectionReuse();
+
+        $this->assertSame('', $client->sendRequest($request)->getHeaderLine('X-Connection-Reuse'));
+        $this->assertSame('on', $configured->sendRequest($request)->getHeaderLine('X-Connection-Reuse'));
+        $this->assertSame('off', $client->withConnectionReuse(false)->sendRequest($request)->getHeaderLine('X-Connection-Reuse'));
+    }
+
     public function testItRejectsInvalidTimeouts(): void
     {
         $client = new Client(new RecordingAdapter());
@@ -205,7 +216,7 @@ final class ClientTest extends TestCase
             ->withBaseUri('https://api.example.com/v1')
             ->withHeaders(['Accept' => 'application/json']);
 
-        $response = $client->streamRequest(
+        $response = $client->stream(
             $requestFactory->createRequest('GET', 'users'),
             function (string $chunk) use (&$received): void {
                 $received .= $chunk;
@@ -227,6 +238,7 @@ final class RecordingAdapter implements Adapter
         private ?string $customCA = null,
         private ?string $certificate = null,
         private ?Tls $minTlsVersion = null,
+        private ?bool $connectionReuse = null,
     ) {}
 
     public function withTimeout(float $seconds): static
@@ -285,6 +297,14 @@ final class RecordingAdapter implements Adapter
         return $clone;
     }
 
+    public function withConnectionReuse(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->connectionReuse = $enabled;
+
+        return $clone;
+    }
+
     /**
      * @throws ClientExceptionInterface
      */
@@ -319,6 +339,10 @@ final class RecordingAdapter implements Adapter
             $response = $response->withHeader('X-Tls-Min-Version', $this->minTlsVersion->name);
         }
 
+        if ($this->connectionReuse !== null) {
+            $response = $response->withHeader('X-Connection-Reuse', $this->connectionReuse ? 'on' : 'off');
+        }
+
         if ($this->connectTimeout !== null) {
             return $response->withHeader('X-Connect-Timeout', (string) $this->connectTimeout);
         }
@@ -331,7 +355,7 @@ final class RecordingAdapter implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    public function streamRequest(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink): ResponseInterface
     {
         $sink('chunk');
 
