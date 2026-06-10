@@ -1,0 +1,11 @@
+parameters:
+    level: 5
+    paths:
+        - src
+        - src/PHPStan
+        - tests
+services:
+    -
+        class: Utopia\PHPStan\DisallowAssertEqualsExtension
+        tags:
+            - phpstan.restrictedMethodUsageExtension
