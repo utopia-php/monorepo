@@ -109,6 +109,7 @@ switch ($command) {
 
     case 'split':
         $targets = $arguments !== [] ? $arguments : packages();
+        $failed = [];
         foreach ($targets as $package) {
             is_dir("packages/{$package}") || fail("unknown package: {$package}");
 
@@ -126,8 +127,15 @@ switch ($command) {
                 ? 'refs/tags/' . $options['tag']
                 : 'refs/heads/' . (is_string($options['branch'] ?? null) ? $options['branch'] : 'main');
 
-            sh("git push{$force} {$remote} {$sha}:{$ref}");
+            passthru("git push{$force} {$remote} {$sha}:{$ref}", $code);
+            if ($code !== 0) {
+                $failed[] = $package;
+                continue;
+            }
             out("{$package} -> {$ref} ({$sha})");
+        }
+        if ($failed !== []) {
+            fail('failed to push: ' . implode(', ', $failed));
         }
         break;
 
