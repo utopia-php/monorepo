@@ -1,5 +1,0 @@
-vendor
-*.cache
-composer.lock
-state.json
-.idea

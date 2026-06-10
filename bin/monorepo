@@ -167,9 +167,26 @@ switch ($command) {
             is_dir("packages/{$package}") || fail("unknown package: {$package}");
 
             out("==> {$package}");
-            $manifest = manifest($package);
-            $runner = isset($manifest['scripts']['test']) ? 'composer test' : './vendor/bin/phpunit';
-            passthru("cd packages/{$package} && composer update --no-interaction --prefer-dist --quiet && {$runner}", $code);
+            $directory = "packages/{$package}";
+
+            // --ignore-platform-reqs: CI installs each package's declared
+            // extensions, and exotic transitive ones (e.g. ext-opentelemetry)
+            // must not block resolution.
+            passthru("cd {$directory} && composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs", $code);
+
+            // Suites with a compose "tests" service run in containers (the
+            // package's own CI convention); everything else runs locally.
+            $compose = is_file("{$directory}/docker-compose.yml")
+                && preg_match('/^ {2}tests:/m', file_get_contents("{$directory}/docker-compose.yml"));
+
+            if ($code === 0 && $compose) {
+                passthru("cd {$directory} && docker compose up -d --build && sleep 10 && docker compose exec -T tests vendor/bin/phpunit", $code);
+                passthru("cd {$directory} && docker compose down -v --remove-orphans > /dev/null 2>&1");
+            } elseif ($code === 0) {
+                $runner = isset(manifest($package)['scripts']['test']) ? 'composer test' : './vendor/bin/phpunit';
+                passthru("cd {$directory} && {$runner}", $code);
+            }
+
             if ($code !== 0) {
                 $failed[] = $package;
             }
