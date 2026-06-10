@@ -1,0 +1,105 @@
+services:
+  tests:
+    container_name: tests
+    build: .
+    volumes:
+      - ./vendor:/usr/src/code/vendor
+      - ./src:/usr/src/code/src
+      - ./tests:/usr/src/code/tests
+    depends_on:
+      - swoole
+      - swoole-redis-cluster
+      - workerman
+
+  swoole:
+    container_name: swoole
+    build: ./tests/Queue/servers/Swoole/.
+    command: php /usr/src/code/tests/Queue/servers/Swoole/worker.php
+    volumes:
+      - ./vendor:/usr/src/code/vendor
+      - ./src:/usr/src/code/src
+      - ./tests:/usr/src/code/tests
+    depends_on:
+      - redis
+
+  swoole-redis-cluster:
+    container_name: swoole-redis-cluster
+    build: ./tests/Queue/servers/SwooleRedisCluster/.
+    command: php /usr/src/code/tests/Queue/servers/SwooleRedisCluster/worker.php
+    volumes:
+      - ./vendor:/usr/src/code/vendor
+      - ./src:/usr/src/code/src
+      - ./tests:/usr/src/code/tests
+    depends_on:
+      redis-cluster-0:
+        condition: service_healthy
+
+  workerman:
+    container_name: workerman
+    build: ./tests/Queue/servers/Workerman/.
+    command: php /usr/src/code/tests/Queue/servers/Workerman/worker.php start
+    volumes:
+      - ./vendor:/usr/src/code/vendor
+      - ./src:/usr/src/code/src
+      - ./tests:/usr/src/code/tests
+    depends_on:
+      - redis
+
+  redis:
+    container_name: redis
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+
+  redis-cluster-0:
+    image: docker.io/bitnamilegacy/redis-cluster:7.4
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+      - REDIS_NODES=redis-cluster-0 redis-cluster-1 redis-cluster-2 redis-cluster-3
+      - REDIS_CLUSTER_CREATOR=yes
+      - REDIS_CLUSTER_REPLICAS=0
+    depends_on:
+      redis-cluster-1:
+        condition: service_started
+      redis-cluster-2:
+        condition: service_started
+      redis-cluster-3:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping" ]
+      start_interval: 1s
+      start_period: 0s
+
+  redis-cluster-1:
+    image: docker.io/bitnamilegacy/redis-cluster:7.4
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+      - REDIS_NODES=redis-cluster-0 redis-cluster-1 redis-cluster-2 redis-cluster-3
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping" ]
+      start_interval: 1s
+      start_period: 0s
+
+  redis-cluster-2:
+    image: docker.io/bitnamilegacy/redis-cluster:7.4
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+      - REDIS_NODES=redis-cluster-0 redis-cluster-1 redis-cluster-2 redis-cluster-3
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping" ]
+      start_interval: 1s
+      start_period: 0s
+
+  redis-cluster-3:
+    image: docker.io/bitnamilegacy/redis-cluster:7.4
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+      - REDIS_NODES=redis-cluster-0 redis-cluster-1 redis-cluster-2 redis-cluster-3
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping" ]
+      start_interval: 1s
+      start_period: 0s
