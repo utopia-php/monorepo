@@ -71,6 +71,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: ${{ steps.meta.outputs.extensions }}
+          coverage: none
 
       - run: bin/monorepo check ${{ matrix.package }}
 
