@@ -46,7 +46,10 @@ One command per library. The first CI split after an import must reach the same 
 
 ## CI setup
 
-The `Split` workflow needs a `SPLIT_TOKEN` repository secret: a token with write access to the `utopia-php` org repositories (a fine-grained PAT or GitHub App token with `contents: write`).
+The `Split` workflow authenticates as a GitHub App with `contents: write`, installed on the `utopia-php` org. In this repository's **Settings → Secrets and variables → Actions**, set:
+
+- variable `SPLIT_APP_ID` — the App ID (or client ID)
+- secret `SPLIT_APP_PRIVATE_KEY` — the app's private key (`.pem` contents, generated in the app's settings)
 
 ## Cross-package development
 

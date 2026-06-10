@@ -18,9 +18,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.SPLIT_APP_ID }}
+          private-key: ${{ secrets.SPLIT_APP_PRIVATE_KEY }}
+          owner: utopia-php
+
       - name: Split packages
         env:
-          SPLIT_REMOTE_BASE: https://x-access-token:${{ secrets.SPLIT_TOKEN }}@github.com/utopia-php
+          SPLIT_REMOTE_BASE: https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/utopia-php
         run: |
           if [ "${{ github.ref_type }}" = "tag" ]; then
             bin/monorepo split "${GITHUB_REF_NAME%%/*}" --tag="${GITHUB_REF_NAME#*/}"
