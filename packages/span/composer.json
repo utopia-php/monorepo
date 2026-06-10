@@ -1,0 +1,37 @@
+{
+    "name": "utopia-php/span",
+    "description": "Simple span tracing library for PHP with coroutine support",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Utopia\\Span\\": "src/Span/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Utopia\\Span\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": ">=8.2"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.0",
+        "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^10.0",
+        "swoole/ide-helper": "^5.0",
+        "rector/rector": "^2.3"
+    },
+    "scripts": {
+        "format": "pint --test",
+        "format:fix": "pint",
+        "test": "phpunit",
+        "analyze": "phpstan analyze",
+        "refactor": "rector",
+        "refactor:check": "rector --dry-run"
+    },
+    "suggest": {
+        "ext-swoole": "Required for coroutine-based storage"
+    }
+}
