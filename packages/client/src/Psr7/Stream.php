@@ -8,7 +8,7 @@ use InvalidArgumentException;
 use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 
-final class Stream implements StreamInterface
+final class Stream implements StreamInterface, \Stringable
 {
     /** @var resource|null */
     private mixed $resource;

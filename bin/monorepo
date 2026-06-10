@@ -160,6 +160,52 @@ switch ($command) {
         out($failures === 0 ? 'all packages valid' : "{$failures} problem(s) found");
         exit($failures === 0 ? 0 : 1);
 
+    case 'check':
+        $targets = $arguments !== [] ? $arguments : packages();
+
+        if (!is_file('vendor/bin/pint')) {
+            passthru('composer update --no-interaction --prefer-dist --no-progress', $code);
+            $code === 0 || fail('failed to install the monorepo toolchain');
+        }
+
+        $failed = [];
+        foreach ($targets as $package) {
+            is_dir("packages/{$package}") || fail("unknown package: {$package}");
+
+            out("==> {$package}");
+            $directory = "packages/{$package}";
+
+            // phpstan and rector reflect against the package's autoloader
+            if (!is_dir("{$directory}/vendor")) {
+                passthru("cd {$directory} && composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs", $code);
+                if ($code !== 0) {
+                    $failed[] = "{$package} (composer)";
+                    continue;
+                }
+            }
+
+            $fix = isset($options['fix']);
+            $checks = ['pint' => '../../vendor/bin/pint --config ../../pint.json' . ($fix ? '' : ' --test')];
+            if (glob("{$directory}/phpstan.neon*") !== []) {
+                $checks['phpstan'] = '../../vendor/bin/phpstan analyse --memory-limit=1G';
+            }
+            if (is_file("{$directory}/rector.php")) {
+                $checks['rector'] = '../../vendor/bin/rector process' . ($fix ? '' : ' --dry-run');
+            }
+
+            foreach ($checks as $tool => $command) {
+                passthru("cd {$directory} && {$command}", $code);
+                if ($code !== 0) {
+                    $failed[] = "{$package} ({$tool})";
+                }
+            }
+        }
+        if ($failed !== []) {
+            fail('checks failed: ' . implode(', ', $failed));
+        }
+        out('all checks passed');
+        break;
+
     case 'test':
         $targets = $arguments !== [] ? $arguments : packages();
         $failed = [];
@@ -206,6 +252,7 @@ switch ($command) {
           split [name...] [--tag=v] [--branch=main] [--remote=url] [--force] [--dry-run]
                                               push package subtrees to their distribution repositories
           validate                            check package composer.json conventions
+          check [name...] [--fix]             run pint, phpstan and rector against packages
           test [name...]                      install dependencies and run package test suites
         HELP);
         break;

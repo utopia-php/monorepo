@@ -7,7 +7,7 @@ namespace Utopia\Psr7;
 use InvalidArgumentException;
 use Psr\Http\Message\UriInterface;
 
-final readonly class Uri implements UriInterface
+final readonly class Uri implements UriInterface, \Stringable
 {
     public function __construct(
         private string $scheme = '',

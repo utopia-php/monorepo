@@ -16,7 +16,7 @@ use Utopia\Psr7\Stream;
  * also exposes its parts and boundary so an adapter (e.g. Swoole) can stream them
  * through a native upload API instead of reading the serialised bytes.
  */
-final class Body implements StreamInterface
+final class Body implements StreamInterface, \Stringable
 {
     /**
      * Read increment used only when buffering the whole body into a string
@@ -92,7 +92,7 @@ final class Body implements StreamInterface
                 $chunk = $segment->read($length);
 
                 if ($chunk !== '') {
-                    $this->position += \strlen($chunk);
+                    $this->position += \strlen((string) $chunk);
 
                     return $chunk;
                 }
@@ -165,7 +165,7 @@ final class Body implements StreamInterface
         }
     }
 
-    public function detach()
+    public function detach(): null
     {
         $this->close();
 

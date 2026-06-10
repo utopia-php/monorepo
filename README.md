@@ -7,7 +7,12 @@ The source of truth for the [utopia-php](https://github.com/utopia-php) librarie
 ```
 packages/<name>/   one Composer library, mirrored to github.com/utopia-php/<name>
 bin/monorepo       all monorepo tooling (dependency-free PHP, built on git subtree)
+pint.json          canonical code style for every package
+composer.json      pins the shared toolchain (pint, phpstan, rector)
 ```
+
+Code style is monorepo-wide; phpstan levels and rector rules stay per-package
+(`phpstan.neon`, `rector.php`) since they encode per-library decisions.
 
 ## Commands
 
@@ -15,6 +20,7 @@ bin/monorepo       all monorepo tooling (dependency-free PHP, built on git subtr
 bin/monorepo list                  # packages and their latest release tag
 bin/monorepo import <name>         # bring an existing library in, preserving full history
 bin/monorepo validate              # check package conventions
+bin/monorepo check [name...]       # run pint, phpstan and rector (--fix to apply)
 bin/monorepo test [name...]        # run package test suites
 bin/monorepo split [name...]       # push subtrees to the distribution repositories (CI does this)
 ```

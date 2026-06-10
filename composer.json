@@ -1,0 +1,14 @@
+{
+    "name": "utopia-php/monorepo",
+    "description": "Monorepo for the utopia-php ecosystem",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.4"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.24",
+        "phpstan/phpstan": "^2.1",
+        "rector/rector": "^2.4"
+    }
+}

@@ -68,4 +68,6 @@ jobs:
           php-version: '8.4'
           extensions: ${{ steps.meta.outputs.extensions }}
 
+      - run: bin/monorepo check ${{ matrix.package }}
+
       - run: bin/monorepo test ${{ matrix.package }}
