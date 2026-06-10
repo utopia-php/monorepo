@@ -383,13 +383,21 @@ switch ($command) {
                     'body' => release_notes($package, $version, $missing === 0 ? $tag : 'HEAD'),
                     'prerelease' => str_contains($version, '-'),
                 ]);
+                // curl with an explicit token: gh's own auth resolution 401s
+                // intermittently (seen with both CI app tokens and the local
+                // keyring), while the same token works fine over plain HTTP.
+                $token = getenv('GH_TOKEN') ?: sh('gh auth token');
+                $authorization = escapeshellarg('Authorization: Bearer ' . $token);
                 foreach ([1, 2] as $attempt) {
                     $response = [];
-                    exec('printf %s ' . escapeshellarg($payload) . ' | gh api -X POST repos/' . ORG . "/{$package}/releases --input - 2>&1", $response, $code);
+                    exec('printf %s ' . escapeshellarg($payload)
+                        . ' | curl -sS --fail-with-body -X POST -H ' . $authorization
+                        . ' -H "Accept: application/vnd.github+json" --data-binary @- '
+                        . 'https://api.github.com/repos/' . ORG . "/{$package}/releases 2>&1", $response, $code);
                     if ($code === 0 || $attempt === 2) {
                         break;
                     }
-                    sleep(2); // intermittent auth failures observed from gh
+                    sleep(2);
                 }
                 if ($code === 0) {
                     out("{$package} -> release {$version} published");
