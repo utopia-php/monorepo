@@ -1,0 +1,196 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Utopia monorepo tool.
+ *
+ * Libraries live in packages/<name> and are distributed (read-only) to
+ * github.com/utopia-php/<name> via `git subtree split`. Releases are made by
+ * tagging the monorepo `<name>/<version>`, which pushes `<version>` to the
+ * distribution repository for Packagist to pick up.
+ */
+
+chdir(dirname(__DIR__));
+
+const ORG = 'utopia-php';
+
+function out(string $message): void
+{
+    fwrite(STDOUT, $message . PHP_EOL);
+}
+
+function fail(string $message): never
+{
+    fwrite(STDERR, 'error: ' . $message . PHP_EOL);
+    exit(1);
+}
+
+/**
+ * Run a command, return its stdout. Stderr streams through to the terminal.
+ */
+function sh(string $command): string
+{
+    exec($command, $output, $code);
+    if ($code !== 0) {
+        fail("command failed ({$code}): {$command}");
+    }
+
+    return trim(implode(PHP_EOL, $output));
+}
+
+/**
+ * @return string[]
+ */
+function packages(): array
+{
+    return array_map('basename', glob('packages/*', GLOB_ONLYDIR));
+}
+
+/**
+ * Distribution remote for a package. CI overrides the base with an
+ * authenticated HTTPS URL via SPLIT_REMOTE_BASE.
+ */
+function remote(string $package): string
+{
+    $base = getenv('SPLIT_REMOTE_BASE') ?: 'git@github.com:' . ORG;
+
+    return $base . '/' . $package . '.git';
+}
+
+function manifest(string $package): ?array
+{
+    $path = 'packages/' . $package . '/composer.json';
+    if (!is_file($path)) {
+        return null;
+    }
+    $manifest = json_decode(file_get_contents($path), true);
+
+    return is_array($manifest) ? $manifest : null;
+}
+
+$arguments = array_slice($argv, 1);
+$command = array_shift($arguments) ?? 'help';
+$options = [];
+$arguments = array_values(array_filter($arguments, function (string $argument) use (&$options): bool {
+    if (!str_starts_with($argument, '--')) {
+        return true;
+    }
+    [$key, $value] = array_pad(explode('=', substr($argument, 2), 2), 2, true);
+    $options[$key] = $value;
+
+    return false;
+}));
+
+switch ($command) {
+    case 'list':
+        foreach (packages() as $package) {
+            $latest = sh("git tag --list '{$package}/*' --sort=-v:refname | head -n 1");
+            out(str_pad($package, 24) . ($latest !== '' ? $latest : '(unreleased)'));
+        }
+        break;
+
+    case 'import':
+        $package = $arguments[0] ?? fail('usage: monorepo import <name> [url] [branch]');
+        $url = $arguments[1] ?? 'https://github.com/' . ORG . "/{$package}.git";
+        if (is_dir("packages/{$package}")) {
+            fail("packages/{$package} already exists");
+        }
+
+        $branch = $arguments[2] ?? null;
+        if ($branch === null) {
+            preg_match('#refs/heads/(\S+)#', sh("git ls-remote --symref {$url} HEAD | head -n 1"), $match)
+                || fail("cannot detect default branch of {$url}");
+            $branch = $match[1];
+        }
+
+        out("importing {$package} from {$url} ({$branch})...");
+        sh("git subtree add --prefix=packages/{$package} {$url} {$branch}");
+        out("imported {$package}");
+        break;
+
+    case 'split':
+        $targets = $arguments !== [] ? $arguments : packages();
+        foreach ($targets as $package) {
+            is_dir("packages/{$package}") || fail("unknown package: {$package}");
+
+            out("splitting {$package}...");
+            $sha = sh("git subtree split --prefix=packages/{$package}");
+            $sha = trim(substr($sha, strrpos("\n" . $sha, "\n"))); // last line
+
+            if (isset($options['dry-run'])) {
+                out("{$package} -> {$sha} (dry run)");
+                continue;
+            }
+
+            $remote = is_string($options['remote'] ?? null) ? $options['remote'] : remote($package);
+            $force = isset($options['force']) ? ' --force' : '';
+            $ref = is_string($options['tag'] ?? null)
+                ? 'refs/tags/' . $options['tag']
+                : 'refs/heads/' . (is_string($options['branch'] ?? null) ? $options['branch'] : 'main');
+
+            sh("git push{$force} {$remote} {$sha}:{$ref}");
+            out("{$package} -> {$ref} ({$sha})");
+        }
+        break;
+
+    case 'validate':
+        $failures = 0;
+        foreach (packages() as $package) {
+            $problems = [];
+            $manifest = manifest($package);
+
+            if ($manifest === null) {
+                $problems[] = 'missing or invalid composer.json';
+            } else {
+                $expected = ORG . "/{$package}";
+                if (($manifest['name'] ?? null) !== $expected) {
+                    $problems[] = "name must be \"{$expected}\", got \"" . ($manifest['name'] ?? '') . '"';
+                }
+                if (empty($manifest['license'])) {
+                    $problems[] = 'missing license';
+                }
+                if (isset($manifest['version'])) {
+                    $problems[] = 'must not declare "version" (versions come from tags)';
+                }
+            }
+
+            foreach ($problems as $problem) {
+                out("packages/{$package}: {$problem}");
+                $failures++;
+            }
+        }
+        out($failures === 0 ? 'all packages valid' : "{$failures} problem(s) found");
+        exit($failures === 0 ? 0 : 1);
+
+    case 'test':
+        $targets = $arguments !== [] ? $arguments : packages();
+        $failed = [];
+        foreach ($targets as $package) {
+            is_dir("packages/{$package}") || fail("unknown package: {$package}");
+
+            out("==> {$package}");
+            $manifest = manifest($package);
+            $runner = isset($manifest['scripts']['test']) ? 'composer test' : './vendor/bin/phpunit';
+            passthru("cd packages/{$package} && composer update --no-interaction --prefer-dist --quiet && {$runner}", $code);
+            if ($code !== 0) {
+                $failed[] = $package;
+            }
+        }
+        if ($failed !== []) {
+            fail('tests failed: ' . implode(', ', $failed));
+        }
+        out('all tests passed');
+        break;
+
+    default:
+        out(<<<'HELP'
+        usage: bin/monorepo <command>
+
+          list                                show packages and their latest release tag
+          import <name> [url] [branch]        import a library into packages/<name>, preserving history
+          split [name...] [--tag=v] [--branch=main] [--remote=url] [--force] [--dry-run]
+                                              push package subtrees to their distribution repositories
+          validate                            check package composer.json conventions
+          test [name...]                      install dependencies and run package test suites
+        HELP);
+        break;
+}

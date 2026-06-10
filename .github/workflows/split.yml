@@ -1,0 +1,29 @@
+name: Split
+
+on:
+  push:
+    branches: [main]
+    tags: ['*/*']
+  workflow_dispatch:
+
+concurrency:
+  group: split
+  cancel-in-progress: false
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Split packages
+        env:
+          SPLIT_REMOTE_BASE: https://x-access-token:${{ secrets.SPLIT_TOKEN }}@github.com/utopia-php
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            bin/monorepo split "${GITHUB_REF_NAME%%/*}" --tag="${GITHUB_REF_NAME#*/}"
+          else
+            bin/monorepo split
+          fi
