@@ -18,7 +18,7 @@ final class LockTest extends TestCase
     {
         $this->assertInstanceOf(Lock::class, new Mutex());
         $this->assertInstanceOf(Lock::class, new Semaphore(2));
-        $this->assertInstanceOf(Lock::class, new File(\sys_get_temp_dir().'/utopia-lock-iface.lock'));
+        $this->assertInstanceOf(Lock::class, new File(sys_get_temp_dir() . '/utopia-lock-iface.lock'));
     }
 
     public function testContentionExtendsBaseException(): void
@@ -31,7 +31,7 @@ final class LockTest extends TestCase
     public function testWithLockReturnsCallbackResult(): void
     {
         $mutex = new Mutex();
-        $result = $mutex->withLock(fn (): string => 'ok');
+        $result = $mutex->withLock(fn(): string => 'ok');
         $this->assertSame('ok', $result);
     }
 

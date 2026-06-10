@@ -34,8 +34,7 @@ final class Distributed implements Lock
         private readonly Redis $redis,
         private readonly string $key,
         private readonly int $ttl = 600,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  Closure(string): void  $logger
@@ -58,14 +57,14 @@ final class Distributed implements Lock
             return false;
         }
 
-        $deadline = \microtime(true) + $timeout;
+        $deadline = microtime(true) + $timeout;
         $delay = 0.05;
 
-        while (\microtime(true) < $deadline) {
-            $remaining = $deadline - \microtime(true);
-            $sleep = \min($delay, $remaining);
+        while (microtime(true) < $deadline) {
+            $remaining = $deadline - microtime(true);
+            $sleep = min($delay, $remaining);
             if ($sleep > 0.0) {
-                \usleep((int) ($sleep * 1_000_000));
+                usleep((int) ($sleep * 1_000_000));
             }
 
             if ($this->tryAcquire()) {
@@ -73,7 +72,7 @@ final class Distributed implements Lock
             }
 
             $this->log("Lock contention for {$this->key}, retrying");
-            $delay = \min($delay * 2.0, 1.0);
+            $delay = min($delay * 2.0, 1.0);
         }
 
         $this->log("Failed to acquire lock for {$this->key} within {$timeout}s");
@@ -151,7 +150,7 @@ final class Distributed implements Lock
 
     private function generateToken(): string
     {
-        return \gethostname().':'.\getmypid().':'.\uniqid('', true);
+        return gethostname() . ':' . getmypid() . ':' . uniqid('', true);
     }
 
     private function log(string $message): void

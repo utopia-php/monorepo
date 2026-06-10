@@ -13,9 +13,6 @@
         "php": ">=8.3"
     },
     "require-dev": {
-        "laravel/pint": "1.*",
-        "phpstan/phpstan": "2.*",
-        "phpunit/phpunit": "11.*",
         "swoole/ide-helper": "*"
     },
     "suggest": {
@@ -34,11 +31,8 @@
         }
     },
     "scripts": {
-        "test": "vendor/bin/phpunit",
-        "lint": "vendor/bin/pint --test",
-        "format": "vendor/bin/pint",
-        "format:check": "vendor/bin/pint --test",
-        "analyze": "vendor/bin/phpstan analyse --memory-limit=512M"
+        "test": "phpunit --testsuite unit",
+        "test:e2e": "phpunit --testsuite e2e"
     },
     "config": {
         "platform": {

@@ -17,8 +17,7 @@ final class File implements Lock
     public function __construct(
         private readonly string $path,
         private readonly int $mode = LOCK_EX,
-    ) {
-    }
+    ) {}
 
     #[\Override]
     public function acquire(float $timeout = 0.0): bool
@@ -29,7 +28,7 @@ final class File implements Lock
             return $this->tryAcquire();
         }
 
-        $deadline = \microtime(true) + $timeout;
+        $deadline = microtime(true) + $timeout;
         $delay = 0.01;
 
         do {
@@ -37,13 +36,13 @@ final class File implements Lock
                 return true;
             }
 
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - microtime(true);
             if ($remaining <= 0.0) {
                 return false;
             }
 
-            \usleep((int) (\min($delay, $remaining) * 1_000_000));
-            $delay = \min($delay * 2.0, 0.25);
+            usleep((int) (min($delay, $remaining) * 1_000_000));
+            $delay = min($delay * 2.0, 0.25);
         } while (true);
     }
 
@@ -59,7 +58,7 @@ final class File implements Lock
         /** @var int<0, 7> $operation */
         $operation = $this->mode | LOCK_NB;
 
-        return \flock($this->handle, $operation, $wouldBlock);
+        return flock($this->handle, $operation, $wouldBlock);
     }
 
     #[\Override]
@@ -69,8 +68,8 @@ final class File implements Lock
             return;
         }
 
-        \flock($this->handle, LOCK_UN);
-        \fclose($this->handle);
+        flock($this->handle, LOCK_UN);
+        fclose($this->handle);
         $this->handle = null;
     }
 
@@ -95,14 +94,14 @@ final class File implements Lock
         }
 
         $directory = \dirname($this->path);
-        if (! \is_dir($directory)) {
+        if (! is_dir($directory)) {
             throw new Exception("Lock file directory does not exist: {$directory}");
         }
-        if (! \is_writable($directory) && ! \file_exists($this->path)) {
+        if (! is_writable($directory) && ! file_exists($this->path)) {
             throw new Exception("Lock file directory is not writable: {$directory}");
         }
 
-        $handle = \fopen($this->path, 'c');
+        $handle = fopen($this->path, 'c');
         if ($handle === false) {
             throw new RuntimeException("Failed to open lock file: {$this->path}");
         }

@@ -14,13 +14,13 @@ final class FileTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->path = \tempnam(\sys_get_temp_dir(), 'utopia-lock-');
+        $this->path = tempnam(sys_get_temp_dir(), 'utopia-lock-');
     }
 
     protected function tearDown(): void
     {
-        if (\file_exists($this->path)) {
-            @\unlink($this->path);
+        if (file_exists($this->path)) {
+            @unlink($this->path);
         }
     }
 
@@ -41,19 +41,19 @@ final class FileTest extends TestCase
             $this->markTestSkipped('pcntl_fork required');
         }
 
-        $ready = \tempnam(\sys_get_temp_dir(), 'utopia-lock-ready-');
-        $done = \tempnam(\sys_get_temp_dir(), 'utopia-lock-done-');
+        $ready = tempnam(sys_get_temp_dir(), 'utopia-lock-ready-');
+        $done = tempnam(sys_get_temp_dir(), 'utopia-lock-done-');
 
-        $pid = \pcntl_fork();
+        $pid = pcntl_fork();
         $this->assertNotSame(-1, $pid, 'Failed to fork');
 
         if ($pid === 0) {
             $child = new File($this->path);
             $acquired = $child->tryAcquire();
-            \file_put_contents($ready, $acquired ? '1' : '0');
+            file_put_contents($ready, $acquired ? '1' : '0');
 
-            while (! \file_exists($done) || \file_get_contents($done) !== '1') {
-                \usleep(10_000);
+            while (! file_exists($done) || file_get_contents($done) !== '1') {
+                usleep(10_000);
             }
 
             $child->release();
@@ -61,25 +61,25 @@ final class FileTest extends TestCase
         }
 
         try {
-            $deadline = \microtime(true) + 5.0;
-            while (\microtime(true) < $deadline && \file_get_contents($ready) === '') {
-                \usleep(10_000);
+            $deadline = microtime(true) + 5.0;
+            while (microtime(true) < $deadline && file_get_contents($ready) === '') {
+                usleep(10_000);
             }
 
-            $this->assertSame('1', \file_get_contents($ready), 'Child failed to acquire');
+            $this->assertSame('1', file_get_contents($ready), 'Child failed to acquire');
 
             $parent = new File($this->path);
             $this->assertFalse($parent->tryAcquire(), 'Parent must not acquire while child holds');
 
-            $start = \microtime(true);
+            $start = microtime(true);
             $this->assertFalse($parent->acquire(0.1));
-            $elapsed = \microtime(true) - $start;
+            $elapsed = microtime(true) - $start;
             $this->assertGreaterThanOrEqual(0.05, $elapsed);
         } finally {
-            \file_put_contents($done, '1');
-            \pcntl_waitpid($pid, $status);
-            @\unlink($ready);
-            @\unlink($done);
+            file_put_contents($done, '1');
+            pcntl_waitpid($pid, $status);
+            @unlink($ready);
+            @unlink($done);
         }
     }
 
@@ -106,39 +106,39 @@ final class FileTest extends TestCase
             $this->markTestSkipped('pcntl_fork required');
         }
 
-        $ready = \tempnam(\sys_get_temp_dir(), 'utopia-lock-ready-');
-        $done = \tempnam(\sys_get_temp_dir(), 'utopia-lock-done-');
+        $ready = tempnam(sys_get_temp_dir(), 'utopia-lock-ready-');
+        $done = tempnam(sys_get_temp_dir(), 'utopia-lock-done-');
 
-        $pid = \pcntl_fork();
+        $pid = pcntl_fork();
         $this->assertNotSame(-1, $pid);
 
         if ($pid === 0) {
             $child = new File($this->path);
             $child->tryAcquire();
-            \file_put_contents($ready, '1');
-            while (\file_get_contents($done) !== '1') {
-                \usleep(10_000);
+            file_put_contents($ready, '1');
+            while (file_get_contents($done) !== '1') {
+                usleep(10_000);
             }
             $child->release();
             exit(0);
         }
 
         try {
-            while (\file_get_contents($ready) !== '1') {
-                \usleep(10_000);
+            while (file_get_contents($ready) !== '1') {
+                usleep(10_000);
             }
 
             $parent = new File($this->path);
             $this->expectException(Contention::class);
             try {
-                $parent->withLock(fn () => null, timeout: 0.1);
+                $parent->withLock(fn() => null, timeout: 0.1);
             } finally {
-                \file_put_contents($done, '1');
+                file_put_contents($done, '1');
             }
         } finally {
-            \pcntl_waitpid($pid, $status);
-            @\unlink($ready);
-            @\unlink($done);
+            pcntl_waitpid($pid, $status);
+            @unlink($ready);
+            @unlink($done);
         }
     }
 }

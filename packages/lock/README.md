@@ -1,5 +1,8 @@
 # Utopia Lock
 
+> [!IMPORTANT]
+> This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Development happens in [`packages/lock`](https://github.com/utopia-php/monorepo/tree/main/packages/lock) — please open issues and pull requests there.
+
 [![Build Status](https://github.com/utopia-php/lock/actions/workflows/tests.yml/badge.svg)](https://github.com/utopia-php/lock/actions/workflows/tests.yml)
 ![Total Downloads](https://img.shields.io/packagist/dt/utopia-php/lock.svg)
 [![Discord](https://img.shields.io/discord/564160730845151244?label=discord)](https://appwrite.io/discord)

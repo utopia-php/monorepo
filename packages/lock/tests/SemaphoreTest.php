@@ -7,10 +7,11 @@ namespace Utopia\Lock\Tests;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
-use Swoole\Coroutine\System;
-use Utopia\Lock\Semaphore;
 
 use function Swoole\Coroutine\run;
+
+use Swoole\Coroutine\System;
+use Utopia\Lock\Semaphore;
 
 final class SemaphoreTest extends TestCase
 {
@@ -26,7 +27,7 @@ final class SemaphoreTest extends TestCase
                 Coroutine::create(function () use ($semaphore, &$concurrent, &$max, &$count): void {
                     $semaphore->withLock(function () use (&$concurrent, &$max, &$count): void {
                         $concurrent++;
-                        $max = \max($max, $concurrent);
+                        $max = max($max, $concurrent);
                         System::sleep(0.02);
                         $count++;
                         $concurrent--;
@@ -57,7 +58,7 @@ final class SemaphoreTest extends TestCase
                 Coroutine::create(function () use ($semaphore, &$concurrent, &$max): void {
                     $semaphore->withLock(function () use (&$concurrent, &$max): void {
                         $concurrent++;
-                        $max = \max($max, $concurrent);
+                        $max = max($max, $concurrent);
                         System::sleep(0.01);
                         $concurrent--;
                     }, timeout: 5.0);
