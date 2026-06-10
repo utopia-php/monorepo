@@ -1,0 +1,30 @@
+services:
+  tests:
+    build:
+      context: .
+    image: lock-dev
+    container_name: lock-tests
+    volumes:
+      - ./src:/usr/src/code/src
+      - ./tests:/usr/src/code/tests
+      - ./phpunit.xml:/usr/src/code/phpunit.xml
+      - ./phpstan.neon:/usr/src/code/phpstan.neon
+      - ./pint.json:/usr/src/code/pint.json
+      - ./composer.json:/usr/src/code/composer.json
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  redis:
+    image: redis:7-alpine
+    container_name: lock-redis
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
