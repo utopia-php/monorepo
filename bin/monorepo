@@ -383,7 +383,14 @@ switch ($command) {
                     'body' => release_notes($package, $version, $missing === 0 ? $tag : 'HEAD'),
                     'prerelease' => str_contains($version, '-'),
                 ]);
-                exec('printf %s ' . escapeshellarg($payload) . ' | gh api -X POST repos/' . ORG . "/{$package}/releases --input - 2>&1", $response, $code);
+                foreach ([1, 2] as $attempt) {
+                    $response = [];
+                    exec('printf %s ' . escapeshellarg($payload) . ' | gh api -X POST repos/' . ORG . "/{$package}/releases --input - 2>&1", $response, $code);
+                    if ($code === 0 || $attempt === 2) {
+                        break;
+                    }
+                    sleep(2); // intermittent auth failures observed from gh
+                }
                 if ($code === 0) {
                     out("{$package} -> release {$version} published");
                 } elseif (stripos($message = implode("\n", $response), 'already_exists') !== false) {
