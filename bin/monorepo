@@ -349,17 +349,25 @@ switch ($command) {
             // must not block resolution.
             passthru("cd {$directory} && composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs", $code);
 
-            // Suites with a compose "tests" service run in containers (the
-            // package's own CI convention); everything else runs locally.
-            $compose = is_file("{$directory}/docker-compose.yml")
-                && preg_match('/^ {2}tests:/m', file_get_contents("{$directory}/docker-compose.yml"));
-
-            if ($code === 0 && $compose) {
-                passthru("cd {$directory} && docker compose up -d --build && sleep 10 && docker compose exec -T tests vendor/bin/phpunit", $code);
-                passthru("cd {$directory} && docker compose down -v --remove-orphans > /dev/null 2>&1");
-            } elseif ($code === 0) {
+            // The test contract: `composer test` is the unit tier and runs on
+            // a bare host; `composer test:e2e` runs on the host against the
+            // package's compose services.
+            if ($code === 0) {
                 $runner = isset(manifest($package)['scripts']['test']) ? 'composer test' : './vendor/bin/phpunit';
                 passthru("cd {$directory} && {$runner}", $code);
+            }
+
+            if ($code === 0 && isset(manifest($package)['scripts']['test:e2e'])) {
+                $compose = is_file("{$directory}/docker-compose.yml");
+                if ($compose) {
+                    passthru("cd {$directory} && docker compose up -d --build --wait", $code);
+                }
+                if ($code === 0) {
+                    passthru("cd {$directory} && composer test:e2e", $code);
+                }
+                if ($compose) {
+                    passthru("cd {$directory} && docker compose down -v --remove-orphans > /dev/null 2>&1");
+                }
             }
 
             if ($code !== 0) {

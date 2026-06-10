@@ -26,6 +26,15 @@ bin/monorepo test [name...]        # run package test suites
 bin/monorepo split [name...]       # push subtrees to the distribution repositories (CI does this)
 ```
 
+## Testing
+
+Every package follows the same two-tier contract:
+
+- **`composer test`** — unit tier. Runs on a bare host: no services, no docker. Always runs in CI for changed packages.
+- **`composer test:e2e`** (optional) — integration tier. Runs on the host against the package's `docker-compose.yml` services: off-the-shelf or package-built images with healthchecks, published on offset host ports (e.g. 16379, not 6379) so they never collide with a developer's running stacks. Fixtures that need long-running processes (queue workers, app servers) start them on the host — see `packages/queue/tests/e2e.sh`.
+
+`bin/monorepo test <name>` runs both tiers: `composer test`, then — when `test:e2e` is defined — `docker compose up --wait`, `composer test:e2e`, teardown. Tests never run inside containers; containers are only servers the tests talk to.
+
 ## How distribution works
 
 On every push to `main`, CI splits each `packages/<name>` directory into a standalone history with `git subtree split` and pushes it to `utopia-php/<name>`. Because libraries are imported with `git subtree add` (full history preserved), the split reproduces the original commit hashes and pushes fast-forward on top of each repository's existing history.
@@ -55,7 +64,7 @@ It imports the library with full history, strips the QA tooling the monorepo hoi
 Then, by hand:
 
 1. `bin/monorepo check <name> --fix` — apply the canonical style; fix whatever phpstan and rector surface.
-2. `bin/monorepo test <name>` — suites with a compose `tests` service run in containers.
+2. `bin/monorepo test <name>` — and make the package satisfy the test contract (see Testing): unit tier in `composer test`, services tier in `composer test:e2e`.
 3. Review `packages/<name>/.github/workflows/` — delete QA-only workflows (pint, phpstan, linters); keep test workflows, they validate the mirror after each split.
 4. Commit, push, and confirm the Split run is green. If the mirror push is rejected:
    - `master` default branch — rename first: `gh api -X POST repos/utopia-php/<name>/branches/master/rename -f new_name=main`
