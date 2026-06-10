@@ -16,9 +16,7 @@ class AnyOf extends Validator
     /**
      * @param array<Validator> $validators
      */
-    public function __construct(protected array $validators, protected string $type = self::TYPE_MIXED)
-    {
-    }
+    public function __construct(protected array $validators, protected string $type = self::TYPE_MIXED) {}
 
     /**
      * Get Validators

@@ -61,19 +61,19 @@ class Text extends Validator
         $message = 'Value must be a valid string';
 
         if ($this->min === $this->length) {
-            $message .= ' and exactly '.$this->length.' chars';
+            $message .= ' and exactly ' . $this->length . ' chars';
         } else {
             if ($this->min) {
-                $message .= ' and at least '.$this->min.' chars';
+                $message .= ' and at least ' . $this->min . ' chars';
             }
 
             if ($this->length) {
-                $message .= ' and no longer than '.$this->length.' chars';
+                $message .= ' and no longer than ' . $this->length . ' chars';
             }
         }
 
         if ($this->allowList) {
-            $message .= ' and only consist of \''.\implode(', ', $this->allowList).'\' chars';
+            $message .= ' and only consist of \'' . implode(', ', $this->allowList) . '\' chars';
         }
 
         return $message;
@@ -117,16 +117,16 @@ class Text extends Validator
             return false;
         }
 
-        if (\mb_strlen($value) < $this->min) {
+        if (mb_strlen($value) < $this->min) {
             return false;
         }
 
-        if (\mb_strlen($value) > $this->length && $this->length !== 0) {
+        if (mb_strlen($value) > $this->length && $this->length !== 0) {
             return false;
         }
 
         if (\count($this->allowList) > 0) {
-            foreach (\str_split($value) as $char) {
+            foreach (str_split($value) as $char) {
                 if (!\in_array($char, $this->allowList)) {
                     return false;
                 }

@@ -43,7 +43,7 @@ class WhiteList extends Validator
 
         if (!$this->strict) {
             foreach ($this->list as $key => &$value) {
-                $this->list[$key] = \strtolower($value);
+                $this->list[$key] = strtolower($value);
             }
         }
     }
@@ -67,7 +67,7 @@ class WhiteList extends Validator
      */
     public function getDescription(): string
     {
-        return 'Value must be one of ('.\implode(', ', $this->list).')';
+        return 'Value must be one of (' . implode(', ', $this->list) . ')';
     }
 
     /**
@@ -108,7 +108,7 @@ class WhiteList extends Validator
             return false;
         }
 
-        $value = ($this->strict) ? $value : \strtolower($value);
+        $value = ($this->strict) ? $value : strtolower($value);
 
         if (!\in_array($value, $this->list, $this->strict)) {
             return false;

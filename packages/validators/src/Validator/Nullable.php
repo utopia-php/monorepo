@@ -6,9 +6,7 @@ use Utopia\Validator;
 
 class Nullable extends Validator
 {
-    public function __construct(protected Validator $validator)
-    {
-    }
+    public function __construct(protected Validator $validator) {}
 
     /**
      * Get Description

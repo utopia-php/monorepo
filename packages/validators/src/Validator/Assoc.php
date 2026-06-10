@@ -76,13 +76,13 @@ class Assoc extends Validator
             return false;
         }
 
-        $jsonString = \json_encode($value);
+        $jsonString = json_encode($value);
         $jsonStringSize = \strlen($jsonString);
 
         if ($jsonStringSize > $this->length) {
             return false;
         }
 
-        return \array_keys($value) !== \range(0, \count($value) - 1);
+        return array_keys($value) !== range(0, \count($value) - 1);
     }
 }

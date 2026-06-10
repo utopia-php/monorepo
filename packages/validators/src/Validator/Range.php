@@ -77,7 +77,7 @@ class Range extends Numeric
      */
     public function getDescription(): string
     {
-        return 'Value must be a valid range between '.\number_format($this->min).' and '.\number_format($this->max);
+        return 'Value must be a valid range between ' . number_format($this->min) . ' and ' . number_format($this->max);
     }
 
     /**
@@ -128,7 +128,7 @@ class Range extends Numeric
                     break; // move to check if value is within range
                 }
                 $value = $value + 0;
-                if (!is_int($value)) {
+                if (!\is_int($value)) {
                     return false;
                 }
                 break;

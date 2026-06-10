@@ -48,7 +48,7 @@ class Contains extends Validator
      */
     public function getDescription(): string
     {
-        $message = 'Value must contain one of ('.\implode(', ', $this->patterns).')';
+        $message = 'Value must contain one of (' . implode(', ', $this->patterns) . ')';
 
         if ($this->strict) {
             $message .= ' (case-sensitive)';
@@ -74,13 +74,13 @@ class Contains extends Validator
         }
 
         if (!$this->strict) {
-            $value = \mb_strtolower($value, 'UTF-8');
+            $value = mb_strtolower($value, 'UTF-8');
         }
 
         foreach ($this->patterns as $pattern) {
-            $pattern = $this->strict ? $pattern : \mb_strtolower($pattern, 'UTF-8');
+            $pattern = $this->strict ? $pattern : mb_strtolower($pattern, 'UTF-8');
 
-            if (\str_contains($value, $pattern)) {
+            if (str_contains($value, $pattern)) {
                 return true;
             }
         }

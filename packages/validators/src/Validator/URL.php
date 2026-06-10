@@ -41,7 +41,7 @@ class URL extends Validator
     public function getDescription(): string
     {
         if (!empty($this->allowedSchemes)) {
-            $description = 'Value must be a valid URL with following schemes (' . \implode(', ', $this->allowedSchemes) . ')';
+            $description = 'Value must be a valid URL with following schemes (' . implode(', ', $this->allowedSchemes) . ')';
 
             if (!$this->allowFragments) {
                 $description .= ' and without a fragment component';
@@ -71,15 +71,15 @@ class URL extends Validator
             return true;
         }
 
-        if (\filter_var($value, FILTER_VALIDATE_URL) === false) {
+        if (filter_var($value, FILTER_VALIDATE_URL) === false) {
             return false;
         }
 
-        if (!empty($this->allowedSchemes) && !\in_array(\parse_url($value, PHP_URL_SCHEME), $this->allowedSchemes)) {
+        if (!empty($this->allowedSchemes) && !\in_array(parse_url($value, PHP_URL_SCHEME), $this->allowedSchemes)) {
             return false;
         }
 
-        if (!$this->allowFragments && \parse_url($value, PHP_URL_FRAGMENT) !== null) {
+        if (!$this->allowFragments && parse_url($value, PHP_URL_FRAGMENT) !== null) {
             return false;
         }
 

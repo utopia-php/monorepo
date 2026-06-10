@@ -39,7 +39,7 @@ class HostnameTest extends TestCase
         $this->assertFalse($validator->isValid('myweb.com/blog/article1'));
 
         // Max length test
-        $domain = \str_repeat('bestdomain', 25); // 250 chars total
+        $domain = str_repeat('bestdomain', 25); // 250 chars total
 
         $domain .= '.sk'; // Exactly at the limit
         $this->assertTrue($validator->isValid($domain));

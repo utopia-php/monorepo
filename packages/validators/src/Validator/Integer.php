@@ -75,8 +75,8 @@ class Integer extends Validator
             'Value must be a valid %s %d-bit integer between %s and %s',
             $signedness,
             $this->bits,
-            \number_format($min),
-            \number_format($max)
+            number_format($min),
+            number_format($max),
         );
     }
 
@@ -152,7 +152,7 @@ class Integer extends Validator
     public function isValid(mixed $value): bool
     {
         if ($this->loose) {
-            if (!\is_numeric($value)) {
+            if (!is_numeric($value)) {
                 return false;
             }
             $value = $value + 0;

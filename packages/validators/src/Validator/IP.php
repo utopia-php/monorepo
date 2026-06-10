@@ -2,8 +2,8 @@
 
 namespace Utopia\Validator;
 
-use Utopia\Validator;
 use Exception;
+use Utopia\Validator;
 
 /**
  * IP
@@ -32,7 +32,7 @@ class IP extends Validator
      */
     public function __construct(string $type = self::ALL)
     {
-        if (!in_array($type, [self::ALL, self::V4, self::V6])) {
+        if (!\in_array($type, [self::ALL, self::V4, self::V6])) {
             throw new Exception('Unsupported IP type');
         }
 
@@ -63,19 +63,19 @@ class IP extends Validator
     {
         switch ($this->type) {
             case self::ALL:
-                if (\filter_var($value, FILTER_VALIDATE_IP)) {
+                if (filter_var($value, FILTER_VALIDATE_IP)) {
                     return true;
                 }
                 break;
 
             case self::V4:
-                if (\filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                if (filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
                     return true;
                 }
                 break;
 
             case self::V6:
-                if (\filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                if (filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
                     return true;
                 }
                 break;

@@ -19,9 +19,8 @@ class Domain extends Validator
     public function __construct(
         protected array $restrictions = [],
         protected bool $hostnames = true,
-        protected bool $allowEmpty = false
-    ) {
-    }
+        protected bool $allowEmpty = false,
+    ) {}
 
     /**
      * Helper for creating domain restriction rule.
@@ -73,21 +72,21 @@ class Domain extends Validator
             return false;
         }
 
-        if (!is_string($value)) {
+        if (!\is_string($value)) {
             return false;
         }
 
         if (
-            \filter_var(
+            filter_var(
                 $value,
                 FILTER_VALIDATE_DOMAIN,
-                $this->hostnames ? FILTER_FLAG_HOSTNAME : 0
+                $this->hostnames ? FILTER_FLAG_HOSTNAME : 0,
             ) === false
         ) {
             return false;
         }
 
-        if (\str_ends_with($value, '.') || \str_ends_with($value, '-')) {
+        if (str_ends_with($value, '.') || str_ends_with($value, '-')) {
             return false;
         }
 
@@ -97,14 +96,14 @@ class Domain extends Validator
             $prefixDenyList = $restriction['prefixDenyList'];
 
             // Only apply restriction rules to relevant domains
-            if (!\str_ends_with($value, $hostname)) {
+            if (!str_ends_with($value, $hostname)) {
                 continue;
             }
 
             // Domain-level restriction
-            if (!is_null($levels)) {
+            if (!\is_null($levels)) {
                 $expectedPartsCount = $levels;
-                $partsCount = \count(\explode('.', $value, $expectedPartsCount + 1));
+                $partsCount = \count(explode('.', $value, $expectedPartsCount + 1));
                 if ($partsCount !== $expectedPartsCount) {
                     return false;
                 }
@@ -113,7 +112,7 @@ class Domain extends Validator
             // Domain prefix (beginning) restriction
             if (!empty($prefixDenyList)) {
                 foreach ($prefixDenyList as $deniedPrefix) {
-                    if (\str_starts_with($value, $deniedPrefix)) {
+                    if (str_starts_with($value, $deniedPrefix)) {
                         return false;
                     }
                 }

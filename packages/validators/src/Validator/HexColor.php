@@ -44,7 +44,7 @@ class HexColor extends Validator
      */
     public function isValid(mixed $value): bool
     {
-        if (\is_string($value) && \preg_match('/^([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/', $value)) {
+        if (\is_string($value) && preg_match('/^([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/', $value)) {
             return true;
         }
 

@@ -67,17 +67,17 @@ class Hostname extends Validator
         }
 
         // Max length 253 chars: https://en.wikipedia.org/wiki/Hostname#:~:text=The%20entire%20hostname%2C%20including%20the,maximum%20of%20253%20ASCII%20characters
-        if (\mb_strlen($value) > 253) {
+        if (mb_strlen($value) > 253) {
             return false;
         }
 
         // This tests: 'http://', 'https://', and 'myapp.com/route'
-        if (\str_contains($value, '/')) {
+        if (str_contains($value, '/')) {
             return false;
         }
 
         // This tests for: 'myapp.com:3000'
-        if (\str_contains($value, ':')) {
+        if (str_contains($value, ':')) {
             return false;
         }
 
@@ -96,13 +96,13 @@ class Hostname extends Validator
             }
 
             // If wildcard symbol used
-            if (\str_starts_with($allowedHostname, '*')) {
+            if (str_starts_with($allowedHostname, '*')) {
                 // Remove starting * symbol before comparing
                 $allowedHostname = substr($allowedHostname, 1);
 
                 // If rest of hostname match; allow
                 // Notice allowedHostname still includes starting dot. Root domain is NOT allowed by wildcard.
-                if (\str_ends_with($value, $allowedHostname)) {
+                if (str_ends_with($value, $allowedHostname)) {
                     return true;
                 }
             }

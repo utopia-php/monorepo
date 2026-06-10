@@ -21,9 +21,7 @@ use Utopia\Validator;
  */
 class Globstar extends Validator
 {
-    public function __construct(private readonly array $patterns)
-    {
-    }
+    public function __construct(private readonly array $patterns) {}
 
     /**
      * Get Description
@@ -45,7 +43,7 @@ class Globstar extends Validator
      */
     public function isValid($value): bool
     {
-        if (!is_string($value)) {
+        if (!\is_string($value)) {
             return false;
         }
 
@@ -76,7 +74,7 @@ class Globstar extends Validator
         //
         // Step 1 — literal (no *, ?, [) inclusion patterns always win:
         //   if any specific inclusion matches, the value is valid regardless of later exclusions.
-        $isWildcard = fn ($p) => str_contains($p, '*') || str_contains($p, '?') || str_contains($p, '[');
+        $isWildcard = fn($p) => str_contains($p, '*') || str_contains($p, '?') || str_contains($p, '[');
 
         foreach ($this->patterns as $pattern) {
             if (!str_starts_with($pattern, '!') && !$isWildcard($pattern) && $this->match($value, $pattern)) {
@@ -140,7 +138,7 @@ class Globstar extends Validator
     private function matchGlobstar(string $subject, string $pattern): bool
     {
         $regex = '';
-        $len = strlen($pattern);
+        $len = \strlen($pattern);
         $i = 0;
 
         while ($i < $len) {

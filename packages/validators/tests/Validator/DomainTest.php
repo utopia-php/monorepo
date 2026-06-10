@@ -105,9 +105,9 @@ class DomainTest extends TestCase
         $this->assertSame(false, $permissiveValidator->isValid($tooLongLabel . '.com'));
 
         // Test total domain length too long (more than 253 characters)
-        $longDomain = str_repeat('a', 50) . '.' . str_repeat('b', 50) . '.' .
-                      str_repeat('c', 50) . '.' . str_repeat('d', 50) . '.' .
-                      str_repeat('e', 50) . '.com';
+        $longDomain = str_repeat('a', 50) . '.' . str_repeat('b', 50) . '.'
+                      . str_repeat('c', 50) . '.' . str_repeat('d', 50) . '.'
+                      . str_repeat('e', 50) . '.com';
         $this->assertSame(false, $permissiveValidator->isValid($longDomain));
 
         // Note: These are actually allowed by FILTER_VALIDATE_DOMAIN without FILTER_FLAG_HOSTNAME
