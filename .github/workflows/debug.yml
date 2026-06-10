@@ -1,0 +1,31 @@
+name: Debug
+
+on:
+  push:
+    branches: [test-contract]
+
+jobs:
+  queue-segfault:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: redis, swoole
+          coverage: none
+
+      - name: Swoole build info
+        run: php --ri swoole | head -20; php -v
+
+      - name: Install
+        run: composer update --no-interaction --no-progress --ignore-platform-reqs --working-dir packages/queue
+
+      - name: Per-file unit runs
+        run: |
+          cd packages/queue
+          for f in LockingTest RedisReconnectCallbackTest ServerTelemetryTest SwooleConcurrencyTest; do
+            vendor/bin/phpunit tests/Queue/E2E/Adapter/$f.php > /dev/null 2>&1
+            echo "$f: exit $?"
+          done
