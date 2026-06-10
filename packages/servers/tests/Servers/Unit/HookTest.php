@@ -39,10 +39,11 @@ class HookTest extends TestCase
 
     public function testActionCanBeSet()
     {
-        $this->assertEquals(function () {
-        }, $this->hook->getAction());
+        $default = $this->hook->getAction();
+        $this->assertInstanceOf(\Closure::class, $default);
+        $this->assertNull($default());
 
-        $this->hook->action(fn () => 'hello world');
+        $this->hook->action(fn() => 'hello world');
 
         $this->assertEquals('hello world', $this->hook->getAction()());
     }
@@ -74,7 +75,7 @@ class HookTest extends TestCase
             '',
             new Text(64),
             description: '',
-            aliases: ['project', 'project_id']
+            aliases: ['project', 'project_id'],
         );
 
         $params = $this->hook->getParams();
@@ -93,7 +94,7 @@ class HookTest extends TestCase
             new Text(32),
             description: 'Status.',
             optional: true,
-            enum: $enum
+            enum: $enum,
         );
 
         $params = $this->hook->getParams();
@@ -107,8 +108,7 @@ class HookTest extends TestCase
         $this->hook
             ->inject('user')
             ->inject('time')
-            ->action(function () {
-            });
+            ->action(function () {});
 
         $this->assertCount(2, $this->hook->getInjections());
         $this->assertEquals('user', $this->hook->getInjections()['user']['name']);

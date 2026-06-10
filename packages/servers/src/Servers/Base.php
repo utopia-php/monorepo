@@ -265,8 +265,8 @@ abstract class Base
             $arg = $existsInRequest ? $requestParams[$requestKey] : $param['default'];
 
             // Adding is string to avoid PHP built-in functions
-            if (!is_string($arg) && \is_callable($arg)) {
-                $injections = array_map(fn ($injection) => $scope->get($injection), $param['injections']);
+            if (!\is_string($arg) && \is_callable($arg)) {
+                $injections = array_map(fn($injection) => $scope->get($injection), $param['injections']);
                 $arg = \call_user_func_array($arg, $injections);
             }
             $value = $existsInValues ? $values[$valuesKey] : $arg;
@@ -286,7 +286,7 @@ abstract class Base
 
             $hook->setParamValue($key, $value);
 
-            $scope->set($key, fn () => $value);
+            $scope->set($key, fn() => $value);
         }
 
         return $scope;

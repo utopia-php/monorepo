@@ -56,8 +56,7 @@ class Hook
 
     public function __construct()
     {
-        $this->action = function (): void {
-        };
+        $this->action = function (): void {};
     }
 
     /**
@@ -197,13 +196,13 @@ class Hook
      */
     public function inject(string $injection): static
     {
-        if (array_key_exists($injection, $this->injections)) {
-            throw new \Exception('Injection already declared for '.$injection);
+        if (\array_key_exists($injection, $this->injections)) {
+            throw new \Exception('Injection already declared for ' . $injection);
         }
 
         $this->injections[$injection] = [
             'name' => $injection,
-            'order' => count($this->params) + count($this->injections),
+            'order' => \count($this->params) + \count($this->injections),
         ];
 
         return $this;
@@ -241,7 +240,7 @@ class Hook
             'aliases' => $aliases,
             'enum' => $enum,
             'value' => null,
-            'order' => count($this->params) + count($this->injections),
+            'order' => \count($this->params) + \count($this->injections),
         ];
 
         return $this;
