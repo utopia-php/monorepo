@@ -4,9 +4,9 @@
  * Utopia monorepo tool.
  *
  * Libraries live in packages/<name> and are distributed (read-only) to
- * github.com/utopia-php/<name> via `git subtree split`. Releases are made by
- * tagging the monorepo `<name>/<version>`, which pushes `<version>` to the
- * distribution repository for Packagist to pick up.
+ * github.com/utopia-php/<name> as synthesized split histories. Releases are
+ * made by tagging the monorepo `<name>/<version>`, which pushes `<version>`
+ * to the distribution repository for Packagist to pick up.
  */
 
 chdir(dirname(__DIR__));
@@ -140,6 +140,40 @@ function release_notes(string $package, string $version, string $to): string
 
     return ($log !== '' ? $log : '- No changes to this package since ' . $previous . '.')
         . "\n\n**Changes**: https://github.com/utopia-php/monorepo/compare/{$previous}...{$package}/{$version}";
+}
+
+/**
+ * Compute a package's split head: starting from the latest subtree
+ * annotation (an import or rejoin merge), re-synthesize one commit per
+ * mainline commit that changed the package, copying tree, author, committer
+ * and raw message. Deterministic, and byte-identical to `git subtree split`
+ * output — without its fatal cache collision when a package is re-imported.
+ */
+function split_package(string $package): string
+{
+    $join = sh('git log --format=%H --grep=' . escapeshellarg("^git-subtree-dir: packages/{$package}\$") . ' -1 HEAD');
+    $join !== '' || fail("packages/{$package} has no subtree annotation — was it imported?");
+    $body = sh("git log --format=%B -1 {$join}");
+    preg_match('/^git-subtree-mainline: (\w+)$/m', $body, $mainline) || fail("no git-subtree-mainline in {$join}");
+    preg_match('/^git-subtree-split: (\w+)$/m', $body, $split) || fail("no git-subtree-split in {$join}");
+
+    $tip = $split[1];
+    $commits = sh("git log --reverse --first-parent --format=%H {$mainline[1]}..HEAD -- packages/{$package}");
+    foreach (array_filter(explode("\n", $commits)) as $commit) {
+        unset($tree);
+        exec("git rev-parse -q --verify {$commit}:packages/{$package} 2>/dev/null", $tree, $missing);
+        if ($missing !== 0 || $tree[0] === sh("git rev-parse {$tip}^{tree}")) {
+            continue;
+        }
+        $identity = explode("\x1f", sh("git log -1 --format=%an%x1f%ae%x1f%aD%x1f%cn%x1f%ce%x1f%cD {$commit}"));
+        $environment = '';
+        foreach (['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_DATE', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GIT_COMMITTER_DATE'] as $index => $variable) {
+            $environment .= $variable . '=' . escapeshellarg($identity[$index]) . ' ';
+        }
+        $tip = sh("git log -1 --pretty=format:%B {$commit} | {$environment}git commit-tree {$tree[0]} -p {$tip}");
+    }
+
+    return $tip;
 }
 
 function manifest(string $package): ?array
@@ -317,7 +351,7 @@ switch ($command) {
             is_dir("packages/{$package}") || fail("unknown package: {$package}");
 
             out("splitting {$package}...");
-            $sha = sh("git subtree split -q --prefix=packages/{$package}");
+            $sha = split_package($package);
 
             if (isset($options['dry-run'])) {
                 out("{$package} -> {$sha} (dry run)");

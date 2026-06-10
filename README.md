@@ -39,7 +39,7 @@ Every package follows the same two-tier contract:
 
 ## How distribution works
 
-On every push to `main`, CI splits each `packages/<name>` directory into a standalone history with `git subtree split` and pushes it to `utopia-php/<name>`. Because libraries are imported with `git subtree add` (full history preserved), the split reproduces the original commit hashes and pushes fast-forward on top of each repository's existing history.
+On every push to `main`, CI splits each `packages/<name>` directory into a standalone history and pushes it to `utopia-php/<name>`. Libraries are imported with `git subtree add` (full history preserved); the split itself is computed by `bin/monorepo` — starting from the latest `git-subtree-*` annotation, it re-synthesizes one commit per mainline commit that changed the package, byte-identical to `git subtree split` output but immune to its fatal cache collision when a package is removed and re-imported. Splits are deterministic and push fast-forward on top of each mirror's existing history.
 
 The distribution repositories become read-only mirrors: archive their open PRs, enable branch protection, and point contributors here.
 
