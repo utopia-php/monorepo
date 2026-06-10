@@ -1,0 +1,18 @@
+{
+    "name": "utopia-php/di-rector",
+    "description": "Rector tooling for utopia-php/di",
+    "type": "project",
+    "license": "MIT",
+    "config": {
+        "platform": {
+            "php": "8.3.0"
+        }
+    },
+    "scripts": {
+        "refactor": "vendor/bin/rector process --config=../../rector.php",
+        "refactor:check": "vendor/bin/rector process --dry-run --config=../../rector.php"
+    },
+    "require-dev": {
+        "rector/rector": "^2.2"
+    }
+}
