@@ -18,7 +18,7 @@ class Auto implements Storage
     {
         $this->memory = new Memory();
 
-        if (extension_loaded('swoole')) {
+        if (\extension_loaded('swoole')) {
             $this->coroutine = new Coroutine();
         }
     }

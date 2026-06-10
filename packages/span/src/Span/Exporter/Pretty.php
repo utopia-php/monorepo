@@ -36,7 +36,7 @@ readonly class Pretty implements Exporter
         private int $maxTraceFrames = 3,
         private int $width = 60,
     ) {
-        $this->sampler = $sampler ?? static fn (Span $span): bool => true;
+        $this->sampler = $sampler ?? static fn(Span $span): bool => true;
     }
 
     public function sample(Span $span): bool
@@ -62,7 +62,7 @@ readonly class Pretty implements Exporter
             }
         }
 
-        if (array_key_exists('level', $attributes)) {
+        if (\array_key_exists('level', $attributes)) {
             $level = $attributes['level'];
             unset($attributes['level']);
             $attributes = ['level' => $level] + $attributes;
@@ -70,7 +70,7 @@ readonly class Pretty implements Exporter
 
         $maxKeyLen = 0;
         foreach (array_keys($attributes) as $key) {
-            $maxKeyLen = max($maxKeyLen, strlen($key));
+            $maxKeyLen = max($maxKeyLen, \strlen($key));
         }
 
         foreach ($attributes as $key => $value) {
@@ -78,14 +78,14 @@ readonly class Pretty implements Exporter
         }
 
         if ($hasError) {
-            if (count($attributes) > 0) {
+            if (\count($attributes) > 0) {
                 $lines[] = '';
             }
 
             $lines[] = $this->error($error);
 
             $trace = $error->getTrace();
-            $limited = array_slice($trace, 0, $this->maxTraceFrames);
+            $limited = \array_slice($trace, 0, $this->maxTraceFrames);
 
             foreach ($limited as $frame) {
                 $file = $frame['file'] ?? 'unknown';
@@ -93,7 +93,7 @@ readonly class Pretty implements Exporter
                 $lines[] = self::DIM . "    at {$file}:{$line}" . self::RESET;
             }
 
-            $remaining = count($trace) - $this->maxTraceFrames;
+            $remaining = \count($trace) - $this->maxTraceFrames;
             if ($remaining > 0) {
                 $lines[] = self::DIM . "    ... {$remaining} more" . self::RESET;
             }
@@ -116,13 +116,13 @@ readonly class Pretty implements Exporter
 
         $parts = [$actionStr];
 
-        if (is_float($duration)) {
+        if (\is_float($duration)) {
             $durationStr = $this->formatDuration($duration);
             $durationColor = $this->durationColor($duration);
             $parts[] = $durationColor . $durationStr . self::RESET;
         }
 
-        if (is_string($traceId)) {
+        if (\is_string($traceId)) {
             $short = substr($traceId, 0, 8);
             $parts[] = self::DIM . $short . self::RESET;
         }

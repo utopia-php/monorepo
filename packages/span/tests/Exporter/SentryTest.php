@@ -140,11 +140,11 @@ class SentryTest extends TestCase
     {
         $exporter = new Sentry(
             dsn: 'https://key@sentry.io/123',
-            classifier: fn (string $key): SentryField => match (true) {
+            classifier: fn(string $key): SentryField => match (true) {
                 str_starts_with($key, 'tenant.') => SentryField::Tag,
                 str_starts_with($key, 'user.') => SentryField::Context,
                 default => SentryField::Extra,
-            }
+            },
         );
 
         $span = new Span('api.request');

@@ -28,7 +28,7 @@ readonly class Stdout implements Exporter
         ?Closure $sampler = null,
         private int $maxTraceFrames = 3,
     ) {
-        $this->sampler = $sampler ?? static fn (Span $span): bool => true;
+        $this->sampler = $sampler ?? static fn(Span $span): bool => true;
     }
 
     public function sample(Span $span): bool
@@ -40,7 +40,7 @@ readonly class Stdout implements Exporter
     {
         $attributes = $span->getAttributes();
         $ordered = [];
-        if (array_key_exists('level', $attributes)) {
+        if (\array_key_exists('level', $attributes)) {
             $ordered['level'] = $attributes['level'];
             unset($attributes['level']);
         }
@@ -57,15 +57,15 @@ readonly class Stdout implements Exporter
             $data['error.line'] = $error->getLine();
 
             $trace = $error->getTrace();
-            $limited = array_slice($trace, 0, $this->maxTraceFrames);
-            $data['error.trace'] = array_map(fn (array $frame): array => [
+            $limited = \array_slice($trace, 0, $this->maxTraceFrames);
+            $data['error.trace'] = array_map(fn(array $frame): array => [
                 'file' => $frame['file'] ?? null,
                 'line' => $frame['line'] ?? null,
                 'function' => $frame['function'],
             ], $limited);
 
-            if (count($trace) > $this->maxTraceFrames) {
-                $data['error.trace_truncated'] = count($trace) - $this->maxTraceFrames;
+            if (\count($trace) > $this->maxTraceFrames) {
+                $data['error.trace_truncated'] = \count($trace) - $this->maxTraceFrames;
             }
         }
 

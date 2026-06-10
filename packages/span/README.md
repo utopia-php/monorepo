@@ -1,5 +1,8 @@
 # Utopia Span
 
+> [!IMPORTANT]
+> This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Development happens in [`packages/span`](https://github.com/utopia-php/monorepo/tree/main/packages/span) — please open issues and pull requests there.
+
 A simple, memory-safe span tracing library for PHP with Swoole coroutine support.
 
 ## Installation

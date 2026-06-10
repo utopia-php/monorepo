@@ -262,7 +262,7 @@ switch ($command) {
         foreach (['laravel/pint', 'phpstan/phpstan', 'rector/rector', 'squizlabs/php_codesniffer', 'phpunit/phpunit'] as $dependency) {
             unset($manifest['require-dev'][$dependency]);
         }
-        foreach (['format', 'format:check', 'lint', 'check', 'analyze', 'refactor', 'refactor:check'] as $script) {
+        foreach (['format', 'format:check', 'format:fix', 'lint', 'check', 'analyse', 'analyze', 'refactor', 'refactor:check'] as $script) {
             unset($manifest['scripts'][$script]);
         }
         foreach ($manifest['scripts'] ?? [] as $name => $script) {

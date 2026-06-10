@@ -74,11 +74,11 @@ class Span
             $parts = explode('-', $traceparent);
 
             if (
-                count($parts) === 4
+                \count($parts) === 4
                 && $parts[0] === '00'
-                && strlen($parts[1]) === 32 && ctype_xdigit($parts[1])
-                && strlen($parts[2]) === 16 && ctype_xdigit($parts[2])
-                && strlen($parts[3]) === 2 && ctype_xdigit($parts[3])
+                && \strlen($parts[1]) === 32 && ctype_xdigit($parts[1])
+                && \strlen($parts[2]) === 16 && ctype_xdigit($parts[2])
+                && \strlen($parts[3]) === 2 && ctype_xdigit($parts[3])
             ) {
                 $span->attributes['span.trace_id'] = $parts[1];
                 $span->attributes['span.parent_id'] = $parts[2];
@@ -194,10 +194,10 @@ class Span
      */
     public function getTraceparent(): string
     {
-        return sprintf(
+        return \sprintf(
             '00-%s-%s-01',
             $this->attributes['span.trace_id'],
-            $this->attributes['span.id']
+            $this->attributes['span.id'],
         );
     }
 

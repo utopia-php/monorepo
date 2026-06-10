@@ -28,8 +28,8 @@ class SpanTest extends TestCase
         $this->assertIsString($traceId);
         $this->assertIsString($spanId);
         $this->assertIsFloat($startedAt);
-        $this->assertSame(32, strlen($traceId));
-        $this->assertSame(16, strlen($spanId));
+        $this->assertSame(32, \strlen($traceId));
+        $this->assertSame(16, \strlen($spanId));
     }
 
     public function testSetAndGet(): void
@@ -254,7 +254,7 @@ class SpanTest extends TestCase
         $exported = [];
         $exporter = $this->createExporter(
             $exported,
-            fn (Span $s): bool => $s->getError() instanceof \Throwable,
+            fn(Span $s): bool => $s->getError() instanceof \Throwable,
         );
 
         Span::setExporters($exporter);
@@ -428,7 +428,7 @@ class SpanTest extends TestCase
 
         $this->assertNotEquals(
             $span1->get('span.trace_id'),
-            $span2->get('span.trace_id')
+            $span2->get('span.trace_id'),
         );
     }
 
@@ -439,7 +439,7 @@ class SpanTest extends TestCase
 
         $this->assertNotEquals(
             $span1->get('span.id'),
-            $span2->get('span.id')
+            $span2->get('span.id'),
         );
     }
 
@@ -485,8 +485,8 @@ class SpanTest extends TestCase
         $exportedYes = [];
         $exportedNo = [];
 
-        $yes = $this->createExporter($exportedYes, fn (Span $s): bool => true);
-        $no = $this->createExporter($exportedNo, fn (Span $s): bool => false);
+        $yes = $this->createExporter($exportedYes, fn(Span $s): bool => true);
+        $no = $this->createExporter($exportedNo, fn(Span $s): bool => false);
 
         Span::setExporters($yes, $no);
 
@@ -502,7 +502,7 @@ class SpanTest extends TestCase
         $exported = [];
         $exporter = $this->createExporter(
             $exported,
-            fn (Span $s): bool => $s->get('span.duration') > 0.005,
+            fn(Span $s): bool => $s->get('span.duration') > 0.005,
         );
 
         Span::setExporters($exporter);
@@ -526,8 +526,8 @@ class SpanTest extends TestCase
         $parts = explode('-', $traceparent);
         $this->assertCount(4, $parts);
         $this->assertSame('00', $parts[0]);
-        $this->assertSame(32, strlen($parts[1]));
-        $this->assertSame(16, strlen($parts[2]));
+        $this->assertSame(32, \strlen($parts[1]));
+        $this->assertSame(16, \strlen($parts[2]));
         $this->assertSame('01', $parts[3]);
     }
 
@@ -584,7 +584,7 @@ class SpanTest extends TestCase
 
         $traceId = $span->get('span.trace_id');
         $this->assertIsString($traceId);
-        $this->assertSame(32, strlen($traceId));
+        $this->assertSame(32, \strlen($traceId));
         $this->assertNull($span->get('span.parent_id'));
     }
 
@@ -594,7 +594,7 @@ class SpanTest extends TestCase
 
         $traceId = $span->get('span.trace_id');
         $this->assertIsString($traceId);
-        $this->assertSame(32, strlen($traceId));
+        $this->assertSame(32, \strlen($traceId));
         $this->assertNull($span->get('span.parent_id'));
     }
 
@@ -655,7 +655,7 @@ class SpanTest extends TestCase
             public function __construct(array &$exported, ?Closure $sampler)
             {
                 $this->exported = &$exported;
-                $this->sampler = $sampler ?? static fn (Span $span): bool => true;
+                $this->sampler = $sampler ?? static fn(Span $span): bool => true;
             }
 
             public function sample(Span $span): bool

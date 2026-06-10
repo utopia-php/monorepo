@@ -10,7 +10,7 @@ class CoroutineTest extends TestCase
 {
     protected function setUp(): void
     {
-        if (!extension_loaded('swoole')) {
+        if (!\extension_loaded('swoole')) {
             $this->markTestSkipped('Swoole extension not available');
         }
     }

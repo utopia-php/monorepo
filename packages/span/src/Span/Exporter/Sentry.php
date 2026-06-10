@@ -73,7 +73,7 @@ class Sentry implements Exporter
         private readonly ?string $serverName = null,
         ?Closure $classifier = null,
     ) {
-        $this->classifier = $classifier ?? static fn (string $key): SentryField => SentryField::Context;
+        $this->classifier = $classifier ?? static fn(string $key): SentryField => SentryField::Context;
         $this->sampler = static function (Span $span) use ($sampler): bool {
             if (!$span->getError() instanceof \Throwable) {
                 return false;
