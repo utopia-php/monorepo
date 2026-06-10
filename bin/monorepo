@@ -262,7 +262,7 @@ switch ($command) {
                 ],
                 'bypass_actors' => [['actor_id' => SPLIT_APP_ID, 'actor_type' => 'Integration', 'bypass_mode' => 'always']],
             ]);
-            exec('echo ' . escapeshellarg($ruleset) . ' | gh api -X POST repos/' . ORG . "/{$package}/rulesets --input - 2>&1", $response, $code);
+            exec('printf %s ' . escapeshellarg($ruleset) . ' | gh api -X POST repos/' . ORG . "/{$package}/rulesets --input - 2>&1", $response, $code);
             if ($code === 0) {
                 out('mirror ruleset created');
             } elseif (stripos($message = implode("\n", $response), 'already') !== false || stripos($message, 'must be unique') !== false) {
@@ -315,7 +315,7 @@ switch ($command) {
                     'body' => release_notes($package, $version, $missing === 0 ? $tag : 'HEAD'),
                     'prerelease' => str_contains($version, '-'),
                 ]);
-                exec('echo ' . escapeshellarg($payload) . ' | gh api -X POST repos/' . ORG . "/{$package}/releases --input - 2>&1", $response, $code);
+                exec('printf %s ' . escapeshellarg($payload) . ' | gh api -X POST repos/' . ORG . "/{$package}/releases --input - 2>&1", $response, $code);
                 if ($code === 0) {
                     out("{$package} -> release {$version} published");
                 } elseif (stripos($message = implode("\n", $response), 'already_exists') !== false) {
