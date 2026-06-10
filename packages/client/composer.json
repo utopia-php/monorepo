@@ -23,11 +23,6 @@
         }
     },
     "scripts": {
-        "format": "vendor/bin/pint",
-        "format:check": "vendor/bin/pint --test",
-        "analyze": "vendor/bin/phpstan analyse -c phpstan.neon --memory-limit 512M",
-        "refactor": "vendor/bin/rector process",
-        "refactor:check": "vendor/bin/rector process --dry-run",
         "test": "vendor/bin/phpunit --configuration phpunit.xml"
     },
     "require": {
@@ -44,10 +39,7 @@
         "ext-swoole": "Required to use the Swoole coroutine HTTP client adapter."
     },
     "require-dev": {
-        "laravel/pint": "1.*",
-        "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^10.5 || ^11.0 || ^12.0",
-        "rector/rector": "^2.4",
         "swoole/ide-helper": "^6.0"
     },
     "config": {
