@@ -30,6 +30,7 @@ jobs:
       - name: Split packages
         env:
           SPLIT_REMOTE_BASE: https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/utopia-php
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           if [ "${{ github.ref_type }}" = "tag" ]; then
             bin/monorepo split "${GITHUB_REF_NAME%%/*}" --tag="${GITHUB_REF_NAME#*/}"
