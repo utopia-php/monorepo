@@ -1,5 +1,8 @@
 # Utopia Client
 
+> [!IMPORTANT]
+> This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Development happens in [`packages/client`](https://github.com/utopia-php/monorepo/tree/main/packages/client) — please open issues and pull requests there.
+
 A small PSR-18 HTTP client for PHP 8.4+. cURL and Swoole coroutine transports, PSR-7 messages, and request/response helpers for JSON, XML, text, forms, and multipart.
 
 ## Install

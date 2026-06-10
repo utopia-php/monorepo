@@ -12,6 +12,7 @@
 chdir(dirname(__DIR__));
 
 const ORG = 'utopia-php';
+const SPLIT_APP_ID = 4016286; // GitHub App that pushes splits to the mirrors
 
 function out(string $message): void
 {
@@ -56,6 +57,52 @@ function remote(string $package): string
     return $base . '/' . $package . '.git';
 }
 
+function import_package(string $package, ?string $url, ?string $branch): void
+{
+    $url ??= 'https://github.com/' . ORG . "/{$package}.git";
+    if (is_dir("packages/{$package}")) {
+        fail("packages/{$package} already exists");
+    }
+
+    if ($branch === null) {
+        preg_match('#refs/heads/(\S+)#', sh("git ls-remote --symref {$url} HEAD | head -n 1"), $match)
+            || fail("cannot detect default branch of {$url}");
+        $branch = $match[1];
+    }
+
+    out("importing {$package} from {$url} ({$branch})...");
+    sh("git subtree add --prefix=packages/{$package} {$url} {$branch}");
+    out("imported {$package}");
+}
+
+function mirror_workflow(string $package): string
+{
+    $yaml = <<<'YAML'
+    name: Mirror
+
+    on:
+      pull_request_target:
+        types: [opened]
+
+    permissions:
+      pull-requests: write
+
+    jobs:
+      redirect:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Redirect pull request to the monorepo
+            env:
+              GH_TOKEN: ${{ github.token }}
+              PR: ${{ github.event.pull_request.html_url }}
+            run: |
+              gh pr comment "$PR" --body "Thanks for contributing! This repository is a read-only mirror — development for this library happens in [\`packages/{package}\`](https://github.com/utopia-php/monorepo/tree/main/packages/{package}) in the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Please open this pull request there instead."
+              gh pr close "$PR"
+    YAML;
+
+    return str_replace('{package}', $package, $yaml) . "\n";
+}
+
 function manifest(string $package): ?array
 {
     $path = 'packages/' . $package . '/composer.json';
@@ -90,21 +137,95 @@ switch ($command) {
 
     case 'import':
         $package = $arguments[0] ?? fail('usage: monorepo import <name> [url] [branch]');
-        $url = $arguments[1] ?? 'https://github.com/' . ORG . "/{$package}.git";
-        if (is_dir("packages/{$package}")) {
-            fail("packages/{$package} already exists");
+        import_package($package, $arguments[1] ?? null, $arguments[2] ?? null);
+        break;
+
+    case 'absorb':
+        $package = $arguments[0] ?? fail('usage: monorepo absorb <name> [url] [branch]');
+        $directory = "packages/{$package}";
+
+        if (!is_dir($directory)) {
+            import_package($package, $arguments[1] ?? null, $arguments[2] ?? null);
         }
 
-        $branch = $arguments[2] ?? null;
-        if ($branch === null) {
-            preg_match('#refs/heads/(\S+)#', sh("git ls-remote --symref {$url} HEAD | head -n 1"), $match)
-                || fail("cannot detect default branch of {$url}");
-            $branch = $match[1];
+        // Strip QA tooling the monorepo hoists (see `check`).
+        $path = "{$directory}/composer.json";
+        $manifest = json_decode(file_get_contents($path), true);
+        $original = $manifest;
+        foreach (['laravel/pint', 'phpstan/phpstan', 'rector/rector', 'squizlabs/php_codesniffer'] as $dependency) {
+            unset($manifest['require-dev'][$dependency]);
+        }
+        foreach (['format', 'format:check', 'lint', 'check', 'analyze', 'refactor', 'refactor:check'] as $script) {
+            unset($manifest['scripts'][$script]);
+        }
+        if (($manifest['scripts'] ?? null) === []) {
+            unset($manifest['scripts']);
+        }
+        if (is_file("{$directory}/pint.json")) {
+            unlink("{$directory}/pint.json");
+            out('removed pint.json (root config is canonical)');
+        }
+        if ($manifest !== $original) {
+            file_put_contents($path, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+            out('stripped hoisted QA tooling from composer.json');
+            if (is_file("{$directory}/composer.lock")) {
+                passthru("cd {$directory} && composer update --no-interaction --no-progress --ignore-platform-reqs", $code);
+                $code === 0 || fail("failed to refresh {$package} composer.lock");
+            }
         }
 
-        out("importing {$package} from {$url} ({$branch})...");
-        sh("git subtree add --prefix=packages/{$package} {$url} {$branch}");
-        out("imported {$package}");
+        // Redirect pull requests opened against the mirror.
+        @mkdir("{$directory}/.github/workflows", 0755, true);
+        file_put_contents("{$directory}/.github/workflows/mirror.yml", mirror_workflow($package));
+        out('wrote .github/workflows/mirror.yml (closes mirror PRs with a redirect)');
+
+        // Point readers at the monorepo.
+        $readme = "{$directory}/README.md";
+        if (is_file($readme) && !str_contains($content = file_get_contents($readme), 'read-only mirror')) {
+            $banner = "> [!IMPORTANT]\n"
+                . "> This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). "
+                . "Development happens in [`packages/{$package}`](https://github.com/utopia-php/monorepo/tree/main/packages/{$package}) — please open issues and pull requests there.\n";
+            $updated = preg_replace('/^(# .+\R)/', "\$1\n{$banner}", $content, 1, $count);
+            file_put_contents($readme, $count === 1 ? $updated : $banner . "\n" . $content);
+            out('added mirror banner to README.md');
+        }
+
+        // Lock the mirror down: PR-only, no force-push, split app bypasses.
+        exec('gh --version 2>/dev/null', $_, $missing);
+        if ($missing !== 0) {
+            out('gh not found — create the mirror ruleset manually (see README)');
+        } else {
+            $ruleset = json_encode([
+                'name' => 'main',
+                'target' => 'branch',
+                'enforcement' => 'active',
+                'conditions' => ['ref_name' => ['include' => ['~DEFAULT_BRANCH'], 'exclude' => []]],
+                'rules' => [
+                    ['type' => 'deletion'],
+                    ['type' => 'non_fast_forward'],
+                    ['type' => 'pull_request', 'parameters' => [
+                        'required_approving_review_count' => 0,
+                        'dismiss_stale_reviews_on_push' => false,
+                        'require_code_owner_review' => false,
+                        'require_last_push_approval' => false,
+                        'required_review_thread_resolution' => false,
+                        'allowed_merge_methods' => ['merge', 'squash', 'rebase'],
+                    ]],
+                ],
+                'bypass_actors' => [['actor_id' => SPLIT_APP_ID, 'actor_type' => 'Integration', 'bypass_mode' => 'always']],
+            ]);
+            exec('echo ' . escapeshellarg($ruleset) . ' | gh api -X POST repos/' . ORG . "/{$package}/rulesets --input - 2>&1", $response, $code);
+            if ($code === 0) {
+                out('mirror ruleset created');
+            } elseif (stripos($message = implode("\n", $response), 'already') !== false || stripos($message, 'must be unique') !== false) {
+                out('mirror ruleset already exists');
+            } else {
+                out('could not create mirror ruleset (create manually, see README): ' . implode("\n", $response));
+            }
+        }
+
+        out("absorbed {$package} — next: bin/monorepo check {$package} --fix, bin/monorepo test {$package}, "
+            . "review {$directory}/.github/workflows for QA-only workflows to delete, then commit and push");
         break;
 
     case 'split':
@@ -257,6 +378,7 @@ switch ($command) {
 
           list                                show packages and their latest release tag
           import <name> [url] [branch]        import a library into packages/<name>, preserving history
+          absorb <name> [url] [branch]        import (if needed) + strip hoisted QA + mirror PR redirect + lockdown
           split [name...] [--tag=v] [--branch=main] [--remote=url] [--force] [--dry-run]
                                               push package subtrees to their distribution repositories
           validate                            check package composer.json conventions
