@@ -15,7 +15,7 @@ jobs:
   changed:
     runs-on: ubuntu-latest
     outputs:
-      packages: ${{ steps.changed.outputs.packages }}
+      matrix: ${{ steps.changed.outputs.matrix }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -40,10 +40,28 @@ jobs:
               CHANGED=$(ls packages)
             fi
           fi
-          PACKAGES=$(echo "$CHANGED" | tr ' ' '\n' | sort -u \
-            | while read -r package; do [ -d "packages/$package" ] && echo "$package"; done \
-            | jq --raw-input . | jq --compact-output --slurp .)
-          echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+          CHANGED=$(echo "$CHANGED" | tr ' ' '\n' | sort -u \
+            | while read -r package; do [ -d "packages/$package" ] && echo "$package"; done)
+
+          # Dependents of changed packages run linked (siblings resolved from
+          # the local checkout); changed packages run registry-resolved —
+          # unless a sibling they depend on also changed, which makes the
+          # registry combination unbuildable until that sibling releases.
+          LINKED=$(bin/monorepo dependents $CHANGED)
+          MATRIX=$(
+            {
+              for package in $LINKED; do
+                printf '{"package":"%s","linked":true}\n' "$package"
+              done
+              for package in $CHANGED; do
+                case " $(echo $LINKED) " in
+                  *" $package "*) ;;
+                  *) printf '{"package":"%s","linked":false}\n' "$package" ;;
+                esac
+              done
+            } | jq --compact-output --slurp 'unique'
+          )
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 
   validate:
     runs-on: ubuntu-latest
@@ -52,13 +70,14 @@ jobs:
       - run: bin/monorepo validate
 
   test:
+    name: test (${{ matrix.package }}${{ matrix.linked && ', linked' || '' }})
     needs: changed
-    if: needs.changed.outputs.packages != '[]'
+    if: needs.changed.outputs.matrix != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        package: ${{ fromJson(needs.changed.outputs.packages) }}
+        include: ${{ fromJson(needs.changed.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v5
 
@@ -73,6 +92,7 @@ jobs:
           extensions: ${{ steps.meta.outputs.extensions }}
           coverage: none
 
-      - run: bin/monorepo check ${{ matrix.package }}
+      - if: ${{ !matrix.linked }}
+        run: bin/monorepo check ${{ matrix.package }}
 
-      - run: bin/monorepo test ${{ matrix.package }}
+      - run: bin/monorepo test ${{ matrix.package }} ${{ matrix.linked && '--linked' || '' }}

@@ -153,6 +153,40 @@ function manifest(string $package): ?array
     return is_array($manifest) ? $manifest : null;
 }
 
+/**
+ * Local siblings in a package's dependency graph, mapped to a version that
+ * satisfies the requiring constraint (e.g. "^0.20" → "0.20.999"), so a path
+ * repository can stand in for Packagist during linked test runs.
+ *
+ * @return array<string, string>
+ */
+function linked_versions(string $package): array
+{
+    $versions = [];
+    $pending = [$package];
+    $seen = [$package => true];
+    while ($pending !== []) {
+        $current = array_shift($pending);
+        foreach (manifest($current)['require'] ?? [] as $dependency => $constraint) {
+            if (!str_starts_with($dependency, ORG . '/')) {
+                continue;
+            }
+            $sibling = substr($dependency, strlen(ORG) + 1);
+            if (!is_dir("packages/{$sibling}") || isset($seen[$sibling])) {
+                continue;
+            }
+            $seen[$sibling] = true;
+            if (preg_match('/\d+(?:\.\d+)*/', $constraint, $match)) {
+                $parts = explode('.', $match[0]);
+                $versions[$dependency] = $parts[0] . '.' . ($parts[1] ?? '0') . '.999';
+                $pending[] = $sibling;
+            }
+        }
+    }
+
+    return $versions;
+}
+
 $arguments = array_slice($argv, 1);
 $command = array_shift($arguments) ?? 'help';
 $options = [];
@@ -434,6 +468,33 @@ switch ($command) {
         out('all checks passed');
         break;
 
+    case 'dependents':
+        $targets = $arguments !== [] ? $arguments : fail('usage: monorepo dependents <name...>');
+
+        $dependents = [];
+        foreach (packages() as $candidate) {
+            foreach (manifest($candidate)['require'] ?? [] as $dependency => $constraint) {
+                if (str_starts_with($dependency, ORG . '/')) {
+                    $dependents[substr($dependency, strlen(ORG) + 1)][] = $candidate;
+                }
+            }
+        }
+
+        $found = [];
+        $pending = $targets;
+        while ($pending !== []) {
+            foreach ($dependents[array_shift($pending)] ?? [] as $dependent) {
+                if (!isset($found[$dependent])) {
+                    $found[$dependent] = true;
+                    $pending[] = $dependent;
+                }
+            }
+        }
+        foreach (array_keys($found) as $dependent) {
+            out($dependent);
+        }
+        break;
+
     case 'test':
         $targets = $arguments !== [] ? $arguments : packages();
         toolchain();
@@ -444,17 +505,38 @@ switch ($command) {
             out("==> {$package}");
             $directory = "packages/{$package}";
 
+            // --linked: resolve monorepo siblings from the local checkout
+            // instead of Packagist, via a generated manifest (COMPOSER env)
+            // with a path repository claiming constraint-satisfying versions.
+            $environment = '';
+            if (isset($options['linked'])) {
+                $versions = linked_versions($package);
+                if ($versions === []) {
+                    out('no local siblings to link; running registry-resolved');
+                } else {
+                    $manifest = manifest($package);
+                    $manifest['repositories'] = array_merge([[
+                        'type' => 'path',
+                        'url' => '../*',
+                        'options' => ['symlink' => true, 'versions' => $versions],
+                    ]], $manifest['repositories'] ?? []);
+                    file_put_contents("{$directory}/composer.linked.json", json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+                    $environment = 'COMPOSER=composer.linked.json ';
+                    out('linked: ' . implode(', ', array_keys($versions)));
+                }
+            }
+
             // --ignore-platform-reqs: CI installs each package's declared
             // extensions, and exotic transitive ones (e.g. ext-opentelemetry)
             // must not block resolution.
-            passthru("cd {$directory} && composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs", $code);
+            passthru("cd {$directory} && {$environment}composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs", $code);
 
             // The test contract: `composer test` is the unit tier and runs on
             // a bare host; `composer test:e2e` runs on the host against the
             // package's compose services.
             if ($code === 0) {
                 $runner = isset(manifest($package)['scripts']['test']) ? 'composer test' : 'phpunit';
-                passthru("cd {$directory} && {$runner}", $code);
+                passthru("cd {$directory} && {$environment}{$runner}", $code);
             }
 
             if ($code === 0 && isset(manifest($package)['scripts']['test:e2e'])) {
@@ -463,7 +545,7 @@ switch ($command) {
                     passthru("cd {$directory} && docker compose up -d --build --wait", $code);
                 }
                 if ($code === 0) {
-                    passthru("cd {$directory} && composer test:e2e", $code);
+                    passthru("cd {$directory} && {$environment}composer test:e2e", $code);
                 }
                 if ($compose) {
                     passthru("cd {$directory} && docker compose down -v --remove-orphans > /dev/null 2>&1");
@@ -493,7 +575,9 @@ switch ($command) {
                                               preview notes, tag <name>/<version> and push it (CI does the rest)
           validate                            check package composer.json conventions
           check [name...] [--fix]             run pint, phpstan and rector against packages
-          test [name...]                      install dependencies and run package test suites
+          test [name...] [--linked]           install dependencies and run package test suites
+                                              (--linked resolves monorepo siblings from the local checkout)
+          dependents <name...>                list packages that depend on the given ones (transitively)
         HELP);
         break;
 }
