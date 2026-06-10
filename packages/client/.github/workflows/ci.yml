@@ -26,6 +26,7 @@ jobs:
         with:
           php-version: ${{ matrix.php-version }}
           extensions: curl, swoole
+          tools: phpunit
           coverage: none
 
       # utopia-php/pools -> utopia-php/telemetry declares ext-opentelemetry and

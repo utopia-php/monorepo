@@ -103,6 +103,19 @@ function mirror_workflow(string $package): string
     return str_replace('{package}', $package, $yaml) . "\n";
 }
 
+/**
+ * Ensure the root toolchain (pint, phpstan, rector, phpunit) is installed and
+ * on PATH, so package scripts resolve `phpunit` to the monorepo's version.
+ */
+function toolchain(): void
+{
+    if (!is_file('vendor/bin/phpunit')) {
+        passthru('composer update --no-interaction --prefer-dist --no-progress', $code);
+        $code === 0 || fail('failed to install the monorepo toolchain');
+    }
+    putenv('PATH=' . getcwd() . '/vendor/bin:' . getenv('PATH'));
+}
+
 function manifest(string $package): ?array
 {
     $path = 'packages/' . $package . '/composer.json';
@@ -152,14 +165,23 @@ switch ($command) {
         $path = "{$directory}/composer.json";
         $manifest = json_decode(file_get_contents($path), true);
         $original = $manifest;
-        foreach (['laravel/pint', 'phpstan/phpstan', 'rector/rector', 'squizlabs/php_codesniffer'] as $dependency) {
+        foreach (['laravel/pint', 'phpstan/phpstan', 'rector/rector', 'squizlabs/php_codesniffer', 'phpunit/phpunit'] as $dependency) {
             unset($manifest['require-dev'][$dependency]);
         }
         foreach (['format', 'format:check', 'lint', 'check', 'analyze', 'refactor', 'refactor:check'] as $script) {
             unset($manifest['scripts'][$script]);
         }
+        foreach ($manifest['scripts'] ?? [] as $name => $script) {
+            if (is_string($script)) {
+                // phpunit comes from the root toolchain, resolved via PATH
+                $manifest['scripts'][$name] = preg_replace('#(\./)?vendor/bin/phpunit#', 'phpunit', $script);
+            }
+        }
         if (($manifest['scripts'] ?? null) === []) {
             unset($manifest['scripts']);
+        }
+        if (($manifest['require-dev'] ?? null) === []) {
+            unset($manifest['require-dev']);
         }
         if (is_file("{$directory}/pint.json")) {
             unlink("{$directory}/pint.json");
@@ -291,12 +313,7 @@ switch ($command) {
 
     case 'check':
         $targets = $arguments !== [] ? $arguments : packages();
-
-        if (!is_file('vendor/bin/pint')) {
-            passthru('composer update --no-interaction --prefer-dist --no-progress', $code);
-            $code === 0 || fail('failed to install the monorepo toolchain');
-        }
-
+        toolchain();
         $failed = [];
         foreach ($targets as $package) {
             is_dir("packages/{$package}") || fail("unknown package: {$package}");
@@ -337,6 +354,7 @@ switch ($command) {
 
     case 'test':
         $targets = $arguments !== [] ? $arguments : packages();
+        toolchain();
         $failed = [];
         foreach ($targets as $package) {
             is_dir("packages/{$package}") || fail("unknown package: {$package}");
@@ -353,7 +371,7 @@ switch ($command) {
             // a bare host; `composer test:e2e` runs on the host against the
             // package's compose services.
             if ($code === 0) {
-                $runner = isset(manifest($package)['scripts']['test']) ? 'composer test' : './vendor/bin/phpunit';
+                $runner = isset(manifest($package)['scripts']['test']) ? 'composer test' : 'phpunit';
                 passthru("cd {$directory} && {$runner}", $code);
             }
 
