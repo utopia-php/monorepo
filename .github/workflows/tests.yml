@@ -35,6 +35,10 @@ jobs:
               RANGE="HEAD~1..HEAD"
             fi
             CHANGED=$(git diff --name-only "$RANGE" -- packages/ | cut -d/ -f2)
+            # tooling changes affect every package
+            if git diff --name-only "$RANGE" | grep -qE '^(bin/|\.github/|composer\.json|pint\.json)'; then
+              CHANGED=$(ls packages)
+            fi
           fi
           PACKAGES=$(echo "$CHANGED" | tr ' ' '\n' | sort -u \
             | while read -r package; do [ -d "packages/$package" ] && echo "$package"; done \
