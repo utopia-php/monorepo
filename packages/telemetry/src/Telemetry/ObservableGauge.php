@@ -1,0 +1,16 @@
+<?php
+
+namespace Utopia\Telemetry;
+
+abstract class ObservableGauge
+{
+    /**
+     * Register an observation callback that will be invoked during collection.
+     *
+     * The callback receives an observer callable that can be called with a value and optional attributes
+     * to record an observation: $observer(float|int $value, iterable $attributes = [])
+     *
+     * @param callable(callable(float|int, iterable<non-empty-string, array<mixed>|bool|float|int|string|null>): void): void $callback
+     */
+    abstract public function observe(callable $callback): void;
+}
