@@ -113,8 +113,7 @@ switch ($command) {
             is_dir("packages/{$package}") || fail("unknown package: {$package}");
 
             out("splitting {$package}...");
-            $sha = sh("git subtree split --prefix=packages/{$package}");
-            $sha = trim(substr($sha, strrpos("\n" . $sha, "\n"))); // last line
+            $sha = sh("git subtree split -q --prefix=packages/{$package}");
 
             if (isset($options['dry-run'])) {
                 out("{$package} -> {$sha} (dry run)");
