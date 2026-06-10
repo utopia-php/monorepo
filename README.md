@@ -35,6 +35,8 @@ Every package follows the same two-tier contract:
 
 `bin/monorepo test <name>` runs both tiers: `composer test`, then — when `test:e2e` is defined — `docker compose up --wait`, `composer test:e2e`, teardown. Tests never run inside containers; containers are only servers the tests talk to.
 
+**Linked runs.** By default siblings resolve from Packagist at released versions — what consumers actually install. `bin/monorepo test <name> --linked` resolves monorepo siblings from the local checkout instead (a generated `composer.linked.json` adds a path repository claiming constraint-satisfying versions). In CI, dependents of a changed package run linked, so a change to `http` runs `platform`'s tests against the new `http` before merge; the changed package itself runs registry-resolved. The two modes answer different questions: linked catches "this change breaks dependents" pre-merge, registry catches "the released constraint combination doesn't actually install".
+
 ## How distribution works
 
 On every push to `main`, CI splits each `packages/<name>` directory into a standalone history with `git subtree split` and pushes it to `utopia-php/<name>`. Because libraries are imported with `git subtree add` (full history preserved), the split reproduces the original commit hashes and pushes fast-forward on top of each repository's existing history.
