@@ -8,7 +8,7 @@ The source of truth for the [utopia-php](https://github.com/utopia-php) librarie
 packages/<name>/   one Composer library, mirrored to github.com/utopia-php/<name>
 bin/monorepo       all monorepo tooling (dependency-free PHP, built on git subtree)
 pint.json          canonical code style for every package
-composer.json      pins the shared toolchain (pint, phpstan, rector)
+composer.json      pins the shared toolchain (pint, phpstan, rector, phpunit)
 ```
 
 Code style is monorepo-wide; phpstan levels and rector rules stay per-package
@@ -59,7 +59,7 @@ One command runs most of the playbook:
 bin/monorepo absorb database
 ```
 
-It imports the library with full history, strips the QA tooling the monorepo hoists (pint/phpstan/rector dependencies, scripts and `pint.json`, refreshing `composer.lock` if one is committed), writes a `mirror.yml` workflow that closes pull requests opened against the mirror with a redirect here, banners the README, and creates the mirror ruleset (PR-only, no force-push, split app bypassed). Every step is idempotent — re-run it freely.
+It imports the library with full history, strips the QA tooling the monorepo hoists (pint/phpstan/rector/phpunit dependencies, QA scripts and `pint.json`, pointing test scripts at the root `phpunit`, refreshing `composer.lock` if one is committed), writes a `mirror.yml` workflow that closes pull requests opened against the mirror with a redirect here, banners the README, and creates the mirror ruleset (PR-only, no force-push, split app bypassed). Every step is idempotent — re-run it freely.
 
 Then, by hand:
 

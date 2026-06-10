@@ -23,7 +23,7 @@
         }
     },
     "scripts": {
-        "test": "vendor/bin/phpunit --configuration phpunit.xml"
+        "test": "phpunit --configuration phpunit.xml"
     },
     "require": {
         "php": ">=8.4",
@@ -39,7 +39,6 @@
         "ext-swoole": "Required to use the Swoole coroutine HTTP client adapter."
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5 || ^11.0 || ^12.0",
         "swoole/ide-helper": "^6.0"
     },
     "config": {
