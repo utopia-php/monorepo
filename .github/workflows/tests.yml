@@ -11,7 +11,7 @@ jobs:
     outputs:
       packages: ${{ steps.changed.outputs.packages }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -32,7 +32,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: bin/monorepo validate
 
   test:
@@ -44,7 +44,7 @@ jobs:
       matrix:
         package: ${{ fromJson(needs.changed.outputs.packages) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: shivammathur/setup-php@v2
         with:
