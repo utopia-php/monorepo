@@ -116,6 +116,32 @@ function toolchain(): void
     putenv('PATH=' . getcwd() . '/vendor/bin:' . getenv('PATH'));
 }
 
+/**
+ * Release notes for a package version: every monorepo commit that touched the
+ * package since its previous release tag, plus a compare link.
+ */
+function release_notes(string $package, string $version, string $to): string
+{
+    $previous = null;
+    $tags = sh("git -c versionsort.suffix=- tag --list '{$package}/*' --sort=-v:refname");
+    foreach (explode("\n", $tags) as $tag) {
+        $candidate = substr($tag, strlen($package) + 1);
+        if ($candidate !== '' && version_compare($candidate, $version, '<')) {
+            $previous = $tag;
+            break;
+        }
+    }
+
+    if ($previous === null) {
+        return "First release cut from the [utopia-php monorepo](https://github.com/utopia-php/monorepo/tree/main/packages/{$package}).";
+    }
+
+    $log = sh("git log {$previous}..{$to} --pretty='- %s' -- packages/{$package}");
+
+    return ($log !== '' ? $log : '- No changes to this package since ' . $previous . '.')
+        . "\n\n**Changes**: https://github.com/utopia-php/monorepo/compare/{$previous}...{$package}/{$version}";
+}
+
 function manifest(string $package): ?array
 {
     $path = 'packages/' . $package . '/composer.json';
@@ -276,10 +302,66 @@ switch ($command) {
                 continue;
             }
             out("{$package} -> {$ref} ({$sha})");
+
+            // A pushed tag gets a GitHub release on the mirror, with notes
+            // derived from the monorepo log.
+            if (is_string($options['tag'] ?? null)) {
+                $version = $options['tag'];
+                $tag = "{$package}/{$version}";
+                exec("git rev-parse -q --verify refs/tags/{$tag} > /dev/null 2>&1", $_, $missing);
+                $payload = json_encode([
+                    'tag_name' => $version,
+                    'name' => $version,
+                    'body' => release_notes($package, $version, $missing === 0 ? $tag : 'HEAD'),
+                    'prerelease' => str_contains($version, '-'),
+                ]);
+                exec('echo ' . escapeshellarg($payload) . ' | gh api -X POST repos/' . ORG . "/{$package}/releases --input - 2>&1", $response, $code);
+                if ($code === 0) {
+                    out("{$package} -> release {$version} published");
+                } elseif (stripos($message = implode("\n", $response), 'already_exists') !== false) {
+                    out("release {$version} already exists");
+                } else {
+                    out("could not publish release: {$message}");
+                    $failed[] = "{$package} (release)";
+                }
+            }
         }
         if ($failed !== []) {
             fail('failed to push: ' . implode(', ', $failed));
         }
+        break;
+
+    case 'release':
+        $package = $arguments[0] ?? fail('usage: monorepo release <package> <version> [--dry-run]');
+        $version = $arguments[1] ?? fail('usage: monorepo release <package> <version> [--dry-run]');
+        is_dir("packages/{$package}") || fail("unknown package: {$package}");
+        preg_match('/^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/', $version)
+            || fail("version must be semver (e.g. 2.1.0 or 2.1.0-rc1), got \"{$version}\"");
+
+        $tag = "{$package}/{$version}";
+        if (sh('git tag --list ' . escapeshellarg($tag)) !== '') {
+            fail("tag {$tag} already exists");
+        }
+
+        out("release notes for {$tag}:\n");
+        out(release_notes($package, $version, 'HEAD') . "\n");
+
+        if (isset($options['dry-run'])) {
+            out('(dry run — nothing tagged)');
+            break;
+        }
+
+        if (sh('git status --porcelain') !== '') {
+            fail('working tree is dirty — commit or stash before releasing');
+        }
+        exec('git merge-base --is-ancestor HEAD origin/main', $_, $unmerged);
+        if ($unmerged !== 0) {
+            out('warning: HEAD is not on origin/main — you are releasing unmerged commits');
+        }
+
+        sh("git tag {$tag}");
+        sh("git push origin {$tag}");
+        out("pushed {$tag} — CI will mirror the tag, publish to Packagist, and create the GitHub release");
         break;
 
     case 'validate':
@@ -407,6 +489,8 @@ switch ($command) {
           absorb <name> [url] [branch]        import (if needed) + strip hoisted QA + mirror PR redirect + lockdown
           split [name...] [--tag=v] [--branch=main] [--remote=url] [--force] [--dry-run]
                                               push package subtrees to their distribution repositories
+          release <name> <version> [--dry-run]
+                                              preview notes, tag <name>/<version> and push it (CI does the rest)
           validate                            check package composer.json conventions
           check [name...] [--fix]             run pint, phpstan and rector against packages
           test [name...]                      install dependencies and run package test suites

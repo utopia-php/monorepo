@@ -43,13 +43,11 @@ The distribution repositories become read-only mirrors: archive their open PRs, 
 
 ## Releasing
 
-Tag the monorepo `<package>/<version>` and push:
-
 ```sh
-git tag http/2.1.0 && git push origin http/2.1.0
+bin/monorepo release http 2.1.0    # --dry-run to preview the notes first
 ```
 
-CI pushes tag `2.1.0` to `utopia-php/http`, and Packagist picks it up as usual. Nothing changes for consumers.
+This previews the release notes, tags the monorepo `http/2.1.0`, and pushes the tag. CI then pushes tag `2.1.0` to `utopia-php/http` (Packagist picks it up as usual) and publishes a GitHub release on the mirror whose notes are every monorepo commit that touched `packages/http` since the previous release, with a compare link back to the monorepo. Tagging by hand (`git tag http/2.1.0 && git push origin http/2.1.0`) does the same minus the preview.
 
 ## Absorbing a library
 
