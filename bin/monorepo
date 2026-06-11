@@ -544,6 +544,31 @@ switch ($command) {
         }
         break;
 
+    case 'graph':
+        $lines = [];
+        $mentioned = [];
+        foreach (packages() as $package) {
+            foreach (manifest($package)['require'] ?? [] as $dependency => $constraint) {
+                $sibling = substr($dependency, strlen(ORG) + 1);
+                if (str_starts_with($dependency, ORG . '/') && is_dir("packages/{$sibling}")) {
+                    $lines[] = "    {$package} --> {$sibling}";
+                    $mentioned += [$package => true, $sibling => true];
+                }
+            }
+        }
+        foreach (packages() as $package) {
+            if (!isset($mentioned[$package])) {
+                $lines[] = "    {$package}";
+            }
+        }
+        $mermaid = "```mermaid\ngraph TD\n" . implode("\n", $lines) . "\n```";
+        $readme = file_get_contents('README.md');
+        $readme = preg_replace('/(<!-- graph -->\n).*?(\n<!-- \/graph -->)/s', '$1' . $mermaid . '$2', $readme, 1, $replaced);
+        $replaced === 1 || fail('README.md: <!-- graph --> markers not found');
+        file_put_contents('README.md', $readme);
+        out('README.md dependency graph regenerated');
+        break;
+
     case 'test':
         $targets = $arguments !== [] ? $arguments : packages();
         toolchain();
@@ -627,6 +652,7 @@ switch ($command) {
           test [name...] [--linked]           install dependencies and run package test suites
                                               (--linked resolves monorepo siblings from the local checkout)
           dependents <name...>                list packages that depend on the given ones (transitively)
+          graph                               regenerate the dependency graph in README.md
         HELP);
         break;
 }

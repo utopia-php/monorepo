@@ -14,6 +14,37 @@ composer.json      pins the shared toolchain (pint, phpstan, rector, phpunit)
 Code style is monorepo-wide; phpstan levels and rector rules stay per-package
 (`phpstan.neon`, `rector.php`) since they encode per-library decisions.
 
+## Dependency graph
+
+Arrows point at dependencies (`platform --> http` means platform requires http). Regenerate with `bin/monorepo graph` after changing a package's requirements.
+
+<!-- graph -->
+```mermaid
+graph TD
+    cli --> servers
+    client --> pools
+    client --> span
+    http --> di
+    http --> servers
+    http --> compression
+    http --> telemetry
+    http --> validators
+    platform --> cli
+    platform --> http
+    platform --> queue
+    platform --> servers
+    pools --> telemetry
+    queue --> di
+    queue --> lock
+    queue --> servers
+    queue --> pools
+    queue --> telemetry
+    queue --> validators
+    servers --> di
+    servers --> validators
+```
+<!-- /graph -->
+
 ## Commands
 
 ```sh
@@ -24,6 +55,7 @@ bin/monorepo validate              # check package conventions
 bin/monorepo check [name...]       # run pint, phpstan and rector (--fix to apply)
 bin/monorepo test [name...]        # run package test suites
 bin/monorepo split [name...]       # push subtrees to the distribution repositories (CI does this)
+bin/monorepo graph                 # regenerate the dependency graph above
 ```
 
 ## Testing
