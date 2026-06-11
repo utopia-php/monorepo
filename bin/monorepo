@@ -221,6 +221,35 @@ function linked_versions(string $package): array
     return $versions;
 }
 
+/**
+ * README.md content with the mermaid dependency graph between the
+ * <!-- graph --> markers regenerated from the package manifests.
+ */
+function graph_readme(): string
+{
+    $lines = [];
+    $mentioned = [];
+    foreach (packages() as $package) {
+        foreach (manifest($package)['require'] ?? [] as $dependency => $constraint) {
+            $sibling = substr($dependency, strlen(ORG) + 1);
+            if (str_starts_with($dependency, ORG . '/') && is_dir("packages/{$sibling}")) {
+                $lines[] = "    {$package} --> {$sibling}";
+                $mentioned += [$package => true, $sibling => true];
+            }
+        }
+    }
+    foreach (packages() as $package) {
+        if (!isset($mentioned[$package])) {
+            $lines[] = "    {$package}";
+        }
+    }
+    $mermaid = "```mermaid\ngraph TD\n" . implode("\n", $lines) . "\n```";
+    $readme = preg_replace('/(<!-- graph -->\n).*?(\n<!-- \/graph -->)/s', '$1' . $mermaid . '$2', file_get_contents('README.md'), 1, $replaced);
+    $replaced === 1 || fail('README.md: <!-- graph --> markers not found');
+
+    return $readme;
+}
+
 $arguments = array_slice($argv, 1);
 $command = array_shift($arguments) ?? 'help';
 $options = [];
@@ -473,6 +502,10 @@ switch ($command) {
                 $failures++;
             }
         }
+        if (file_get_contents('README.md') !== graph_readme()) {
+            out('README.md: dependency graph is stale, run `bin/monorepo graph`');
+            $failures++;
+        }
         out($failures === 0 ? 'all packages valid' : "{$failures} problem(s) found");
         exit($failures === 0 ? 0 : 1);
 
@@ -545,27 +578,7 @@ switch ($command) {
         break;
 
     case 'graph':
-        $lines = [];
-        $mentioned = [];
-        foreach (packages() as $package) {
-            foreach (manifest($package)['require'] ?? [] as $dependency => $constraint) {
-                $sibling = substr($dependency, strlen(ORG) + 1);
-                if (str_starts_with($dependency, ORG . '/') && is_dir("packages/{$sibling}")) {
-                    $lines[] = "    {$package} --> {$sibling}";
-                    $mentioned += [$package => true, $sibling => true];
-                }
-            }
-        }
-        foreach (packages() as $package) {
-            if (!isset($mentioned[$package])) {
-                $lines[] = "    {$package}";
-            }
-        }
-        $mermaid = "```mermaid\ngraph TD\n" . implode("\n", $lines) . "\n```";
-        $readme = file_get_contents('README.md');
-        $readme = preg_replace('/(<!-- graph -->\n).*?(\n<!-- \/graph -->)/s', '$1' . $mermaid . '$2', $readme, 1, $replaced);
-        $replaced === 1 || fail('README.md: <!-- graph --> markers not found');
-        file_put_contents('README.md', $readme);
+        file_put_contents('README.md', graph_readme());
         out('README.md dependency graph regenerated');
         break;
 

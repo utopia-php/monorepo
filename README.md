@@ -16,7 +16,7 @@ Code style is monorepo-wide; phpstan levels and rector rules stay per-package
 
 ## Dependency graph
 
-Arrows point at dependencies (`platform --> http` means platform requires http). Regenerate with `bin/monorepo graph` after changing a package's requirements.
+Arrows point at dependencies (`platform --> http` means platform requires http). Regenerate with `bin/monorepo graph` after changing a package's requirements — `bin/monorepo validate` (which CI runs on every push) fails while it is stale.
 
 <!-- graph -->
 ```mermaid
