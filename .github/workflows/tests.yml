@@ -43,6 +43,12 @@ jobs:
           CHANGED=$(echo "$CHANGED" | tr ' ' '\n' | sort -u \
             | while read -r package; do [ -d "packages/$package" ] && echo "$package"; done)
 
+          # docs-only change: no packages to test
+          if [ -z "$CHANGED" ]; then
+            echo "matrix=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           # Dependents of changed packages run linked (siblings resolved from
           # the local checkout); changed packages run registry-resolved —
           # unless a sibling they depend on also changed, which makes the
