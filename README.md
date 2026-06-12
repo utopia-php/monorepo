@@ -66,6 +66,7 @@ graph TD
     queue --> validators
     servers --> di
     servers --> validators
+    system
 ```
 <!-- /graph -->
 
