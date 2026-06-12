@@ -12,7 +12,7 @@ Then, by hand:
 
 1. `bin/monorepo check <name> --fix` — apply the canonical style; fix whatever phpstan and rector surface.
 2. `bin/monorepo test <name>` — and make the package satisfy the test contract (see the README's Testing section): unit tier in `composer test`, services tier in `composer test:e2e`.
-3. Review `packages/<name>/.github/workflows/` — delete QA-only workflows (pint, phpstan, linters); keep test workflows, they validate the mirror after each split.
+3. Review `packages/<name>/.github/workflows/` — delete QA-only workflows (pint, phpstan, linters); keep test workflows, they validate the mirror after each split. Pin their actions with [ratchet](https://github.com/sethvargo/ratchet) (`ratchet pin packages/<name>/.github/workflows/*.yml`) — CI rejects unpinned `uses:` refs.
 4. Commit, push, and confirm the Split run is green. If the mirror push is rejected:
    - `master` default branch — rename first: `gh api -X POST repos/utopia-php/<name>/branches/master/rename -f new_name=main`
    - `protected branch hook declined` — classic branch protection; let the app bypass it:
