@@ -1,5 +1,8 @@
 # Utopia Console
 
+> [!IMPORTANT]
+> This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Development happens in [`packages/console`](https://github.com/utopia-php/monorepo/tree/main/packages/console) — please open issues and pull requests there.
+
 Small collection of helpers for working with PHP command line applications. The Console class focuses on everyday needs such as logging, prompting users for input, executing external commands, and building long-running daemons.
 
 ## Installation

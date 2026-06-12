@@ -14,7 +14,7 @@ class Console
      */
     public static function title(string $title): bool
     {
-        return @\cli_set_process_title($title);
+        return @cli_set_process_title($title);
     }
 
     /**
@@ -27,7 +27,7 @@ class Console
      */
     public static function log(string $message): int|false
     {
-        return \fwrite(STDOUT, $message."\n");
+        return fwrite(STDOUT, $message . "\n");
     }
 
     /**
@@ -40,7 +40,7 @@ class Console
      */
     public static function success(string $message): int|false
     {
-        return \fwrite(STDOUT, "\033[32m".$message."\033[0m\n");
+        return fwrite(STDOUT, "\033[32m" . $message . "\033[0m\n");
     }
 
     /**
@@ -53,7 +53,7 @@ class Console
      */
     public static function error(string $message): int|false
     {
-        return \fwrite(STDERR, "\033[31m".$message."\033[0m\n");
+        return fwrite(STDERR, "\033[31m" . $message . "\033[0m\n");
     }
 
     /**
@@ -66,7 +66,7 @@ class Console
      */
     public static function info(string $message): int|false
     {
-        return \fwrite(STDOUT, "\033[34m".$message."\033[0m\n");
+        return fwrite(STDOUT, "\033[34m" . $message . "\033[0m\n");
     }
 
     /**
@@ -79,7 +79,7 @@ class Console
      */
     public static function warning(string $message): int|false
     {
-        return \fwrite(STDERR, "\033[1;33m".$message."\033[0m\n");
+        return fwrite(STDERR, "\033[1;33m" . $message . "\033[0m\n");
     }
 
     /**
@@ -98,10 +98,10 @@ class Console
 
         self::log($question);
 
-        $handle = \fopen('php://stdin', 'r');
-        $line = \trim(\fgets($handle));
+        $handle = fopen('php://stdin', 'r');
+        $line = trim(fgets($handle));
 
-        \fclose($handle);
+        fclose($handle);
 
         return $line;
     }
@@ -142,34 +142,34 @@ class Console
 
         // If the $cmd is passed as string, it will be wrapped into a subshell by \proc_open
         // Forward stdout and exit codes from the subshell.
-        if (is_string($cmd)) {
-            $cmd = '( '.$cmd.' ) 3>/dev/null ; echo $? >&3';
+        if (\is_string($cmd)) {
+            $cmd = '( ' . $cmd . ' ) 3>/dev/null ; echo $? >&3';
         }
 
         $pipes = [];
-        $process = \proc_open(
+        $process = proc_open(
             $cmd,
             [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w'], ['pipe', 'w']],
-            $pipes
+            $pipes,
         );
-        $start = \time();
+        $start = time();
         $stdout = '';
         $stderr = '';
         $status = '';
 
         if (\is_resource($process)) {
-            \stream_set_blocking($pipes[0], false);
-            \stream_set_blocking($pipes[1], false);
-            \stream_set_blocking($pipes[2], false);
-            \stream_set_blocking($pipes[3], false);
+            stream_set_blocking($pipes[0], false);
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
+            stream_set_blocking($pipes[3], false);
 
-            \fwrite($pipes[0], $stdin);
-            \fclose($pipes[0]);
+            fwrite($pipes[0], $stdin);
+            fclose($pipes[0]);
         }
 
         while (\is_resource($process)) {
-            $stdoutContents = \stream_get_contents($pipes[1]) ?: '';
-            $stderrContents = \stream_get_contents($pipes[2]) ?: '';
+            $stdoutContents = stream_get_contents($pipes[1]) ?: '';
+            $stderrContents = stream_get_contents($pipes[2]) ?: '';
 
             $stderr .= $stderrContents;
 
@@ -180,19 +180,19 @@ class Console
             }
 
             $stdout .= $outputContents;
-            $status .= \stream_get_contents($pipes[3]);
+            $status .= stream_get_contents($pipes[3]);
 
-            if ($timeout > 0 && \time() - $start > $timeout) {
-                \proc_terminate($process, 9);
+            if ($timeout > 0 && time() - $start > $timeout) {
+                proc_terminate($process, 9);
 
                 return 1;
             }
 
-            $procStatus = \proc_get_status($process);
+            $procStatus = proc_get_status($process);
             if (! $procStatus['running']) {
-                \fclose($pipes[1]);
-                \fclose($pipes[2]);
-                \proc_close($process);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                proc_close($process);
 
                 $exitCode = ($status !== '')
                     ? (int) str_replace("\n", '', $status)
@@ -201,7 +201,7 @@ class Console
                 return $exitCode;
             }
 
-            \usleep(10000);
+            usleep(10000);
         }
 
         return 1;
@@ -214,7 +214,7 @@ class Console
      */
     public static function isInteractive(): bool
     {
-        return 'cli' === PHP_SAPI && defined('STDOUT');
+        return 'cli' === PHP_SAPI && \defined('STDOUT');
     }
 
     /**
@@ -243,7 +243,7 @@ class Console
             $suspend = $sleep;
 
             try {
-                $execStart = \time();
+                $execStart = time();
                 $callback();
             } catch (\Exception $e) {
                 if ($onError != null) {
@@ -253,10 +253,10 @@ class Console
                 }
             }
 
-            $execTotal = \time() - $execStart;
+            $execTotal = time() - $execStart;
             $suspend = $suspend - $execTotal;
 
-            $intSeconds = intval($suspend);
+            $intSeconds = \intval($suspend);
             $microSeconds = ($suspend - $intSeconds) * 1000000;
 
             if ($intSeconds > 0) {

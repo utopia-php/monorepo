@@ -48,6 +48,7 @@ graph TD
     cli --> servers
     client --> pools
     client --> span
+    console --> validators
     http --> di
     http --> servers
     http --> compression

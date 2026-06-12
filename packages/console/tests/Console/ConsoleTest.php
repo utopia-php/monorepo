@@ -63,7 +63,7 @@ class ConsoleTest extends TestCase
     {
         $command = (new Command('git'))
             ->argument('checkout')
-            ->argument('develop', fn (string $value): bool => in_array($value, ['main', 'develop', 'staging'], true));
+            ->argument('develop', fn(string $value): bool => \in_array($value, ['main', 'develop', 'staging'], true));
 
         $this->assertSame(['git', 'checkout', 'develop'], $command->toArray());
     }
@@ -75,7 +75,7 @@ class ConsoleTest extends TestCase
 
         (new Command('git'))
             ->argument('checkout')
-            ->argument('feature/test; rm -rf /', fn (string $value): bool => preg_match('/^[A-Za-z0-9._\/-]+$/', $value) === 1);
+            ->argument('feature/test; rm -rf /', fn(string $value): bool => preg_match('/^[A-Za-z0-9._\/-]+$/', $value) === 1);
     }
 
     public function testCommandRejectsInvalidFlag(): void
@@ -134,7 +134,7 @@ class ConsoleTest extends TestCase
             }
 
             $kv = explode('=', $row, 2);
-            $this->assertEquals(2, count($kv), $row);
+            $this->assertEquals(2, \count($kv), $row);
             $data[$kv[0]] = $kv[1];
         }
 
@@ -235,7 +235,7 @@ class ConsoleTest extends TestCase
 
     public function testLoop(): void
     {
-        $file = __DIR__.'/../resources/loop.php';
+        $file = __DIR__ . '/../resources/loop.php';
         $command = (new Command(PHP_BINARY))
             ->argument($file);
         $input = '';
@@ -245,8 +245,8 @@ class ConsoleTest extends TestCase
 
         $lines = explode("\n", $output);
 
-        $this->assertGreaterThan(30, count($lines));
-        $this->assertLessThan(50, count($lines));
+        $this->assertGreaterThan(30, \count($lines));
+        $this->assertLessThan(50, \count($lines));
         $this->assertEquals(1, $code);
     }
 
@@ -256,10 +256,10 @@ class ConsoleTest extends TestCase
             Command::group(
                 Command::or(
                     new Command('build'),
-                    new Command('build:fallback')
-                )
+                    new Command('build:fallback'),
+                ),
             ),
-            new Command('publish')
+            new Command('publish'),
         );
 
         $this->assertSame("( 'build' || 'build:fallback' ) && 'publish'", $command->toString());
@@ -270,7 +270,7 @@ class ConsoleTest extends TestCase
         $command = Command::pipe(
             (new Command('ps'))->flag('-ef'),
             (new Command('grep'))->argument('php-fpm'),
-            (new Command('wc'))->flag('-l')
+            (new Command('wc'))->flag('-l'),
         );
 
         $this->assertSame("'ps' '-ef' | 'grep' 'php-fpm' | 'wc' '-l'", $command->toString());
@@ -281,9 +281,9 @@ class ConsoleTest extends TestCase
         $command = Command::appendStdout(
             Command::pipe(
                 (new Command('cat'))->argument('app.log'),
-                (new Command('grep'))->argument('ERROR')
+                (new Command('grep'))->argument('ERROR'),
             ),
-            'errors.log'
+            'errors.log',
         );
 
         $this->assertSame("'cat' 'app.log' | 'grep' 'ERROR' >> 'errors.log'", $command->toString());
@@ -296,12 +296,12 @@ class ConsoleTest extends TestCase
                 Command::and(
                     Command::or(
                         new Command('build'),
-                        new Command('build:fallback')
+                        new Command('build:fallback'),
                     ),
-                    new Command('publish')
-                )
+                    new Command('publish'),
+                ),
             ),
-            'deploy.log'
+            'deploy.log',
         );
 
         $this->assertSame("( 'build' || 'build:fallback' && 'publish' ) > 'deploy.log'", $command->toString());
@@ -389,7 +389,7 @@ class ConsoleTest extends TestCase
     {
         $command = Command::pipe(
             (new Command(PHP_BINARY))->option('-r', 'echo "alpha\nbeta\n";'),
-            (new Command('grep'))->argument('beta')
+            (new Command('grep'))->argument('beta'),
         );
         $output = '';
         $stderr = '';
@@ -407,10 +407,10 @@ class ConsoleTest extends TestCase
             Command::group(
                 Command::or(
                     (new Command(PHP_BINARY))->option('-r', 'exit(1);'),
-                    (new Command(PHP_BINARY))->option('-r', 'echo "fallback";')
-                )
+                    (new Command(PHP_BINARY))->option('-r', 'echo "fallback";'),
+                ),
             ),
-            (new Command(PHP_BINARY))->option('-r', 'echo " publish";')
+            (new Command(PHP_BINARY))->option('-r', 'echo " publish";'),
         );
         $output = '';
         $stderr = '';
@@ -426,7 +426,7 @@ class ConsoleTest extends TestCase
     {
         $command = Command::and(
             (new Command(PHP_BINARY))->option('-r', 'echo "start"; exit(1);'),
-            (new Command(PHP_BINARY))->option('-r', 'echo "never";')
+            (new Command(PHP_BINARY))->option('-r', 'echo "never";'),
         );
         $output = '';
         $stderr = '';
@@ -442,7 +442,7 @@ class ConsoleTest extends TestCase
     {
         $command = Command::or(
             (new Command(PHP_BINARY))->option('-r', 'echo "done";'),
-            (new Command(PHP_BINARY))->option('-r', 'echo "fallback";')
+            (new Command(PHP_BINARY))->option('-r', 'echo "fallback";'),
         );
         $output = '';
         $stderr = '';
@@ -460,10 +460,10 @@ class ConsoleTest extends TestCase
             Command::group(
                 Command::or(
                     (new Command(PHP_BINARY))->option('-r', 'exit(1);'),
-                    (new Command(PHP_BINARY))->option('-r', 'echo "fallback";')
-                )
+                    (new Command(PHP_BINARY))->option('-r', 'echo "fallback";'),
+                ),
             ),
-            (new Command(PHP_BINARY))->option('-r', 'echo " publish";')
+            (new Command(PHP_BINARY))->option('-r', 'echo " publish";'),
         );
         $output = '';
         $stderr = '';
@@ -482,7 +482,7 @@ class ConsoleTest extends TestCase
         try {
             $command = Command::redirectStdout(
                 (new Command(PHP_BINARY))->option('-r', 'echo "saved";'),
-                $file
+                $file,
             );
             $output = '';
             $stderr = '';
@@ -508,7 +508,7 @@ class ConsoleTest extends TestCase
 
             $command = Command::appendStdout(
                 (new Command(PHP_BINARY))->option('-r', 'echo "second";'),
-                $file
+                $file,
             );
             $output = '';
             $stderr = '';
@@ -534,7 +534,7 @@ class ConsoleTest extends TestCase
 
             $command = Command::redirectInput(
                 new Command('sort'),
-                $file
+                $file,
             );
             $output = '';
             $stderr = '';

@@ -97,8 +97,8 @@ class Command implements Stringable
     {
         $this->ensurePlain();
 
-        if (! \preg_match('/^-[A-Za-z0-9]+$|^--[A-Za-z0-9][A-Za-z0-9_-]*$/', $key)) {
-            throw new InvalidArgumentException('Invalid command flag: '.$key);
+        if (! preg_match('/^-[A-Za-z0-9]+$|^--[A-Za-z0-9][A-Za-z0-9_-]*$/', $key)) {
+            throw new InvalidArgumentException('Invalid command flag: ' . $key);
         }
 
         $this->arguments[] = $key;
@@ -110,8 +110,8 @@ class Command implements Stringable
     {
         $this->ensurePlain();
 
-        if (! \preg_match('/^-[A-Za-z0-9]$|^--[A-Za-z0-9][A-Za-z0-9_-]*$/', $key)) {
-            throw new InvalidArgumentException('Invalid command option: '.$key);
+        if (! preg_match('/^-[A-Za-z0-9]$|^--[A-Za-z0-9][A-Za-z0-9_-]*$/', $key)) {
+            throw new InvalidArgumentException('Invalid command option: ' . $key);
         }
 
         $argument = $this->normalize($value, 'Command option value');
@@ -150,11 +150,11 @@ class Command implements Stringable
     public function toString(): string
     {
         return match ($this->type) {
-            self::TYPE_PLAIN => \implode(' ', \array_map(static fn (string $argument): string => \escapeshellarg($argument), $this->arguments)),
-            self::TYPE_COMPOSITE => \implode(' '.$this->operator.' ', \array_map(static fn (self $command): string => $command->toString(), $this->commands)),
-            self::TYPE_GROUP => '( '.$this->command?->toString().' )',
-            self::TYPE_REDIRECT => $this->command?->toString().' '.$this->redirect.' '.\escapeshellarg($this->redirectTarget ?? ''),
-            default => throw new InvalidArgumentException('Unsupported command type: '.$this->type),
+            self::TYPE_PLAIN => implode(' ', array_map(static fn(string $argument): string => escapeshellarg($argument), $this->arguments)),
+            self::TYPE_COMPOSITE => implode(' ' . $this->operator . ' ', array_map(static fn(self $command): string => $command->toString(), $this->commands)),
+            self::TYPE_GROUP => '( ' . $this->command?->toString() . ' )',
+            self::TYPE_REDIRECT => $this->command?->toString() . ' ' . $this->redirect . ' ' . escapeshellarg($this->redirectTarget ?? ''),
+            default => throw new InvalidArgumentException('Unsupported command type: ' . $this->type),
         };
     }
 
@@ -181,7 +181,7 @@ class Command implements Stringable
         $expression->type = self::TYPE_COMPOSITE;
         $expression->arguments = [];
         $expression->operator = $operator;
-        $expression->commands = \array_values($commands);
+        $expression->commands = array_values($commands);
 
         return $expression;
     }
@@ -210,7 +210,7 @@ class Command implements Stringable
         $value = (string) $value;
 
         if ($value === '') {
-            throw new InvalidArgumentException($context.' cannot be empty');
+            throw new InvalidArgumentException($context . ' cannot be empty');
         }
 
         return $value;
@@ -223,7 +223,7 @@ class Command implements Stringable
     {
         if ($validator instanceof Validator) {
             if (! $validator->isValid($argument)) {
-                throw new InvalidArgumentException('Invalid command argument: '.$argument.' ('.$validator->getDescription().')');
+                throw new InvalidArgumentException('Invalid command argument: ' . $argument . ' (' . $validator->getDescription() . ')');
             }
 
             return;
@@ -232,7 +232,7 @@ class Command implements Stringable
         $isValid = (bool) $validator($argument);
 
         if (! $isValid) {
-            throw new InvalidArgumentException('Invalid command argument: '.$argument);
+            throw new InvalidArgumentException('Invalid command argument: ' . $argument);
         }
     }
 }
