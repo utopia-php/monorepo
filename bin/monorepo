@@ -201,7 +201,12 @@ function linked_versions(string $package): array
     $seen = [$package => true];
     while ($pending !== []) {
         $current = array_shift($pending);
-        foreach (manifest($current)['require'] ?? [] as $dependency => $constraint) {
+        $manifest = manifest($current);
+        // composer installs the root package's dev dependencies too, and the
+        // path repository shadows them on Packagist
+        $requirements = ($manifest['require'] ?? [])
+            + ($current === $package ? $manifest['require-dev'] ?? [] : []);
+        foreach ($requirements as $dependency => $constraint) {
             if (!str_starts_with($dependency, ORG . '/')) {
                 continue;
             }
