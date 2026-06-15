@@ -4,13 +4,15 @@ namespace Utopia\Span\Exporter;
 
 use Closure;
 use Composer\InstalledVersions;
+use Utopia\Span\Exporter\Sentry\Level as SentryLevel;
+use Utopia\Span\Level;
 use Utopia\Span\Span;
 
 /**
- * Exports error spans to Sentry Issues.
+ * Exports warning-or-higher spans to Sentry Issues.
  *
- * Only spans with errors are sent. Non-error spans are silently skipped.
- * Use the Stdout exporter for non-error spans.
+ * Only spans whose level is warning, error, or fatal are sent, at that level.
+ * Lower levels (info, debug) are skipped — use the Stdout exporter for those.
  *
  * ## HTTP Attribute Conventions
  *
@@ -42,6 +44,11 @@ class Sentry implements Exporter
 {
     private static ?string $sdkVersion = null;
 
+    /**
+     * Span levels that are exported. Anything below warning (info, debug) is skipped.
+     */
+    private const EXPORT_LEVELS = [Level::Warn, Level::Error, Level::Fatal];
+
     private readonly string $endpoint;
     private readonly string $publicKey;
     private readonly string $projectId;
@@ -55,10 +62,10 @@ class Sentry implements Exporter
     /**
      * Create a new Sentry exporter.
      *
-     * Sentry only ever exports error spans; a custom sampler is composed (AND) with the
-     * built-in error filter, so it can further restrict — but not broaden — what is sent.
+     * Sentry only exports spans at warning level or above; a custom sampler is composed (AND)
+     * with the built-in level filter, so it can further restrict — but not broaden — what is sent.
      *
-     * @param Closure(Span): bool|null $sampler Optional additional filter, composed with the error-only filter.
+     * @param Closure(Span): bool|null $sampler Optional additional filter, composed with the level filter.
      * @param string $dsn Sentry DSN (e.g., https://key@sentry.io/123)
      * @param string|null $environment Optional environment name (e.g., 'production')
      * @param string|null $release Optional release/version identifier (e.g., commit hash)
@@ -75,7 +82,8 @@ class Sentry implements Exporter
     ) {
         $this->classifier = $classifier ?? static fn(string $key): SentryField => SentryField::Context;
         $this->sampler = static function (Span $span) use ($sampler): bool {
-            if (!$span->getError() instanceof \Throwable) {
+            $level = Level::tryFrom((string) $span->get('level'));
+            if ($level === null || !\in_array($level, self::EXPORT_LEVELS, true)) {
                 return false;
             }
             return !$sampler instanceof \Closure || $sampler($span);
@@ -233,8 +241,10 @@ class Sentry implements Exporter
             $contexts['custom'] = $customContexts;
         }
 
+        $level = Level::tryFrom((string) $attributes['level']) ?? Level::Error;
+
         $payloadData = [
-            'level' => (string) $attributes['level'],
+            'level' => SentryLevel::fromSpan($level)->value,
             'platform' => 'php',
             'sdk' => [
                 'name' => 'utopia-php/span',

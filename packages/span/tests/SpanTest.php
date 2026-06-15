@@ -6,6 +6,7 @@ use Closure;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Utopia\Span\Exporter\Exporter;
+use Utopia\Span\Level;
 use Utopia\Span\Span;
 use Utopia\Span\Storage\Memory;
 
@@ -618,9 +619,9 @@ class SpanTest extends TestCase
     public function testFinishAcceptsLevelOverride(): void
     {
         $span = new Span();
-        $span->finish(level: 'warning', error: new RuntimeException('Test'));
+        $span->finish(level: Level::Warn, error: new RuntimeException('Test'));
 
-        $this->assertSame('warning', $span->get('level'));
+        $this->assertSame('warn', $span->get('level'));
     }
 
     public function testFinishOwnsLevelAttribute(): void
