@@ -31,7 +31,7 @@
         "psr/http-factory": "^1.0",
         "psr/http-message": "^1.1 || ^2.0",
         "utopia-php/pools": "^1.0",
-        "utopia-php/span": "^1.1 || ^3.0"
+        "utopia-php/span": "^1.1 || ^3.0 || ^4.0"
     },
     "suggest": {
         "ext-curl": "Required to use the cURL HTTP client adapter.",
