@@ -7,6 +7,7 @@ namespace Utopia\Span\Tests\Exporter;
 use PHPUnit\Framework\TestCase;
 use Utopia\Span\Exporter\Sentry;
 use Utopia\Span\Exporter\SentryField;
+use Utopia\Span\Level;
 use Utopia\Span\Span;
 
 class SentryTest extends TestCase
@@ -134,6 +135,60 @@ class SentryTest extends TestCase
         $exporter->export($span);
 
         $this->assertTrue(true);
+    }
+
+    public function testSampleSkipsInfoLevelSpans(): void
+    {
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123');
+        $span = new Span();
+        $span->finish();
+
+        $this->assertFalse($exporter->sample($span));
+    }
+
+    public function testSampleSendsWarningLevelSpans(): void
+    {
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123');
+        $span = new Span();
+        $span->finish(level: Level::Warn, error: new \RuntimeException('Heads up'));
+
+        $this->assertTrue($exporter->sample($span));
+    }
+
+    public function testSampleSendsErrorLevelSpans(): void
+    {
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123');
+        $span = new Span();
+        $span->setError(new \RuntimeException('Boom'));
+        $span->finish();
+
+        $this->assertTrue($exporter->sample($span));
+    }
+
+    public function testSampleSkipsDowngradedErrorSpans(): void
+    {
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123');
+        $span = new Span();
+        $span->finish(level: Level::Info, error: new \RuntimeException('Handled, not worth reporting'));
+
+        $this->assertFalse($exporter->sample($span));
+    }
+
+    public function testSampleComposesCustomSamplerWithLevelFilter(): void
+    {
+        $exporter = new Sentry(
+            sampler: fn(Span $span): bool => $span->getAction() === 'keep',
+            dsn: 'https://key@sentry.io/123',
+        );
+
+        $kept = new Span('keep');
+        $kept->finish(level: Level::Warn, error: new \RuntimeException('Test'));
+
+        $dropped = new Span('drop');
+        $dropped->finish(level: Level::Warn, error: new \RuntimeException('Test'));
+
+        $this->assertTrue($exporter->sample($kept));
+        $this->assertFalse($exporter->sample($dropped));
     }
 
     public function testExportWithClassifier(): void

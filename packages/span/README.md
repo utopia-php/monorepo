@@ -86,11 +86,15 @@ Exporters access the exception via `$span->getError()` and extract what they nee
 
 Use `setError()` when you need to record the error before the span ends, such as before cleanup work that should still be included in the same span.
 
-The `level` attribute is set when the span finishes. It defaults to `error` when an error is captured and `info` otherwise. Pass a level to `finish()` to override it:
+The `level` attribute is set when the span finishes. It defaults to `Level::Error` when an error is captured and `Level::Info` otherwise. Pass a `Level` to `finish()` to override it:
 
 ```php
-$span->finish(level: 'warning', error: $e);
+use Utopia\Span\Level;
+
+$span->finish(level: Level::Warn, error: $e);
 ```
+
+Level names follow Grafana Loki's `detected_level` vocabulary (note `warn`). The Sentry exporter only sends spans at `Level::Warn` or above — translating to Sentry's own terms (`warn` → `warning`) — and reports each at its own level; lower levels (`Info`, `Debug`) are skipped.
 
 Use attributes for warning details that do not end the span:
 
@@ -259,7 +263,7 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `setError(Throwable $e): self`          | Capture exception                  |
 | `getError(): ?Throwable`                | Get captured exception             |
 | `getTraceparent(): string`              | Get W3C traceparent header value   |
-| `finish(?string $level = null, ?Throwable $error = null): void` | End span and export |
+| `finish(?Level $level = null, ?Throwable $error = null): void` | End span and export |
 
 ### Attribute Conventions
 
