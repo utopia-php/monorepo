@@ -16,10 +16,10 @@ class ResourceIndicatorsTest extends TestCase
         $this->assertSame(['https://api.example.com/'], ResourceIndicators::from('https://api.example.com/')->toArray());
 
         $this->assertSame(
-            ['https://api.example.com/', 'urn:example:resource'],
+            ['https://api.example.com/', 'http://localhost:8080/v1'],
             ResourceIndicators::from([
                 'https://api.example.com/',
-                'urn:example:resource',
+                'http://localhost:8080/v1',
                 'https://api.example.com/',
             ])->toArray(),
         );
@@ -86,11 +86,23 @@ class ResourceIndicatorsTest extends TestCase
         return [
             'fragment' => [
                 'resources' => 'https://api.example.com/#section',
-                'message' => 'resource must be an absolute URI with no fragment component.',
+                'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
             ],
             'relative URI' => [
                 'resources' => '/relative',
-                'message' => 'resource must be an absolute URI with no fragment component.',
+                'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
+            ],
+            'urn URI' => [
+                'resources' => 'urn:example:resource',
+                'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
+            ],
+            'file URI' => [
+                'resources' => 'file:///etc/passwd',
+                'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
+            ],
+            'javascript URI' => [
+                'resources' => 'javascript:alert(1)',
+                'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
             ],
             'non-string' => [
                 'resources' => ['https://api.example.com/', 42],

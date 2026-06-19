@@ -26,7 +26,7 @@ class ResourceIndicators
                     throw new InvalidResourceException('resource must be a non-empty absolute URI.');
 
                 case \is_string($resource) && !self::isValid($resource):
-                    throw new InvalidResourceException('resource must be an absolute URI with no fragment component.');
+                    throw new InvalidResourceException('resource must be an absolute HTTP(S) URI with no fragment component.');
 
                 case \in_array($resource, $seen, true):
                     throw new InvalidResourceException('resources must not contain duplicates.');
@@ -106,8 +106,9 @@ class ResourceIndicators
         $parts = parse_url($resource);
 
         return \is_array($parts)
-            && !empty($parts['scheme'])
+            && isset($parts['scheme'])
+            && \in_array(strtolower($parts['scheme']), ['http', 'https'], true)
             && !isset($parts['fragment'])
-            && (!empty($parts['host']) || !empty($parts['path']));
+            && !empty($parts['host']);
     }
 }

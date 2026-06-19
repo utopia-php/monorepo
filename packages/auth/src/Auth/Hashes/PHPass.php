@@ -65,7 +65,7 @@ class PHPass extends Hash
             $verificationHash = crypt($value, $hash);
         }
 
-        return $hash === $verificationHash;
+        return hash_equals($hash, $verificationHash);
     }
 
     /**

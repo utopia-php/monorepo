@@ -16,7 +16,7 @@ class Scrypt extends Hash
         $this->setOption('costMemory', 14);
         $this->setOption('costParallel', 1);
         $this->setOption('length', 64);
-        $this->setOption('salt', '');
+        $this->setOption('salt', bin2hex(random_bytes(16)));
     }
 
     /**
@@ -63,7 +63,7 @@ class Scrypt extends Hash
      */
     public function verify(string $value, string $hash): bool
     {
-        return $this->hash($value) === $hash;
+        return hash_equals($hash, $this->hash($value));
     }
 
     /**

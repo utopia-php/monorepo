@@ -25,6 +25,15 @@ class ScryptTest extends TestCase
         $this->assertFalse($this->scrypt->verify('wrongpassword', $hash));
     }
 
+    public function testDefaultSaltIsGenerated(): void
+    {
+        $salt = $this->scrypt->getOption('salt');
+
+        $this->assertIsString($salt);
+        $this->assertNotSame('', $salt);
+        $this->assertNotSame($salt, (new Scrypt())->getOption('salt'));
+    }
+
     public function testCustomOptions(): void
     {
         $this->scrypt->setCpuCost(16)

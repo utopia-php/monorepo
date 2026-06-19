@@ -27,7 +27,7 @@ class Plaintext extends Hash
      */
     public function verify(string $value, string $hash): bool
     {
-        return $this->hash($value) === $hash;
+        return hash_equals($hash, $this->hash($value));
     }
 
     /**
