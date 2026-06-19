@@ -78,8 +78,10 @@ class EventParser
 
     /**
      * Resolve column names for a MINIMAL-metadata table. Uses the injected
-     * resolver (cached per table, and only when its arity matches the binlog's
-     * column count), falling back to positional names otherwise.
+     * resolver when its arity matches the binlog's column count, otherwise
+     * positional names. Either way the outcome is cached, so the resolver runs at
+     * most once per table — a failing resolver doesn't re-fire on every (per-
+     * transaction) TABLE_MAP.
      *
      * @return list<string>
      */
@@ -91,16 +93,20 @@ class EventParser
             return $cached['names'];
         }
 
+        $names = [];
         if ($this->columnResolver !== null) {
             $resolved = ($this->columnResolver)($schema, $table);
             if (\count($resolved) === $count) {
-                $this->resolvedNames[$key] = ['count' => $count, 'names' => $resolved];
-
-                return $resolved;
+                $names = $resolved;
             }
         }
+        if ($names === []) {
+            $names = array_map('strval', range(0, max(0, $count - 1)));
+        }
 
-        return array_map('strval', range(0, max(0, $count - 1)));
+        $this->resolvedNames[$key] = ['count' => $count, 'names' => $names];
+
+        return $names;
     }
 
     /**

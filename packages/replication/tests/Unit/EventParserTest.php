@@ -190,7 +190,12 @@ class EventParserTest extends TestCase
 
     public function testResolverArityMismatchFallsBackToPositional(): void
     {
-        $parser = new EventParser(fn(string $schema, string $table): array => ['only_one']);
+        $calls = 0;
+        $parser = new EventParser(function (string $schema, string $table) use (&$calls): array {
+            $calls++;
+
+            return ['only_one']; // table has 2 columns -> mismatch
+        });
         $parser->parseTableMap($this->tableMapBodyMinimal());
 
         $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->rowsHeader() . $this->cell(5, 'x'));
@@ -198,6 +203,11 @@ class EventParserTest extends TestCase
         $this->assertNotNull($decoded);
         $this->assertSame(5, $decoded['rows'][0]['0']);
         $this->assertSame('x', $decoded['rows'][0]['1']);
+
+        // The positional fallback is cached too, so a repeat TABLE_MAP does not
+        // re-invoke the (failing) resolver.
+        $parser->parseTableMap($this->tableMapBodyMinimal());
+        $this->assertSame(1, $calls);
     }
 
     #[DataProvider('signednessProvider')]

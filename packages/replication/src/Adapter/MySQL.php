@@ -123,11 +123,13 @@ class MySQL implements Adapter
                 $this->schemaConnection->execute('SET SESSION group_concat_max_len = 1048576');
             }
 
-            $schemaLiteral = str_replace("'", "''", $schema);
-            $tableLiteral = str_replace("'", "''", $table);
+            // Hex literals avoid quoting/escaping entirely (and any sql_mode
+            // backslash ambiguity); schema/table from the binlog are non-empty.
+            $schemaHex = '0x' . bin2hex($schema);
+            $tableHex = '0x' . bin2hex($table);
             $names = $this->schemaConnection->queryScalar(
                 'SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR 0x00)'
-                . " FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '{$schemaLiteral}' AND TABLE_NAME = '{$tableLiteral}'",
+                . " FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = {$schemaHex} AND TABLE_NAME = {$tableHex}",
             );
 
             return ($names === null || $names === '') ? [] : explode("\0", $names);
