@@ -37,6 +37,26 @@ class EventParserTest extends TestCase
         return $body;
     }
 
+    /**
+     * Same table as {@see tableMapBody()} but with no optional metadata at all —
+     * i.e. binlog_row_metadata=MINIMAL, so column names are absent.
+     */
+    private function tableMapBodyMinimal(): string
+    {
+        $body = $this->uint(self::TABLE_ID, 6)
+            . "\x00\x00"
+            . \chr(\strlen(self::SCHEMA)) . self::SCHEMA . "\x00"
+            . \chr(\strlen(self::TABLE)) . self::TABLE . "\x00"
+            . \chr(2)
+            . \chr(Constants::TYPE_LONGLONG) . \chr(Constants::TYPE_VAR_STRING);
+
+        $metadata = pack('v', 1020);
+        $body .= \chr(\strlen($metadata)) . $metadata;
+        $body .= "\x00"; // null bitmap, then no optional metadata
+
+        return $body;
+    }
+
     private function rowsHeader(): string
     {
         return $this->uint(self::TABLE_ID, 6)
@@ -133,6 +153,51 @@ class EventParserTest extends TestCase
         $body = $this->rowsHeader() . $this->cell(1, 'x');
 
         $this->assertNull($parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $body));
+    }
+
+    public function testMinimalMetadataResolvesNamesViaResolver(): void
+    {
+        $calls = [];
+        $parser = new EventParser(function (string $schema, string $table) use (&$calls): array {
+            $calls[] = "{$schema}.{$table}";
+
+            return ['_id', '_uid'];
+        });
+        $parser->parseTableMap($this->tableMapBodyMinimal());
+
+        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->rowsHeader() . $this->cell(100, 'proj123'));
+
+        $this->assertNotNull($decoded);
+        $this->assertSame(100, $decoded['rows'][0]['_id']);
+        $this->assertSame('proj123', $decoded['rows'][0]['_uid']);
+
+        // A second TABLE_MAP for the same table must reuse the cached names.
+        $parser->parseTableMap($this->tableMapBodyMinimal());
+        $this->assertSame(['appwrite.console15x_projects'], $calls);
+    }
+
+    public function testMinimalMetadataFallsBackToPositionalNamesWithoutResolver(): void
+    {
+        $parser = new EventParser();
+        $parser->parseTableMap($this->tableMapBodyMinimal());
+
+        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->rowsHeader() . $this->cell(100, 'proj123'));
+
+        $this->assertNotNull($decoded);
+        $this->assertSame(100, $decoded['rows'][0]['0']);
+        $this->assertSame('proj123', $decoded['rows'][0]['1']);
+    }
+
+    public function testResolverArityMismatchFallsBackToPositional(): void
+    {
+        $parser = new EventParser(fn(string $schema, string $table): array => ['only_one']);
+        $parser->parseTableMap($this->tableMapBodyMinimal());
+
+        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->rowsHeader() . $this->cell(5, 'x'));
+
+        $this->assertNotNull($decoded);
+        $this->assertSame(5, $decoded['rows'][0]['0']);
+        $this->assertSame('x', $decoded['rows'][0]['1']);
     }
 
     #[DataProvider('signednessProvider')]
