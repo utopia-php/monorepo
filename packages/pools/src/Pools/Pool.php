@@ -204,13 +204,13 @@ class Pool
         // Connection counts are gauges: only their value at export time matters, so observe
         // them lazily at collection rather than recording on every pop/push/reclaim.
         $telemetry->createObservableGauge('pool.connection.active.count')
-            ->observe(fn (callable $observe) => $observe(\count($this->active), $this->telemetryAttributes));
+            ->observe(fn(callable $observe) => $observe(\count($this->active), $this->telemetryAttributes));
         $telemetry->createObservableGauge('pool.connection.idle.count')
-            ->observe(fn (callable $observe) => $observe($this->pool->count(), $this->telemetryAttributes));
+            ->observe(fn(callable $observe) => $observe($this->pool->count(), $this->telemetryAttributes));
         $telemetry->createObservableGauge('pool.connection.open.count')
-            ->observe(fn (callable $observe) => $observe(\count($this->active) + $this->pool->count(), $this->telemetryAttributes));
+            ->observe(fn(callable $observe) => $observe(\count($this->active) + $this->pool->count(), $this->telemetryAttributes));
         $telemetry->createObservableGauge('pool.connection.capacity.count')
-            ->observe(fn (callable $observe) => $observe($this->connectionsCreated, $this->telemetryAttributes));
+            ->observe(fn(callable $observe) => $observe($this->connectionsCreated, $this->telemetryAttributes));
 
         return $this;
     }
