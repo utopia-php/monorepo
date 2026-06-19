@@ -41,6 +41,14 @@ class MySQL implements Adapter
         Constants::DELETE_ROWS_EVENT_V2 => Change::DELETE,
     ];
 
+    /**
+     * Ask the source to emit a heartbeat at least this often (nanoseconds) so an
+     * idle dump stream keeps the socket active instead of tripping the read
+     * timeout. Must stay below {@see Connection}'s timeout. Heartbeat events
+     * carry no row change and are ignored by the decoder.
+     */
+    private const int HEARTBEAT_PERIOD_NS = 15_000_000_000;
+
     private Connection $connection;
     private ?Connection $schemaConnection = null;
     private EventParser $parser;
@@ -84,6 +92,8 @@ class MySQL implements Adapter
         $this->connection->execute('SET @master_binlog_checksum = @@global.binlog_checksum');
         $checksum = $this->connection->queryScalar('SELECT @@global.binlog_checksum') ?? 'NONE';
         $this->checksum = strtoupper(trim($checksum)) !== 'NONE';
+
+        $this->connection->execute('SET @master_heartbeat_period = ' . self::HEARTBEAT_PERIOD_NS);
 
         $this->registerSlave();
 
