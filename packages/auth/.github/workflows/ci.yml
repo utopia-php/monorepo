@@ -1,0 +1,59 @@
+name: "CI"
+
+on: [pull_request]
+
+jobs:
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 2
+
+      - run: git checkout HEAD^2
+
+      - name: Run CodeQL
+        run: |
+          docker run --rm -v $PWD:/app composer:2.6 sh -c \
+          "composer install --profile --ignore-platform-reqs && composer check"
+
+  linter:
+    name: Linter
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 2
+
+      - run: git checkout HEAD^2
+
+      - name: Run Linter
+        run: |
+          docker run --rm -v $PWD:/app composer sh -c \
+          "composer install --profile --ignore-platform-reqs && composer lint"
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 2
+
+      - run: git checkout HEAD^2
+
+      - name: Build
+        run: |
+          docker compose build
+          docker compose up -d
+          sleep 10
+
+      - name: Run Tests
+        run: docker compose exec tests vendor/bin/phpunit --configuration phpunit.xml tests
