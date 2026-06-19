@@ -41,14 +41,6 @@ class MySQL implements Adapter
         Constants::DELETE_ROWS_EVENT_V2 => Change::DELETE,
     ];
 
-    /**
-     * Ask the source to emit a heartbeat at least this often (nanoseconds) so an
-     * idle dump stream keeps the socket active instead of tripping the read
-     * timeout. Must stay below {@see Connection}'s timeout. Heartbeat events
-     * carry no row change and are ignored by the decoder.
-     */
-    private const int HEARTBEAT_PERIOD_NS = 15_000_000_000;
-
     private Connection $connection;
     private ?Connection $schemaConnection = null;
     private EventParser $parser;
@@ -59,8 +51,13 @@ class MySQL implements Adapter
     private int $currentGno = 0;
 
     /**
-     * @param string|null $schema Only emit changes for this database; others are
-     *                            decoded for bookkeeping but not yielded.
+     * @param string|null $schema   Only emit changes for this database; others are
+     *                              decoded for bookkeeping but not yielded.
+     * @param float       $heartbeat How often (seconds) to ask the source for a
+     *                              heartbeat so an idle dump stream keeps the
+     *                              socket active instead of tripping the read
+     *                              timeout. Keep it below the connection timeout;
+     *                              0 disables heartbeats.
      */
     public function __construct(
         private readonly string $host,
@@ -72,6 +69,7 @@ class MySQL implements Adapter
         private readonly bool $ssl = false,
         private readonly bool $sslVerify = true,
         private readonly string $sslCa = '',
+        private readonly float $heartbeat = 15.0,
     ) {
         $this->parser = new EventParser(fn(string $schema, string $table): array => $this->resolveColumns($schema, $table));
         $this->executed = new GtidSet();
@@ -93,7 +91,9 @@ class MySQL implements Adapter
         $checksum = $this->connection->queryScalar('SELECT @@global.binlog_checksum') ?? 'NONE';
         $this->checksum = strtoupper(trim($checksum)) !== 'NONE';
 
-        $this->connection->execute('SET @master_heartbeat_period = ' . self::HEARTBEAT_PERIOD_NS);
+        if ($this->heartbeat > 0) {
+            $this->connection->execute('SET @master_heartbeat_period = ' . (int) ($this->heartbeat * 1_000_000_000));
+        }
 
         $this->registerSlave();
 
