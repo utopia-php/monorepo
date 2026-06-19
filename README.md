@@ -67,6 +67,7 @@ graph TD
     queue --> validators
     servers --> di
     servers --> validators
+    replication
     system
 ```
 <!-- /graph -->
