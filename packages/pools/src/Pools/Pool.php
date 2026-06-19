@@ -6,7 +6,6 @@ use Exception;
 use Utopia\Pools\Adapter as PoolAdapter;
 use Utopia\Telemetry\Adapter as Telemetry;
 use Utopia\Telemetry\Adapter\None as NoTelemetry;
-use Utopia\Telemetry\Gauge;
 use Utopia\Telemetry\Histogram;
 
 /**
@@ -54,10 +53,6 @@ class Pool
      */
     protected int $connectionsCreated = 0;
 
-    private Gauge $telemetryOpenConnections;
-    private Gauge $telemetryActiveConnections;
-    private Gauge $telemetryIdleConnections;
-    private Gauge $telemetryPoolCapacity;
     private Histogram $telemetryWaitDuration;
     private Histogram $telemetryUseDuration;
     /** @var array<non-empty-string, int|string> */
@@ -192,10 +187,6 @@ class Pool
      */
     public function setTelemetry(Telemetry $telemetry): static
     {
-        $this->telemetryOpenConnections = $telemetry->createGauge('pool.connection.open.count');
-        $this->telemetryActiveConnections = $telemetry->createGauge('pool.connection.active.count');
-        $this->telemetryIdleConnections = $telemetry->createGauge('pool.connection.idle.count');
-        $this->telemetryPoolCapacity = $telemetry->createGauge('pool.connection.capacity.count');
         $this->telemetryWaitDuration = Histogram::lazy(
             telemetry: $telemetry,
             name: 'pool.connection.wait_time',
@@ -209,6 +200,17 @@ class Pool
             advisory: ['ExplicitBucketBoundaries' => [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]],
         );
         $this->telemetryAttributes = ['pool' => $this->name, 'size' => $this->size];
+
+        // Connection counts are gauges: only their value at export time matters, so observe
+        // them lazily at collection rather than recording on every pop/push/reclaim.
+        $telemetry->createObservableGauge('pool.connection.active.count')
+            ->observe(fn (callable $observe) => $observe(\count($this->active), $this->telemetryAttributes));
+        $telemetry->createObservableGauge('pool.connection.idle.count')
+            ->observe(fn (callable $observe) => $observe($this->pool->count(), $this->telemetryAttributes));
+        $telemetry->createObservableGauge('pool.connection.open.count')
+            ->observe(fn (callable $observe) => $observe(\count($this->active) + $this->pool->count(), $this->telemetryAttributes));
+        $telemetry->createObservableGauge('pool.connection.capacity.count')
+            ->observe(fn (callable $observe) => $observe($this->connectionsCreated, $this->telemetryAttributes));
 
         return $this;
     }
@@ -311,7 +313,6 @@ class Pool
             $idleCount = $this->pool->count();
             throw new Exception("Pool '{$this->name}' failed to provide a connection (size {$this->size}, active {$activeCount}, idle {$idleCount})", 0, $lastException);
         } finally {
-            $this->recordPoolTelemetry();
             $this->telemetryWaitDuration->record($totalSleepTime, $this->telemetryAttributes);
         }
     }
@@ -358,15 +359,11 @@ class Pool
      */
     public function push(Connection $connection): static
     {
-        try {
-            // Push the actual connection back to the pool
-            $this->pool->push($connection);
-            unset($this->active[$connection->getID()]);
+        // Push the actual connection back to the pool
+        $this->pool->push($connection);
+        unset($this->active[$connection->getID()]);
 
-            return $this;
-        } finally {
-            $this->recordPoolTelemetry();
-        }
+        return $this;
     }
 
     /**
@@ -441,11 +438,7 @@ class Pool
      */
     public function destroy(?Connection $connection = null): static
     {
-        try {
-            return $this->destroyConnection($connection);
-        } finally {
-            $this->recordPoolTelemetry();
-        }
+        return $this->destroyConnection($connection);
     }
 
     /**
@@ -463,17 +456,5 @@ class Pool
     {
         // Pool is full when all possible connections are available (idle or not created yet)
         return \count($this->active) === 0;
-    }
-
-    private function recordPoolTelemetry(): void
-    {
-        $activeConnections = \count($this->active);
-        $idleConnections = $this->pool->count(); // Connections in the pool (idle)
-        $openConnections = $activeConnections + $idleConnections; // Total connections in use or available
-
-        $this->telemetryActiveConnections->record($activeConnections, $this->telemetryAttributes);
-        $this->telemetryIdleConnections->record($idleConnections, $this->telemetryAttributes);
-        $this->telemetryOpenConnections->record($openConnections, $this->telemetryAttributes);
-        $this->telemetryPoolCapacity->record($this->connectionsCreated, $this->telemetryAttributes);
     }
 }
