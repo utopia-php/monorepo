@@ -1,8 +1,9 @@
 <?php
 
-namespace Utopia\Replication;
+namespace Utopia\Replication\Adapter\MySQL;
 
 use Swoole\Coroutine\Socket;
+use Utopia\Replication\Exception;
 
 /**
  * A coroutine MySQL connection speaking just enough of the client protocol to

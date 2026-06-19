@@ -6,8 +6,8 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Scheduler;
+use Utopia\Replication\Adapter\MySQL;
 use Utopia\Replication\Change;
-use Utopia\Replication\Replication;
 
 /**
  * Integration tests for the binlog Replication reader against a live MySQL 8.
@@ -147,8 +147,8 @@ class ReplicationTest extends TestCase
         $scheduler = new Scheduler();
         $scheduler->add(function () use (&$collected, &$error, $writer, $expected, $dsn, $writerUser, $writerPass, $readerUser, $readerPass, $ssl, $sslVerify) {
             try {
-                $replication = new Replication($this->host, $this->port, $readerUser, $readerPass, self::SERVER_ID, $ssl, $sslVerify);
-                $replication->setSchema(self::SCHEMA)->start(null);
+                $replication = new MySQL($this->host, $this->port, $readerUser, $readerPass, self::SERVER_ID, self::SCHEMA, $ssl, $sslVerify);
+                $replication->start(null);
 
                 Coroutine::create(function () use ($writer, $dsn, $writerUser, $writerPass) {
                     Coroutine::sleep(0.5);

@@ -38,20 +38,21 @@ The connecting user needs the `REPLICATION SLAVE` and `REPLICATION CLIENT` privi
 ## Usage
 
 ```php
-use Utopia\Replication\Replication;
+use Utopia\Replication\Adapter;
+use Utopia\Replication\Adapter\MySQL;
 
-$replication = new Replication(
+// Adapter is the polymorphic interface; MySQL is the binlog implementation.
+$replication = new MySQL(
     host: '127.0.0.1',
     port: 3306,
     username: 'replicator',
     password: 'secret',
-    serverId: 1001,   // unique among replicas
-    ssl: false,
+    serverId: 1001,            // unique among replicas
+    schema: 'appwrite',        // only emit changes for this database
+    ssl: false,                // when true, TLS verifies the server cert by default
 );
 
-$replication
-    ->setSchema('appwrite')         // only emit changes for this database
-    ->start($checkpoint ?? null);   // resume from a GTID set, or null for "now"
+$replication->start($checkpoint ?? null);  // resume from a GTID set, or null for "now"
 
 foreach ($replication->getChanges() as $change) {
     // $change->action  — Change::INSERT | UPDATE | DELETE

@@ -1,13 +1,20 @@
 <?php
 
-namespace Utopia\Replication;
+namespace Utopia\Replication\Adapter;
+
+use Utopia\Replication\Adapter;
+use Utopia\Replication\Adapter\MySQL\BinaryReader;
+use Utopia\Replication\Adapter\MySQL\Connection;
+use Utopia\Replication\Adapter\MySQL\Constants;
+use Utopia\Replication\Adapter\MySQL\EventParser;
+use Utopia\Replication\Adapter\MySQL\GtidSet;
+use Utopia\Replication\Change;
 
 /**
  * Streams ROW-format changes from a MySQL binlog over the replication protocol.
  *
- * Each region can point this at its local (group-replicated) MySQL and react to
- * data changes — e.g. purge a stale document cache — without any cross-region
- * messaging.
+ * Point it at a (group-replicated) MySQL and react to data changes — e.g. purge
+ * a stale cache — without any application-level cross-region messaging.
  *
  * Requirements on the source server:
  *  - `binlog_format = ROW`
@@ -16,11 +23,11 @@ namespace Utopia\Replication;
  *  - a user with REPLICATION SLAVE (and REPLICATION CLIENT) privileges
  *
  * Usage:
- *  $replication = new Replication($host, $port, $user, $pass, $serverId);
- *  $replication->setSchema('appwrite')->start($checkpoint);
+ *  $replication = new MySQL($host, $port, $user, $pass, $serverId, schema: 'appwrite');
+ *  $replication->start($checkpoint);
  *  foreach ($replication->getChanges() as $change) { ...; $checkpoint = $change->gtid; }
  */
-class Replication
+class MySQL implements Adapter
 {
     private const array ROWS_EVENTS = [
         Constants::WRITE_ROWS_EVENT_V1 => Change::INSERT,
@@ -35,34 +42,27 @@ class Replication
     private EventParser $parser;
     private GtidSet $executed;
     private bool $checksum = false;
-    private ?string $schema = null;
 
     private string $currentSid = '';
     private int $currentGno = 0;
 
+    /**
+     * @param string|null $schema Only emit changes for this database; others are
+     *                            decoded for bookkeeping but not yielded.
+     */
     public function __construct(
         private readonly string $host,
         private readonly int $port,
         private readonly string $username,
         private readonly string $password,
         private readonly int $serverId,
+        private readonly ?string $schema = null,
         private readonly bool $ssl = false,
         private readonly bool $sslVerify = true,
         private readonly string $sslCa = '',
     ) {
         $this->parser = new EventParser();
         $this->executed = new GtidSet();
-    }
-
-    /**
-     * Only emit changes for this schema (database). Others are decoded for
-     * bookkeeping but not yielded.
-     */
-    public function setSchema(string $schema): self
-    {
-        $this->schema = $schema;
-
-        return $this;
     }
 
     /**

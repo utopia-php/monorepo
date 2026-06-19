@@ -3,7 +3,7 @@
 namespace Utopia\Replication\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Replication\BinaryReader;
+use Utopia\Replication\Adapter\MySQL\BinaryReader;
 
 class BinaryReaderTest extends TestCase
 {

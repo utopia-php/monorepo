@@ -1,6 +1,6 @@
 <?php
 
-namespace Utopia\Replication;
+namespace Utopia\Replication\Adapter\MySQL;
 
 /**
  * Forward-only cursor over a binary string.

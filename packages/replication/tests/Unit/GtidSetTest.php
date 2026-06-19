@@ -3,7 +3,7 @@
 namespace Utopia\Replication\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Replication\GtidSet;
+use Utopia\Replication\Adapter\MySQL\GtidSet;
 
 class GtidSetTest extends TestCase
 {

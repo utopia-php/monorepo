@@ -4,8 +4,8 @@ namespace Utopia\Replication\Tests\Unit;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Utopia\Replication\Constants;
-use Utopia\Replication\EventParser;
+use Utopia\Replication\Adapter\MySQL\Constants;
+use Utopia\Replication\Adapter\MySQL\EventParser;
 
 class EventParserTest extends TestCase
 {

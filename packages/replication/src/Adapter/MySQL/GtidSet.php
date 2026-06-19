@@ -1,6 +1,6 @@
 <?php
 
-namespace Utopia\Replication;
+namespace Utopia\Replication\Adapter\MySQL;
 
 /**
  * A MySQL GTID set: a map of source UUIDs to their executed transaction

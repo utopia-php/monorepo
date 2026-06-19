@@ -1,6 +1,8 @@
 <?php
 
-namespace Utopia\Replication;
+namespace Utopia\Replication\Adapter\MySQL;
+
+use Utopia\Replication\Exception;
 
 /**
  * Decodes the binlog events we care about: TABLE_MAP (to learn a table's
