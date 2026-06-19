@@ -7,6 +7,7 @@ use Utopia\Pools\Adapter as PoolAdapter;
 use Utopia\Telemetry\Adapter as Telemetry;
 use Utopia\Telemetry\Adapter\None as NoTelemetry;
 use Utopia\Telemetry\Histogram;
+use Utopia\Telemetry\ObservableGauge;
 
 /**
  * @template TResource
@@ -57,6 +58,8 @@ class Pool
     private Histogram $telemetryUseDuration;
     /** @var array<non-empty-string, int|string> */
     private array $telemetryAttributes;
+    /** @var list<ObservableGauge> */
+    private array $telemetryGauges = [];
 
     /**
      * @param PoolAdapter $pool
@@ -187,6 +190,13 @@ class Pool
      */
     public function setTelemetry(Telemetry $telemetry): static
     {
+        // Observable gauges are pull-based: the adapter samples them on its own
+        // collection cycle. When swapping adapters, neutralize the ones bound to the
+        // previous adapter so it stops sampling this pool and double-emitting metrics.
+        foreach ($this->telemetryGauges as $gauge) {
+            $gauge->observe(fn(callable $observe) => null);
+        }
+
         $this->telemetryWaitDuration = Histogram::lazy(
             telemetry: $telemetry,
             name: 'pool.connection.wait_time',
@@ -203,16 +213,24 @@ class Pool
 
         // Connection counts are gauges: only their value at export time matters, so observe
         // them lazily at collection rather than recording on every pop/push/reclaim.
-        $telemetry->createObservableGauge('pool.connection.active.count')
-            ->observe(fn(callable $observe) => $observe(\count($this->active), $this->telemetryAttributes));
-        $telemetry->createObservableGauge('pool.connection.idle.count')
-            ->observe(fn(callable $observe) => $observe($this->pool->count(), $this->telemetryAttributes));
-        $telemetry->createObservableGauge('pool.connection.open.count')
-            ->observe(fn(callable $observe) => $observe(\count($this->active) + $this->pool->count(), $this->telemetryAttributes));
-        $telemetry->createObservableGauge('pool.connection.capacity.count')
-            ->observe(fn(callable $observe) => $observe($this->connectionsCreated, $this->telemetryAttributes));
+        $this->telemetryGauges = [
+            $this->observeGauge($telemetry, 'pool.connection.active.count', fn() => \count($this->active)),
+            $this->observeGauge($telemetry, 'pool.connection.idle.count', fn() => $this->pool->count()),
+            $this->observeGauge($telemetry, 'pool.connection.open.count', fn() => \count($this->active) + $this->pool->count()),
+            $this->observeGauge($telemetry, 'pool.connection.capacity.count', fn() => $this->connectionsCreated),
+        ];
 
         return $this;
+    }
+
+    /**
+     * @param callable(): (float|int) $sample
+     */
+    private function observeGauge(Telemetry $telemetry, string $name, callable $sample): ObservableGauge
+    {
+        $gauge = $telemetry->createObservableGauge($name);
+        $gauge->observe(fn(callable $observe) => $observe($sample(), $this->telemetryAttributes));
+        return $gauge;
     }
 
     /**

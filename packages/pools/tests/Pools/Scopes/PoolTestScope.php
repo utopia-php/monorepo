@@ -446,6 +446,37 @@ trait PoolTestScope
         });
     }
 
+    public function testPoolTelemetrySwapStopsPreviousAdapter(): void
+    {
+        $this->execute(function (): void {
+            $this->setUpPool();
+
+            $first = new TestTelemetry();
+            $this->poolObject->setTelemetry($first);
+
+            // Swapping adapters must neutralize the gauges bound to the previous one,
+            // otherwise its collection cycle keeps sampling this pool and duplicates metrics.
+            $second = new TestTelemetry();
+            $this->poolObject->setTelemetry($second);
+
+            $observed = function (TestTelemetry $telemetry, string $name): bool {
+                /** @var object{callback: \Closure} $gauge */
+                $gauge = $telemetry->observableGauges[$name];
+                $called = false;
+                ($gauge->callback)(function () use (&$called): void {
+                    $called = true;
+                });
+                return $called;
+            };
+
+            foreach (['active', 'idle', 'open', 'capacity'] as $metric) {
+                $name = "pool.connection.{$metric}.count";
+                $this->assertFalse($observed($first, $name), "stale gauge {$name} still emits");
+                $this->assertTrue($observed($second, $name), "current gauge {$name} does not emit");
+            }
+        });
+    }
+
     public function testPoolUseDurationTelemetryIsCreatedOnFirstUse(): void
     {
         $this->execute(function (): void {
