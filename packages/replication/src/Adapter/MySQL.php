@@ -19,8 +19,11 @@ use Utopia\Replication\Change;
  * Requirements on the source server:
  *  - `binlog_format = ROW`
  *  - `gtid_mode = ON`
- *  - `binlog_row_metadata = FULL` (so column names are available)
  *  - a user with REPLICATION SLAVE (and REPLICATION CLIENT) privileges
+ *
+ * Column names come from the TABLE_MAP when `binlog_row_metadata = FULL`;
+ * otherwise (MINIMAL) they are resolved from INFORMATION_SCHEMA over a second
+ * connection, so the reader works against default-config and managed MySQL too.
  *
  * Usage:
  *  $replication = new MySQL($host, $port, $user, $pass, $serverId, schema: 'appwrite');
@@ -39,6 +42,7 @@ class MySQL implements Adapter
     ];
 
     private Connection $connection;
+    private ?Connection $schemaConnection = null;
     private EventParser $parser;
     private GtidSet $executed;
     private bool $checksum = false;
@@ -61,7 +65,7 @@ class MySQL implements Adapter
         private readonly bool $sslVerify = true,
         private readonly string $sslCa = '',
     ) {
-        $this->parser = new EventParser();
+        $this->parser = new EventParser(fn(string $schema, string $table): array => $this->resolveColumns($schema, $table));
         $this->executed = new GtidSet();
     }
 
@@ -95,6 +99,44 @@ class MySQL implements Adapter
     {
         if (isset($this->connection)) {
             $this->connection->close();
+        }
+        if ($this->schemaConnection !== null) {
+            $this->schemaConnection->close();
+            $this->schemaConnection = null;
+        }
+    }
+
+    /**
+     * Resolve a table's column names in ordinal order from INFORMATION_SCHEMA,
+     * over a second connection (the dump connection is busy streaming). This is
+     * what lets the reader cope with `binlog_row_metadata = MINIMAL`. Returns an
+     * empty list on any failure, so the parser falls back to positional names.
+     *
+     * @return list<string>
+     */
+    private function resolveColumns(string $schema, string $table): array
+    {
+        try {
+            if ($this->schemaConnection === null) {
+                $this->schemaConnection = new Connection($this->host, $this->port, $this->username, $this->password, $this->ssl, $this->sslVerify, $this->sslCa);
+                $this->schemaConnection->connect();
+                $this->schemaConnection->execute('SET SESSION group_concat_max_len = 1048576');
+            }
+
+            // Hex literals avoid quoting/escaping entirely (and any sql_mode
+            // backslash ambiguity); schema/table from the binlog are non-empty.
+            $schemaHex = '0x' . bin2hex($schema);
+            $tableHex = '0x' . bin2hex($table);
+            $names = $this->schemaConnection->queryScalar(
+                'SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR 0x00)'
+                . " FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = {$schemaHex} AND TABLE_NAME = {$tableHex}",
+            );
+
+            return ($names === null || $names === '') ? [] : explode("\0", $names);
+        } catch (\Throwable) {
+            $this->schemaConnection = null; // drop a broken connection; retried next call
+
+            return [];
         }
     }
 

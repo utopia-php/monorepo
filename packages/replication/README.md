@@ -30,8 +30,13 @@ The MySQL source must be configured for GTID-based row replication:
 binlog_format       = ROW
 gtid_mode           = ON
 enforce_gtid_consistency = ON
-binlog_row_metadata = FULL   # so column names arrive in the stream
+binlog_row_metadata = FULL   # optional: ships column names in the stream
 ```
+
+`binlog_row_metadata = FULL` lets column names ride along in the binlog. When it
+is `MINIMAL` (the MySQL default, and what some managed providers are fixed to)
+the reader resolves names from `INFORMATION_SCHEMA` over a second connection
+instead — no configuration change required.
 
 The connecting user needs the `REPLICATION SLAVE` and `REPLICATION CLIENT` privileges.
 
@@ -77,7 +82,8 @@ commit, so a crash mid-transaction re-streams it — treat changes as idempotent
 Deliberately minimal: MySQL 8, ROW-format binlog, and the event types needed for
 CDC (TABLE_MAP, WRITE/UPDATE/DELETE_ROWS, GTID, ROTATE, XID). JSON column values
 are skipped (bytes advanced, not decoded). Column names come from FULL row
-metadata, so no `INFORMATION_SCHEMA` lookups are required.
+metadata when available, otherwise from a single cached `INFORMATION_SCHEMA`
+lookup per table.
 
 ## Tests
 

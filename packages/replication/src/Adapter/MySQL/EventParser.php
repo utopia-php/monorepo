@@ -8,11 +8,13 @@ use Utopia\Replication\Exception;
  * Decodes the binlog events we care about: TABLE_MAP (to learn a table's
  * column layout and names) and WRITE/UPDATE/DELETE_ROWS (the actual changes).
  *
- * Requires the source to run with `binlog_row_metadata=FULL` so column names
- * arrive in the TABLE_MAP optional metadata — this avoids any INFORMATION_SCHEMA
- * round-trips.
+ * With `binlog_row_metadata=FULL` column names ride in the TABLE_MAP optional
+ * metadata. With MINIMAL (the MySQL default, and what some managed providers are
+ * fixed to) they are absent; an optional resolver recovers them from
+ * INFORMATION_SCHEMA, at most once per table.
  *
- * Pure (operates on byte buffers), so it is unit-testable with fixtures.
+ * Pure (operates on byte buffers) when no resolver is supplied, so it is
+ * unit-testable with fixtures.
  */
 class EventParser
 {
@@ -23,7 +25,24 @@ class EventParser
      */
     private array $tables = [];
 
+    /**
+     * "schema.table" => resolved column names, so we hit INFORMATION_SCHEMA at
+     * most once per table rather than on every (per-transaction) TABLE_MAP.
+     *
+     * @var array<string, array{count: int, names: list<string>}>
+     */
+    private array $resolvedNames = [];
+
     private const array DIGITS_TO_BYTES = [0, 1, 1, 2, 2, 3, 3, 4, 4, 4];
+
+    /**
+     * @param (\Closure(string, string): list<string>)|null $columnResolver
+     *        Resolves a (schema, table) to ordinal-ordered column names when the
+     *        binlog omits them (MINIMAL metadata). Omit for pure FULL-only use.
+     */
+    public function __construct(
+        private readonly ?\Closure $columnResolver = null,
+    ) {}
 
     /**
      * Cache a table definition from a TABLE_MAP event body.
@@ -50,12 +69,44 @@ class EventParser
 
         [$names, $signedness] = $this->parseOptionalMetadata($reader);
         if ($names === []) {
-            // Fall back to positional names if FULL metadata is unavailable.
-            $names = array_map('strval', range(0, max(0, $count - 1)));
+            $names = $this->resolveNames($schema, $table, $count);
         }
         $signed = $this->computeSignedness($types, $signedness);
 
         $this->tables[$tableId] = compact('schema', 'table', 'count', 'types', 'metadata', 'names', 'signed');
+    }
+
+    /**
+     * Resolve column names for a MINIMAL-metadata table. Uses the injected
+     * resolver when its arity matches the binlog's column count, otherwise
+     * positional names. Either way the outcome is cached, so the resolver runs at
+     * most once per table — a failing resolver doesn't re-fire on every (per-
+     * transaction) TABLE_MAP.
+     *
+     * @return list<string>
+     */
+    private function resolveNames(string $schema, string $table, int $count): array
+    {
+        $key = $schema . '.' . $table;
+        $cached = $this->resolvedNames[$key] ?? null;
+        if ($cached !== null && $cached['count'] === $count) {
+            return $cached['names'];
+        }
+
+        $names = [];
+        if ($this->columnResolver !== null) {
+            $resolved = ($this->columnResolver)($schema, $table);
+            if (\count($resolved) === $count) {
+                $names = $resolved;
+            }
+        }
+        if ($names === []) {
+            $names = array_map('strval', range(0, max(0, $count - 1)));
+        }
+
+        $this->resolvedNames[$key] = ['count' => $count, 'names' => $names];
+
+        return $names;
     }
 
     /**
