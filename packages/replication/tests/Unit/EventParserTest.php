@@ -2,6 +2,7 @@
 
 namespace Utopia\Replication\Tests\Unit;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Utopia\Replication\Constants;
 use Utopia\Replication\EventParser;
@@ -132,5 +133,45 @@ class EventParserTest extends TestCase
         $body = $this->rowsHeader() . $this->cell(1, 'x');
 
         $this->assertNull($parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $body));
+    }
+
+    #[DataProvider('signednessProvider')]
+    public function testSignedIntegerDecoding(string $signednessByte, int $rawByte, int $expected): void
+    {
+        // Single TINYINT column 'n' with an explicit SIGNEDNESS metadata byte.
+        $tableMap = $this->uint(self::TABLE_ID, 6) . "\x00\x00"
+            . \chr(\strlen(self::SCHEMA)) . self::SCHEMA . "\x00"
+            . \chr(\strlen(self::TABLE)) . self::TABLE . "\x00"
+            . \chr(1)                                    // column count
+            . \chr(Constants::TYPE_TINY)                 // types
+            . \chr(0)                                    // metadata block (TINY has none)
+            . "\x00"                                     // null bitmap
+            . \chr(Constants::METADATA_SIGNEDNESS) . \chr(1) . $signednessByte
+            . \chr(Constants::METADATA_COLUMN_NAME) . \chr(2) . \chr(1) . 'n';
+
+        $parser = new EventParser();
+        $parser->parseTableMap($tableMap);
+
+        $body = $this->uint(self::TABLE_ID, 6) . "\x00\x00" . "\x02\x00"
+            . \chr(1) . \chr(0b1)   // column count + present bitmap
+            . "\x00"                // null bitmap
+            . \chr($rawByte);       // TINY value
+
+        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $body);
+        $this->assertNotNull($decoded);
+        $this->assertSame($expected, $decoded['rows'][0]['n']);
+    }
+
+    /**
+     * @return array<string, array{string, int, int}>
+     */
+    public static function signednessProvider(): array
+    {
+        // SIGNEDNESS bitmap: MSB set => UNSIGNED. One numeric column => bit 7.
+        return [
+            'signed -1'    => ["\x00", 0xFF, -1],
+            'signed 127'   => ["\x00", 0x7F, 127],
+            'unsigned 255' => ["\x80", 0xFF, 255],
+        ];
     }
 }

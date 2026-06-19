@@ -17,7 +17,7 @@ class EventParser
     /**
      * table_id => decoded table definition.
      *
-     * @var array<int, array{schema: string, table: string, count: int, types: list<int>, metadata: list<int>, names: list<string>}>
+     * @var array<int, array{schema: string, table: string, count: int, types: list<int>, metadata: list<int>, names: list<string>, signed: list<bool>}>
      */
     private array $tables = [];
 
@@ -46,10 +46,33 @@ class EventParser
 
         $reader->skip((int) ceil($count / 8)); // null bitmap
 
-        $names = $this->parseColumnNames($reader, $count);
+        [$names, $signedness] = $this->parseOptionalMetadata($reader);
+        if ($names === []) {
+            // Fall back to positional names if FULL metadata is unavailable.
+            $names = array_map('strval', range(0, max(0, $count - 1)));
+        }
+        $signed = $this->computeSignedness($types, $signedness);
 
-        $this->tables[$tableId] = compact('schema', 'table', 'count', 'types', 'metadata', 'names');
+        $this->tables[$tableId] = compact('schema', 'table', 'count', 'types', 'metadata', 'names', 'signed');
     }
+
+    /**
+     * Numeric column types that consume a bit in the SIGNEDNESS metadata bitmap
+     * (matches MySQL's notion of numeric fields). Bit alignment must count all of
+     * these, even though two's-complement is only applied to integer types.
+     */
+    private const array NUMERIC_TYPES = [
+        Constants::TYPE_TINY,
+        Constants::TYPE_SHORT,
+        Constants::TYPE_INT24,
+        Constants::TYPE_LONG,
+        Constants::TYPE_LONGLONG,
+        Constants::TYPE_YEAR,
+        Constants::TYPE_FLOAT,
+        Constants::TYPE_DOUBLE,
+        Constants::TYPE_NEWDECIMAL,
+        Constants::TYPE_DECIMAL,
+    ];
 
     /**
      * Decode a ROWS event body into row maps.
@@ -97,7 +120,7 @@ class EventParser
     }
 
     /**
-     * @param array{count: int, types: list<int>, metadata: list<int>, names: list<string>} $table
+     * @param array{count: int, types: list<int>, metadata: list<int>, names: list<string>, signed: list<bool>} $table
      * @return array<string, mixed>
      */
     private function readRow(BinaryReader $reader, array $table, string $present): array
@@ -118,24 +141,26 @@ class EventParser
 
             $row[$name] = $isNull
                 ? null
-                : $this->decodeValue($reader, $table['types'][$column], $table['metadata'][$column]);
+                : $this->decodeValue($reader, $table['types'][$column], $table['metadata'][$column], $table['signed'][$column] ?? false);
         }
 
         return $row;
     }
 
-    private function decodeValue(BinaryReader $reader, int $type, int $metadata): mixed
+    private function decodeValue(BinaryReader $reader, int $type, int $metadata, bool $signed): mixed
     {
         switch ($type) {
             case Constants::TYPE_TINY:
-                return $reader->readUInt(1);
+                return $this->maybeSigned($reader->readUInt(1), 1, $signed);
             case Constants::TYPE_SHORT:
-                return $reader->readUInt(2);
+                return $this->maybeSigned($reader->readUInt(2), 2, $signed);
             case Constants::TYPE_INT24:
-                return $reader->readUInt(3);
+                return $this->maybeSigned($reader->readUInt(3), 3, $signed);
             case Constants::TYPE_LONG:
-                return $reader->readUInt(4);
+                return $this->maybeSigned($reader->readUInt(4), 4, $signed);
             case Constants::TYPE_LONGLONG:
+                // 64-bit reads already wrap to PHP's signed int; unsigned values
+                // above PHP_INT_MAX cannot be represented and are left as-is.
                 return $reader->readUInt(8);
             case Constants::TYPE_YEAR:
                 return $reader->readUInt(1);
@@ -192,6 +217,22 @@ class EventParser
         return \is_array($value) ? (float) ($value[1] ?? 0) : 0.0;
     }
 
+    /**
+     * Reinterpret an unsigned little-endian integer as two's-complement signed
+     * when the column is signed. Only used for widths < 64 bits — 64-bit reads
+     * already wrap to PHP's native signed int.
+     */
+    private function maybeSigned(int $value, int $bytes, bool $signed): int
+    {
+        if (!$signed) {
+            return $value;
+        }
+
+        $signBit = 1 << ($bytes * 8 - 1);
+
+        return $value >= $signBit ? $value - ($signBit << 1) : $value;
+    }
+
     private function decodeString(BinaryReader $reader, int $metadata): mixed
     {
         $realType = $metadata >> 8;
@@ -246,13 +287,15 @@ class EventParser
     }
 
     /**
-     * Read column names from the TABLE_MAP optional metadata (COLUMN_NAME field).
+     * Read the TABLE_MAP optional metadata, returning column names and the raw
+     * SIGNEDNESS bitmap (both require binlog_row_metadata=FULL).
      *
-     * @return list<string>
+     * @return array{0: list<string>, 1: string}
      */
-    private function parseColumnNames(BinaryReader $reader, int $count): array
+    private function parseOptionalMetadata(BinaryReader $reader): array
     {
         $names = [];
+        $signedness = '';
 
         while (!$reader->eof()) {
             $fieldType = $reader->readUInt8();
@@ -264,15 +307,39 @@ class EventParser
                 while (!$fieldReader->eof()) {
                     $names[] = $fieldReader->readLengthEncodedString() ?? '';
                 }
+            } elseif ($fieldType === Constants::METADATA_SIGNEDNESS) {
+                $signedness = $field;
             }
         }
 
-        // Fall back to positional names if FULL metadata is unavailable.
-        if ($names === []) {
-            $names = array_map('strval', range(0, max(0, $count - 1)));
+        return [$names, $signedness];
+    }
+
+    /**
+     * Map the SIGNEDNESS bitmap onto column indices. The bitmap covers only
+     * numeric columns, MSB-first, where a set bit means UNSIGNED. Absent
+     * metadata leaves every column unsigned (the safe legacy default).
+     *
+     * @param list<int> $types
+     * @return list<bool>
+     */
+    private function computeSignedness(array $types, string $bitmap): array
+    {
+        $signed = [];
+        $bit = 0;
+
+        foreach ($types as $type) {
+            if ($bitmap !== '' && \in_array($type, self::NUMERIC_TYPES, true)) {
+                $byte = \ord($bitmap[$bit >> 3] ?? "\0");
+                $unsigned = ($byte & (0x80 >> ($bit & 7))) !== 0;
+                $signed[] = !$unsigned;
+                $bit++;
+            } else {
+                $signed[] = false;
+            }
         }
 
-        return $names;
+        return $signed;
     }
 
     private function decimalLength(int $precision, int $scale): int

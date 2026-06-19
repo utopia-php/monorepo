@@ -27,6 +27,8 @@ class Connection
         private readonly string $username,
         private readonly string $password,
         private readonly bool $ssl = false,
+        private readonly bool $sslVerify = true,
+        private readonly string $sslCa = '',
         private readonly float $timeout = 30.0,
     ) {}
 
@@ -231,7 +233,17 @@ class Connection
             . str_repeat("\0", 23);
         $this->writePacket($payload);
 
-        $this->socket->setProtocol(['open_ssl' => true, 'ssl_verify_peer' => false]);
+        $options = [
+            'open_ssl' => true,
+            'ssl_host_name' => $this->host,
+            'ssl_verify_peer' => $this->sslVerify,
+            'ssl_allow_self_signed' => !$this->sslVerify,
+        ];
+        if ($this->sslCa !== '') {
+            $options['ssl_cafile'] = $this->sslCa;
+        }
+
+        $this->socket->setProtocol($options);
         if (!$this->socket->sslHandshake()) {
             throw new Exception("TLS handshake failed: {$this->socket->errMsg}");
         }

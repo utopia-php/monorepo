@@ -108,12 +108,25 @@ class ReplicationTest extends TestCase
 
     public function testTlsConnection(): void
     {
+        // The test server presents MySQL's auto-generated self-signed cert, so
+        // peer verification is disabled here; production defaults to verify=true.
         $changes = $this->capture(1, function (PDO $pdo) {
             $pdo->exec('INSERT INTO ' . self::TABLE . " (_uid, name) VALUES ('proj_tls', 'Secure')");
-        }, ssl: true);
+        }, ssl: true, sslVerify: false);
 
         $this->assertCount(1, $changes);
         $this->assertSame('proj_tls', $changes[0]->rows[0]['_uid']);
+    }
+
+    public function testSignedAndUnsignedIntegers(): void
+    {
+        $changes = $this->capture(1, function (PDO $pdo) {
+            $pdo->exec('INSERT INTO ' . self::TABLE . " (_uid, signed_val, unsigned_val) VALUES ('ints', -42, 200)");
+        });
+
+        $this->assertCount(1, $changes);
+        $this->assertSame(-42, $changes[0]->rows[0]['signed_val']);   // TINYINT SIGNED
+        $this->assertSame(200, $changes[0]->rows[0]['unsigned_val']); // TINYINT UNSIGNED
     }
 
     /**
@@ -121,7 +134,7 @@ class ReplicationTest extends TestCase
      *
      * @return array<int, Change>
      */
-    private function capture(int $expected, callable $writer, string $user = '', string $pass = '', bool $ssl = false): array
+    private function capture(int $expected, callable $writer, string $user = '', string $pass = '', bool $ssl = false, bool $sslVerify = true): array
     {
         $collected = [];
         $error = null;
@@ -132,9 +145,9 @@ class ReplicationTest extends TestCase
         $readerPass = $user !== '' ? $pass : $this->pass;
 
         $scheduler = new Scheduler();
-        $scheduler->add(function () use (&$collected, &$error, $writer, $expected, $dsn, $writerUser, $writerPass, $readerUser, $readerPass, $ssl) {
+        $scheduler->add(function () use (&$collected, &$error, $writer, $expected, $dsn, $writerUser, $writerPass, $readerUser, $readerPass, $ssl, $sslVerify) {
             try {
-                $replication = new Replication($this->host, $this->port, $readerUser, $readerPass, self::SERVER_ID, $ssl);
+                $replication = new Replication($this->host, $this->port, $readerUser, $readerPass, self::SERVER_ID, $ssl, $sslVerify);
                 $replication->setSchema(self::SCHEMA)->start(null);
 
                 Coroutine::create(function () use ($writer, $dsn, $writerUser, $writerPass) {
@@ -190,6 +203,8 @@ class ReplicationTest extends TestCase
                 _createdAt DATETIME(3) NULL,
                 _permissions JSON NULL,
                 data LONGBLOB NULL,
+                signed_val TINYINT NULL,
+                unsigned_val TINYINT UNSIGNED NULL,
                 PRIMARY KEY (_id),
                 UNIQUE KEY (_uid)
             )',

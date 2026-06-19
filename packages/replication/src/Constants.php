@@ -89,5 +89,6 @@ final class Constants
     public const int TYPE_GEOMETRY = 255;
 
     // TABLE_MAP optional metadata field types (require binlog_row_metadata=FULL).
+    public const int METADATA_SIGNEDNESS = 1;
     public const int METADATA_COLUMN_NAME = 4;
 }

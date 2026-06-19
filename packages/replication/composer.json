@@ -10,13 +10,13 @@
         }
     ],
     "require": {
-        "php": ">=8.3"
+        "php": ">=8.3",
+        "ext-swoole": "*"
     },
     "require-dev": {
         "swoole/ide-helper": "*"
     },
     "suggest": {
-        "ext-swoole": "Required for coroutine socket I/O (>=6.0)",
         "ext-openssl": "Required for caching_sha2_password full authentication and TLS"
     },
     "autoload": {

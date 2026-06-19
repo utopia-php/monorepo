@@ -18,7 +18,10 @@ final class Change
      * @param string $database Source schema name.
      * @param string $table Physical table name (e.g. "console15x_projects").
      * @param array<int, array<string, mixed>> $rows Affected rows as column => value maps.
-     * @param string $gtid Executed-GTID-set after this event — a resumable checkpoint token.
+     * @param string $gtid Executed-GTID-set of all transactions committed *before* this event's
+     *                     transaction — a resumable checkpoint token. Resuming from this value
+     *                     re-streams the transaction that produced this change (safe for
+     *                     idempotent consumers).
      */
     public function __construct(
         public readonly string $action,
