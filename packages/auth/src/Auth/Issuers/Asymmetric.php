@@ -67,7 +67,7 @@ abstract class Asymmetric extends Issuer
      */
     public static function generateKeyPair(int $bits = 2048): array
     {
-        $resource = \openssl_pkey_new([
+        $resource = openssl_pkey_new([
             'private_key_bits' => $bits,
             'private_key_type' => OPENSSL_KEYTYPE_RSA,
         ]);
@@ -90,7 +90,7 @@ abstract class Asymmetric extends Issuer
     private static function exportPrivateKey(\OpenSSLAsymmetricKey $resource): string
     {
         $privateKey = '';
-        if (!\openssl_pkey_export($resource, $privateKey)) {
+        if (!openssl_pkey_export($resource, $privateKey)) {
             throw new \Exception('Unable to export the private key');
         }
 
@@ -104,7 +104,7 @@ abstract class Asymmetric extends Issuer
      */
     private static function exportPublicKey(\OpenSSLAsymmetricKey $resource): string
     {
-        $details = \openssl_pkey_get_details($resource);
+        $details = openssl_pkey_get_details($resource);
         if ($details === false || !isset($details['key'])) {
             throw new \Exception('Unable to export the public key');
         }
@@ -134,12 +134,12 @@ abstract class Asymmetric extends Issuer
      */
     public function getPublicJwk(): array
     {
-        $publicKey = \openssl_pkey_get_public($this->publicKey);
+        $publicKey = openssl_pkey_get_public($this->publicKey);
         if ($publicKey === false) {
             throw new \Exception('Unable to parse the public key');
         }
 
-        $details = \openssl_pkey_get_details($publicKey);
+        $details = openssl_pkey_get_details($publicKey);
         if ($details === false || !isset($details['rsa'])) {
             throw new \Exception('Public key is not an RSA key');
         }
@@ -176,13 +176,13 @@ abstract class Asymmetric extends Issuer
      */
     protected function signInput(string $signingInput): string
     {
-        $privateKey = \openssl_pkey_get_private($this->privateKey);
+        $privateKey = openssl_pkey_get_private($this->privateKey);
         if ($privateKey === false) {
             throw new \Exception('Unable to parse the private key');
         }
 
         $signature = '';
-        if (!\openssl_sign($signingInput, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
+        if (!openssl_sign($signingInput, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
             throw new \Exception('Unable to sign the token');
         }
 
@@ -195,7 +195,7 @@ abstract class Asymmetric extends Issuer
      */
     private static function deriveKeyId(string $modulus): string
     {
-        return \hash('sha256', $modulus);
+        return hash('sha256', $modulus);
     }
 
     /**
@@ -205,12 +205,12 @@ abstract class Asymmetric extends Issuer
      */
     protected function getModulus(): string
     {
-        $publicKey = \openssl_pkey_get_public($this->publicKey);
+        $publicKey = openssl_pkey_get_public($this->publicKey);
         if ($publicKey === false) {
             throw new \Exception('Unable to parse the public key');
         }
 
-        $details = \openssl_pkey_get_details($publicKey);
+        $details = openssl_pkey_get_details($publicKey);
         if ($details === false || !isset($details['rsa']['n'])) {
             throw new \Exception('Public key is not an RSA key');
         }

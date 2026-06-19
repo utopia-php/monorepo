@@ -21,9 +21,9 @@ class Argon2Test extends TestCase
         $this->assertNotEmpty($hash);
         $this->assertIsString($hash);
         $this->assertStringStartsWith('$argon2id$', $hash);
-        $this->assertStringContainsString('m='.$this->argon2->getOption('memory_cost'), $hash);
-        $this->assertStringContainsString('t='.$this->argon2->getOption('time_cost'), $hash);
-        $this->assertStringContainsString('p='.$this->argon2->getOption('threads'), $hash);
+        $this->assertStringContainsString('m=' . $this->argon2->getOption('memory_cost'), $hash);
+        $this->assertStringContainsString('t=' . $this->argon2->getOption('time_cost'), $hash);
+        $this->assertStringContainsString('p=' . $this->argon2->getOption('threads'), $hash);
         $this->assertTrue($this->argon2->verify($password, $hash));
         $this->assertFalse($this->argon2->verify('wrongpassword', $hash));
     }
@@ -36,7 +36,7 @@ class Argon2Test extends TestCase
         // Test that the new memory cost is being used by verifying a hash
         $password = 'test123';
         $hash = $this->argon2->hash($password);
-        $this->assertStringContainsString('m='.$cost, $hash);
+        $this->assertStringContainsString('m=' . $cost, $hash);
         $this->assertTrue($this->argon2->verify($password, $hash));
     }
 
@@ -48,7 +48,7 @@ class Argon2Test extends TestCase
         // Test that the new time cost is being used by verifying a hash
         $password = 'test123';
         $hash = $this->argon2->hash($password);
-        $this->assertStringContainsString('t='.$cost, $hash);
+        $this->assertStringContainsString('t=' . $cost, $hash);
         $this->assertTrue($this->argon2->verify($password, $hash));
     }
 
@@ -60,7 +60,7 @@ class Argon2Test extends TestCase
         // Test that the new thread count is being used by verifying a hash
         $password = 'test123';
         $hash = $this->argon2->hash($password);
-        $this->assertStringContainsString('p='.$threads, $hash);
+        $this->assertStringContainsString('p=' . $threads, $hash);
         $this->assertTrue($this->argon2->verify($password, $hash));
     }
 

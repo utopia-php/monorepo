@@ -28,7 +28,7 @@ class Token extends Proof
     public function generate(): string
     {
         $bytesLength = max(1, (int) ceil($this->length / 2));
-        $token = \bin2hex(\random_bytes($bytesLength));
+        $token = bin2hex(random_bytes($bytesLength));
 
         return substr($token, 0, $this->length);
     }

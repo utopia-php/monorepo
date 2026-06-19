@@ -20,7 +20,7 @@ class CodeTest extends TestCase
 
         $this->assertNotEmpty($proof);
         $this->assertIsString($proof);
-        $this->assertEquals(6, strlen($proof)); // Default code length
+        $this->assertEquals(6, \strlen($proof)); // Default code length
         $this->assertMatchesRegularExpression('/^[0-9]{6}$/', $proof);
     }
 
@@ -47,7 +47,7 @@ class CodeTest extends TestCase
         $code = new Code(8);
         $proof = $code->generate();
 
-        $this->assertEquals(8, strlen($proof));
+        $this->assertEquals(8, \strlen($proof));
         $this->assertMatchesRegularExpression('/^[0-9]{8}$/', $proof);
     }
 
@@ -65,7 +65,7 @@ class CodeTest extends TestCase
         $this->assertEquals(4, $this->code->getLength());
 
         $proof = $this->code->generate();
-        $this->assertEquals(4, strlen($proof));
+        $this->assertEquals(4, \strlen($proof));
         $this->assertMatchesRegularExpression('/^[0-9]{4}$/', $proof);
     }
 

@@ -30,7 +30,7 @@ class AccessTokenTest extends TestCase
     private function decodeSegment(string $segment): array
     {
         /** @var array<string, mixed> $claims */
-        $claims = \json_decode(\base64_decode(\strtr($segment, '-_', '+/')), true);
+        $claims = json_decode(base64_decode(strtr($segment, '-_', '+/')), true);
 
         return $claims;
     }
@@ -38,7 +38,7 @@ class AccessTokenTest extends TestCase
     public function testHeaderType(): void
     {
         $token = $this->accessToken->issue('user-123', ['https://api.example.com'], 'client-abc', 1000, 3600);
-        $header = $this->decodeSegment(\explode('.', $token)[0]);
+        $header = $this->decodeSegment(explode('.', $token)[0]);
 
         // RFC 9068 §2.1: access tokens carry the "at+jwt" media type.
         $this->assertEquals('at+jwt', $header['typ']);
@@ -48,11 +48,11 @@ class AccessTokenTest extends TestCase
 
     public function testClaims(): void
     {
-        $before = \time();
+        $before = time();
         $token = $this->accessToken->issue('user-123', ['https://api.example.com'], 'client-abc', 1000, 3600, ['read', 'write']);
-        $after = \time();
+        $after = time();
 
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('https://example.com/v1/oauth2/test', $claims['iss']);
         $this->assertEquals(['https://api.example.com'], $claims['aud']);
@@ -72,7 +72,7 @@ class AccessTokenTest extends TestCase
     {
         $audience = ['https://api.example.com', 'https://mcp.example.com'];
         $token = $this->accessToken->issue('user-123', $audience, 'client-abc', 1000, 3600);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals($audience, $claims['aud']);
     }
@@ -89,12 +89,12 @@ class AccessTokenTest extends TestCase
     {
         $token = $this->accessToken->issue('user-123', ['https://api.example.com'], 'client-abc', 1000, 3600);
 
-        $parts = \explode('.', $token);
-        $result = \openssl_verify(
+        $parts = explode('.', $token);
+        $result = openssl_verify(
             $parts[0] . '.' . $parts[1],
-            \base64_decode(\strtr($parts[2], '-_', '+/')),
+            base64_decode(strtr($parts[2], '-_', '+/')),
             $this->publicKey,
-            OPENSSL_ALGO_SHA256
+            OPENSSL_ALGO_SHA256,
         );
 
         $this->assertEquals(1, $result);
@@ -103,7 +103,7 @@ class AccessTokenTest extends TestCase
     public function testScopeOmittedWhenEmpty(): void
     {
         $token = $this->accessToken->issue('user-123', ['https://api.example.com'], 'client-abc', 1000, 3600);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertArrayNotHasKey('scope', $claims);
     }
@@ -113,7 +113,7 @@ class AccessTokenTest extends TestCase
         $token = $this->accessToken->issue('user-123', ['https://api.example.com'], 'client-abc', 1000, 3600, [], null, [
             'scope' => 'admin',
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertArrayNotHasKey('scope', $claims);
     }
@@ -123,15 +123,15 @@ class AccessTokenTest extends TestCase
         $token = $this->accessToken->issue('user-123', ['https://api.example.com'], 'client-abc', 1000, 3600, ['read'], null, [
             'scope' => 'admin',
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('read', $claims['scope']);
     }
 
     public function testJtiIsGeneratedAndUnique(): void
     {
-        $first = $this->decodeSegment(\explode('.', $this->accessToken->issue('user-123', ['aud'], 'client', 1000, 3600))[1]);
-        $second = $this->decodeSegment(\explode('.', $this->accessToken->issue('user-123', ['aud'], 'client', 1000, 3600))[1]);
+        $first = $this->decodeSegment(explode('.', $this->accessToken->issue('user-123', ['aud'], 'client', 1000, 3600))[1]);
+        $second = $this->decodeSegment(explode('.', $this->accessToken->issue('user-123', ['aud'], 'client', 1000, 3600))[1]);
 
         $this->assertNotEquals($first['jti'], $second['jti']);
     }
@@ -139,7 +139,7 @@ class AccessTokenTest extends TestCase
     public function testCustomJti(): void
     {
         $token = $this->accessToken->issue('user-123', ['aud'], 'client', 1000, 3600, [], 'fixed-jti');
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('fixed-jti', $claims['jti']);
     }
@@ -149,7 +149,7 @@ class AccessTokenTest extends TestCase
         $token = $this->accessToken->issue('user-123', ['aud'], 'client', 1000, 3600, [], null, [
             'tokenId' => 'identity-row-1',
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('identity-row-1', $claims['tokenId']);
     }
@@ -161,7 +161,7 @@ class AccessTokenTest extends TestCase
             'iss' => 'https://evil.example.com',
             'client_id' => 'evil',
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('user-123', $claims['sub']);
         $this->assertEquals('https://example.com/v1/oauth2/test', $claims['iss']);

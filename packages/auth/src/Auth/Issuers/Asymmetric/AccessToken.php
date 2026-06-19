@@ -58,7 +58,7 @@ class AccessToken extends Asymmetric
             throw new \InvalidArgumentException('audience must contain at least one resource server identifier.');
         }
 
-        if ($audience !== \array_values($audience)) {
+        if ($audience !== array_values($audience)) {
             throw new \InvalidArgumentException('audience must be a list of resource server identifiers.');
         }
 
@@ -68,13 +68,13 @@ class AccessToken extends Asymmetric
             }
         }
 
-        $now = \time();
+        $now = time();
 
         // "scope" is issuer-controlled; drop any caller-supplied value so it
         // cannot be injected through $claims when $scopes is empty.
         unset($claims['scope']);
 
-        $claims = \array_merge($claims, [
+        $claims = array_merge($claims, [
             'iss' => $this->issuer,
             'aud' => $audience,
             'sub' => $subject,
@@ -86,7 +86,7 @@ class AccessToken extends Asymmetric
         ]);
 
         if (!empty($scopes)) {
-            $claims['scope'] = \implode(' ', $scopes);
+            $claims['scope'] = implode(' ', $scopes);
         }
 
         return $this->sign($claims);

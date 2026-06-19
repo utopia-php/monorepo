@@ -21,7 +21,7 @@ class MD5Test extends TestCase
 
         $this->assertNotEmpty($hash);
         $this->assertIsString($hash);
-        $this->assertEquals(32, strlen($hash));
+        $this->assertEquals(32, \strlen($hash));
         $this->assertEquals(md5($password), $hash);
         $this->assertTrue($this->md5->verify($password, $hash));
         $this->assertFalse($this->md5->verify('wrongpassword', $hash));

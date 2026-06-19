@@ -27,20 +27,20 @@ class RefreshTokenTest extends TestCase
     private function decodeSegment(string $segment): array
     {
         /** @var array<string, mixed> $claims */
-        $claims = \json_decode(\base64_decode(\strtr($segment, '-_', '+/')), true);
+        $claims = json_decode(base64_decode(strtr($segment, '-_', '+/')), true);
 
         return $claims;
     }
 
     private function base64UrlEncode(string $value): string
     {
-        return \rtrim(\strtr(\base64_encode($value), '+/', '-_'), '=');
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
     }
 
     public function testHeaderUsesHs256AndNoKidByDefault(): void
     {
         $token = $this->refreshToken->issue('user-123', 'https://example.com/token', 'client-abc', 1209600);
-        $header = $this->decodeSegment(\explode('.', $token)[0]);
+        $header = $this->decodeSegment(explode('.', $token)[0]);
 
         $this->assertEquals('JWT', $header['typ']);
         $this->assertEquals('HS256', $header['alg']);
@@ -49,11 +49,11 @@ class RefreshTokenTest extends TestCase
 
     public function testClaims(): void
     {
-        $before = \time();
+        $before = time();
         $token = $this->refreshToken->issue('user-123', 'https://example.com/token', 'client-abc', 1209600, ['read', 'offline_access']);
-        $after = \time();
+        $after = time();
 
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('https://example.com/v1/oauth2/test', $claims['iss']);
         $this->assertEquals('https://example.com/token', $claims['aud']);
@@ -75,8 +75,8 @@ class RefreshTokenTest extends TestCase
     {
         $token = $this->refreshToken->issue('user-123', 'aud', 'client-abc', 1209600);
 
-        $parts = \explode('.', $token);
-        $expected = $this->base64UrlEncode(\hash_hmac('sha256', $parts[0] . '.' . $parts[1], $this->secret, true));
+        $parts = explode('.', $token);
+        $expected = $this->base64UrlEncode(hash_hmac('sha256', $parts[0] . '.' . $parts[1], $this->secret, true));
 
         $this->assertEquals($expected, $parts[2]);
     }
@@ -85,8 +85,8 @@ class RefreshTokenTest extends TestCase
     {
         $token = $this->refreshToken->issue('user-123', 'aud', 'client-abc', 1209600);
 
-        $parts = \explode('.', $token);
-        $wrong = $this->base64UrlEncode(\hash_hmac('sha256', $parts[0] . '.' . $parts[1], 'not-the-secret', true));
+        $parts = explode('.', $token);
+        $wrong = $this->base64UrlEncode(hash_hmac('sha256', $parts[0] . '.' . $parts[1], 'not-the-secret', true));
 
         $this->assertNotEquals($wrong, $parts[2]);
     }
@@ -94,7 +94,7 @@ class RefreshTokenTest extends TestCase
     public function testScopeOmittedWhenEmpty(): void
     {
         $token = $this->refreshToken->issue('user-123', 'aud', 'client-abc', 1209600);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertArrayNotHasKey('scope', $claims);
     }
@@ -104,7 +104,7 @@ class RefreshTokenTest extends TestCase
         $token = $this->refreshToken->issue('user-123', 'aud', 'client-abc', 1209600, [], null, [
             'scope' => 'admin',
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertArrayNotHasKey('scope', $claims);
     }
@@ -114,15 +114,15 @@ class RefreshTokenTest extends TestCase
         $token = $this->refreshToken->issue('user-123', 'aud', 'client-abc', 1209600, ['read'], null, [
             'scope' => 'admin',
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('read', $claims['scope']);
     }
 
     public function testJtiIsGeneratedAndUnique(): void
     {
-        $first = $this->decodeSegment(\explode('.', $this->refreshToken->issue('u', 'a', 'c', 100))[1]);
-        $second = $this->decodeSegment(\explode('.', $this->refreshToken->issue('u', 'a', 'c', 100))[1]);
+        $first = $this->decodeSegment(explode('.', $this->refreshToken->issue('u', 'a', 'c', 100))[1]);
+        $second = $this->decodeSegment(explode('.', $this->refreshToken->issue('u', 'a', 'c', 100))[1]);
 
         $this->assertNotEquals($first['jti'], $second['jti']);
     }
@@ -130,7 +130,7 @@ class RefreshTokenTest extends TestCase
     public function testCustomJti(): void
     {
         $token = $this->refreshToken->issue('u', 'a', 'c', 100, [], 'fixed-jti');
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('fixed-jti', $claims['jti']);
     }
@@ -141,7 +141,7 @@ class RefreshTokenTest extends TestCase
 
         $this->assertEquals('secret-v2', $refreshToken->getKeyId());
 
-        $header = $this->decodeSegment(\explode('.', $refreshToken->issue('u', 'a', 'c', 100))[0]);
+        $header = $this->decodeSegment(explode('.', $refreshToken->issue('u', 'a', 'c', 100))[0]);
         $this->assertEquals('secret-v2', $header['kid']);
     }
 
@@ -151,7 +151,7 @@ class RefreshTokenTest extends TestCase
             'sub' => 'attacker',
             'iss' => 'https://evil.example.com',
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('user-123', $claims['sub']);
         $this->assertEquals('https://example.com/v1/oauth2/test', $claims['iss']);

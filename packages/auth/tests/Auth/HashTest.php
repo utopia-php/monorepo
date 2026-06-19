@@ -12,15 +12,15 @@ class HashTest extends TestCase
     protected function setUp(): void
     {
         // Create a concrete implementation of Hash for testing
-        $this->hash = new class () extends Hash {
+        $this->hash = new class extends Hash {
             public function hash(string $value): string
             {
-                return 'hashed_'.$value;
+                return 'hashed_' . $value;
             }
 
             public function verify(string $value, string $hash): bool
             {
-                return $hash === 'hashed_'.$value;
+                return $hash === 'hashed_' . $value;
             }
 
             public function getName(): string

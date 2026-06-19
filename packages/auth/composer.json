@@ -2,7 +2,12 @@
     "name": "utopia-php/auth",
     "description": "A simple PHP authentication library",
     "type": "library",
-    "keywords": ["php", "auth", "authentication", "security"],
+    "keywords": [
+        "php",
+        "auth",
+        "authentication",
+        "security"
+    ],
     "license": "MIT",
     "minimum-stability": "stable",
     "authors": [
@@ -22,9 +27,7 @@
         }
     },
     "scripts": {
-        "check": "./vendor/bin/phpstan analyse --level max --memory-limit=1G src tests",
-        "lint": "./vendor/bin/pint --config pint.json --test",
-        "format": "./vendor/bin/pint --config pint.json"
+        "test": "phpunit --configuration phpunit.xml"
     },
     "require": {
         "php": ">=8.0",
@@ -32,10 +35,5 @@
         "ext-openssl": "*",
         "ext-scrypt": "*",
         "ext-sodium": "*"
-    },
-    "require-dev": {
-        "phpunit/phpunit": "^9.3",
-        "laravel/pint": "^1.29",
-        "phpstan/phpstan": "^1.12"
     }
 }

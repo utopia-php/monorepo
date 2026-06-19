@@ -72,7 +72,7 @@ class Store
             }
 
             $json = json_decode($decoded, true, 512, JSON_THROW_ON_ERROR);
-            if (is_array($json)) {
+            if (\is_array($json)) {
                 foreach ($json as $key => $value) {
                     $this->setProperty($key, $value);
                 }

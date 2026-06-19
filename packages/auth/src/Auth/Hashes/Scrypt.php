@@ -24,7 +24,7 @@ class Scrypt extends Hash
      */
     public function hash(string $value): string
     {
-        if (! function_exists('scrypt')) {
+        if (! \function_exists('scrypt')) {
             throw new \RuntimeException('The scrypt extension is required. Please install php-scrypt.');
         }
 
@@ -42,13 +42,13 @@ class Scrypt extends Hash
             throw new \InvalidArgumentException('Scrypt cost and length options must be integers');
         }
 
-        $hash = \scrypt(
+        $hash = scrypt(
             $value,
             $salt,
             $costCpu,
             $costMemory,
             $costParallel,
-            $length
+            $length,
         );
 
         if ($hash === false) {

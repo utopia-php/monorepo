@@ -133,7 +133,7 @@ class Password extends Proof
      */
     public function setCharset(string $charset): static
     {
-        if (strlen($charset) < 10) {
+        if (\strlen($charset) < 10) {
             throw new \Exception('Password charset must contain at least 10 characters');
         }
         $this->defaultCharset = $charset;
@@ -147,7 +147,7 @@ class Password extends Proof
     public function generate(): string
     {
         $password = '';
-        $max = strlen($this->defaultCharset) - 1;
+        $max = \strlen($this->defaultCharset) - 1;
 
         if ($max < 0) {
             throw new \Exception('Password charset is empty');

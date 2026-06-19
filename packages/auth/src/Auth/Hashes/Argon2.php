@@ -22,7 +22,7 @@ class Argon2 extends Hash
      */
     public function hash(string $value): string
     {
-        return \password_hash($value, PASSWORD_ARGON2ID, $this->getOptions());
+        return password_hash($value, PASSWORD_ARGON2ID, $this->getOptions());
     }
 
     /**
@@ -30,7 +30,7 @@ class Argon2 extends Hash
      */
     public function verify(string $value, string $hash): bool
     {
-        return \password_verify($value, $hash);
+        return password_verify($value, $hash);
     }
 
     /**

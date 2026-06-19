@@ -16,7 +16,7 @@ class PHPass extends Hash
      */
     public function __construct()
     {
-        $randomState = \microtime();
+        $randomState = microtime();
         if (\function_exists('getmypid')) {
             $randomState .= getmypid();
         }
@@ -38,17 +38,17 @@ class PHPass extends Hash
         if (CRYPT_BLOWFISH === 1 && ! $options['portable_hashes']) {
             $random = $this->getRandomBytes(16);
             $hash = crypt($value, $this->gensaltBlowfish($random));
-            if (strlen($hash) === 60) {
+            if (\strlen($hash) === 60) {
                 return $hash;
             }
         }
 
-        if (strlen($random) < 6) {
+        if (\strlen($random) < 6) {
             $random = $this->getRandomBytes(6);
         }
 
         $hash = $this->cryptPrivate($value, $this->gensaltPrivate($random));
-        if (strlen($hash) === 34) {
+        if (\strlen($hash) === 34) {
             return $hash;
         }
 
@@ -86,12 +86,12 @@ class PHPass extends Hash
             fclose($fh);
         }
 
-        if (strlen($output) < $count) {
+        if (\strlen($output) < $count) {
             $output = '';
             $options = $this->getOptions();
 
             for ($i = 0; $i < $count; $i += 16) {
-                $options['random_state'] = md5(microtime().$options['random_state']);
+                $options['random_state'] = md5(microtime() . $options['random_state']);
                 $output .= md5($options['random_state'], true);
             }
 
@@ -113,17 +113,17 @@ class PHPass extends Hash
         $output = '';
         $i = 0;
         do {
-            $value = ord($input[$i++]);
+            $value = \ord($input[$i++]);
             $output .= $this->itoa64[$value & 0x3F];
             if ($i < $count) {
-                $value |= ord($input[$i]) << 8;
+                $value |= \ord($input[$i]) << 8;
             }
             $output .= $this->itoa64[($value >> 6) & 0x3F];
             if ($i++ >= $count) {
                 break;
             }
             if ($i < $count) {
-                $value |= ord($input[$i]) << 16;
+                $value |= \ord($input[$i]) << 16;
             }
             $output .= $this->itoa64[($value >> 12) & 0x3F];
             if ($i++ >= $count) {
@@ -157,13 +157,13 @@ class PHPass extends Hash
         $itoa64 = './ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
         $output = '$2a$';
-        $output .= chr(ord('0') + intval($options['iteration_count_log2'] / 10));
-        $output .= chr(ord('0') + $options['iteration_count_log2'] % 10);
+        $output .= \chr(\ord('0') + \intval($options['iteration_count_log2'] / 10));
+        $output .= \chr(\ord('0') + $options['iteration_count_log2'] % 10);
         $output .= '$';
 
         $i = 0;
         do {
-            $c1 = ord($input[$i++]);
+            $c1 = \ord($input[$i++]);
             $output .= $itoa64[$c1 >> 2];
             $c1 = ($c1 & 0x03) << 4;
             if ($i >= 16) {
@@ -171,12 +171,12 @@ class PHPass extends Hash
                 break;
             }
 
-            $c2 = ord($input[$i++]);
+            $c2 = \ord($input[$i++]);
             $c1 |= $c2 >> 4;
             $output .= $itoa64[$c1];
             $c1 = ($c2 & 0x0F) << 2;
 
-            $c2 = ord($input[$i++]);
+            $c2 = \ord($input[$i++]);
             $c1 |= $c2 >> 6;
             $output .= $itoa64[$c1];
             $output .= $itoa64[$c2 & 0x3F];
@@ -208,13 +208,13 @@ class PHPass extends Hash
 
         $count = 1 << $count_log2;
         $salt = substr($setting, 4, 8);
-        if (strlen($salt) !== 8) {
+        if (\strlen($salt) !== 8) {
             return $output;
         }
 
-        $hash = md5($salt.$password, true);
+        $hash = md5($salt . $password, true);
         do {
-            $hash = md5($hash.$password, true);
+            $hash = md5($hash . $password, true);
         } while (--$count);
 
         $output = substr($setting, 0, 12);

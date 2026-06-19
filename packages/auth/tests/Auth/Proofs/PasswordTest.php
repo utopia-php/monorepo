@@ -33,7 +33,7 @@ class PasswordTest extends TestCase
 
         $this->assertNotEmpty($proof);
         $this->assertIsString($proof);
-        $this->assertEquals(16, strlen($proof)); // Default length
+        $this->assertEquals(16, \strlen($proof)); // Default length
         $this->assertMatchesRegularExpression('/^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{}|;:,.<>?]+$/', $proof);
     }
 
@@ -41,7 +41,7 @@ class PasswordTest extends TestCase
     {
         $this->password->setLength(20);
         $proof = $this->password->generate();
-        $this->assertEquals(20, strlen($proof));
+        $this->assertEquals(20, \strlen($proof));
     }
 
     public function testGenerateWithCustomCharset(): void

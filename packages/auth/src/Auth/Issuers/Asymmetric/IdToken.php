@@ -52,7 +52,7 @@ class IdToken extends Asymmetric
         ?string $code = null,
         array $claims = [],
     ): string {
-        $now = \time();
+        $now = time();
 
         // nonce/at_hash/c_hash are issuer-controlled; drop any caller-supplied
         // values so they cannot be injected through $claims when the matching
@@ -60,7 +60,7 @@ class IdToken extends Asymmetric
         // access token that was never co-issued).
         unset($claims['nonce'], $claims['at_hash'], $claims['c_hash']);
 
-        $claims = \array_merge($claims, [
+        $claims = array_merge($claims, [
             'iss' => $this->issuer,
             'sub' => $subject,
             'aud' => $audience,
@@ -91,6 +91,6 @@ class IdToken extends Asymmetric
      */
     protected function leftHalfHash(string $value): string
     {
-        return $this->base64UrlEncode(\substr(\hash('sha256', $value, true), 0, 16));
+        return $this->base64UrlEncode(substr(hash('sha256', $value, true), 0, 16));
     }
 }

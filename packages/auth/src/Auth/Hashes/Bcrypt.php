@@ -20,7 +20,7 @@ class Bcrypt extends Hash
      */
     public function hash(string $value): string
     {
-        return \password_hash($value, PASSWORD_BCRYPT, $this->getOptions());
+        return password_hash($value, PASSWORD_BCRYPT, $this->getOptions());
     }
 
     /**
@@ -28,7 +28,7 @@ class Bcrypt extends Hash
      */
     public function verify(string $value, string $hash): bool
     {
-        return \password_verify($value, $hash);
+        return password_verify($value, $hash);
     }
 
     /**

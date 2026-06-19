@@ -25,7 +25,7 @@ class TokenTest extends TestCase
 
         $this->assertNotEmpty($proof);
         $this->assertIsString($proof);
-        $this->assertEquals(32, strlen($proof)); // Default token length
+        $this->assertEquals(32, \strlen($proof)); // Default token length
     }
 
     public function testHash(): void
@@ -35,7 +35,7 @@ class TokenTest extends TestCase
 
         $this->assertNotEmpty($hash);
         $this->assertIsString($hash);
-        $this->assertEquals(64, strlen($hash)); // SHA-256 produces a 64-character hex string
+        $this->assertEquals(64, \strlen($hash)); // SHA-256 produces a 64-character hex string
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $hash); // SHA-256 hex format
     }
 
@@ -62,7 +62,7 @@ class TokenTest extends TestCase
         $this->assertEquals(64, $this->token->getLength());
 
         $proof = $this->token->generate();
-        $this->assertEquals(64, strlen($proof));
+        $this->assertEquals(64, \strlen($proof));
     }
 
     public function testSetLengthInvalid(): void

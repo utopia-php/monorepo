@@ -56,7 +56,7 @@ abstract class Symmetric extends Issuer
      */
     public static function generateSecret(int $bytes = 32): string
     {
-        return \bin2hex(\random_bytes($bytes));
+        return bin2hex(random_bytes($bytes));
     }
 
     /**
@@ -82,6 +82,6 @@ abstract class Symmetric extends Issuer
 
     protected function signInput(string $signingInput): string
     {
-        return \hash_hmac('sha256', $signingInput, $this->secret, true);
+        return hash_hmac('sha256', $signingInput, $this->secret, true);
     }
 }

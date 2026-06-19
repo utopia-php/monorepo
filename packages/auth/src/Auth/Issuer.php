@@ -73,14 +73,14 @@ abstract class Issuer
      */
     protected function sign(array $claims): string
     {
-        $header = \array_merge([
+        $header = array_merge([
             'typ' => $this->getType(),
             'alg' => $this->getAlgorithm(),
         ], $this->getHeaders());
 
-        $signingInput = $this->base64UrlEncode(\json_encode($header, JSON_THROW_ON_ERROR))
+        $signingInput = $this->base64UrlEncode(json_encode($header, JSON_THROW_ON_ERROR))
             . '.'
-            . $this->base64UrlEncode(\json_encode($claims, JSON_THROW_ON_ERROR));
+            . $this->base64UrlEncode(json_encode($claims, JSON_THROW_ON_ERROR));
 
         return $signingInput . '.' . $this->base64UrlEncode($this->signInput($signingInput));
     }
@@ -95,7 +95,7 @@ abstract class Issuer
      */
     protected function generateJti(int $bytes = 16): string
     {
-        return \bin2hex(\random_bytes($bytes));
+        return bin2hex(random_bytes($bytes));
     }
 
     /**
@@ -103,6 +103,6 @@ abstract class Issuer
      */
     protected function base64UrlEncode(string $value): string
     {
-        return \rtrim(\strtr(\base64_encode($value), '+/', '-_'), '=');
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
     }
 }

@@ -31,10 +31,10 @@ class IdTokenTest extends TestCase
      */
     private function decodeSegment(string $segment): array
     {
-        $json = \base64_decode(\strtr($segment, '-_', '+/'));
+        $json = base64_decode(strtr($segment, '-_', '+/'));
 
         /** @var array<string, mixed> $claims */
-        $claims = \json_decode($json, true);
+        $claims = json_decode($json, true);
 
         return $claims;
     }
@@ -43,7 +43,7 @@ class IdTokenTest extends TestCase
     {
         $token = $this->idToken->issue('user-123', 'client-abc', 1000, 3600);
 
-        $parts = \explode('.', $token);
+        $parts = explode('.', $token);
         $this->assertCount(3, $parts);
 
         $header = $this->decodeSegment($parts[0]);
@@ -54,11 +54,11 @@ class IdTokenTest extends TestCase
 
     public function testIssueClaims(): void
     {
-        $before = \time();
+        $before = time();
         $token = $this->idToken->issue('user-123', 'client-abc', 1000, 3600);
-        $after = \time();
+        $after = time();
 
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('https://example.com/v1/oauth2/test', $claims['iss']);
         $this->assertEquals('user-123', $claims['sub']);
@@ -78,15 +78,15 @@ class IdTokenTest extends TestCase
     {
         $token = $this->idToken->issue('user-123', 'client-abc', 1000, 3600);
 
-        $parts = \explode('.', $token);
+        $parts = explode('.', $token);
         $signingInput = $parts[0] . '.' . $parts[1];
-        $signature = \base64_decode(\strtr($parts[2], '-_', '+/'));
+        $signature = base64_decode(strtr($parts[2], '-_', '+/'));
 
-        $result = \openssl_verify(
+        $result = openssl_verify(
             $signingInput,
             $signature,
             $this->publicKey,
-            OPENSSL_ALGO_SHA256
+            OPENSSL_ALGO_SHA256,
         );
 
         $this->assertEquals(1, $result);
@@ -95,7 +95,7 @@ class IdTokenTest extends TestCase
     public function testNonceClaim(): void
     {
         $token = $this->idToken->issue('user-123', 'client-abc', 1000, 3600, 'n-0S6_WzA2Mj');
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('n-0S6_WzA2Mj', $claims['nonce']);
     }
@@ -106,7 +106,7 @@ class IdTokenTest extends TestCase
         $code = 'authorization-code-value';
 
         $token = $this->idToken->issue('user-123', 'client-abc', 1000, 3600, null, $accessToken, $code);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $expectedAtHash = $this->expectedLeftHalfHash($accessToken);
         $expectedCHash = $this->expectedLeftHalfHash($code);
@@ -124,7 +124,7 @@ class IdTokenTest extends TestCase
             'at_hash' => 'forged-at-hash',
             'c_hash' => 'forged-c-hash',
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertArrayNotHasKey('nonce', $claims);
         $this->assertArrayNotHasKey('at_hash', $claims);
@@ -141,7 +141,7 @@ class IdTokenTest extends TestCase
             'at_hash' => 'forged-at-hash',
             'c_hash' => 'forged-c-hash',
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('real-nonce', $claims['nonce']);
         $this->assertEquals($this->expectedLeftHalfHash($accessToken), $claims['at_hash']);
@@ -164,7 +164,7 @@ class IdTokenTest extends TestCase
             'email' => 'user@example.com',
             'email_verified' => true,
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('user@example.com', $claims['email']);
         $this->assertTrue($claims['email_verified']);
@@ -176,7 +176,7 @@ class IdTokenTest extends TestCase
             'sub' => 'attacker',
             'iss' => 'https://evil.example.com',
         ]);
-        $claims = $this->decodeSegment(\explode('.', $token)[1]);
+        $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('user-123', $claims['sub']);
         $this->assertEquals('https://example.com/v1/oauth2/test', $claims['iss']);
@@ -197,7 +197,7 @@ class IdTokenTest extends TestCase
         $this->assertEquals('my-custom-kid', $idToken->getKeyId());
 
         $token = $idToken->issue('user-123', 'client-abc', 1000, 3600);
-        $header = $this->decodeSegment(\explode('.', $token)[0]);
+        $header = $this->decodeSegment(explode('.', $token)[0]);
         $this->assertEquals('my-custom-kid', $header['kid']);
     }
 
@@ -246,12 +246,12 @@ class IdTokenTest extends TestCase
         $idToken = new IdToken($privateKey, $publicKey, 'https://example.com');
         $token = $idToken->issue('user-123', 'client-abc', 1000, 3600);
 
-        $parts = \explode('.', $token);
-        $result = \openssl_verify(
+        $parts = explode('.', $token);
+        $result = openssl_verify(
             $parts[0] . '.' . $parts[1],
-            \base64_decode(\strtr($parts[2], '-_', '+/')),
+            base64_decode(strtr($parts[2], '-_', '+/')),
             $publicKey,
-            OPENSSL_ALGO_SHA256
+            OPENSSL_ALGO_SHA256,
         );
         $this->assertEquals(1, $result);
     }
@@ -261,6 +261,6 @@ class IdTokenTest extends TestCase
      */
     private function expectedLeftHalfHash(string $value): string
     {
-        return \rtrim(\strtr(\base64_encode(\substr(\hash('sha256', $value, true), 0, 16)), '+/', '-_'), '=');
+        return rtrim(strtr(base64_encode(substr(hash('sha256', $value, true), 0, 16)), '+/', '-_'), '=');
     }
 }
