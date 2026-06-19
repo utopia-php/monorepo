@@ -377,6 +377,7 @@ class Connection
     private function lengthEncodedInt(int $value): string
     {
         return match (true) {
+            $value < 0 => throw new Exception("Cannot length-encode a negative value: {$value}"),
             $value < 0xFB => \chr($value),
             $value < 0x10000 => \chr(0xFC) . pack('v', $value),
             $value < 0x1000000 => \chr(0xFD) . substr(pack('V', $value), 0, 3),

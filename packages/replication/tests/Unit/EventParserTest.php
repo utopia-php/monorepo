@@ -26,13 +26,13 @@ class EventParserTest extends TestCase
             . \chr(Constants::TYPE_LONGLONG) . \chr(Constants::TYPE_VAR_STRING);
 
         $metadata = pack('v', 1020); // VAR_STRING max length; LONGLONG has none
-        $body .= \chr(\strlen($metadata)) . $metadata;
+        $body .= pack('C', \strlen($metadata)) . $metadata;
         $body .= "\x00"; // null bitmap (ceil(2/8))
 
         // Optional metadata: SIGNEDNESS (skipped) then COLUMN_NAME.
         $body .= \chr(1) . \chr(1) . "\x00"; // SIGNEDNESS field, 1 byte payload
         $names = \chr(3) . '_id' . \chr(4) . '_uid';
-        $body .= \chr(Constants::METADATA_COLUMN_NAME) . \chr(\strlen($names)) . $names;
+        $body .= \chr(Constants::METADATA_COLUMN_NAME) . pack('C', \strlen($names)) . $names;
 
         return $body;
     }
@@ -51,7 +51,7 @@ class EventParserTest extends TestCase
             . \chr(Constants::TYPE_LONGLONG) . \chr(Constants::TYPE_VAR_STRING);
 
         $metadata = pack('v', 1020);
-        $body .= \chr(\strlen($metadata)) . $metadata;
+        $body .= pack('C', \strlen($metadata)) . $metadata;
         $body .= "\x00"; // null bitmap, then no optional metadata
 
         return $body;
@@ -184,8 +184,8 @@ class EventParserTest extends TestCase
         $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->rowsHeader() . $this->cell(100, 'proj123'));
 
         $this->assertNotNull($decoded);
-        $this->assertSame(100, $decoded['rows'][0]['0']);
-        $this->assertSame('proj123', $decoded['rows'][0]['1']);
+        $this->assertSame(100, $decoded['rows'][0][0] ?? null);
+        $this->assertSame('proj123', $decoded['rows'][0][1] ?? null);
     }
 
     public function testResolverArityMismatchFallsBackToPositional(): void
@@ -201,8 +201,8 @@ class EventParserTest extends TestCase
         $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->rowsHeader() . $this->cell(5, 'x'));
 
         $this->assertNotNull($decoded);
-        $this->assertSame(5, $decoded['rows'][0]['0']);
-        $this->assertSame('x', $decoded['rows'][0]['1']);
+        $this->assertSame(5, $decoded['rows'][0][0] ?? null);
+        $this->assertSame('x', $decoded['rows'][0][1] ?? null);
 
         // The positional fallback is cached too, so a repeat TABLE_MAP does not
         // re-invoke the (failing) resolver.
@@ -230,7 +230,7 @@ class EventParserTest extends TestCase
         $body = $this->uint(self::TABLE_ID, 6) . "\x00\x00" . "\x02\x00"
             . \chr(1) . \chr(0b1)   // column count + present bitmap
             . "\x00"                // null bitmap
-            . \chr($rawByte);       // TINY value
+            . pack('C', $rawByte);  // TINY value
 
         $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $body);
         $this->assertNotNull($decoded);
