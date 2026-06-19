@@ -34,9 +34,9 @@ binlog_row_metadata = FULL   # optional: ships column names in the stream
 ```
 
 `binlog_row_metadata = FULL` lets column names ride along in the binlog. When it
-is `MINIMAL` (the MySQL default, and what managed providers such as DigitalOcean
-are fixed to) the reader resolves names from `INFORMATION_SCHEMA` over a second
-connection instead — no configuration change required.
+is `MINIMAL` (the MySQL default, and what some managed providers are fixed to)
+the reader resolves names from `INFORMATION_SCHEMA` over a second connection
+instead — no configuration change required.
 
 The connecting user needs the `REPLICATION SLAVE` and `REPLICATION CLIENT` privileges.
 

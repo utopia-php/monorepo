@@ -9,8 +9,8 @@ use Utopia\Replication\Exception;
  * column layout and names) and WRITE/UPDATE/DELETE_ROWS (the actual changes).
  *
  * With `binlog_row_metadata=FULL` column names ride in the TABLE_MAP optional
- * metadata. With MINIMAL (the MySQL default, and what DigitalOcean managed MySQL
- * is fixed to) they are absent; an optional resolver recovers them from
+ * metadata. With MINIMAL (the MySQL default, and what some managed providers are
+ * fixed to) they are absent; an optional resolver recovers them from
  * INFORMATION_SCHEMA, at most once per table.
  *
  * Pure (operates on byte buffers) when no resolver is supplied, so it is
