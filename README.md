@@ -68,6 +68,7 @@ graph TD
     servers --> di
     servers --> validators
     auth
+    replication
     system
 ```
 <!-- /graph -->

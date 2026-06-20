@@ -1,0 +1,45 @@
+{
+    "name": "utopia-php/replication",
+    "description": "A Swoole-native MySQL binlog replication reader for streaming row changes (CDC)",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Appwrite Team",
+            "email": "team@appwrite.io"
+        }
+    ],
+    "require": {
+        "php": ">=8.3",
+        "ext-swoole": "*"
+    },
+    "require-dev": {
+        "swoole/ide-helper": "*"
+    },
+    "suggest": {
+        "ext-openssl": "Required for caching_sha2_password full authentication and TLS"
+    },
+    "autoload": {
+        "psr-4": {
+            "Utopia\\Replication\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Utopia\\Replication\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit --testsuite unit",
+        "test:e2e": "phpunit --testsuite e2e"
+    },
+    "config": {
+        "platform": {
+            "php": "8.3"
+        },
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
