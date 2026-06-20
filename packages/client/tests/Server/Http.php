@@ -45,6 +45,95 @@ final class Http
     }
 
     /**
+     * Run a server that closes its first connection right after answering one
+     * request — an idle keep-alive socket dropped by the peer — while every
+     * later connection is kept alive and answers repeatedly. Returns the number
+     * of connections accepted, so a caller can confirm a reusing client had to
+     * re-establish the dropped connection rather than open one per request.
+     *
+     * @param callable(int): void $test receives the listening port
+     *
+     * @return int connections the server accepted
+     */
+    public static function dropsFirstKeepAliveConnection(callable $test): int
+    {
+        $readyFile = tempnam(sys_get_temp_dir(), 'utopia-drop-ready-');
+        $countFile = tempnam(sys_get_temp_dir(), 'utopia-drop-count-');
+
+        if ($readyFile === false || $countFile === false) {
+            throw new RuntimeException('Unable to create drop server temp files.');
+        }
+
+        unlink($readyFile);
+
+        $port = self::availablePort();
+
+        $code = <<<'PHP'
+            $port = (int) $argv[1];
+            $readyFile = $argv[2];
+            $countFile = $argv[3];
+            $server = stream_socket_server('tcp://127.0.0.1:' . $port, $errorCode, $errorMessage);
+            if (!is_resource($server)) {
+                fwrite(STDERR, $errorCode . ' ' . $errorMessage);
+                exit(1);
+            }
+            file_put_contents($readyFile, 'ready');
+            $connections = 0;
+            while (true) {
+                $connection = @stream_socket_accept($server, 30);
+                if (!is_resource($connection)) {
+                    continue;
+                }
+                $connections++;
+                file_put_contents($countFile, (string) $connections);
+                $dropAfterResponse = ($connections === 1);
+                while (true) {
+                    $request = '';
+                    while (($line = fgets($connection, 8192)) !== false) {
+                        $request .= $line;
+                        if ($line === "\r\n" || $line === "\n") {
+                            break;
+                        }
+                    }
+                    if ($request === '') {
+                        break;
+                    }
+                    $body = 'ok';
+                    @fwrite($connection, "HTTP/1.1 200 OK\r\nContent-Length: " . strlen($body) . "\r\n\r\n" . $body);
+                    if ($dropAfterResponse) {
+                        break;
+                    }
+                }
+                @fclose($connection);
+            }
+            PHP;
+
+        $server = proc_open(
+            [\PHP_BINARY, '-r', $code, (string) $port, $readyFile, $countFile],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+
+        if (!\is_resource($server)) {
+            throw new RuntimeException('Unable to start the drop test server.');
+        }
+
+        unset($pipes);
+        self::waitForReadyFile($readyFile);
+
+        try {
+            $test($port);
+        } finally {
+            self::stop($server);
+        }
+
+        $count = is_file($countFile) ? (int) file_get_contents($countFile) : 0;
+        @unlink($countFile);
+
+        return $count;
+    }
+
+    /**
      * Run the callable against a port with nothing listening on it, so a
      * connection attempt is refused. No server is started or torn down.
      *

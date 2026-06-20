@@ -526,6 +526,30 @@ abstract class AdapterContract extends TestCase
         });
     }
 
+    public function testItRecoversWhenAReusedConnectionIsDropped(): void
+    {
+        $statuses = [];
+
+        $connections = Http::dropsFirstKeepAliveConnection(function (int $port) use (&$statuses): void {
+            $client = $this->createAdapter()->withConnectionReuse();
+            $requestFactory = new Request\Factory();
+            $uri = 'http://127.0.0.1:' . $port . '/';
+
+            // A reused connection only persists within a single coroutine run,
+            // so every request shares one runAdapter call.
+            $this->runAdapter(function () use ($client, $requestFactory, $uri, &$statuses): void {
+                for ($i = 0; $i < 4; $i++) {
+                    $statuses[] = $client->sendRequest($requestFactory->createRequest(Method::GET, $uri))->getStatusCode();
+                }
+            });
+        });
+
+        // The peer dropped the first keep-alive socket; a reusing client must
+        // re-establish it and keep serving, not wedge on the dead connection.
+        $this->assertSame([200, 200, 200, 200], $statuses);
+        $this->assertSame(2, $connections);
+    }
+
     public function testItThrowsDnsExceptionsForResolutionFailures(): void
     {
         $requestFactory = new Request\Factory();
