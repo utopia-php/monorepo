@@ -7,7 +7,7 @@ namespace Utopia\Replication;
  * database's replication log — MySQL (binlog) today, conceivably Postgres
  * (logical replication) or MongoDB (change streams) tomorrow.
  */
-interface Adapter
+interface Source
 {
     /**
      * Connect and begin streaming.

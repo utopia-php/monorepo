@@ -6,8 +6,8 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Scheduler;
-use Utopia\Replication\Adapter\MySQL;
 use Utopia\Replication\Change;
+use Utopia\Replication\Source\MySQL;
 
 /**
  * Integration tests for the binlog Replication reader against a live MySQL 8.

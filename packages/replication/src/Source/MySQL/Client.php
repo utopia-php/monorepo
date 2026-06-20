@@ -1,19 +1,19 @@
 <?php
 
-namespace Utopia\Replication\Adapter\MySQL;
+namespace Utopia\Replication\Source\MySQL;
 
 use Swoole\Coroutine\Socket;
 use Utopia\Replication\Exception;
 
 /**
- * A coroutine MySQL connection speaking just enough of the client protocol to
- * authenticate (MySQL 8 caching_sha2_password, with mysql_native_password
- * fallback), run a handful of setup queries and request a binlog dump.
+ * A coroutine MySQL client speaking just enough of the protocol to authenticate
+ * (MySQL 8 caching_sha2_password, with mysql_native_password fallback), run a
+ * handful of setup queries and request a binlog dump.
  *
  * Swoole-native: all socket I/O happens on a {@see Socket}, so it yields the
  * current coroutine instead of blocking the worker.
  */
-class Connection
+class Client
 {
     private const int MAX_PACKET_SIZE = 0x40000000;
     private const int CHARSET_UTF8MB4 = 45;
