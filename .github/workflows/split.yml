@@ -6,8 +6,11 @@ on:
     tags: ['*/*']
   workflow_dispatch:
 
+# Per-ref so independent tag releases (each targets its own mirror) run in
+# parallel instead of cancelling each other as pending; branch pushes to main
+# still serialise under one group.
 concurrency:
-  group: split
+  group: split-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
