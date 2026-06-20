@@ -188,22 +188,47 @@ class DecoderTest extends TestCase
         $this->assertSame('v1', $change->rows[0]['_uid']);
     }
 
-    public function testAutocommittedQueryTransactionCommitsOnNextGtid(): void
+    public function testAutocommittedStatementCommitsOnItsOwnQueryEvent(): void
     {
         $decoder = $this->decoder();
 
-        // Transaction 5 is an autocommitted DDL: GTID + QUERY, no XID.
+        // A DDL transaction is GTID + QUERY with no XID — autocommitted, so the
+        // QUERY itself is the commit boundary (even if it ends the segment).
         $decoder->decode($this->binlogEvent(Constants::GTID_EVENT, $this->binlogGtidEvent(self::SID_HEX, 5)));
-        $decoder->decode($this->binlogEvent(Constants::QUERY_EVENT, str_repeat("\x00", 13) . 'CREATE TABLE t (id INT)'));
-        $this->assertSame('', $decoder->position()); // not committed by a QUERY alone
+        $decoder->decode($this->binlogEvent(Constants::QUERY_EVENT, $this->binlogQueryEvent('CREATE TABLE t (id INT)')));
 
-        // The next GTID implicitly commits transaction 5 so the checkpoint keeps up.
-        $decoder->decode($this->binlogEvent(Constants::GTID_EVENT, $this->binlogGtidEvent(self::SID_HEX, 6)));
         $this->assertSame(self::SID . ':5', $decoder->position());
+    }
 
-        // Transaction 6 is a normal row transaction, committed on its XID.
+    public function testBeginOpenedRowTransactionCommitsOnlyOnXid(): void
+    {
+        $decoder = $this->decoder();
+
+        $decoder->decode($this->binlogEvent(Constants::GTID_EVENT, $this->binlogGtidEvent(self::SID_HEX, 5)));
+        $decoder->decode($this->binlogEvent(Constants::QUERY_EVENT, $this->binlogQueryEvent('BEGIN')));
+        $decoder->decode($this->tableMapEvent());
+        $decoder->decode($this->writeEvent(1, 'a'));
+
+        // BEGIN must not commit; only the XID does.
+        $this->assertSame('', $decoder->position());
+
         $decoder->decode($this->binlogEvent(Constants::XID_EVENT, pack('P', 1)));
-        $this->assertSame(self::SID . ':5-6', $decoder->position());
+        $this->assertSame(self::SID . ':5', $decoder->position());
+    }
+
+    public function testInterruptedRowTransactionIsNotCommittedByALaterGtid(): void
+    {
+        $decoder = $this->decoder();
+
+        // Transaction 7 is a row transaction cut off before its XID.
+        $decoder->decode($this->binlogEvent(Constants::GTID_EVENT, $this->binlogGtidEvent(self::SID_HEX, 7)));
+        $decoder->decode($this->binlogEvent(Constants::QUERY_EVENT, $this->binlogQueryEvent('BEGIN')));
+        $decoder->decode($this->tableMapEvent());
+        $decoder->decode($this->writeEvent(1, 'a'));
+
+        // A later GTID must NOT mark the incomplete transaction 7 as executed.
+        $decoder->decode($this->binlogEvent(Constants::GTID_EVENT, $this->binlogGtidEvent(self::SID_HEX, 8)));
+        $this->assertSame('', $decoder->position());
     }
 
     private function decoder(): Decoder

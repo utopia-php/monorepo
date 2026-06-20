@@ -55,11 +55,10 @@ final class Decoder
 
         switch (true) {
             case $eventType === Constants::GTID_EVENT:
-                // A new GTID implicitly commits the previous transaction when it
-                // carried no XID — e.g. an autocommitted DDL/statement shipped as a
-                // QUERY_EVENT — so the checkpoint never lags behind such transactions.
-                $this->commit();
                 $this->trackGtid($body);
+                return null;
+            case $eventType === Constants::QUERY_EVENT:
+                $this->commitIfStatement($body);
                 return null;
             case $eventType === Constants::XID_EVENT:
                 $this->commit();
@@ -100,6 +99,29 @@ final class Decoder
             rows: $decoded['rows'],
             gtid: (string) $this->executed,
         );
+    }
+
+    /**
+     * A QUERY_EVENT that is not the "BEGIN" of an explicit transaction is an
+     * autocommitted statement — a DDL, or DML on a non-transactional engine —
+     * which is its own complete transaction with no XID_EVENT, so it commits the
+     * current GTID. A "BEGIN" merely opens a transaction whose XID_EVENT (or
+     * COMMIT query) commits it. This keeps DDL checkpoints current without
+     * advancing a row transaction that was cut off before its XID.
+     */
+    private function commitIfStatement(string $body): void
+    {
+        $reader = new BinaryReader($body);
+        $reader->skip(8);                       // thread id + execution time
+        $schemaLength = $reader->readUInt8();
+        $reader->skip(2);                       // error code
+        $reader->skip($reader->readUInt16());   // status-variables block
+        $reader->skip($schemaLength + 1);       // schema name + NUL terminator
+        $query = $reader->read($reader->remaining());
+
+        if (strtoupper(trim($query)) !== 'BEGIN') {
+            $this->commit();
+        }
     }
 
     private function trackGtid(string $body): void

@@ -54,6 +54,18 @@ trait BinlogFixtures
         return "\x00" . hex2bin($sidHex) . pack('P', $gno);
     }
 
+    /** QUERY_EVENT body carrying $query (e.g. "BEGIN" or a DDL statement). */
+    private function binlogQueryEvent(string $query, string $schema = ''): string
+    {
+        return pack('V', 1)               // thread id
+            . pack('V', 0)                // execution time
+            . \chr(\strlen($schema))      // schema length
+            . pack('v', 0)                // error code
+            . pack('v', 0)                // status-variables length (none)
+            . $schema . "\x00"            // schema name + NUL
+            . $query;                     // the SQL statement
+    }
+
     /**
      * TABLE_MAP body shipping FULL column-name metadata.
      *

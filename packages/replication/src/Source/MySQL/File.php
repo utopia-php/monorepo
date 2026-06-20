@@ -46,6 +46,10 @@ final class File implements Transport
      * @param string|iterable<string> $source Full binlog bytes, or a stream of
      *                                        byte chunks (e.g. an object-storage
      *                                        download) reassembled on the fly.
+     *                                        A string or array source is
+     *                                        re-openable; a one-shot iterable
+     *                                        (e.g. a Generator) is single-pass and
+     *                                        cannot be re-opened once drained.
      */
     public function __construct(private readonly string|iterable $source) {}
 
