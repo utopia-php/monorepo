@@ -144,25 +144,33 @@ function release_notes(string $package, string $version, string $to): string
 
 /**
  * Compute a package's split head: starting from the latest subtree
- * annotation (an import or rejoin merge), re-synthesize one commit per
- * mainline commit that changed the package, copying tree, author, committer
- * and raw message. Deterministic, and byte-identical to `git subtree split`
- * output — without its fatal cache collision when a package is re-imported.
+ * annotation (an import or rejoin merge), or from the repository root when
+ * there is none, re-synthesize one commit per mainline commit that changed
+ * the package, copying tree, author, committer and raw message. Deterministic,
+ * and byte-identical to `git subtree split` output — without its fatal cache
+ * collision when a package is re-imported.
  */
 function split_package(string $package): string
 {
+    // With an annotation present, resume from it; without one — a hand-created
+    // package, or one whose import merge a squash-merge flattened — synthesize
+    // from the repository root, the first commit landing parentless.
     $join = sh('git log --format=%H --grep=' . escapeshellarg("^git-subtree-dir: packages/{$package}\$") . ' -1 HEAD');
-    $join !== '' || fail("packages/{$package} has no subtree annotation — was it imported?");
-    $body = sh("git log --format=%B -1 {$join}");
-    preg_match('/^git-subtree-mainline: (\w+)$/m', $body, $mainline) || fail("no git-subtree-mainline in {$join}");
-    preg_match('/^git-subtree-split: (\w+)$/m', $body, $split) || fail("no git-subtree-split in {$join}");
+    $tip = null;
+    $range = 'HEAD';
+    if ($join !== '') {
+        $body = sh("git log --format=%B -1 {$join}");
+        preg_match('/^git-subtree-mainline: (\w+)$/m', $body, $mainline) || fail("no git-subtree-mainline in {$join}");
+        preg_match('/^git-subtree-split: (\w+)$/m', $body, $split) || fail("no git-subtree-split in {$join}");
+        $tip = $split[1];
+        $range = "{$mainline[1]}..HEAD";
+    }
 
-    $tip = $split[1];
-    $commits = sh("git log --reverse --first-parent --format=%H {$mainline[1]}..HEAD -- packages/{$package}");
+    $commits = sh("git log --reverse --first-parent --format=%H {$range} -- packages/{$package}");
     foreach (array_filter(explode("\n", $commits)) as $commit) {
         unset($tree);
         exec("git rev-parse -q --verify {$commit}:packages/{$package} 2>/dev/null", $tree, $missing);
-        if ($missing !== 0 || $tree[0] === sh("git rev-parse {$tip}^{tree}")) {
+        if ($missing !== 0 || ($tip !== null && $tree[0] === sh("git rev-parse {$tip}^{tree}"))) {
             continue;
         }
         $identity = explode("\x1f", sh("git log -1 --format=%an%x1f%ae%x1f%aD%x1f%cn%x1f%ce%x1f%cD {$commit}"));
@@ -170,8 +178,11 @@ function split_package(string $package): string
         foreach (['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_DATE', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GIT_COMMITTER_DATE'] as $index => $variable) {
             $environment .= $variable . '=' . escapeshellarg($identity[$index]) . ' ';
         }
-        $tip = sh("git log -1 --pretty=format:%B {$commit} | {$environment}git commit-tree {$tree[0]} -p {$tip}");
+        $parent = $tip === null ? '' : "-p {$tip}";
+        $tip = sh("git log -1 --pretty=format:%B {$commit} | {$environment}git commit-tree {$tree[0]} {$parent}");
     }
+
+    $tip !== null || fail("packages/{$package} has no commits to split");
 
     return $tip;
 }
