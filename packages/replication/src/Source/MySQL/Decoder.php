@@ -55,6 +55,10 @@ final class Decoder
 
         switch (true) {
             case $eventType === Constants::GTID_EVENT:
+                // A new GTID implicitly commits the previous transaction when it
+                // carried no XID — e.g. an autocommitted DDL/statement shipped as a
+                // QUERY_EVENT — so the checkpoint never lags behind such transactions.
+                $this->commit();
                 $this->trackGtid($body);
                 return null;
             case $eventType === Constants::XID_EVENT:

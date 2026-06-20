@@ -51,6 +51,12 @@ final class File implements Transport
 
     public function open(?string $position = null): void
     {
+        // Reset per-open state so the same instance can be re-opened (e.g. a retry).
+        $this->buffer = '';
+        $this->exhausted = false;
+        $this->pending = null;
+        $this->checksum = false;
+
         $chunks = \is_string($this->source) ? [$this->source] : $this->source;
         $this->chunks = (function () use ($chunks): \Generator {
             foreach ($chunks as $chunk) {
@@ -62,10 +68,15 @@ final class File implements Transport
             throw new Exception('Not a MySQL binlog file: bad magic header');
         }
 
-        // The first event is the FORMAT_DESCRIPTION_EVENT; its last body byte
-        // before the 4-byte CRC trailer is the checksum algorithm (1 = CRC32).
+        // The first event is the FORMAT_DESCRIPTION_EVENT. On checksum-aware servers
+        // (MySQL >= 5.6.1, which the package targets) it always carries a trailing
+        // [algorithm byte][4-byte CRC slot], so the algorithm sits at len-5 — the
+        // same offset MySQL's own Log_event_footer::get_checksum_alg reads. 1 = CRC32.
         $this->pending = $this->readEvent();
-        if ($this->pending !== null && \ord($this->pending[4]) === Constants::FORMAT_DESCRIPTION_EVENT) {
+        if ($this->pending !== null
+            && \ord($this->pending[4]) === Constants::FORMAT_DESCRIPTION_EVENT
+            && \strlen($this->pending) >= Constants::EVENT_HEADER_SIZE + 5
+        ) {
             $this->checksum = \ord($this->pending[\strlen($this->pending) - 5]) === 1;
         }
     }
@@ -116,6 +127,9 @@ final class File implements Transport
 
         // event_size (header bytes 9-12, little-endian) covers header + body + CRC.
         $eventSize = \ord($header[9]) | (\ord($header[10]) << 8) | (\ord($header[11]) << 16) | (\ord($header[12]) << 24);
+        if ($eventSize < Constants::EVENT_HEADER_SIZE) {
+            throw new Exception("Corrupt binlog: event_size {$eventSize} is smaller than the event header");
+        }
         $remaining = $eventSize - Constants::EVENT_HEADER_SIZE;
 
         $body = $this->take($remaining);

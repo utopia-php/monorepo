@@ -188,6 +188,24 @@ class DecoderTest extends TestCase
         $this->assertSame('v1', $change->rows[0]['_uid']);
     }
 
+    public function testAutocommittedQueryTransactionCommitsOnNextGtid(): void
+    {
+        $decoder = $this->decoder();
+
+        // Transaction 5 is an autocommitted DDL: GTID + QUERY, no XID.
+        $decoder->decode($this->binlogEvent(Constants::GTID_EVENT, $this->binlogGtidEvent(self::SID_HEX, 5)));
+        $decoder->decode($this->binlogEvent(Constants::QUERY_EVENT, str_repeat("\x00", 13) . 'CREATE TABLE t (id INT)'));
+        $this->assertSame('', $decoder->position()); // not committed by a QUERY alone
+
+        // The next GTID implicitly commits transaction 5 so the checkpoint keeps up.
+        $decoder->decode($this->binlogEvent(Constants::GTID_EVENT, $this->binlogGtidEvent(self::SID_HEX, 6)));
+        $this->assertSame(self::SID . ':5', $decoder->position());
+
+        // Transaction 6 is a normal row transaction, committed on its XID.
+        $decoder->decode($this->binlogEvent(Constants::XID_EVENT, pack('P', 1)));
+        $this->assertSame(self::SID . ':5-6', $decoder->position());
+    }
+
     private function decoder(): Decoder
     {
         return new Decoder(new EventParser(), new GtidSet(), self::SCHEMA, true);

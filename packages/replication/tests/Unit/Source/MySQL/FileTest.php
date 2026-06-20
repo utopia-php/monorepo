@@ -269,6 +269,35 @@ class FileTest extends TestCase
         $this->assertSame($payload, $changes[0]->rows[0]['data']);
     }
 
+    public function testRejectsAnImpossiblySmallEventSize(): void
+    {
+        // An event header whose event_size field claims 4 — smaller than the
+        // 19-byte header itself. A corrupt archive must fail loudly, not frame
+        // the malformed header as a valid (empty-body) event.
+        $header = "\x00\x00\x00\x00" . \chr(Constants::FORMAT_DESCRIPTION_EVENT) . "\x00\x00\x00\x00"
+            . pack('V', 4) . "\x00\x00\x00\x00" . "\x00\x00";
+
+        $source = new File($this->binlogMagic() . $header);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('Corrupt binlog');
+
+        $source->open();
+    }
+
+    public function testCanBeReopenedAfterDraining(): void
+    {
+        $source = new File($this->insertBinlog(checksum: true));
+
+        $source->open();
+        iterator_to_array($source->events()); // drain to exhaustion
+
+        // Re-opening the same instance must reset stream state, not stay exhausted.
+        $source->open();
+        $this->assertTrue($source->checksum());
+        $this->assertNotEmpty(iterator_to_array($source->events()));
+    }
+
     /**
      * A complete binlog with a single INSERT, checksummed or not.
      */
