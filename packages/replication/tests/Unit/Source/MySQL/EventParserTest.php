@@ -1,14 +1,17 @@
 <?php
 
-namespace Utopia\Replication\Tests\Unit;
+namespace Utopia\Replication\Tests\Unit\Source\MySQL;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Utopia\Replication\Adapter\MySQL\Constants;
-use Utopia\Replication\Adapter\MySQL\EventParser;
+use Utopia\Replication\Exception;
+use Utopia\Replication\Source\MySQL\Constants;
+use Utopia\Replication\Source\MySQL\EventParser;
 
 class EventParserTest extends TestCase
 {
+    use BinlogFixtures;
+
     private const int TABLE_ID = 42;
     private const string SCHEMA = 'appwrite';
     private const string TABLE = 'console15x_projects';
@@ -248,5 +251,170 @@ class EventParserTest extends TestCase
             'signed 127'   => ["\x00", 0x7F, 127],
             'unsigned 255' => ["\x80", 0xFF, 255],
         ];
+    }
+
+    /**
+     * Decode one column of $type (with $meta TABLE_MAP metadata) carrying $value,
+     * asserting both the decoded result and that a trailing sentinel column still
+     * lands on its byte — i.e. the column consumed exactly the right width.
+     */
+    #[DataProvider('columnTypeProvider')]
+    public function testDecodesColumnType(int $type, string $meta, string $value, mixed $expected): void
+    {
+        $columns = [
+            ['type' => $type, 'meta' => $meta, 'name' => 'v'],
+            ['type' => Constants::TYPE_TINY, 'name' => 'sentinel'],
+        ];
+        $parser = new EventParser();
+        $parser->parseTableMap($this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $columns));
+
+        $body = $this->binlogRowsV2(self::TABLE_ID, 2, $this->binlogRow(2, $value, "\x7F"));
+        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $body);
+
+        $this->assertNotNull($decoded);
+        $this->assertSame($expected, $decoded['rows'][0]['v']);
+        $this->assertSame(127, $decoded['rows'][0]['sentinel'], 'trailing column misaligned — wrong byte width consumed');
+    }
+
+    /**
+     * @return array<string, array{int, string, string, mixed}>
+     */
+    public static function columnTypeProvider(): array
+    {
+        return [
+            // Integers (unsigned, no SIGNEDNESS metadata).
+            'TINY'      => [Constants::TYPE_TINY, '', \chr(200), 200],
+            'SHORT'     => [Constants::TYPE_SHORT, '', pack('v', 60000), 60000],
+            'INT24'     => [Constants::TYPE_INT24, '', "\x40\x42\x0F", 1000000],
+            'LONG'      => [Constants::TYPE_LONG, '', pack('V', 3000000000), 3000000000],
+            'LONGLONG'  => [Constants::TYPE_LONGLONG, '', pack('P', 9000000000), 9000000000],
+            'YEAR'      => [Constants::TYPE_YEAR, '', \chr(123), 123],
+
+            // Strings: 1-byte length prefix when max <= 255, else 2-byte.
+            'VARCHAR short' => [Constants::TYPE_VAR_STRING, pack('v', 100), \chr(3) . 'abc', 'abc'],
+            'VARCHAR long'  => [Constants::TYPE_VAR_STRING, pack('v', 300), pack('v', 3) . 'xyz', 'xyz'],
+
+            // BLOB: metadata = number of length bytes (here 2).
+            'BLOB' => [Constants::TYPE_BLOB, \chr(2), pack('v', 4) . 'blob', 'blob'],
+
+            // ENUM index: metadata low byte = storage width.
+            'ENUM' => [Constants::TYPE_ENUM, "\x00\x01", \chr(2), 2],
+
+            // Fixed-width temporals are returned as their raw bytes.
+            'TIMESTAMP' => [Constants::TYPE_TIMESTAMP, '', "\x01\x02\x03\x04", "\x01\x02\x03\x04"],
+            'DATETIME'  => [Constants::TYPE_DATETIME, '', "\x01\x02\x03\x04\x05\x06\x07\x08", "\x01\x02\x03\x04\x05\x06\x07\x08"],
+            'DATE'      => [Constants::TYPE_DATE, '', "\xAA\xBB\xCC", "\xAA\xBB\xCC"],
+
+            // Fractional temporals: width grows with the fsp metadata byte.
+            'TIMESTAMP2(6)' => [Constants::TYPE_TIMESTAMP2, \chr(6), "\x01\x02\x03\x04\x05\x06\x07", "\x01\x02\x03\x04\x05\x06\x07"],
+            'DATETIME2(0)'  => [Constants::TYPE_DATETIME2, \chr(0), "\x01\x02\x03\x04\x05", "\x01\x02\x03\x04\x05"],
+            'TIME2(0)'      => [Constants::TYPE_TIME2, \chr(0), "\xAA\xBB\xCC", "\xAA\xBB\xCC"],
+
+            // BIT: metadata packs (bytes, bits) -> 10 bits = ceil(10/8) = 2 bytes.
+            'BIT(10)' => [Constants::TYPE_BIT, pack('v', (1 << 8) | 2), "\x03\xFF", "\x03\xFF"],
+
+            // NEWDECIMAL(5,2): precision/scale metadata -> 3 storage bytes.
+            'NEWDECIMAL(5,2)' => [Constants::TYPE_NEWDECIMAL, \chr(5) . \chr(2), "\x80\x00\x05", "\x80\x00\x05"],
+        ];
+    }
+
+    public function testDecodesFloatAndDouble(): void
+    {
+        $columns = [
+            ['type' => Constants::TYPE_FLOAT, 'meta' => \chr(4), 'name' => 'f'],
+            ['type' => Constants::TYPE_DOUBLE, 'meta' => \chr(8), 'name' => 'd'],
+        ];
+        $parser = new EventParser();
+        $parser->parseTableMap($this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $columns));
+
+        $body = $this->binlogRowsV2(self::TABLE_ID, 2, $this->binlogRow(2, pack('g', 1.5), pack('e', 2.5)));
+        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $body);
+
+        $this->assertNotNull($decoded);
+        $this->assertEqualsWithDelta(1.5, $decoded['rows'][0]['f'], 0.0001);
+        $this->assertEqualsWithDelta(2.5, $decoded['rows'][0]['d'], 0.0001);
+    }
+
+    public function testDeleteRowsDecodesTheRemovedImage(): void
+    {
+        $columns = [
+            ['type' => Constants::TYPE_LONGLONG, 'name' => '_id'],
+            ['type' => Constants::TYPE_VAR_STRING, 'meta' => pack('v', 100), 'name' => '_uid'],
+        ];
+        $parser = new EventParser();
+        $parser->parseTableMap($this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $columns));
+
+        $row = $this->binlogRow(2, pack('P', 7), \chr(4) . 'gone');
+        $decoded = $parser->parseRows(Constants::DELETE_ROWS_EVENT_V2, $this->binlogRowsV2(self::TABLE_ID, 2, $row));
+
+        $this->assertNotNull($decoded);
+        $this->assertSame(7, $decoded['rows'][0]['_id']);
+        $this->assertSame('gone', $decoded['rows'][0]['_uid']);
+    }
+
+    public function testPartialColumnPresenceOnlyDecodesPresentColumns(): void
+    {
+        $columns = [
+            ['type' => Constants::TYPE_LONGLONG, 'name' => 'a'],
+            ['type' => Constants::TYPE_LONGLONG, 'name' => 'b'],
+            ['type' => Constants::TYPE_LONGLONG, 'name' => 'c'],
+        ];
+        $parser = new EventParser();
+        $parser->parseTableMap($this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $columns));
+
+        // present bitmap 0b101 -> only columns a and c are in the image.
+        $row = $this->binlogRow(2, pack('P', 10), pack('P', 30));
+        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogPartialRowsV2(self::TABLE_ID, 3, \chr(0b101), $row));
+
+        $this->assertNotNull($decoded);
+        $this->assertSame(['a' => 10, 'c' => 30], $decoded['rows'][0]);
+        $this->assertArrayNotHasKey('b', $decoded['rows'][0]);
+    }
+
+    public function testDistinctTablesAreTrackedByTableId(): void
+    {
+        $parser = new EventParser();
+        $parser->parseTableMap($this->binlogTableMap(1, 'appwrite', 'projects', [['type' => Constants::TYPE_LONGLONG, 'name' => 'id']]));
+        $parser->parseTableMap($this->binlogTableMap(2, 'appwrite', 'users', [['type' => Constants::TYPE_LONGLONG, 'name' => 'id']]));
+
+        $projects = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(1, 1, $this->binlogRow(1, pack('P', 1))));
+        $users = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(2, 1, $this->binlogRow(1, pack('P', 2))));
+
+        $this->assertNotNull($projects);
+        $this->assertNotNull($users);
+        $this->assertSame('projects', $projects['table']);
+        $this->assertSame('users', $users['table']);
+    }
+
+    public function testReprocessingTableMapPicksUpSchemaChanges(): void
+    {
+        // A DDL mid-stream re-emits TABLE_MAP for the same id with a new layout;
+        // the parser must decode subsequent rows against the latest definition.
+        $parser = new EventParser();
+        $parser->parseTableMap($this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, [
+            ['type' => Constants::TYPE_LONGLONG, 'name' => 'id'],
+        ]));
+        $parser->parseTableMap($this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, [
+            ['type' => Constants::TYPE_LONGLONG, 'name' => 'id'],
+            ['type' => Constants::TYPE_VAR_STRING, 'meta' => pack('v', 100), 'name' => 'added'],
+        ]));
+
+        $row = $this->binlogRow(2, pack('P', 1), \chr(3) . 'new');
+        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(self::TABLE_ID, 2, $row));
+
+        $this->assertNotNull($decoded);
+        $this->assertSame(['id' => 1, 'added' => 'new'], $decoded['rows'][0]);
+    }
+
+    public function testUnsupportedColumnTypeThrows(): void
+    {
+        $parser = new EventParser();
+        // 99 is not a MYSQL_TYPE_* the decoder knows.
+        $parser->parseTableMap($this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, [['type' => 99, 'name' => 'weird']]));
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('Unsupported binlog column type');
+
+        $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(self::TABLE_ID, 1, $this->binlogRow(1, "\x00")));
     }
 }

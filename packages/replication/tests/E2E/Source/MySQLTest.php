@@ -1,16 +1,16 @@
 <?php
 
-namespace Utopia\Replication\Tests\E2E;
+namespace Utopia\Replication\Tests\E2E\Source;
 
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Scheduler;
-use Utopia\Replication\Adapter\MySQL;
 use Utopia\Replication\Change;
+use Utopia\Replication\Source\MySQL;
 
 /**
- * Integration tests for the binlog Replication reader against a live MySQL 8.
+ * Integration tests for the MySQL binlog reader against a live MySQL 8.
  *
  * Opt-in: skipped unless REPLICATION_TEST_HOST is set. The test self-configures
  * the server (GTID + FULL row metadata), so the connecting user must have
@@ -18,9 +18,9 @@ use Utopia\Replication\Change;
  *
  *   REPLICATION_TEST_HOST=127.0.0.1 REPLICATION_TEST_PORT=3306 \
  *   REPLICATION_TEST_USER=root REPLICATION_TEST_PASS=password \
- *   vendor/bin/phpunit tests/e2e/Replication
+ *   vendor/bin/phpunit tests/E2E/Source/MySQLTest.php
  */
-class ReplicationTest extends TestCase
+class MySQLTest extends TestCase
 {
     private const string SCHEMA = 'replication_test';
     private const string TABLE = 'console15x_projects';

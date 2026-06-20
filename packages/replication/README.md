@@ -43,10 +43,9 @@ The connecting user needs the `REPLICATION SLAVE` and `REPLICATION CLIENT` privi
 ## Usage
 
 ```php
-use Utopia\Replication\Adapter;
-use Utopia\Replication\Adapter\MySQL;
+use Utopia\Replication\Source\MySQL;
 
-// Adapter is the polymorphic interface; MySQL is the binlog implementation.
+// Source is the polymorphic interface; MySQL is the binlog implementation.
 $replication = new MySQL(
     host: '127.0.0.1',
     port: 3306,
@@ -76,6 +75,36 @@ foreach ($replication->getChanges() as $change) {
 The reader runs inside a Swoole coroutine; `getChanges()` blocks (yielding the
 coroutine) while waiting for events. The GTID checkpoint advances on transaction
 commit, so a crash mid-transaction re-streams it — treat changes as idempotent.
+
+### Reading from a binlog file
+
+Decoding and transport are separate: a `Decoder` turns raw binlog events into
+`Change`s, and a `Transport` supplies those events. The `MySQL` source above is a
+live `MySQL\Connection` transport wired to a `Decoder`; swap in a `MySQL\File`
+transport to decode an archived binlog file — the same bytes `mysqlbinlog --raw`
+writes, or a segment pulled from object storage — with no server and no
+replication privileges:
+
+```php
+use Utopia\Replication\Source\MySQL\Decoder;
+use Utopia\Replication\Source\MySQL\EventParser;
+use Utopia\Replication\Source\MySQL\File;
+use Utopia\Replication\Source\MySQL\GtidSet;
+
+$source = new File($bytes);   // a string, or an iterable of byte chunks
+$source->open();
+
+// Offline there is no server to resolve column names from, so the binlog must
+// carry them (binlog_row_metadata=FULL) or you pass EventParser a resolver.
+$decoder = new Decoder(new EventParser(), new GtidSet(), 'appwrite', $source->checksum());
+
+foreach ($source->events() as $event) {
+    $change = $decoder->decode($event);
+    if ($change !== null) {
+        // react to the change ...
+    }
+}
+```
 
 ## Scope
 

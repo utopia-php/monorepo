@@ -1,6 +1,6 @@
 <?php
 
-namespace Utopia\Replication\Adapter\MySQL;
+namespace Utopia\Replication\Source\MySQL;
 
 /**
  * MySQL client/replication protocol constants.
