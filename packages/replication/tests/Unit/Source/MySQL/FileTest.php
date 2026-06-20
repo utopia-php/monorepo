@@ -1,6 +1,6 @@
 <?php
 
-namespace Utopia\Replication\Tests\Unit;
+namespace Utopia\Replication\Tests\Unit\Source\MySQL;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Replication\Change;
@@ -16,7 +16,7 @@ use Utopia\Replication\Source\MySQL\GtidSet;
  * {@see Decoder} turns them into changes — no socket, no server. This is the
  * offline path edge uses to read archived binlogs.
  */
-class FileSourceTest extends TestCase
+class FileTest extends TestCase
 {
     private const int TABLE_ID = 42;
     private const string SCHEMA = 'appwrite';

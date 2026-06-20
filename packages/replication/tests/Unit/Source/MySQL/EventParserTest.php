@@ -1,6 +1,6 @@
 <?php
 
-namespace Utopia\Replication\Tests\Unit;
+namespace Utopia\Replication\Tests\Unit\Source\MySQL;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
