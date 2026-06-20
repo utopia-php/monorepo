@@ -18,6 +18,8 @@ use Utopia\Replication\Source\MySQL\GtidSet;
  */
 class FileTest extends TestCase
 {
+    use BinlogFixtures;
+
     private const int TABLE_ID = 42;
     private const string SCHEMA = 'appwrite';
     private const string TABLE = 'console15x_projects';
@@ -207,5 +209,81 @@ class FileTest extends TestCase
         }
 
         return $out;
+    }
+
+    public function testDecodesAChecksumOffBinlog(): void
+    {
+        $changes = $this->drain(new File($this->insertBinlog(checksum: false)));
+
+        $this->assertCount(1, $changes);
+        $this->assertSame('x', $changes[0]->rows[0]['_uid']);
+
+        $probe = new File($this->insertBinlog(checksum: false));
+        $probe->open();
+        $this->assertFalse($probe->checksum());
+    }
+
+    public function testPositionIsEmptyAndCloseIsANoop(): void
+    {
+        $source = new File($this->insertBinlog(checksum: true));
+        $source->open();
+
+        $this->assertSame('', $source->position()); // a file carries no resume token
+        $source->close();                            // the caller owns any stream; nothing to release
+        $source->close();                            // idempotent
+    }
+
+    public function testIgnoresATrailingRotateEvent(): void
+    {
+        // Real binlog files end with a ROTATE pointing at the next file.
+        $binlog = $this->insertBinlog(checksum: true)
+            . $this->binlogEvent(Constants::ROTATE_EVENT, str_repeat("\x00", 30));
+
+        $changes = $this->drain(new File($binlog));
+
+        $this->assertCount(1, $changes); // the INSERT decoded; ROTATE skipped cleanly
+    }
+
+    public function testFramesALargeEventSplitAcrossManyChunks(): void
+    {
+        // A single event far larger than a chunk: framing must follow event_size,
+        // not chunk boundaries (a file has no 16 MiB packet split like the wire).
+        $payload = str_repeat('Z', 100_000);
+        $columns = [['type' => Constants::TYPE_BLOB, 'meta' => \chr(3), 'name' => 'data']];
+        $value = $this->le(\strlen($payload), 3) . $payload; // 3-byte length prefix
+
+        $binlog = $this->binlogMagic()
+            . $this->binlogEvent(Constants::FORMAT_DESCRIPTION_EVENT, str_repeat("\x00", 50) . \chr(1))
+            . $this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $columns))
+            . $this->binlogEvent(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(self::TABLE_ID, 1, $this->binlogRow(1, $value)));
+
+        $chunks = (function () use ($binlog): \Generator {
+            foreach (str_split($binlog, 64) as $chunk) {
+                yield $chunk;
+            }
+        })();
+
+        $changes = $this->drain(new File($chunks));
+
+        $this->assertCount(1, $changes);
+        $this->assertSame($payload, $changes[0]->rows[0]['data']);
+    }
+
+    /**
+     * A complete binlog with a single INSERT, checksummed or not.
+     */
+    private function insertBinlog(bool $checksum): string
+    {
+        $fde = $checksum ? str_repeat("\x00", 50) . \chr(1) : str_repeat("\x00", 51);
+        $columns = [
+            ['type' => Constants::TYPE_LONGLONG, 'name' => '_id'],
+            ['type' => Constants::TYPE_VAR_STRING, 'meta' => pack('v', 100), 'name' => '_uid'],
+        ];
+        $rows = $this->binlogRowsV2(self::TABLE_ID, 2, $this->binlogRow(2, pack('P', 1), \chr(1) . 'x'));
+
+        return $this->binlogMagic()
+            . $this->binlogEvent(Constants::FORMAT_DESCRIPTION_EVENT, $fde, $checksum)
+            . $this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $columns), $checksum)
+            . $this->binlogEvent(Constants::WRITE_ROWS_EVENT_V2, $rows, $checksum);
     }
 }
