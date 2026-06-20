@@ -85,11 +85,9 @@ with a redirect here), adds the mirror banner to the README, and creates the
 mirror ruleset (PR-only, no force-push, split app bypassed). Idempotent — re-run
 freely. If `gh` can't reach the repo the ruleset step prints a manual fallback.
 
-Add a package CI workflow if you want per-PR test runs on the mirror — copy
-`packages/span/.github/workflows/ci.yaml`. Pin every `uses:` with
-[ratchet](https://github.com/sethvargo/ratchet)
-(`ratchet pin packages/<name>/.github/workflows/*.y*ml`); CI rejects unpinned
-actions.
+The mirror needs no CI workflow of its own: the monorepo's own test matrix gates
+every package on each PR, and `mirror.yml` is the only workflow a package
+carries.
 
 ## 4. Verify locally
 

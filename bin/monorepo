@@ -287,11 +287,6 @@ switch ($command) {
         }
         break;
 
-    case 'import':
-        $package = $arguments[0] ?? fail('usage: monorepo import <name> [url] [branch]');
-        import_package($package, $arguments[1] ?? null, $arguments[2] ?? null);
-        break;
-
     case 'absorb':
         $package = $arguments[0] ?? fail('usage: monorepo absorb <name> [url] [branch]');
         $directory = "packages/{$package}";
@@ -335,9 +330,13 @@ switch ($command) {
             }
         }
 
-        // Redirect pull requests opened against the mirror.
-        @mkdir("{$directory}/.github/workflows", 0755, true);
-        file_put_contents("{$directory}/.github/workflows/mirror.yml", mirror_workflow($package));
+        // The monorepo's own CI gates every package pre-merge, so the mirror
+        // needs no test or QA workflows — only the redirect that closes PRs
+        // opened against it. Drop whatever the upstream shipped, write just that.
+        $workflows = "{$directory}/.github/workflows";
+        @mkdir($workflows, 0755, true);
+        array_map('unlink', glob("{$workflows}/*.{yml,yaml}", GLOB_BRACE) ?: []);
+        file_put_contents("{$workflows}/mirror.yml", mirror_workflow($package));
         out('wrote .github/workflows/mirror.yml (closes mirror PRs with a redirect)');
 
         // Point readers at the monorepo.
@@ -351,12 +350,16 @@ switch ($command) {
             out('added mirror banner to README.md');
         }
 
-        // Lock the mirror down: PR-only, no force-push, split app bypasses.
+        // Lock the mirror down (PR-only, no force-push) and let the split app
+        // bypass it. Idempotent: normalise whatever branch ruleset already
+        // exists to the canonical config — a pre-existing, differently-named
+        // ruleset is what left auth's mirror without the bypass and blocked its
+        // split, so we update in place rather than skip on a name clash.
         exec('gh --version 2>/dev/null', $_, $missing);
         if ($missing !== 0) {
             out('gh not found — create the mirror ruleset manually (see README)');
         } else {
-            $ruleset = json_encode([
+            $payload = json_encode([
                 'name' => 'main',
                 'target' => 'branch',
                 'enforcement' => 'active',
@@ -375,18 +378,23 @@ switch ($command) {
                 ],
                 'bypass_actors' => [['actor_id' => SPLIT_APP_ID, 'actor_type' => 'Integration', 'bypass_mode' => 'always']],
             ]);
-            exec('printf %s ' . escapeshellarg($ruleset) . ' | gh api -X POST repos/' . ORG . "/{$package}/rulesets --input - 2>&1", $response, $code);
-            if ($code === 0) {
-                out('mirror ruleset created');
-            } elseif (stripos($message = implode("\n", $response), 'already') !== false || stripos($message, 'must be unique') !== false) {
-                out('mirror ruleset already exists');
-            } else {
-                out('could not create mirror ruleset (create manually, see README): ' . implode("\n", $response));
+            exec('gh api ' . escapeshellarg('repos/' . ORG . "/{$package}/rulesets") . ' 2>/dev/null', $listing, $listed);
+            $id = null;
+            foreach (($listed === 0 ? json_decode(implode('', $listing), true) : []) ?: [] as $rule) {
+                if (($rule['target'] ?? '') === 'branch') {
+                    $id = $rule['id'];
+                    break;
+                }
             }
+            $endpoint = 'repos/' . ORG . "/{$package}/rulesets" . ($id === null ? '' : "/{$id}");
+            exec('printf %s ' . escapeshellarg($payload) . ' | gh api -X ' . ($id === null ? 'POST' : 'PUT')
+                . " {$endpoint} --input - 2>&1", $response, $code);
+            out($code === 0
+                ? ($id === null ? 'mirror ruleset created' : 'mirror ruleset updated (split app can bypass)')
+                : 'could not set mirror ruleset (configure manually, see README): ' . implode("\n", $response));
         }
 
-        out("absorbed {$package} — next: bin/monorepo check {$package} --fix, bin/monorepo test {$package}, "
-            . "review {$directory}/.github/workflows for QA-only workflows to delete, then commit and push");
+        out("absorbed {$package} — next: bin/monorepo check {$package} --fix, bin/monorepo test {$package}, then commit and push");
         break;
 
     case 'split':
@@ -670,8 +678,7 @@ switch ($command) {
         usage: bin/monorepo <command>
 
           list                                show packages and their latest release tag
-          import <name> [url] [branch]        import a library into packages/<name>, preserving history
-          absorb <name> [url] [branch]        import (if needed) + strip hoisted QA + mirror PR redirect + lockdown
+          absorb <name> [url] [branch]        import (preserving history) + strip hoisted QA + mirror PR redirect + lockdown
           split [name...] [--tag=v] [--branch=main] [--remote=url] [--force] [--dry-run]
                                               push package subtrees to their distribution repositories
           release <name> <version> [--dry-run]
