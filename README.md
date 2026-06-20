@@ -49,6 +49,7 @@ graph TD
     client --> pools
     client --> span
     console --> validators
+    fastly --> client
     http --> di
     http --> servers
     http --> compression

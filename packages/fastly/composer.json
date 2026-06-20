@@ -1,0 +1,32 @@
+{
+    "name": "utopia-php/fastly",
+    "description": "Fastly HTTP API client built on utopia-php/client",
+    "type": "library",
+    "keywords": [
+        "php",
+        "fastly",
+        "cdn",
+        "purge",
+        "http",
+        "utopia"
+    ],
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Utopia\\Fastly\\": "src/Fastly/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Utopia\\Fastly\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "require": {
+        "php": ">=8.4",
+        "psr/http-client": "^1.0",
+        "utopia-php/client": "^0.1.1"
+    }
+}
