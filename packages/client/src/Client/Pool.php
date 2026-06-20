@@ -16,11 +16,13 @@ use Utopia\Psr18\StreamingClientInterface;
  * reclaims it once the request completes, so concurrent callers share a bounded
  * set of underlying connections. The pool's resources must themselves be both a
  * PSR-18 and a streaming client.
+ *
+ * @template T of ClientInterface&StreamingClientInterface
  */
 final readonly class Pool implements ClientInterface, StreamingClientInterface
 {
     /**
-     * @param Connections<ClientInterface&StreamingClientInterface> $connections
+     * @param Connections<T> $connections
      */
     public function __construct(
         private Connections $connections,

@@ -53,9 +53,14 @@ final class PoolTest extends TestCase
     }
 
     /**
-     * @param callable(): (\Psr\Http\Client\ClientInterface&StreamingClientInterface) $init
+     * Mirrors how a caller builds a pool: a factory returning a concrete client
+     * type flows through to `new Pool()` without needing the intersection type.
      *
-     * @return Connections<\Psr\Http\Client\ClientInterface&StreamingClientInterface>
+     * @template T of \Psr\Http\Client\ClientInterface&StreamingClientInterface
+     *
+     * @param callable(): T $init
+     *
+     * @return Connections<T>
      */
     private function connections(callable $init, int $size = 4): Connections
     {
