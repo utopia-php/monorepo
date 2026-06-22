@@ -117,12 +117,6 @@ class RedisCluster implements Connection
         return !!$this->getRedis()->del($key);
     }
 
-    public function move(string $queue, string $destination): bool
-    {
-        // Move is not supported for Redis Cluster
-        return false;
-    }
-
     public function setArray(string $key, array $value, int $ttl = 0): bool
     {
         return $this->set($key, json_encode($value), $ttl);

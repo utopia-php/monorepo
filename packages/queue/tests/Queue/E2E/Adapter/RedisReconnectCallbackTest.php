@@ -148,11 +148,6 @@ class FailingRedisConnection implements Connection
         return true;
     }
 
-    public function move(string $queue, string $destination): bool
-    {
-        return true;
-    }
-
     public function set(string $key, string $value, int $ttl = 0): bool
     {
         return true;
