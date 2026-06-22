@@ -110,7 +110,7 @@ class ScryptModified extends Hash
      */
     public function setSalt(string $salt): static
     {
-        if (empty($salt)) {
+        if ($salt === '' || $salt === '0') {
             throw new \InvalidArgumentException('Salt cannot be empty');
         }
 
@@ -150,7 +150,7 @@ class ScryptModified extends Hash
      */
     public function setSignerKey(string $key): static
     {
-        if (empty($key)) {
+        if ($key === '' || $key === '0') {
             throw new \InvalidArgumentException('Signer key cannot be empty');
         }
 

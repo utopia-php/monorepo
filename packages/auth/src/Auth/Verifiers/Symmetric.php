@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Auth\Verifiers;
 
 use Utopia\Auth\Verifier;
@@ -21,7 +23,7 @@ class Symmetric extends Verifier
      */
     public function __construct(protected readonly string $secret)
     {
-        if (empty($secret)) {
+        if ($secret === '' || $secret === '0') {
             throw new \Exception('A signing secret is required');
         }
     }

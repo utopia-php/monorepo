@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Verifiers;
 
 use PHPUnit\Framework\TestCase;
@@ -8,12 +10,8 @@ use Utopia\Auth\Issuers\Symmetric\RefreshToken;
 use Utopia\Auth\Verifiers\Asymmetric;
 use Utopia\Auth\Verifiers\VerificationException;
 
-class AsymmetricTest extends TestCase
+final class AsymmetricTest extends TestCase
 {
-    protected string $privateKey;
-
-    protected string $publicKey;
-
     protected AccessToken $issuer;
 
     protected Asymmetric $verifier;
@@ -22,9 +20,9 @@ class AsymmetricTest extends TestCase
 
     protected function setUp(): void
     {
-        [$this->privateKey, $this->publicKey] = AccessToken::generateKeyPair();
-        $this->issuer = new AccessToken($this->privateKey, $this->publicKey, $this->iss);
-        $this->verifier = new Asymmetric($this->publicKey);
+        [$privateKey, $publicKey] = AccessToken::generateKeyPair();
+        $this->issuer = new AccessToken($privateKey, $publicKey, $this->iss);
+        $this->verifier = new Asymmetric($publicKey);
     }
 
     public function testVerifiesIssuedToken(): void
@@ -41,7 +39,7 @@ class AsymmetricTest extends TestCase
     public function testKeyIdMatchesIssuer(): void
     {
         // Issuer and verifier must agree on the "kid" for the same key.
-        $this->assertEquals($this->issuer->getKeyId(), $this->verifier->getKeyId());
+        $this->assertSame($this->issuer->getKeyId(), $this->verifier->getKeyId());
     }
 
     public function testIssuerCheckPasses(): void

@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Algorithms;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Hashes\PHPass;
 
-class PHPassTest extends TestCase
+final class PHPassTest extends TestCase
 {
     protected PHPass $phpass;
 
@@ -20,7 +22,6 @@ class PHPassTest extends TestCase
         $hash = $this->phpass->hash($password);
 
         $this->assertNotEmpty($hash);
-        $this->assertIsString($hash);
         $this->assertTrue($this->phpass->verify($password, $hash));
         $this->assertFalse($this->phpass->verify('wrongpassword', $hash));
     }
@@ -85,6 +86,6 @@ class PHPassTest extends TestCase
 
     public function testGetName(): void
     {
-        $this->assertEquals('phpass', $this->phpass->getName());
+        $this->assertSame('phpass', $this->phpass->getName());
     }
 }

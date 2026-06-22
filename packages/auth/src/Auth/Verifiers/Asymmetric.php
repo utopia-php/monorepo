@@ -20,7 +20,7 @@ class Asymmetric extends Verifier
      */
     public function __construct(protected readonly string $publicKey)
     {
-        if (empty($publicKey)) {
+        if ($publicKey === '' || $publicKey === '0') {
             throw new \Exception('A public key is required');
         }
     }

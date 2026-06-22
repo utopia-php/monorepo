@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Proofs;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Hashes\Sha;
 use Utopia\Auth\Proofs\Token;
 
-class TokenTest extends TestCase
+final class TokenTest extends TestCase
 {
     protected Token $token;
 
@@ -24,8 +26,7 @@ class TokenTest extends TestCase
         $proof = $this->token->generate();
 
         $this->assertNotEmpty($proof);
-        $this->assertIsString($proof);
-        $this->assertEquals(32, \strlen($proof)); // Default token length
+        $this->assertSame(32, \strlen($proof)); // Default token length
     }
 
     public function testHash(): void
@@ -34,8 +35,7 @@ class TokenTest extends TestCase
         $hash = $this->token->hash($proof);
 
         $this->assertNotEmpty($hash);
-        $this->assertIsString($hash);
-        $this->assertEquals(64, \strlen($hash)); // SHA-256 produces a 64-character hex string
+        $this->assertSame(64, \strlen($hash)); // SHA-256 produces a 64-character hex string
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $hash); // SHA-256 hex format
     }
 
@@ -50,19 +50,19 @@ class TokenTest extends TestCase
 
     public function testGetLength(): void
     {
-        $this->assertEquals(32, $this->token->getLength());
+        $this->assertSame(32, $this->token->getLength());
 
         $token = new Token(64);
-        $this->assertEquals(64, $token->getLength());
+        $this->assertSame(64, $token->getLength());
     }
 
     public function testSetLength(): void
     {
         $this->token->setLength(64);
-        $this->assertEquals(64, $this->token->getLength());
+        $this->assertSame(64, $this->token->getLength());
 
         $proof = $this->token->generate();
-        $this->assertEquals(64, \strlen($proof));
+        $this->assertSame(64, \strlen($proof));
     }
 
     public function testSetLengthInvalid(): void

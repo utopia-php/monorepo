@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Auth\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Store;
 
-class StoreTest extends TestCase
+final class StoreTest extends TestCase
 {
     public function testGetAndSetProperty(): void
     {
@@ -75,7 +77,7 @@ class StoreTest extends TestCase
         // Verify it's a valid base64 string
         $decoded = base64_decode($encoded, true);
         $this->assertNotFalse($decoded);
-        $this->assertEquals($encoded, base64_encode($decoded));
+        $this->assertSame($encoded, base64_encode($decoded));
 
         // Create a new store and decode the data
         $newStore = new Store();

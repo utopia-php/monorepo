@@ -31,7 +31,7 @@ abstract class Asymmetric extends Issuer
     ) {
         parent::__construct($issuer);
 
-        if (empty($privateKey) || empty($publicKey)) {
+        if ($privateKey === '' || $privateKey === '0' || ($publicKey === '' || $publicKey === '0')) {
             throw new \Exception('Both a private and a public key are required');
         }
     }
@@ -102,7 +102,7 @@ abstract class Asymmetric extends Issuer
      */
     public function getKeyId(): string
     {
-        return $this->keyId ??= self::deriveKeyId($this->getModulus());
+        return $this->keyId ??= $this->deriveKeyId($this->getModulus());
     }
 
     /**
@@ -131,7 +131,7 @@ abstract class Asymmetric extends Issuer
             'alg' => 'RS256',
             // Reuse the modulus already in $details rather than re-parsing
             // the key via getKeyId() -> getModulus().
-            'kid' => $this->keyId ??= self::deriveKeyId($details['rsa']['n']),
+            'kid' => $this->keyId ??= $this->deriveKeyId($details['rsa']['n']),
             'n' => $this->base64UrlEncode($details['rsa']['n']),
             'e' => $this->base64UrlEncode($details['rsa']['e']),
         ];
@@ -174,7 +174,7 @@ abstract class Asymmetric extends Issuer
      * Derive a deterministic key id from the RSA modulus, so the same key
      * always yields the same "kid".
      */
-    private static function deriveKeyId(string $modulus): string
+    private function deriveKeyId(string $modulus): string
     {
         return hash('sha256', $modulus);
     }

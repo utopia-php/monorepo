@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Issuers\Symmetric;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Issuers\Symmetric\RefreshToken;
 
-class RefreshTokenTest extends TestCase
+final class RefreshTokenTest extends TestCase
 {
     protected string $secret;
 
@@ -78,7 +80,7 @@ class RefreshTokenTest extends TestCase
         $parts = explode('.', $token);
         $expected = $this->base64UrlEncode(hash_hmac('sha256', $parts[0] . '.' . $parts[1], $this->secret, true));
 
-        $this->assertEquals($expected, $parts[2]);
+        $this->assertSame($expected, $parts[2]);
     }
 
     public function testSignatureFailsWithWrongSecret(): void
@@ -88,7 +90,7 @@ class RefreshTokenTest extends TestCase
         $parts = explode('.', $token);
         $wrong = $this->base64UrlEncode(hash_hmac('sha256', $parts[0] . '.' . $parts[1], 'not-the-secret', true));
 
-        $this->assertNotEquals($wrong, $parts[2]);
+        $this->assertNotSame($wrong, $parts[2]);
     }
 
     public function testScopeOmittedWhenEmpty(): void
@@ -139,7 +141,7 @@ class RefreshTokenTest extends TestCase
     {
         $refreshToken = new RefreshToken($this->secret, 'https://example.com/v1/oauth2/test', 'secret-v2');
 
-        $this->assertEquals('secret-v2', $refreshToken->getKeyId());
+        $this->assertSame('secret-v2', $refreshToken->getKeyId());
 
         $header = $this->decodeSegment(explode('.', $refreshToken->issue('u', 'a', 'c', 100))[0]);
         $this->assertEquals('secret-v2', $header['kid']);
@@ -162,7 +164,7 @@ class RefreshTokenTest extends TestCase
         $secret = RefreshToken::generateSecret();
 
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $secret);
-        $this->assertNotEquals($secret, RefreshToken::generateSecret());
+        $this->assertNotSame($secret, RefreshToken::generateSecret());
     }
 
     public function testEmptySecretThrows(): void

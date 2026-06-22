@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Auth\Issuers\Asymmetric;
 
 use Utopia\Auth\Enums\Claim;
@@ -71,15 +73,15 @@ class IdToken extends Asymmetric
             Claim::AuthTime->value => $authTime,
         ];
 
-        if (!empty($nonce)) {
+        if (!\in_array($nonce, [null, '', '0'], true)) {
             $claims[Claim::Nonce->value] = $nonce;
         }
 
-        if (!empty($accessToken)) {
+        if (!\in_array($accessToken, [null, '', '0'], true)) {
             $claims[Claim::AccessTokenHash->value] = $this->leftHalfHash($accessToken);
         }
 
-        if (!empty($code)) {
+        if (!\in_array($code, [null, '', '0'], true)) {
             $claims[Claim::CodeHash->value] = $this->leftHalfHash($code);
         }
 

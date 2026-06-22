@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Auth\Issuers\Symmetric;
 
 use Utopia\Auth\Enums\Claim;
@@ -67,7 +69,7 @@ class RefreshToken extends Symmetric
             Claim::JwtId->value => $jti ?? $this->generateJti(),
         ];
 
-        if (!empty($scopes)) {
+        if ($scopes !== []) {
             $claims[Claim::Scope->value] = implode(' ', $scopes);
         }
 

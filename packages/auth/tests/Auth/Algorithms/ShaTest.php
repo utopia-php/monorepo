@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Algorithms;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Hashes\Sha;
 
-class ShaTest extends TestCase
+final class ShaTest extends TestCase
 {
     protected Sha $sha;
 
@@ -20,7 +22,6 @@ class ShaTest extends TestCase
         $hash = $this->sha->hash($password);
 
         $this->assertNotEmpty($hash);
-        $this->assertIsString($hash);
         $this->assertTrue($this->sha->verify($password, $hash));
         $this->assertFalse($this->sha->verify('wrongpassword', $hash));
     }
@@ -42,6 +43,6 @@ class ShaTest extends TestCase
 
     public function testGetName(): void
     {
-        $this->assertEquals('sha', $this->sha->getName());
+        $this->assertSame('sha', $this->sha->getName());
     }
 }

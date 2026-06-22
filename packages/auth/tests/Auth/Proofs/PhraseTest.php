@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Proofs;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Proofs\Phrase;
 
-class PhraseTest extends TestCase
+final class PhraseTest extends TestCase
 {
     protected Phrase $phrase;
 
@@ -19,7 +21,6 @@ class PhraseTest extends TestCase
         $proof = $this->phrase->generate();
 
         $this->assertNotEmpty($proof);
-        $this->assertIsString($proof);
         $this->assertStringContainsString(' ', $proof); // Should contain spaces between words
         $this->assertMatchesRegularExpression('/^[a-zA-Z\s]+$/', $proof); // Letters (both cases) and spaces
     }
@@ -30,7 +31,6 @@ class PhraseTest extends TestCase
         $hash = $this->phrase->hash($proof);
 
         $this->assertNotEmpty($hash);
-        $this->assertIsString($hash);
         $this->assertStringStartsWith('$argon2id$', $hash);
     }
 

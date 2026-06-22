@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Verifiers;
 
 use PHPUnit\Framework\TestCase;
@@ -7,10 +9,8 @@ use Utopia\Auth\Issuers\Symmetric\RefreshToken;
 use Utopia\Auth\Verifiers\Symmetric;
 use Utopia\Auth\Verifiers\VerificationException;
 
-class SymmetricTest extends TestCase
+final class SymmetricTest extends TestCase
 {
-    protected string $secret;
-
     protected RefreshToken $issuer;
 
     protected Symmetric $verifier;
@@ -19,9 +19,9 @@ class SymmetricTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->secret = RefreshToken::generateSecret();
-        $this->issuer = new RefreshToken($this->secret, $this->iss);
-        $this->verifier = new Symmetric($this->secret);
+        $secret = RefreshToken::generateSecret();
+        $this->issuer = new RefreshToken($secret, $this->iss);
+        $this->verifier = new Symmetric($secret);
     }
 
     public function testVerifiesIssuedToken(): void

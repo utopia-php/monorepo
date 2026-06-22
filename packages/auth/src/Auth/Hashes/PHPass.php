@@ -35,7 +35,7 @@ class PHPass extends Hash
         $options = $this->getOptions();
         $random = '';
 
-        if (CRYPT_BLOWFISH === 1 && ! $options['portable_hashes']) {
+        if (! $options['portable_hashes']) {
             $random = $this->getRandomBytes(16);
             $hash = crypt($value, $this->gensaltBlowfish($random));
             if (\strlen($hash) === 60) {
@@ -143,9 +143,8 @@ class PHPass extends Hash
         $options = $this->getOptions();
         $output = '$P$';
         $output .= $this->itoa64[min($options['iteration_count_log2'] + ((PHP_VERSION >= '5') ? 5 : 3), 30)];
-        $output .= $this->encode64($input, 6);
 
-        return $output;
+        return $output . $this->encode64($input, 6);
     }
 
     /**
@@ -218,16 +217,14 @@ class PHPass extends Hash
         } while (--$count);
 
         $output = substr($setting, 0, 12);
-        $output .= $this->encode64($hash, 16);
 
-        return $output;
+        return $output . $this->encode64($hash, 16);
     }
 
     /**
      * Set iteration count (log2)
      *
      * @param  int  $count  Iteration count (log2) between 4 and 31
-     * @return static
      *
      * @throws \InvalidArgumentException
      */
@@ -246,7 +243,6 @@ class PHPass extends Hash
      * Set portable hashes mode
      *
      * @param  bool  $portable  Whether to use portable hashes
-     * @return static
      */
     public function setPortableHashes(bool $portable): PHPass
     {

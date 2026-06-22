@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Algorithms;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Hashes\ScryptModified;
 
-class ScryptModifiedTest extends TestCase
+final class ScryptModifiedTest extends TestCase
 {
     protected ScryptModified $scryptModified;
 
@@ -20,7 +22,6 @@ class ScryptModifiedTest extends TestCase
         $hash = $this->scryptModified->hash($password);
 
         $this->assertNotEmpty($hash);
-        $this->assertIsString($hash);
         $this->assertTrue($this->scryptModified->verify($password, $hash));
         $this->assertFalse($this->scryptModified->verify('wrongpassword', $hash));
     }
@@ -39,6 +40,6 @@ class ScryptModifiedTest extends TestCase
 
     public function testGetName(): void
     {
-        $this->assertEquals('scryptMod', $this->scryptModified->getName());
+        $this->assertSame('scryptMod', $this->scryptModified->getName());
     }
 }

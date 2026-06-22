@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Algorithms;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Hashes\Plaintext;
 
-class PlaintextTest extends TestCase
+final class PlaintextTest extends TestCase
 {
     protected Plaintext $plaintext;
 
@@ -20,8 +22,7 @@ class PlaintextTest extends TestCase
         $hash = $this->plaintext->hash($password);
 
         $this->assertNotEmpty($hash);
-        $this->assertIsString($hash);
-        $this->assertEquals($password, $hash);
+        $this->assertSame($password, $hash);
         $this->assertTrue($this->plaintext->verify($password, $hash));
         $this->assertFalse($this->plaintext->verify('wrongpassword', $hash));
     }
@@ -31,7 +32,7 @@ class PlaintextTest extends TestCase
         $password = '!@#$%^&*()_+-=[]{}|;:,.<>?';
         $hash = $this->plaintext->hash($password);
 
-        $this->assertEquals($password, $hash);
+        $this->assertSame($password, $hash);
         $this->assertTrue($this->plaintext->verify($password, $hash));
     }
 
@@ -40,7 +41,7 @@ class PlaintextTest extends TestCase
         $password = 'Hello 世界';
         $hash = $this->plaintext->hash($password);
 
-        $this->assertEquals($password, $hash);
+        $this->assertSame($password, $hash);
         $this->assertTrue($this->plaintext->verify($password, $hash));
     }
 
@@ -49,12 +50,12 @@ class PlaintextTest extends TestCase
         $password = '';
         $hash = $this->plaintext->hash($password);
 
-        $this->assertEquals($password, $hash);
+        $this->assertSame($password, $hash);
         $this->assertTrue($this->plaintext->verify($password, $hash));
     }
 
     public function testGetName(): void
     {
-        $this->assertEquals('plaintext', $this->plaintext->getName());
+        $this->assertSame('plaintext', $this->plaintext->getName());
     }
 }

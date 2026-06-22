@@ -29,7 +29,7 @@ abstract class Symmetric extends Issuer
     ) {
         parent::__construct($issuer);
 
-        if (empty($secret)) {
+        if ($secret === '' || $secret === '0') {
             throw new \Exception('A signing secret is required');
         }
     }

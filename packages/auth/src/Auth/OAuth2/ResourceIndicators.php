@@ -7,7 +7,7 @@ class ResourceIndicators
     /**
      * @var array<int, string>
      */
-    private array $resources;
+    private readonly array $resources;
 
     /**
      * @param array<int, mixed> $resources
@@ -25,7 +25,7 @@ class ResourceIndicators
                 case !\is_string($resource) || $resource === '':
                     throw new InvalidResourceException('resource must be a non-empty absolute URI.');
 
-                case \is_string($resource) && !self::isValid($resource):
+                case !$this->isValid($resource):
                     throw new InvalidResourceException('resource must be an absolute HTTP(S) URI with no fragment component.');
 
                 case \in_array($resource, $seen, true):
@@ -68,7 +68,7 @@ class ResourceIndicators
      */
     public function isSubsetOf(self $granted): bool
     {
-        return empty(array_diff($this->resources, $granted->resources));
+        return array_diff($this->resources, $granted->resources) === [];
     }
 
     public function equals(self $resources): bool
@@ -101,7 +101,7 @@ class ResourceIndicators
         return $this->resources;
     }
 
-    private static function isValid(string $resource): bool
+    private function isValid(string $resource): bool
     {
         $parts = parse_url($resource);
 

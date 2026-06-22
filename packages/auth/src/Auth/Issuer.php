@@ -25,7 +25,7 @@ abstract class Issuer
      */
     public function __construct(protected readonly string $issuer)
     {
-        if (empty($issuer)) {
+        if ($issuer === '' || $issuer === '0') {
             throw new \Exception('An issuer is required');
         }
     }

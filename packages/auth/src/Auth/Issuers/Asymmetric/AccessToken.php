@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Auth\Issuers\Asymmetric;
 
 use Utopia\Auth\Enums\Claim;
@@ -64,7 +66,7 @@ class AccessToken extends Asymmetric
         }
 
         foreach ($audience as $identifier) {
-            if (!\is_string($identifier) || $identifier === '') {
+            if ($identifier === '') {
                 throw new \InvalidArgumentException('audience must contain non-empty resource server identifiers.');
             }
         }
@@ -87,7 +89,7 @@ class AccessToken extends Asymmetric
             Claim::AuthTime->value => $authTime,
         ];
 
-        if (!empty($scopes)) {
+        if ($scopes !== []) {
             $claims[Claim::Scope->value] = implode(' ', $scopes);
         }
 
