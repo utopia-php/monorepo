@@ -34,11 +34,22 @@ abstract class Adapter
      */
     abstract public function stop(): self;
 
+    /**
+     * Read the stopped flag through a method so static analysis treats it as
+     * volatile: stop() may be called from a signal handler mid-consume().
+     *
+     * @phpstan-impure
+     */
+    protected function isStopped(): bool
+    {
+        return $this->stopped;
+    }
+
     public function consume(callable $messageCallback, callable $successCallback, callable $errorCallback): void
     {
         $this->stopped = false;
 
-        while (!$this->stopped) {
+        while (!$this->isStopped()) {
             $message = $this->consumer->receive($this->queue, static::RECEIVE_TIMEOUT);
 
             if ($message === null) {
