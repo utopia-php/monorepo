@@ -207,7 +207,6 @@ class Redis implements Connection
                 $this->redis = $redis;
                 return $this->redis;
             } catch (\RedisException $e) {
-                // Close any half-open handle; harmless (and swallowed) if connect() never succeeded.
                 try {
                     $redis->close();
                 } catch (\Throwable) {

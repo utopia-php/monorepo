@@ -125,12 +125,7 @@ class Redis implements Publisher, Consumer
         $this->closed = true;
     }
 
-    /**
-     * Read the closed flag through a method so static analysis treats it as
-     * volatile: close() may be called from another coroutine mid-receive().
-     *
-     * @phpstan-impure
-     */
+    /** @phpstan-impure close() flips this from another coroutine mid-receive(). */
     private function isClosed(): bool
     {
         return $this->closed;

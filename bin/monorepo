@@ -554,9 +554,7 @@ switch ($command) {
 
             $fix = isset($options['fix']);
             $checks = ['pint' => '../../vendor/bin/pint --config ../../pint.json' . ($fix ? '' : ' --test')];
-            // Every package is analysed at the monorepo's level-5 floor; a package
-            // phpstan.neon (auto-discovered) overrides it to raise the level or add
-            // settings, otherwise we point phpstan at the root baseline.
+            // A package phpstan.neon overrides the root level-5 baseline; without one, fall back to it.
             $checks['phpstan'] = '../../vendor/bin/phpstan analyse --memory-limit=1G'
                 . (glob("{$directory}/phpstan.neon*") !== [] ? '' : ' -c ../../phpstan.neon');
             if (is_file("{$directory}/rector.php")) {
