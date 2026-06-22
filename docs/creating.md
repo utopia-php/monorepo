@@ -47,10 +47,12 @@ Packagist constraints, never path repositories.
 }
 ```
 
-**`phpunit.xml`**, **`phpstan.neon`**, **`rector.php`**, **`.gitignore`** — copy
+**`phpunit.xml`**, **`rector.php`**, **`.gitignore`** — copy
 from `packages/span` verbatim (the `.gitignore` ignores `/vendor/`,
-`composer.lock`, and the phpunit caches). `phpstan.neon` is optional but
-expected; `check` runs it only when present.
+`composer.lock`, and the phpunit caches). A **`phpstan.neon`** is optional:
+`check` analyses every package at the monorepo's level-5 floor (the root
+`phpstan.neon`), so add one only to raise the level or add package-specific
+settings — it overrides the baseline when present.
 
 **`README.md`** — start with an `# Utopia <Ns>` H1 and an Installation /
 Quick Start section. `absorb` inserts the read-only-mirror banner under the H1 in
