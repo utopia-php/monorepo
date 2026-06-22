@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\OAuth2;
 
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -7,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 use Utopia\Auth\OAuth2\InvalidResourceException;
 use Utopia\Auth\OAuth2\ResourceIndicators;
 
-class ResourceIndicatorsTest extends TestCase
+final class ResourceIndicatorsTest extends TestCase
 {
     public function testNormalizesResources(): void
     {
@@ -79,35 +81,33 @@ class ResourceIndicatorsTest extends TestCase
     }
 
     /**
-     * @return array<string, array{resources: string|array<int, mixed>, message: string}>
+     * @return \Iterator<string, array{resources: (array<int, mixed> | string), message: string}>
      */
-    public static function invalidResourceProvider(): array
+    public static function invalidResourceProvider(): \Iterator
     {
-        return [
-            'fragment' => [
-                'resources' => 'https://api.example.com/#section',
-                'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
-            ],
-            'relative URI' => [
-                'resources' => '/relative',
-                'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
-            ],
-            'urn URI' => [
-                'resources' => 'urn:example:resource',
-                'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
-            ],
-            'file URI' => [
-                'resources' => 'file:///etc/passwd',
-                'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
-            ],
-            'javascript URI' => [
-                'resources' => 'javascript:alert(1)',
-                'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
-            ],
-            'non-string' => [
-                'resources' => ['https://api.example.com/', 42],
-                'message' => 'resource must be a non-empty absolute URI.',
-            ],
+        yield 'fragment' => [
+            'resources' => 'https://api.example.com/#section',
+            'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
+        ];
+        yield 'relative URI' => [
+            'resources' => '/relative',
+            'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
+        ];
+        yield 'urn URI' => [
+            'resources' => 'urn:example:resource',
+            'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
+        ];
+        yield 'file URI' => [
+            'resources' => 'file:///etc/passwd',
+            'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
+        ];
+        yield 'javascript URI' => [
+            'resources' => 'javascript:alert(1)',
+            'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
+        ];
+        yield 'non-string' => [
+            'resources' => ['https://api.example.com/', 42],
+            'message' => 'resource must be a non-empty absolute URI.',
         ];
     }
 }

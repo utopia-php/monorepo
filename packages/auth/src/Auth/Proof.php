@@ -1,17 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Auth;
 
 use Utopia\Auth\Hashes\Argon2;
 
 abstract class Proof
 {
-    protected Hash $hash;
-
-    public function __construct()
-    {
-        $this->hash = new Argon2();
-    }
+    public function __construct(protected Hash $hash = new Argon2()) {}
 
     /**
      * Set custom hash

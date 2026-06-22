@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Auth\Proofs;
 
 use Utopia\Auth\Proof;
@@ -11,14 +13,6 @@ class Phrase extends Proof
 
     /** @var array<string> */
     private array $nouns = ['apple', 'banana', 'cat', 'dog', 'elephant', 'fish', 'guitar', 'hat', 'ice cream', 'jacket', 'kangaroo', 'lemon', 'moon', 'notebook', 'orange', 'piano', 'quilt', 'rabbit', 'sun', 'tree', 'umbrella', 'violin', 'watermelon', 'xylophone', 'yogurt', 'zebra', 'airplane', 'ball', 'cloud', 'diamond', 'eagle', 'fire', 'giraffe', 'hammer', 'island', 'jellyfish', 'kiwi', 'lamp', 'mango', 'needle', 'ocean', 'pear', 'quasar', 'rose', 'star', 'turtle', 'unicorn', 'volcano', 'whale', 'xylograph', 'yarn', 'zephyr', 'ant', 'book', 'candle', 'door', 'envelope', 'feather', 'globe', 'harp', 'insect', 'jar', 'kite', 'lighthouse', 'magnet', 'necklace', 'owl', 'puzzle', 'queen', 'rainbow', 'sailboat', 'telescope', 'umbrella', 'vase', 'wallet', 'xylograph', 'yacht', 'zeppelin', 'accordion', 'brush', 'chocolate', 'dolphin', 'easel', 'fountain', 'globe', 'hairbrush', 'iceberg', 'jigsaw', 'kettle', 'leopard', 'marble', 'nutmeg', 'obstacle', 'penguin', 'quiver', 'raccoon', 'sphinx', 'trampoline', 'utensil', 'velvet', 'wagon', 'xerox', 'yodel', 'zipper'];
-
-    /**
-     * Constructor
-     */
-    public function __construct()
-    {
-        parent::__construct();
-    }
 
     /**
      * Generate a proof

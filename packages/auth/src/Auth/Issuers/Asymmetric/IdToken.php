@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Auth\Issuers\Asymmetric;
 
+use Utopia\Auth\Enums\Claim;
 use Utopia\Auth\Issuers\Asymmetric;
 
 /**
@@ -58,27 +61,28 @@ class IdToken extends Asymmetric
         // values so they cannot be injected through $claims when the matching
         // parameter is absent (e.g. a forged at_hash binding the id_token to an
         // access token that was never co-issued).
-        unset($claims['nonce'], $claims['at_hash'], $claims['c_hash']);
+        unset($claims[Claim::Nonce->value], $claims[Claim::AccessTokenHash->value], $claims[Claim::CodeHash->value]);
 
-        $claims = array_merge($claims, [
-            'iss' => $this->issuer,
-            'sub' => $subject,
-            'aud' => $audience,
-            'exp' => $now + $duration,
-            'iat' => $now,
-            'auth_time' => $authTime,
-        ]);
+        $claims = [
+            ...$claims,
+            Claim::Issuer->value => $this->issuer,
+            Claim::Subject->value => $subject,
+            Claim::Audience->value => $audience,
+            Claim::Expiration->value => $now + $duration,
+            Claim::IssuedAt->value => $now,
+            Claim::AuthTime->value => $authTime,
+        ];
 
-        if (!empty($nonce)) {
-            $claims['nonce'] = $nonce;
+        if (!\in_array($nonce, [null, '', '0'], true)) {
+            $claims[Claim::Nonce->value] = $nonce;
         }
 
-        if (!empty($accessToken)) {
-            $claims['at_hash'] = $this->leftHalfHash($accessToken);
+        if (!\in_array($accessToken, [null, '', '0'], true)) {
+            $claims[Claim::AccessTokenHash->value] = $this->leftHalfHash($accessToken);
         }
 
-        if (!empty($code)) {
-            $claims['c_hash'] = $this->leftHalfHash($code);
+        if (!\in_array($code, [null, '', '0'], true)) {
+            $claims[Claim::CodeHash->value] = $this->leftHalfHash($code);
         }
 
         return $this->sign($claims);

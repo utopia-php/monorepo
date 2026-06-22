@@ -148,7 +148,7 @@ class Scrypt extends Hash
      */
     public function setSalt(string $salt): static
     {
-        if (empty($salt)) {
+        if ($salt === '' || $salt === '0') {
             throw new \InvalidArgumentException('Salt cannot be empty');
         }
 

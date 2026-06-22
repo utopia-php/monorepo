@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Proofs;
 
 use PHPUnit\Framework\TestCase;
@@ -12,11 +14,9 @@ use Utopia\Auth\Hashes\ScryptModified;
 use Utopia\Auth\Hashes\Sha;
 use Utopia\Auth\Proofs\Password;
 
-class PasswordTest extends TestCase
+final class PasswordTest extends TestCase
 {
     protected Password $password;
-
-    protected Bcrypt $bcrypt;
 
     protected function setUp(): void
     {
@@ -24,7 +24,7 @@ class PasswordTest extends TestCase
         $this->password = new Password();
 
         // Test legacy constructor with explicit hashes
-        $this->bcrypt = new Bcrypt();
+        new Bcrypt();
     }
 
     public function testGenerate(): void
@@ -32,8 +32,7 @@ class PasswordTest extends TestCase
         $proof = $this->password->generate();
 
         $this->assertNotEmpty($proof);
-        $this->assertIsString($proof);
-        $this->assertEquals(16, \strlen($proof)); // Default length
+        $this->assertSame(16, \strlen($proof)); // Default length
         $this->assertMatchesRegularExpression('/^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{}|;:,.<>?]+$/', $proof);
     }
 
@@ -41,7 +40,7 @@ class PasswordTest extends TestCase
     {
         $this->password->setLength(20);
         $proof = $this->password->generate();
-        $this->assertEquals(20, \strlen($proof));
+        $this->assertSame(20, \strlen($proof));
     }
 
     public function testGenerateWithCustomCharset(): void
@@ -71,7 +70,6 @@ class PasswordTest extends TestCase
         $hash = $this->password->hash($proof);
 
         $this->assertNotEmpty($hash);
-        $this->assertIsString($hash);
         $this->assertStringStartsWith('$argon2id$', $hash); // Default is now argon2
     }
 
@@ -199,5 +197,23 @@ class PasswordTest extends TestCase
             'invalid_option' => 'value',
         ]);
         $this->assertInstanceOf(Bcrypt::class, $hash);
+    }
+
+    public function testActiveHashComesFromRegistry(): void
+    {
+        // A custom registry without Argon2 must drive the active hash instead
+        // of silently falling back to an unregistered Argon2 instance.
+        $password = new Password([Password::BCRYPT => new Bcrypt()]);
+
+        $this->assertInstanceOf(Bcrypt::class, $password->getHash());
+    }
+
+    public function testRemoveCurrentDefaultHashIsGuarded(): void
+    {
+        // The default active hash is the registry's Argon2 instance, so the
+        // current-hash guard fires when removing it.
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Cannot remove current hash');
+        $this->password->removeHash(Password::ARGON2);
     }
 }

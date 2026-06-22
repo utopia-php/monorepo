@@ -2,6 +2,8 @@
 
 namespace Utopia\Auth;
 
+use Utopia\Auth\Enums\Header;
+
 /**
  * Base class for tokens issued as a compact JWS (RFC 7515).
  *
@@ -15,23 +17,17 @@ namespace Utopia\Auth;
 abstract class Issuer
 {
     /**
-     * The token issuer (the "iss" claim). For OAuth2/OIDC this is the URL of
-     * the authorization server, e.g. "https://example.com/v1/oauth2/<id>".
-     */
-    protected string $issuer;
-
-    /**
-     * @param  string  $issuer  The "iss" claim value.
+     * @param  string  $issuer  The token issuer (the "iss" claim). For OAuth2/OIDC
+     *                          this is the URL of the authorization server,
+     *                          e.g. "https://example.com/v1/oauth2/<id>".
      *
      * @throws \Exception When the issuer is missing.
      */
-    public function __construct(string $issuer)
+    public function __construct(protected readonly string $issuer)
     {
-        if (empty($issuer)) {
+        if ($issuer === '' || $issuer === '0') {
             throw new \Exception('An issuer is required');
         }
-
-        $this->issuer = $issuer;
     }
 
     /**
@@ -73,10 +69,11 @@ abstract class Issuer
      */
     protected function sign(array $claims): string
     {
-        $header = array_merge([
-            'typ' => $this->getType(),
-            'alg' => $this->getAlgorithm(),
-        ], $this->getHeaders());
+        $header = [
+            Header::Type->value => $this->getType(),
+            Header::Algorithm->value => $this->getAlgorithm(),
+            ...$this->getHeaders(),
+        ];
 
         $signingInput = $this->base64UrlEncode(json_encode($header, JSON_THROW_ON_ERROR))
             . '.'

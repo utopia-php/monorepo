@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Issuers\Asymmetric;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Issuers\Asymmetric\IdToken;
 
-class IdTokenTest extends TestCase
+final class IdTokenTest extends TestCase
 {
     protected string $privateKey;
 
@@ -89,7 +91,7 @@ class IdTokenTest extends TestCase
             OPENSSL_ALGO_SHA256,
         );
 
-        $this->assertEquals(1, $result);
+        $this->assertSame(1, $result);
     }
 
     public function testNonceClaim(): void
@@ -186,7 +188,7 @@ class IdTokenTest extends TestCase
     {
         $other = new IdToken($this->privateKey, $this->publicKey, 'https://example.com/v1/oauth2/test');
 
-        $this->assertEquals($this->idToken->getKeyId(), $other->getKeyId());
+        $this->assertSame($this->idToken->getKeyId(), $other->getKeyId());
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $this->idToken->getKeyId());
     }
 
@@ -194,7 +196,7 @@ class IdTokenTest extends TestCase
     {
         $idToken = new IdToken($this->privateKey, $this->publicKey, 'https://example.com', 'my-custom-kid');
 
-        $this->assertEquals('my-custom-kid', $idToken->getKeyId());
+        $this->assertSame('my-custom-kid', $idToken->getKeyId());
 
         $token = $idToken->issue('user-123', 'client-abc', 1000, 3600);
         $header = $this->decodeSegment(explode('.', $token)[0]);
@@ -253,7 +255,7 @@ class IdTokenTest extends TestCase
             $publicKey,
             OPENSSL_ALGO_SHA256,
         );
-        $this->assertEquals(1, $result);
+        $this->assertSame(1, $result);
     }
 
     /**

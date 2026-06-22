@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Proofs;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Proofs\Code;
 
-class CodeTest extends TestCase
+final class CodeTest extends TestCase
 {
     protected Code $code;
 
@@ -19,9 +21,8 @@ class CodeTest extends TestCase
         $proof = $this->code->generate();
 
         $this->assertNotEmpty($proof);
-        $this->assertIsString($proof);
-        $this->assertEquals(6, \strlen($proof)); // Default code length
-        $this->assertMatchesRegularExpression('/^[0-9]{6}$/', $proof);
+        $this->assertSame(6, \strlen($proof)); // Default code length
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $proof);
     }
 
     public function testHash(): void
@@ -30,7 +31,6 @@ class CodeTest extends TestCase
         $hash = $this->code->hash($proof);
 
         $this->assertNotEmpty($hash);
-        $this->assertIsString($hash);
     }
 
     public function testVerify(): void
@@ -47,26 +47,26 @@ class CodeTest extends TestCase
         $code = new Code(8);
         $proof = $code->generate();
 
-        $this->assertEquals(8, \strlen($proof));
-        $this->assertMatchesRegularExpression('/^[0-9]{8}$/', $proof);
+        $this->assertSame(8, \strlen($proof));
+        $this->assertMatchesRegularExpression('/^\d{8}$/', $proof);
     }
 
     public function testGetLength(): void
     {
-        $this->assertEquals(6, $this->code->getLength());
+        $this->assertSame(6, $this->code->getLength());
 
         $code = new Code(8);
-        $this->assertEquals(8, $code->getLength());
+        $this->assertSame(8, $code->getLength());
     }
 
     public function testSetLength(): void
     {
         $this->code->setLength(4);
-        $this->assertEquals(4, $this->code->getLength());
+        $this->assertSame(4, $this->code->getLength());
 
         $proof = $this->code->generate();
-        $this->assertEquals(4, \strlen($proof));
-        $this->assertMatchesRegularExpression('/^[0-9]{4}$/', $proof);
+        $this->assertSame(4, \strlen($proof));
+        $this->assertMatchesRegularExpression('/^\d{4}$/', $proof);
     }
 
     public function testSetLengthInvalid(): void

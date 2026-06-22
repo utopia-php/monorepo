@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Hash;
 
-class HashTest extends TestCase
+final class HashTest extends TestCase
 {
     protected Hash $hash;
 
@@ -49,7 +51,7 @@ class HashTest extends TestCase
         $this->hash->setOptions($options);
 
         // Verify all options were set
-        $this->assertEquals($options, $this->hash->getOptions());
+        $this->assertSame($options, $this->hash->getOptions());
 
         // Verify individual options
         foreach ($options as $key => $value) {
@@ -65,7 +67,7 @@ class HashTest extends TestCase
         ];
 
         $this->hash->setOptions($options);
-        $this->assertEquals($options, $this->hash->getOptions());
+        $this->assertSame($options, $this->hash->getOptions());
     }
 
     public function testMethodChaining(): void

@@ -2,6 +2,7 @@
 
 namespace Utopia\Auth\Issuers;
 
+use Utopia\Auth\Enums\Header;
 use Utopia\Auth\Issuer;
 
 /**
@@ -15,44 +16,24 @@ use Utopia\Auth\Issuer;
 abstract class Asymmetric extends Issuer
 {
     /**
-     * PEM-encoded RSA private key used to sign tokens.
-     */
-    protected string $privateKey;
-
-    /**
-     * PEM-encoded RSA public key matching the private key. Used to derive
-     * the key id (kid) and to expose the public JWK for verification.
-     */
-    protected string $publicKey;
-
-    /**
-     * The JWS "kid" header. When null it is derived from the public key.
-     */
-    protected ?string $keyId;
-
-    /**
-     * @param  string  $privateKey  PEM-encoded RSA private key, generate using {@see generateKeyPair()}.
-     * @param  string  $publicKey  PEM-encoded RSA public key, generate using {@see generateKeyPair()}.
+     * @param  string  $privateKey  PEM-encoded RSA private key used to sign tokens, generate using {@see generateKeyPair()}.
+     * @param  string  $publicKey  PEM-encoded RSA public key matching the private key, generate using {@see generateKeyPair()}.
      * @param  string  $issuer  The "iss" claim value.
      * @param  string|null  $keyId  Optional "kid" header; derived from the public key when null.
      *
      * @throws \Exception When a key or the issuer is missing.
      */
     public function __construct(
-        string $privateKey,
-        string $publicKey,
+        protected readonly string $privateKey,
+        protected readonly string $publicKey,
         string $issuer,
-        ?string $keyId = null,
+        protected ?string $keyId = null,
     ) {
         parent::__construct($issuer);
 
-        if (empty($privateKey) || empty($publicKey)) {
+        if ($privateKey === '' || $privateKey === '0' || ($publicKey === '' || $publicKey === '0')) {
             throw new \Exception('Both a private and a public key are required');
         }
-
-        $this->privateKey = $privateKey;
-        $this->publicKey = $publicKey;
-        $this->keyId = $keyId;
     }
 
     /**
@@ -121,7 +102,7 @@ abstract class Asymmetric extends Issuer
      */
     public function getKeyId(): string
     {
-        return $this->keyId ??= self::deriveKeyId($this->getModulus());
+        return $this->keyId ??= $this->deriveKeyId($this->getModulus());
     }
 
     /**
@@ -150,7 +131,7 @@ abstract class Asymmetric extends Issuer
             'alg' => 'RS256',
             // Reuse the modulus already in $details rather than re-parsing
             // the key via getKeyId() -> getModulus().
-            'kid' => $this->keyId ??= self::deriveKeyId($details['rsa']['n']),
+            'kid' => $this->keyId ??= $this->deriveKeyId($details['rsa']['n']),
             'n' => $this->base64UrlEncode($details['rsa']['n']),
             'e' => $this->base64UrlEncode($details['rsa']['e']),
         ];
@@ -168,7 +149,7 @@ abstract class Asymmetric extends Issuer
      */
     protected function getHeaders(): array
     {
-        return ['kid' => $this->getKeyId()];
+        return [Header::KeyId->value => $this->getKeyId()];
     }
 
     /**
@@ -193,7 +174,7 @@ abstract class Asymmetric extends Issuer
      * Derive a deterministic key id from the RSA modulus, so the same key
      * always yields the same "kid".
      */
-    private static function deriveKeyId(string $modulus): string
+    private function deriveKeyId(string $modulus): string
     {
         return hash('sha256', $modulus);
     }

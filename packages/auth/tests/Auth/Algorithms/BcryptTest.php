@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Algorithms;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Hashes\Bcrypt;
 
-class BcryptTest extends TestCase
+final class BcryptTest extends TestCase
 {
     protected Bcrypt $bcrypt;
 
@@ -20,7 +22,6 @@ class BcryptTest extends TestCase
         $hash = $this->bcrypt->hash($password);
 
         $this->assertNotEmpty($hash);
-        $this->assertIsString($hash);
         $this->assertStringStartsWith('$2y$', $hash);
         $this->assertTrue($this->bcrypt->verify($password, $hash));
         $this->assertFalse($this->bcrypt->verify('wrongpassword', $hash));
@@ -28,6 +29,6 @@ class BcryptTest extends TestCase
 
     public function testGetName(): void
     {
-        $this->assertEquals('bcrypt', $this->bcrypt->getName());
+        $this->assertSame('bcrypt', $this->bcrypt->getName());
     }
 }

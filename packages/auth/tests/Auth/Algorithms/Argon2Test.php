@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Algorithms;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Hashes\Argon2;
 
-class Argon2Test extends TestCase
+final class Argon2Test extends TestCase
 {
     protected Argon2 $argon2;
 
@@ -19,7 +21,6 @@ class Argon2Test extends TestCase
         $password = 'test123';
         $hash = $this->argon2->hash($password);
         $this->assertNotEmpty($hash);
-        $this->assertIsString($hash);
         $this->assertStringStartsWith('$argon2id$', $hash);
         $this->assertStringContainsString('m=' . $this->argon2->getOption('memory_cost'), $hash);
         $this->assertStringContainsString('t=' . $this->argon2->getOption('time_cost'), $hash);
@@ -66,6 +67,6 @@ class Argon2Test extends TestCase
 
     public function testGetName(): void
     {
-        $this->assertEquals('argon2', $this->argon2->getName());
+        $this->assertSame('argon2', $this->argon2->getName());
     }
 }

@@ -1,24 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Auth\Issuers\Asymmetric;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Auth\Issuers\Asymmetric\AccessToken;
 
-class AccessTokenTest extends TestCase
+final class AccessTokenTest extends TestCase
 {
-    protected string $privateKey;
-
     protected string $publicKey;
 
     protected AccessToken $accessToken;
 
     protected function setUp(): void
     {
-        [$this->privateKey, $this->publicKey] = AccessToken::generateKeyPair();
+        [$privateKey, $this->publicKey] = AccessToken::generateKeyPair();
 
         $this->accessToken = new AccessToken(
-            $this->privateKey,
+            $privateKey,
             $this->publicKey,
             'https://example.com/v1/oauth2/test',
         );
@@ -97,7 +97,7 @@ class AccessTokenTest extends TestCase
             OPENSSL_ALGO_SHA256,
         );
 
-        $this->assertEquals(1, $result);
+        $this->assertSame(1, $result);
     }
 
     public function testScopeOmittedWhenEmpty(): void
