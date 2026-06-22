@@ -60,7 +60,6 @@ class Password extends Proof
         }
 
         $this->hashes = $hashes;
-        $this->hash = new Argon2(); // Set the first hash as the default one
     }
 
     /**

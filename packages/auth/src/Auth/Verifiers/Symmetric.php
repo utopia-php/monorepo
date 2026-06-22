@@ -15,22 +15,15 @@ use Utopia\Auth\Verifier;
 class Symmetric extends Verifier
 {
     /**
-     * The shared secret used to sign and verify tokens.
-     */
-    protected string $secret;
-
-    /**
-     * @param  string  $secret  The shared signing secret.
+     * @param  string  $secret  The shared signing secret used to verify the signature.
      *
      * @throws \Exception When the secret is missing.
      */
-    public function __construct(string $secret)
+    public function __construct(protected readonly string $secret)
     {
         if (empty($secret)) {
             throw new \Exception('A signing secret is required');
         }
-
-        $this->secret = $secret;
     }
 
     protected function getAlgorithm(): string

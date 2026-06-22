@@ -17,23 +17,17 @@ use Utopia\Auth\Enums\Header;
 abstract class Issuer
 {
     /**
-     * The token issuer (the "iss" claim). For OAuth2/OIDC this is the URL of
-     * the authorization server, e.g. "https://example.com/v1/oauth2/<id>".
-     */
-    protected string $issuer;
-
-    /**
-     * @param  string  $issuer  The "iss" claim value.
+     * @param  string  $issuer  The token issuer (the "iss" claim). For OAuth2/OIDC
+     *                          this is the URL of the authorization server,
+     *                          e.g. "https://example.com/v1/oauth2/<id>".
      *
      * @throws \Exception When the issuer is missing.
      */
-    public function __construct(string $issuer)
+    public function __construct(protected readonly string $issuer)
     {
         if (empty($issuer)) {
             throw new \Exception('An issuer is required');
         }
-
-        $this->issuer = $issuer;
     }
 
     /**

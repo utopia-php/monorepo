@@ -8,9 +8,9 @@ abstract class Proof
 {
     protected Hash $hash;
 
-    public function __construct()
+    public function __construct(Hash $hash = new Argon2())
     {
-        $this->hash = new Argon2();
+        $this->hash = $hash;
     }
 
     /**

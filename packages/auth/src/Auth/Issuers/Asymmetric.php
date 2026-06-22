@@ -16,44 +16,24 @@ use Utopia\Auth\Issuer;
 abstract class Asymmetric extends Issuer
 {
     /**
-     * PEM-encoded RSA private key used to sign tokens.
-     */
-    protected string $privateKey;
-
-    /**
-     * PEM-encoded RSA public key matching the private key. Used to derive
-     * the key id (kid) and to expose the public JWK for verification.
-     */
-    protected string $publicKey;
-
-    /**
-     * The JWS "kid" header. When null it is derived from the public key.
-     */
-    protected ?string $keyId;
-
-    /**
-     * @param  string  $privateKey  PEM-encoded RSA private key, generate using {@see generateKeyPair()}.
-     * @param  string  $publicKey  PEM-encoded RSA public key, generate using {@see generateKeyPair()}.
+     * @param  string  $privateKey  PEM-encoded RSA private key used to sign tokens, generate using {@see generateKeyPair()}.
+     * @param  string  $publicKey  PEM-encoded RSA public key matching the private key, generate using {@see generateKeyPair()}.
      * @param  string  $issuer  The "iss" claim value.
      * @param  string|null  $keyId  Optional "kid" header; derived from the public key when null.
      *
      * @throws \Exception When a key or the issuer is missing.
      */
     public function __construct(
-        string $privateKey,
-        string $publicKey,
+        protected readonly string $privateKey,
+        protected readonly string $publicKey,
         string $issuer,
-        ?string $keyId = null,
+        protected ?string $keyId = null,
     ) {
         parent::__construct($issuer);
 
         if (empty($privateKey) || empty($publicKey)) {
             throw new \Exception('Both a private and a public key are required');
         }
-
-        $this->privateKey = $privateKey;
-        $this->publicKey = $publicKey;
-        $this->keyId = $keyId;
     }
 
     /**

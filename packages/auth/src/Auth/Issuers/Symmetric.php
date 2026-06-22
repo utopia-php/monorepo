@@ -16,35 +16,22 @@ use Utopia\Auth\Issuer;
 abstract class Symmetric extends Issuer
 {
     /**
-     * The shared secret used to sign and verify tokens.
-     */
-    protected string $secret;
-
-    /**
-     * Optional JWS "kid" header, useful when rotating secrets. Omitted when null.
-     */
-    protected ?string $keyId;
-
-    /**
      * @param  string  $secret  The shared signing secret, generate using {@see generateSecret()}.
      * @param  string  $issuer  The "iss" claim value.
-     * @param  string|null  $keyId  Optional "kid" header; omitted when null.
+     * @param  string|null  $keyId  Optional "kid" header, useful when rotating secrets; omitted when null.
      *
      * @throws \Exception When the secret or the issuer is missing.
      */
     public function __construct(
-        string $secret,
+        protected readonly string $secret,
         string $issuer,
-        ?string $keyId = null,
+        protected readonly ?string $keyId = null,
     ) {
         parent::__construct($issuer);
 
         if (empty($secret)) {
             throw new \Exception('A signing secret is required');
         }
-
-        $this->secret = $secret;
-        $this->keyId = $keyId;
     }
 
     /**

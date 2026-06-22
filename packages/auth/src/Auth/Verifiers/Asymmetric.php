@@ -14,22 +14,15 @@ use Utopia\Auth\Verifier;
 class Asymmetric extends Verifier
 {
     /**
-     * PEM-encoded RSA public key used to verify the signature.
-     */
-    protected string $publicKey;
-
-    /**
-     * @param  string  $publicKey  PEM-encoded RSA public key.
+     * @param  string  $publicKey  PEM-encoded RSA public key used to verify the signature.
      *
      * @throws \Exception When the public key is missing.
      */
-    public function __construct(string $publicKey)
+    public function __construct(protected readonly string $publicKey)
     {
         if (empty($publicKey)) {
             throw new \Exception('A public key is required');
         }
-
-        $this->publicKey = $publicKey;
     }
 
     /**
