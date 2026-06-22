@@ -514,6 +514,25 @@ abstract class AdapterContract extends TestCase
         });
     }
 
+    public function testItDoesNotReadABodyForHeadResponses(): void
+    {
+        // A HEAD response advertises the resource's Content-Length but carries
+        // no body. The adapter must not try to read that body: on a closed
+        // socket that surfaces as a truncated-body error, and on a kept-alive
+        // socket it wedges until the timeout. Either way the request must come
+        // back as a clean, empty-bodied 200.
+        Http::raw("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 4\r\n\r\n", function (int $port): void {
+            $client = $this->createAdapter($this->timeoutOptions(1, 1));
+            $request = new Request\Factory()->createRequest(Method::HEAD, 'http://127.0.0.1:' . $port . '/head');
+
+            $response = $this->send($client, $request);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('4', $response->getHeaderLine('Content-Length'));
+            $this->assertSame('', (string) $response->getBody());
+        });
+    }
+
     public function testItThrowsConnectionExceptionsForConnectionFailures(): void
     {
         Http::unbound(function (int $port): void {
