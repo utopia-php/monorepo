@@ -60,6 +60,11 @@ class Password extends Proof
         }
 
         $this->hashes = $hashes;
+
+        // Keep the active hash aligned with the registry so generate()/hash()
+        // use a registered algorithm (Argon2 by default, otherwise the first
+        // registered one) and removeHash()'s current-hash guard can match it.
+        $this->hash = $this->hashes[self::ARGON2] ?? array_values($this->hashes)[0];
     }
 
     /**

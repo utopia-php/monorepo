@@ -18,11 +18,12 @@ use Utopia\Auth\Verifiers\VerificationException;
  * live one level down: {@see \Utopia\Auth\Verifiers\Asymmetric} (RS256) and
  * {@see \Utopia\Auth\Verifiers\Symmetric} (HS256).
  *
- * Expected claim values are opt-in and configured fluently: a check only runs
- * once you supply what to compare against ({@see setIssuer()},
- * {@see setAudience()}). Time validation is on by default and can be relaxed
- * with {@see allowExpired()} (e.g. an OIDC `id_token_hint`) or
- * {@see setLeeway()} for clock skew.
+ * Expected values are opt-in and configured fluently: the issuer, audience and
+ * type are only checked once you supply them ({@see setIssuer()},
+ * {@see setAudience()}, {@see setType()}). Expiry is enforced by default —
+ * "exp" is required and must be in the future — while "nbf"/"iat" are always
+ * enforced when present; {@see allowExpired()} relaxes only the expiry check
+ * and {@see setLeeway()} tolerates clock skew.
  */
 abstract class Verifier
 {
@@ -40,7 +41,14 @@ abstract class Verifier
     protected ?array $audience = null;
 
     /**
-     * Whether the time-based claims ("exp"/"nbf"/"iat") are enforced.
+     * Expected "typ" header (e.g. "at+jwt", "JWT"). When null the type is not
+     * checked.
+     */
+    protected ?string $type = null;
+
+    /**
+     * Whether "exp" is required and enforced. "nbf" and "iat" are always
+     * enforced regardless; this flag only relaxes expiry (see {@see allowExpired()}).
      */
     protected bool $validateTime = true;
 
@@ -82,13 +90,26 @@ abstract class Verifier
     }
 
     /**
-     * Accept tokens whose lifetime has lapsed by skipping the time-based
-     * claims. Useful for an OIDC `id_token_hint`, where the spec requires the
-     * OP to accept an expired hint for a current or recent session.
+     * Accept tokens whose lifetime has lapsed by skipping the "exp" check (and
+     * its required-presence rule). "nbf" and "iat" are still enforced. Useful
+     * for an OIDC `id_token_hint`, where the spec requires the OP to accept an
+     * expired hint for a current or recent session.
      */
     public function allowExpired(bool $allow = true): static
     {
         $this->validateTime = !$allow;
+
+        return $this;
+    }
+
+    /**
+     * Require the token's "typ" header to equal $type (e.g. "at+jwt" for an
+     * RFC 9068 access token), so one token type cannot be accepted in place of
+     * another even when issuer and audience match.
+     */
+    public function setType(string $type): static
+    {
+        $this->type = $type;
 
         return $this;
     }
@@ -141,6 +162,10 @@ abstract class Verifier
             throw new VerificationException('Unexpected token algorithm');
         }
 
+        if ($this->type !== null && ($header[Header::Type->value] ?? null) !== $this->type) {
+            throw new VerificationException('Unexpected token type');
+        }
+
         if (!$this->verifySignature("{$encodedHeader}.{$encodedClaims}", $signature)) {
             throw new VerificationException('Signature verification failed');
         }
@@ -161,35 +186,41 @@ abstract class Verifier
     {
         $now = time();
 
+        // "nbf"/"iat" bound when a token *becomes* valid; they are always
+        // enforced, so a token that is not valid yet or claims a future
+        // issuance is rejected even when expiry is relaxed via allowExpired().
+        $nbf = $claims[Claim::NotBefore->value] ?? null;
+        if ($nbf !== null) {
+            if (!is_numeric($nbf)) {
+                throw new VerificationException('Invalid "nbf" claim');
+            }
+            if ($now + $this->leeway < (int) $nbf) {
+                throw new VerificationException('Token is not yet valid');
+            }
+        }
+
+        $iat = $claims[Claim::IssuedAt->value] ?? null;
+        if ($iat !== null) {
+            if (!is_numeric($iat)) {
+                throw new VerificationException('Invalid "iat" claim');
+            }
+            if ($now + $this->leeway < (int) $iat) {
+                throw new VerificationException('Token was issued in the future');
+            }
+        }
+
+        // These are bounded-lifetime bearer tokens, so "exp" is required and
+        // must be in the future — unless relaxed via allowExpired().
         if ($this->validateTime) {
             $exp = $claims[Claim::Expiration->value] ?? null;
-            if ($exp !== null) {
-                if (!is_numeric($exp)) {
-                    throw new VerificationException('Invalid "exp" claim');
-                }
-                if ($now >= (int) $exp + $this->leeway) {
-                    throw new VerificationException('Token has expired');
-                }
+            if ($exp === null) {
+                throw new VerificationException('Token is missing the "exp" claim');
             }
-
-            $nbf = $claims[Claim::NotBefore->value] ?? null;
-            if ($nbf !== null) {
-                if (!is_numeric($nbf)) {
-                    throw new VerificationException('Invalid "nbf" claim');
-                }
-                if ($now + $this->leeway < (int) $nbf) {
-                    throw new VerificationException('Token is not yet valid');
-                }
+            if (!is_numeric($exp)) {
+                throw new VerificationException('Invalid "exp" claim');
             }
-
-            $iat = $claims[Claim::IssuedAt->value] ?? null;
-            if ($iat !== null) {
-                if (!is_numeric($iat)) {
-                    throw new VerificationException('Invalid "iat" claim');
-                }
-                if ($now + $this->leeway < (int) $iat) {
-                    throw new VerificationException('Token was issued in the future');
-                }
+            if ($now >= (int) $exp + $this->leeway) {
+                throw new VerificationException('Token has expired');
             }
         }
 
@@ -242,7 +273,10 @@ abstract class Verifier
             throw new VerificationException("{$label} is not valid JSON");
         }
 
-        if (!\is_array($data)) {
+        // json_decode(..., true) maps both JSON objects and JSON arrays to PHP
+        // arrays; a populated list means the segment was a JSON array, which is
+        // not a valid JWT header/claims object.
+        if (!\is_array($data) || (array_is_list($data) && $data !== [])) {
             throw new VerificationException("{$label} must be a JSON object");
         }
 

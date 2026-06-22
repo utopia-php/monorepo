@@ -198,4 +198,22 @@ final class PasswordTest extends TestCase
         ]);
         $this->assertInstanceOf(Bcrypt::class, $hash);
     }
+
+    public function testActiveHashComesFromRegistry(): void
+    {
+        // A custom registry without Argon2 must drive the active hash instead
+        // of silently falling back to an unregistered Argon2 instance.
+        $password = new Password([Password::BCRYPT => new Bcrypt()]);
+
+        $this->assertInstanceOf(Bcrypt::class, $password->getHash());
+    }
+
+    public function testRemoveCurrentDefaultHashIsGuarded(): void
+    {
+        // The default active hash is the registry's Argon2 instance, so the
+        // current-hash guard fires when removing it.
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Cannot remove current hash');
+        $this->password->removeHash(Password::ARGON2);
+    }
 }

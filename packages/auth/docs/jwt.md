@@ -126,6 +126,13 @@ signature is checked first, then the `alg` header, then whatever claim
 expectations you configure. `verify()` returns the decoded claims or throws a
 `VerificationException`.
 
+By default a bounded lifetime is enforced: `exp` is **required** and must be in
+the future, and `nbf`/`iat` are rejected if the token isn't valid yet or claims
+a future issuance. The issuer, audience and type checks are opt-in — they only
+run once you call `setIssuer()`, `setAudience()` or `setType()`. Use `setType()`
+to pin the `typ` header (e.g. `at+jwt`) so one token kind can't be accepted in
+place of another.
+
 ```php
 <?php
 
@@ -136,17 +143,19 @@ use Utopia\Auth\Verifiers\VerificationException;
 $verifier = (new Asymmetric($publicKey))
     ->setIssuer('https://example.com/v1/oauth2/project')
     ->setAudience('https://example.com/v1/project')
-    ->setLeeway(30); // tolerate 30s of clock skew
+    ->setType('at+jwt') // require an RFC 9068 access token
+    ->setLeeway(30);    // tolerate 30s of clock skew
 
 try {
     $claims = $verifier->verify($accessToken);
 } catch (VerificationException) {
-    // malformed, bad signature, wrong alg, expired, or a claim mismatch
+    // malformed, bad signature, wrong alg/type, expired, or a claim mismatch
 }
 ```
 
 For an OpenID Connect `id_token_hint` (which must be accepted even after it
-expires), relax the time checks with `allowExpired()`:
+expires), relax only the expiry check with `allowExpired()` (`nbf`/`iat` are
+still enforced):
 
 ```php
 $claims = (new Asymmetric($publicKey))

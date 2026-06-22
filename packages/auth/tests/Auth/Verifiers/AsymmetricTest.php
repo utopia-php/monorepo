@@ -12,6 +12,8 @@ use Utopia\Auth\Verifiers\VerificationException;
 
 final class AsymmetricTest extends TestCase
 {
+    protected string $privateKey;
+
     protected AccessToken $issuer;
 
     protected Asymmetric $verifier;
@@ -20,9 +22,26 @@ final class AsymmetricTest extends TestCase
 
     protected function setUp(): void
     {
-        [$privateKey, $publicKey] = AccessToken::generateKeyPair();
-        $this->issuer = new AccessToken($privateKey, $publicKey, $this->iss);
+        [$this->privateKey, $publicKey] = AccessToken::generateKeyPair();
+        $this->issuer = new AccessToken($this->privateKey, $publicKey, $this->iss);
         $this->verifier = new Asymmetric($publicKey);
+    }
+
+    /**
+     * Hand-sign an RS256 JWS so tests can craft tokens the issuers never
+     * produce (e.g. without "exp", or with a non-object segment).
+     *
+     * @param  array<array-key, mixed>  $claims
+     * @param  array<string, mixed>  $header
+     */
+    private function signRs256(array $claims, array $header = ['typ' => 'at+jwt', 'alg' => 'RS256']): string
+    {
+        $encode = fn(mixed $part): string => rtrim(strtr(base64_encode((string) json_encode($part)), '+/', '-_'), '=');
+
+        $signingInput = $encode($header) . '.' . $encode($claims);
+        openssl_sign($signingInput, $signature, $this->privateKey, OPENSSL_ALGO_SHA256);
+
+        return $signingInput . '.' . rtrim(strtr(base64_encode((string) $signature), '+/', '-_'), '=');
     }
 
     public function testVerifiesIssuedToken(): void
@@ -147,5 +166,62 @@ final class AsymmetricTest extends TestCase
         $this->expectException(VerificationException::class);
         $this->expectExceptionMessage('Token must have three segments');
         $this->verifier->verify('not-a-jwt');
+    }
+
+    public function testMissingExpirationRejected(): void
+    {
+        // A signed token with no "exp" must not verify forever.
+        $token = $this->signRs256(['sub' => 'u']);
+
+        $this->expectException(VerificationException::class);
+        $this->expectExceptionMessage('Token is missing the "exp" claim');
+        $this->verifier->verify($token);
+    }
+
+    public function testNotYetValidRejectedEvenWhenExpiredAllowed(): void
+    {
+        // allowExpired() relaxes only "exp"; a future "nbf" is still rejected.
+        $token = $this->signRs256(['exp' => time() + 3600, 'nbf' => time() + 3600]);
+
+        $this->expectException(VerificationException::class);
+        $this->expectExceptionMessage('Token is not yet valid');
+        $this->verifier->allowExpired()->verify($token);
+    }
+
+    public function testFutureIssuedAtRejected(): void
+    {
+        $token = $this->signRs256(['exp' => time() + 3600, 'iat' => time() + 3600]);
+
+        $this->expectException(VerificationException::class);
+        $this->expectExceptionMessage('Token was issued in the future');
+        $this->verifier->verify($token);
+    }
+
+    public function testTypeMismatchRejected(): void
+    {
+        // The issuer mints "at+jwt"; pinning a different type must reject it.
+        $token = $this->issuer->issue('u', ['aud'], 'c', 1000, 3600);
+
+        $this->expectException(VerificationException::class);
+        $this->expectExceptionMessage('Unexpected token type');
+        $this->verifier->setType('JWT')->verify($token);
+    }
+
+    public function testTypeMatchAccepted(): void
+    {
+        $token = $this->issuer->issue('u', ['aud'], 'c', 1000, 3600);
+        $claims = $this->verifier->setType('at+jwt')->verify($token);
+
+        $this->assertSame('u', $claims['sub']);
+    }
+
+    public function testNonObjectClaimsRejected(): void
+    {
+        // A JSON array as the claims segment is not a valid JWT payload.
+        $token = $this->signRs256([1, 2, 3]);
+
+        $this->expectException(VerificationException::class);
+        $this->expectExceptionMessage('Claims must be a JSON object');
+        $this->verifier->verify($token);
     }
 }
