@@ -166,3 +166,31 @@ $claims = (new Symmetric($secret))
     ->setAudience('https://example.com/token')
     ->verify($refreshToken);
 ```
+
+`Verifiers\Asymmetric` also exposes `getKeyId()`, which derives the JWS `kid`
+deterministically from the public key the same way the issuer does — useful for
+matching a token's `kid` header or selecting the right key from a JWKS:
+
+```php
+$verifier = new Asymmetric($publicKey);
+$kid = $verifier->getKeyId(); // matches the issuer's getKeyId() for the same key
+```
+
+## Claim and header names
+
+The claim and header names used above are also available as string-backed enums,
+so you can reference them without magic strings when reading verified claims:
+
+```php
+<?php
+
+use Utopia\Auth\Enums\Claim;
+use Utopia\Auth\Enums\Header;
+
+$subject = $claims[Claim::Subject->value]; // 'sub'
+$algorithm = Header::Algorithm->value;      // 'alg'
+```
+
+`Claim` covers the RFC 7519 registered claims plus the OAuth2 (RFC 9068) and
+OpenID Connect claims this library issues; `Header` covers the RFC 7515 JOSE
+header parameters (`typ`, `alg`, `kid`).
