@@ -2,6 +2,8 @@
 
 namespace Utopia\Auth;
 
+use Utopia\Auth\Enums\Header;
+
 /**
  * Base class for tokens issued as a compact JWS (RFC 7515).
  *
@@ -73,10 +75,11 @@ abstract class Issuer
      */
     protected function sign(array $claims): string
     {
-        $header = array_merge([
-            'typ' => $this->getType(),
-            'alg' => $this->getAlgorithm(),
-        ], $this->getHeaders());
+        $header = [
+            Header::Type->value => $this->getType(),
+            Header::Algorithm->value => $this->getAlgorithm(),
+            ...$this->getHeaders(),
+        ];
 
         $signingInput = $this->base64UrlEncode(json_encode($header, JSON_THROW_ON_ERROR))
             . '.'

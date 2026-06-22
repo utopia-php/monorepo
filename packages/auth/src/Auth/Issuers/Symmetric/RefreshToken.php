@@ -2,6 +2,7 @@
 
 namespace Utopia\Auth\Issuers\Symmetric;
 
+use Utopia\Auth\Enums\Claim;
 use Utopia\Auth\Issuers\Symmetric;
 
 /**
@@ -53,20 +54,21 @@ class RefreshToken extends Symmetric
 
         // "scope" is issuer-controlled; drop any caller-supplied value so it
         // cannot be injected through $claims when $scopes is empty.
-        unset($claims['scope']);
+        unset($claims[Claim::Scope->value]);
 
-        $claims = array_merge($claims, [
-            'iss' => $this->issuer,
-            'aud' => $audience,
-            'sub' => $subject,
-            'client_id' => $clientId,
-            'exp' => $now + $duration,
-            'iat' => $now,
-            'jti' => $jti ?? $this->generateJti(),
-        ]);
+        $claims = [
+            ...$claims,
+            Claim::Issuer->value => $this->issuer,
+            Claim::Audience->value => $audience,
+            Claim::Subject->value => $subject,
+            Claim::ClientId->value => $clientId,
+            Claim::Expiration->value => $now + $duration,
+            Claim::IssuedAt->value => $now,
+            Claim::JwtId->value => $jti ?? $this->generateJti(),
+        ];
 
         if (!empty($scopes)) {
-            $claims['scope'] = implode(' ', $scopes);
+            $claims[Claim::Scope->value] = implode(' ', $scopes);
         }
 
         return $this->sign($claims);

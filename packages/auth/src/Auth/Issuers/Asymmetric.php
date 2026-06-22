@@ -2,6 +2,7 @@
 
 namespace Utopia\Auth\Issuers;
 
+use Utopia\Auth\Enums\Header;
 use Utopia\Auth\Issuer;
 
 /**
@@ -168,7 +169,7 @@ abstract class Asymmetric extends Issuer
      */
     protected function getHeaders(): array
     {
-        return ['kid' => $this->getKeyId()];
+        return [Header::KeyId->value => $this->getKeyId()];
     }
 
     /**

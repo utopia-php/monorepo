@@ -30,7 +30,7 @@
         "test": "phpunit --configuration phpunit.xml"
     },
     "require": {
-        "php": ">=8.0",
+        "php": ">=8.1",
         "ext-hash": "*",
         "ext-openssl": "*",
         "ext-scrypt": "*",

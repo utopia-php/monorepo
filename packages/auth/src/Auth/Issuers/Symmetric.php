@@ -2,6 +2,7 @@
 
 namespace Utopia\Auth\Issuers;
 
+use Utopia\Auth\Enums\Header;
 use Utopia\Auth\Issuer;
 
 /**
@@ -77,7 +78,7 @@ abstract class Symmetric extends Issuer
      */
     protected function getHeaders(): array
     {
-        return $this->keyId !== null ? ['kid' => $this->keyId] : [];
+        return $this->keyId !== null ? [Header::KeyId->value => $this->keyId] : [];
     }
 
     protected function signInput(string $signingInput): string
