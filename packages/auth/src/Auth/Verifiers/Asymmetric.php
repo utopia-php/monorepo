@@ -15,14 +15,27 @@ class Asymmetric extends Verifier
 {
     /**
      * @param  string  $publicKey  PEM-encoded RSA public key used to verify the signature.
+     * @param  string|null  $issuer  Required "iss" claim; not checked when null.
+     * @param  string|array<int, string>|null  $audience  Acceptable "aud" value(s); not checked when null.
+     * @param  string|null  $type  Required "typ" header (e.g. "at+jwt"); not checked when null.
+     * @param  bool  $allowExpired  Skip the "exp" check when true; "nbf"/"iat" stay enforced.
+     * @param  int  $leeway  Clock-skew tolerance in seconds.
      *
      * @throws \Exception When the public key is missing.
      */
-    public function __construct(protected readonly string $publicKey)
-    {
+    public function __construct(
+        protected readonly string $publicKey,
+        ?string $issuer = null,
+        string|array|null $audience = null,
+        ?string $type = null,
+        bool $allowExpired = false,
+        int $leeway = 0,
+    ) {
         if ($publicKey === '' || $publicKey === '0') {
             throw new \Exception('A public key is required');
         }
+
+        parent::__construct($issuer, $audience, $type, $allowExpired, $leeway);
     }
 
     /**

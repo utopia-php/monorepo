@@ -14,6 +14,8 @@ final class AsymmetricTest extends TestCase
 {
     protected string $privateKey;
 
+    protected string $publicKey;
+
     protected AccessToken $issuer;
 
     protected Asymmetric $verifier;
@@ -22,9 +24,9 @@ final class AsymmetricTest extends TestCase
 
     protected function setUp(): void
     {
-        [$this->privateKey, $publicKey] = AccessToken::generateKeyPair();
-        $this->issuer = new AccessToken($this->privateKey, $publicKey, $this->iss);
-        $this->verifier = new Asymmetric($publicKey);
+        [$this->privateKey, $this->publicKey] = AccessToken::generateKeyPair();
+        $this->issuer = new AccessToken($this->privateKey, $this->publicKey, $this->iss);
+        $this->verifier = new Asymmetric($this->publicKey);
     }
 
     /**
@@ -64,7 +66,7 @@ final class AsymmetricTest extends TestCase
     public function testIssuerCheckPasses(): void
     {
         $token = $this->issuer->issue('u', ['aud'], 'c', 1000, 3600);
-        $claims = $this->verifier->setIssuer($this->iss)->verify($token);
+        $claims = (new Asymmetric($this->publicKey, issuer: $this->iss))->verify($token);
 
         $this->assertEquals($this->iss, $claims['iss']);
     }
@@ -75,13 +77,13 @@ final class AsymmetricTest extends TestCase
 
         $this->expectException(VerificationException::class);
         $this->expectExceptionMessage('Unexpected token issuer');
-        $this->verifier->setIssuer('https://evil.example.com')->verify($token);
+        (new Asymmetric($this->publicKey, issuer: 'https://evil.example.com'))->verify($token);
     }
 
     public function testAudienceMembershipPasses(): void
     {
         $token = $this->issuer->issue('u', ['https://a.example.com', 'https://b.example.com'], 'c', 1000, 3600);
-        $claims = $this->verifier->setAudience('https://b.example.com')->verify($token);
+        $claims = (new Asymmetric($this->publicKey, audience: 'https://b.example.com'))->verify($token);
 
         $this->assertContains('https://b.example.com', $claims['aud']);
     }
@@ -92,7 +94,7 @@ final class AsymmetricTest extends TestCase
 
         $this->expectException(VerificationException::class);
         $this->expectExceptionMessage('Unexpected token audience');
-        $this->verifier->setAudience('https://other.example.com')->verify($token);
+        (new Asymmetric($this->publicKey, audience: 'https://other.example.com'))->verify($token);
     }
 
     public function testExpiredTokenRejected(): void
@@ -108,7 +110,7 @@ final class AsymmetricTest extends TestCase
     public function testExpiredTokenAcceptedWhenAllowed(): void
     {
         $token = $this->issuer->issue('u', ['aud'], 'c', 1000, -3600);
-        $claims = $this->verifier->allowExpired()->verify($token);
+        $claims = (new Asymmetric($this->publicKey, allowExpired: true))->verify($token);
 
         $this->assertEquals('u', $claims['sub']);
     }
@@ -180,12 +182,12 @@ final class AsymmetricTest extends TestCase
 
     public function testNotYetValidRejectedEvenWhenExpiredAllowed(): void
     {
-        // allowExpired() relaxes only "exp"; a future "nbf" is still rejected.
+        // allowExpired relaxes only "exp"; a future "nbf" is still rejected.
         $token = $this->signRs256(['exp' => time() + 3600, 'nbf' => time() + 3600]);
 
         $this->expectException(VerificationException::class);
         $this->expectExceptionMessage('Token is not yet valid');
-        $this->verifier->allowExpired()->verify($token);
+        (new Asymmetric($this->publicKey, allowExpired: true))->verify($token);
     }
 
     public function testFutureIssuedAtRejected(): void
@@ -204,13 +206,13 @@ final class AsymmetricTest extends TestCase
 
         $this->expectException(VerificationException::class);
         $this->expectExceptionMessage('Unexpected token type');
-        $this->verifier->setType('JWT')->verify($token);
+        (new Asymmetric($this->publicKey, type: 'JWT'))->verify($token);
     }
 
     public function testTypeMatchAccepted(): void
     {
         $token = $this->issuer->issue('u', ['aud'], 'c', 1000, 3600);
-        $claims = $this->verifier->setType('at+jwt')->verify($token);
+        $claims = (new Asymmetric($this->publicKey, type: 'at+jwt'))->verify($token);
 
         $this->assertSame('u', $claims['sub']);
     }

@@ -18,44 +18,53 @@ use Utopia\Auth\Verifiers\VerificationException;
  * live one level down: {@see \Utopia\Auth\Verifiers\Asymmetric} (RS256) and
  * {@see \Utopia\Auth\Verifiers\Symmetric} (HS256).
  *
- * Expected values are opt-in and configured fluently: the issuer, audience and
- * type are only checked once you supply them ({@see setIssuer()},
- * {@see setAudience()}, {@see setType()}). Expiry is enforced by default —
- * "exp" is required and must be in the future — while "nbf"/"iat" are always
- * enforced when present; {@see allowExpired()} relaxes only the expiry check
- * and {@see setLeeway()} tolerates clock skew.
+ * Expectations are passed to the constructor (not fluent setters) and held
+ * read-only, so a shared instance is coroutine-safe — its issuer, audience or
+ * type cannot be flipped mid-verification. The issuer, audience and type are
+ * only checked once supplied. Expiry is enforced by default — "exp" is required
+ * and must be in the future — while "nbf"/"iat" are always enforced when
+ * present; `$allowExpired` relaxes only the expiry check and `$leeway`
+ * tolerates clock skew.
  */
 abstract class Verifier
 {
-    /**
-     * Expected "iss" claim. When null the issuer is not checked.
-     */
-    protected ?string $issuer = null;
-
     /**
      * Acceptable "aud" values. A token passes when any of these appears in its
      * audience. When null the audience is not checked.
      *
      * @var array<int, string>|null
      */
-    protected ?array $audience = null;
+    protected readonly ?array $audience;
 
     /**
-     * Expected "typ" header (e.g. "at+jwt", "JWT"). When null the type is not
-     * checked.
+     * Configuration is immutable: passed once at construction so a shared
+     * instance cannot have its expectations flipped mid-verification.
+     *
+     * @param  string|null  $issuer  Required "iss" claim; not checked when null.
+     * @param  string|array<int, string>|null  $audience  Acceptable "aud" value(s); a token passes when any appears in its audience. Not checked when null.
+     * @param  string|null  $type  Required "typ" header (e.g. "at+jwt"); not checked when null, so one token kind cannot be accepted in place of another.
+     * @param  bool  $allowExpired  When true, skip the "exp" check and its required-presence rule (e.g. an OIDC `id_token_hint`); "nbf"/"iat" are still enforced.
+     * @param  int  $leeway  Clock-skew tolerance in seconds for the time-based claims.
+     *
+     * @throws \InvalidArgumentException When the leeway is negative.
      */
-    protected ?string $type = null;
+    public function __construct(
+        protected readonly ?string $issuer = null,
+        string|array|null $audience = null,
+        protected readonly ?string $type = null,
+        protected readonly bool $allowExpired = false,
+        protected readonly int $leeway = 0,
+    ) {
+        if ($leeway < 0) {
+            throw new \InvalidArgumentException('Leeway cannot be negative');
+        }
 
-    /**
-     * Whether "exp" is required and enforced. "nbf" and "iat" are always
-     * enforced regardless; this flag only relaxes expiry (see {@see allowExpired()}).
-     */
-    protected bool $validateTime = true;
-
-    /**
-     * Clock-skew tolerance in seconds applied to the time-based claims.
-     */
-    protected int $leeway = 0;
+        $this->audience = match (true) {
+            $audience === null => null,
+            \is_array($audience) => array_values($audience),
+            default => [$audience],
+        };
+    }
 
     /**
      * The JWS "alg" header the token must carry (e.g. "RS256", "HS256").
@@ -66,67 +75,6 @@ abstract class Verifier
      * Check the raw (binary) signature against the signing input.
      */
     abstract protected function verifySignature(string $signingInput, string $signature): bool;
-
-    /**
-     * Require the token's "iss" claim to equal $issuer.
-     */
-    public function setIssuer(string $issuer): static
-    {
-        $this->issuer = $issuer;
-
-        return $this;
-    }
-
-    /**
-     * Require the token's "aud" claim to contain at least one of these values.
-     *
-     * @param  string|array<int, string>  $audience
-     */
-    public function setAudience(string|array $audience): static
-    {
-        $this->audience = \is_array($audience) ? array_values($audience) : [$audience];
-
-        return $this;
-    }
-
-    /**
-     * Accept tokens whose lifetime has lapsed by skipping the "exp" check (and
-     * its required-presence rule). "nbf" and "iat" are still enforced. Useful
-     * for an OIDC `id_token_hint`, where the spec requires the OP to accept an
-     * expired hint for a current or recent session.
-     */
-    public function allowExpired(bool $allow = true): static
-    {
-        $this->validateTime = !$allow;
-
-        return $this;
-    }
-
-    /**
-     * Require the token's "typ" header to equal $type (e.g. "at+jwt" for an
-     * RFC 9068 access token), so one token type cannot be accepted in place of
-     * another even when issuer and audience match.
-     */
-    public function setType(string $type): static
-    {
-        $this->type = $type;
-
-        return $this;
-    }
-
-    /**
-     * Allow up to $seconds of clock skew when checking the time-based claims.
-     */
-    public function setLeeway(int $seconds): static
-    {
-        if ($seconds < 0) {
-            throw new \InvalidArgumentException('Leeway cannot be negative');
-        }
-
-        $this->leeway = $seconds;
-
-        return $this;
-    }
 
     /**
      * Verify a compact JWS and return its claims.
@@ -210,8 +158,8 @@ abstract class Verifier
         }
 
         // These are bounded-lifetime bearer tokens, so "exp" is required and
-        // must be in the future — unless relaxed via allowExpired().
-        if ($this->validateTime) {
+        // must be in the future — unless relaxed via $allowExpired.
+        if (!$this->allowExpired) {
             $exp = $claims[Claim::Expiration->value] ?? null;
             if ($exp === null) {
                 throw new VerificationException('Token is missing the "exp" claim');

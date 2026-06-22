@@ -122,16 +122,17 @@ $serialized = $resources->toArray();
 ## Verifying tokens
 
 Verify a token minted by one of the issuers (or any compliant JWS). The
-signature is checked first, then the `alg` header, then whatever claim
-expectations you configure. `verify()` returns the decoded claims or throws a
+signature is checked first, then the `alg` header, then the claim expectations
+you pass to the constructor. `verify()` returns the decoded claims or throws a
 `VerificationException`.
 
-By default a bounded lifetime is enforced: `exp` is **required** and must be in
-the future, and `nbf`/`iat` are rejected if the token isn't valid yet or claims
-a future issuance. The issuer, audience and type checks are opt-in — they only
-run once you call `setIssuer()`, `setAudience()` or `setType()`. Use `setType()`
-to pin the `typ` header (e.g. `at+jwt`) so one token kind can't be accepted in
-place of another.
+Expectations are passed at construction (not fluent setters) and held
+read-only, so a verifier instance is immutable and safe to share across
+coroutines. By default a bounded lifetime is enforced: `exp` is **required** and
+must be in the future, and `nbf`/`iat` are rejected if the token isn't valid yet
+or claims a future issuance. The `issuer`, `audience` and `type` checks are
+opt-in — supply `type` to pin the `typ` header (e.g. `at+jwt`) so one token kind
+can't be accepted in place of another.
 
 ```php
 <?php
@@ -140,11 +141,13 @@ use Utopia\Auth\Verifiers\Asymmetric;
 use Utopia\Auth\Verifiers\VerificationException;
 
 // $publicKey is the PEM advertised on the issuer's JWKS endpoint.
-$verifier = (new Asymmetric($publicKey))
-    ->setIssuer('https://example.com/v1/oauth2/project')
-    ->setAudience('https://example.com/v1/project')
-    ->setType('at+jwt') // require an RFC 9068 access token
-    ->setLeeway(30);    // tolerate 30s of clock skew
+$verifier = new Asymmetric(
+    $publicKey,
+    issuer: 'https://example.com/v1/oauth2/project',
+    audience: 'https://example.com/v1/project',
+    type: 'at+jwt', // require an RFC 9068 access token
+    leeway: 30,     // tolerate 30s of clock skew
+);
 
 try {
     $claims = $verifier->verify($accessToken);
@@ -154,13 +157,11 @@ try {
 ```
 
 For an OpenID Connect `id_token_hint` (which must be accepted even after it
-expires), relax only the expiry check with `allowExpired()` (`nbf`/`iat` are
+expires), relax only the expiry check with `allowExpired: true` (`nbf`/`iat` are
 still enforced):
 
 ```php
-$claims = (new Asymmetric($publicKey))
-    ->setIssuer($issuer)
-    ->allowExpired()
+$claims = (new Asymmetric($publicKey, issuer: $issuer, allowExpired: true))
     ->verify($idToken);
 ```
 
@@ -170,9 +171,7 @@ secret:
 ```php
 use Utopia\Auth\Verifiers\Symmetric;
 
-$claims = (new Symmetric($secret))
-    ->setIssuer($issuer)
-    ->setAudience('https://example.com/token')
+$claims = (new Symmetric($secret, issuer: $issuer, audience: 'https://example.com/token'))
     ->verify($refreshToken);
 ```
 
