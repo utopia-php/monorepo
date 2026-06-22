@@ -25,6 +25,7 @@ use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
 use Utopia\Client\Response\Builder as ResponseBuilder;
 use Utopia\Client\Tls;
+use Utopia\Psr7\Method;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
 use ValueError;
@@ -266,6 +267,7 @@ class Client implements Adapter
         $options = [
             \CURLOPT_URL => (string) $request->getUri(),
             \CURLOPT_CUSTOMREQUEST => $request->getMethod(),
+            \CURLOPT_NOBODY => $request->getMethod() === Method::HEAD,
             \CURLOPT_FOLLOWLOCATION => false,
             \CURLOPT_HEADER => false,
             \CURLOPT_HTTPHEADER => $this->headers($request),
