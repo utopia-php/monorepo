@@ -12,6 +12,5 @@ final class Message
         public readonly ?string $replyTo = null,
         public readonly ?Headers $headers = null,
         public readonly ?string $sid = null,
-    ) {
-    }
+    ) {}
 }

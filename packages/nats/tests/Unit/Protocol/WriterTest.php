@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Utopia\NATS\Tests\Unit\Protocol;
 
-use Utopia\NATS\Protocol\Writer;
 use PHPUnit\Framework\TestCase;
+use Utopia\NATS\Protocol\Writer;
 
 final class WriterTest extends TestCase
 {
@@ -44,7 +44,7 @@ final class WriterTest extends TestCase
     {
         $headers = "NATS/1.0\r\nX-Key: value\r\n\r\n";
         $result = $this->writer->hpub('foo', $headers, 'hello');
-        $headerLen = strlen($headers);
+        $headerLen = \strlen($headers);
         $totalLen = $headerLen + 5;
         $this->assertSame("HPUB foo {$headerLen} {$totalLen}\r\n{$headers}hello\r\n", $result);
     }
@@ -53,7 +53,7 @@ final class WriterTest extends TestCase
     {
         $headers = "NATS/1.0\r\n\r\n";
         $result = $this->writer->hpub('foo', $headers, 'data', 'reply');
-        $headerLen = strlen($headers);
+        $headerLen = \strlen($headers);
         $totalLen = $headerLen + 4;
         $this->assertSame("HPUB foo reply {$headerLen} {$totalLen}\r\n{$headers}data\r\n", $result);
     }

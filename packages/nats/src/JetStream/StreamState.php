@@ -14,8 +14,7 @@ final class StreamState
         public readonly int $lastSeq,
         public readonly ?string $lastTs,
         public readonly int $consumerCount,
-    ) {
-    }
+    ) {}
 
     public static function fromArray(array $data): self
     {

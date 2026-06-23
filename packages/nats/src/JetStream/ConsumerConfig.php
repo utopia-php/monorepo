@@ -31,8 +31,7 @@ final class ConsumerConfig
         public readonly ?int $maxBytes = null,
         public readonly bool $memStorage = false,
         public readonly ?int $numReplicas = null,
-    ) {
-    }
+    ) {}
 
     public function toArray(): array
     {

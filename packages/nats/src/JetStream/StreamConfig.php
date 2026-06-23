@@ -33,8 +33,7 @@ final class StreamConfig
         public readonly bool $denyDelete = false,
         public readonly bool $denyPurge = false,
         public readonly bool $allowRollup = false,
-    ) {
-    }
+    ) {}
 
     public function toArray(): array
     {

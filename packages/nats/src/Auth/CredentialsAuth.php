@@ -56,7 +56,7 @@ final class CredentialsAuth implements Authenticator
             return null;
         }
 
-        $startPos += strlen($begin);
+        $startPos += \strlen($begin);
         $endPos = strpos($content, $end, $startPos);
         if ($endPos === false) {
             return null;

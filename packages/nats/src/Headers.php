@@ -144,6 +144,6 @@ final class Headers implements \IteratorAggregate, \Countable
 
     public function count(): int
     {
-        return count($this->headers);
+        return \count($this->headers);
     }
 }

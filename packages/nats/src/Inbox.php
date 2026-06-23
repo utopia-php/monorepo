@@ -18,10 +18,10 @@ final class Inbox
     {
         $id = '';
         $bytes = random_bytes(self::ID_LENGTH);
-        $charsetLen = strlen(self::CHARSET);
+        $charsetLen = \strlen(self::CHARSET);
 
         for ($i = 0; $i < self::ID_LENGTH; $i++) {
-            $id .= self::CHARSET[ord($bytes[$i]) % $charsetLen];
+            $id .= self::CHARSET[\ord($bytes[$i]) % $charsetLen];
         }
 
         return $id;

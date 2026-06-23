@@ -8,7 +8,6 @@ use Utopia\NATS\Connection;
 use Utopia\NATS\Exception\KeyValueException;
 use Utopia\NATS\Headers;
 use Utopia\NATS\JetStream\JetStream;
-use Utopia\NATS\JetStream\StreamConfig;
 
 final class KeyValue
 {
@@ -16,8 +15,7 @@ final class KeyValue
         private readonly Connection $conn,
         private readonly JetStream $js,
         private readonly string $bucket,
-    ) {
-    }
+    ) {}
 
     public function get(string $key): KeyValueEntry
     {
@@ -159,7 +157,7 @@ final class KeyValue
             $subjects = $data['state']['subjects'] ?? [];
             foreach ($subjects as $subj => $count) {
                 if (str_starts_with($subj, $prefix)) {
-                    $keys[] = substr($subj, strlen($prefix));
+                    $keys[] = substr($subj, \strlen($prefix));
                 }
             }
 

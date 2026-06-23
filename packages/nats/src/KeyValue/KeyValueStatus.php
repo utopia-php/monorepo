@@ -15,6 +15,5 @@ final class KeyValueStatus
         public readonly int $history,
         public readonly ?float $ttl,
         public readonly StreamInfo $streamInfo,
-    ) {
-    }
+    ) {}
 }

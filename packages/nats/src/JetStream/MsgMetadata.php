@@ -15,8 +15,7 @@ final class MsgMetadata
         public readonly string $timestamp,
         public readonly int $numPending,
         public readonly ?string $domain = null,
-    ) {
-    }
+    ) {}
 
     /**
      * Parse from reply subject: $JS.ACK.<stream>.<consumer>.<delivered>.<streamSeq>.<consumerSeq>.<timestamp>.<pending>
@@ -27,8 +26,8 @@ final class MsgMetadata
         $parts = explode('.', $reply);
 
         // Standard format: $JS.ACK.<stream>.<consumer>.<delivered>.<streamSeq>.<consumerSeq>.<timestamp>.<pending>
-        if (count($parts) >= 9 && $parts[0] === '$JS' && $parts[1] === 'ACK') {
-            if (count($parts) === 9) {
+        if (\count($parts) >= 9 && $parts[0] === '$JS' && $parts[1] === 'ACK') {
+            if (\count($parts) === 9) {
                 return new self(
                     stream: $parts[2],
                     consumer: $parts[3],
@@ -41,7 +40,7 @@ final class MsgMetadata
             }
 
             // Domain format has extra parts
-            if (count($parts) >= 11) {
+            if (\count($parts) >= 11) {
                 return new self(
                     domain: $parts[2],
                     stream: $parts[4],

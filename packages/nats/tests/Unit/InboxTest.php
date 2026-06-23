@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Utopia\NATS\Tests\Unit;
 
-use Utopia\NATS\Inbox;
 use PHPUnit\Framework\TestCase;
+use Utopia\NATS\Inbox;
 
 final class InboxTest extends TestCase
 {
@@ -13,7 +13,7 @@ final class InboxTest extends TestCase
     {
         $inbox = Inbox::create();
         $this->assertStringStartsWith('_INBOX.', $inbox);
-        $this->assertSame(29, strlen($inbox)); // "_INBOX." (7) + 22 chars
+        $this->assertSame(29, \strlen($inbox)); // "_INBOX." (7) + 22 chars
     }
 
     public function testCreateWithCustomPrefix(): void
@@ -32,7 +32,7 @@ final class InboxTest extends TestCase
     public function testGenerateId(): void
     {
         $id = Inbox::generateId();
-        $this->assertSame(22, strlen($id));
+        $this->assertSame(22, \strlen($id));
         $this->assertMatchesRegularExpression('/^[0-9A-Za-z]+$/', $id);
     }
 }

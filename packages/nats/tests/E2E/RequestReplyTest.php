@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Utopia\NATS\Tests\Integration;
+namespace Utopia\NATS\Tests\E2E;
 
-use Utopia\NATS\Connection;
-use Utopia\NATS\Exception\TimeoutException;
 use PHPUnit\Framework\TestCase;
+use Utopia\NATS\Connection;
+use Utopia\NATS\Exception\NatsException;
+use Utopia\NATS\Exception\TimeoutException;
 
 /**
  * Integration tests require a running NATS server at localhost:4222.
@@ -40,8 +41,26 @@ final class RequestReplyTest extends TestCase
     {
         $conn = Connection::connect($this->getServerUrl());
 
+        // Subscribe a silent responder so the server sees interest and does not
+        // short-circuit with a "no responders" reply — the request must hang
+        // until it times out.
+        $conn->subscribe('test.silent', fn($msg) => null);
+
         $this->expectException(TimeoutException::class);
-        $conn->request('test.no-responder-' . uniqid(), 'hello', 0.5);
+        $conn->request('test.silent', 'hello', 0.5);
+
+        $conn->close();
+    }
+
+    public function testRequestNoResponders(): void
+    {
+        $conn = Connection::connect($this->getServerUrl());
+
+        // With no subscriber on the subject the server replies immediately with
+        // a 503 "no responders" status rather than letting the request hang.
+        $this->expectException(NatsException::class);
+        $this->expectExceptionMessage('No responders for request');
+        $conn->request('test.no-responder-' . uniqid(), 'hello', 2.0);
 
         $conn->close();
     }

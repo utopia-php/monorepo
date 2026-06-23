@@ -13,8 +13,7 @@ final class Parser
 
     public function __construct(
         private readonly Transport $transport,
-    ) {
-    }
+    ) {}
 
     /**
      * Read and parse the next server operation.
@@ -80,11 +79,11 @@ final class Parser
     {
         $parts = preg_split('/\s+/', trim($args));
 
-        if ($parts === false || count($parts) < 3 || count($parts) > 4) {
+        if ($parts === false || \count($parts) < 3 || \count($parts) > 4) {
             throw new ProtocolException("Invalid MSG line: MSG {$args}");
         }
 
-        if (count($parts) === 3) {
+        if (\count($parts) === 3) {
             [$subject, $sid, $byteCount] = $parts;
             $replyTo = null;
         } else {
@@ -114,11 +113,11 @@ final class Parser
     {
         $parts = preg_split('/\s+/', trim($args));
 
-        if ($parts === false || count($parts) < 4 || count($parts) > 5) {
+        if ($parts === false || \count($parts) < 4 || \count($parts) > 5) {
             throw new ProtocolException("Invalid HMSG line: HMSG {$args}");
         }
 
-        if (count($parts) === 4) {
+        if (\count($parts) === 4) {
             [$subject, $sid, $headerBytes, $totalBytes] = $parts;
             $replyTo = null;
         } else {
@@ -173,8 +172,8 @@ final class Parser
 
     private function readExactly(int $bytes): string
     {
-        while (strlen($this->buffer) < $bytes) {
-            $data = $this->transport->read(max(65536, $bytes - strlen($this->buffer)));
+        while (\strlen($this->buffer) < $bytes) {
+            $data = $this->transport->read(max(65536, $bytes - \strlen($this->buffer)));
             if ($data === '') {
                 throw new ProtocolException('Unexpected end of data while reading payload');
             }

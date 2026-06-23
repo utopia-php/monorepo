@@ -14,8 +14,7 @@ final class MessageBatch implements \IteratorAggregate, \Countable
 
     public function __construct(
         private readonly Connection $conn,
-    ) {
-    }
+    ) {}
 
     public function addMessage(Message $msg): void
     {
@@ -35,6 +34,6 @@ final class MessageBatch implements \IteratorAggregate, \Countable
 
     public function count(): int
     {
-        return count($this->messages);
+        return \count($this->messages);
     }
 }

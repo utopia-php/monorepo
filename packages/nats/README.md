@@ -1,5 +1,8 @@
 # nats.php
 
+> [!IMPORTANT]
+> This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Development happens in [`packages/nats`](https://github.com/utopia-php/monorepo/tree/main/packages/nats) — please open issues and pull requests there.
+
 A modern PHP client for [NATS](https://nats.io) messaging system with JetStream and Key-Value store support.
 
 ## Requirements

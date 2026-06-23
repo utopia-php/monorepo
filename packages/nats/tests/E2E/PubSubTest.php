@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Utopia\NATS\Tests\Integration;
+namespace Utopia\NATS\Tests\E2E;
 
+use PHPUnit\Framework\TestCase;
 use Utopia\NATS\Connection;
 use Utopia\NATS\Headers;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Integration tests require a running NATS server at localhost:4222.

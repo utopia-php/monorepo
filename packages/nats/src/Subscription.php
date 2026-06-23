@@ -34,36 +34,25 @@ final class Subscription
 
     public function nextMessage(?float $timeout = null): ?Message
     {
-        if (!$this->active) {
-            return null;
-        }
-
-        // Return from pending queue first
-        if (!$this->pendingMessages->isEmpty()) {
-            return $this->pendingMessages->dequeue();
-        }
-
-        // Block and process messages until one arrives for this subscription
-        if ($this->connection === null) {
-            return null;
-        }
-
         $deadline = $timeout !== null ? microtime(true) + $timeout : null;
 
-        while ($this->active) {
+        while (true) {
+            // Drain anything already queued before blocking on the socket.
+            if (!$this->pendingMessages->isEmpty()) {
+                return $this->pendingMessages->dequeue();
+            }
+
+            if (!$this->active || $this->connection === null) {
+                return null;
+            }
+
             $remaining = $deadline !== null ? $deadline - microtime(true) : null;
             if ($remaining !== null && $remaining <= 0) {
                 return null;
             }
 
             $this->connection->processMessage($remaining);
-
-            if (!$this->pendingMessages->isEmpty()) {
-                return $this->pendingMessages->dequeue();
-            }
         }
-
-        return null;
     }
 
     public function unsubscribe(?int $afterMessages = null): void

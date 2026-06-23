@@ -4,6 +4,4 @@ declare(strict_types=1);
 
 namespace Utopia\NATS\Exception;
 
-class KeyValueException extends NatsException
-{
-}
+class KeyValueException extends NatsException {}

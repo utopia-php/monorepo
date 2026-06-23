@@ -59,8 +59,6 @@ final class Connection
     // Reconnection
     /** @var list<string> */
     private array $serverPool = [];
-    private int $currentServerIndex = 0;
-    private int $reconnectAttempts = 0;
     /** @var list<string> */
     private array $pendingBuffer = [];
 
@@ -97,9 +95,9 @@ final class Connection
     {
         $this->ensureConnected();
 
-        if (isset($this->serverInfo) && strlen($data) > $this->serverInfo->maxPayload) {
+        if (isset($this->serverInfo) && \strlen($data) > $this->serverInfo->maxPayload) {
             throw new MaxPayloadException(
-                "Payload size " . strlen($data) . " exceeds server maximum of {$this->serverInfo->maxPayload}"
+                'Payload size ' . \strlen($data) . " exceeds server maximum of {$this->serverInfo->maxPayload}",
             );
         }
 
@@ -353,9 +351,7 @@ final class Connection
         foreach ($this->serverPool as $index => $url) {
             try {
                 $this->connectToServer($url);
-                $this->currentServerIndex = $index;
                 $this->status = self::STATUS_CONNECTED;
-                $this->reconnectAttempts = 0;
                 return;
             } catch (\Throwable $e) {
                 $lastError = $e;
@@ -400,7 +396,7 @@ final class Connection
 
         // Merge connect_urls into server pool
         foreach ($this->serverInfo->connectUrls as $connectUrl) {
-            if (!in_array($connectUrl, $this->serverPool, true)) {
+            if (!\in_array($connectUrl, $this->serverPool, true)) {
                 $this->serverPool[] = $this->normalizeUrl($connectUrl);
             }
         }
@@ -436,7 +432,7 @@ final class Connection
             }
             if ($op === ServerOp::Err) {
                 $this->transport->close();
-                $errMsg = is_string($data) ? $data : 'Unknown error';
+                $errMsg = \is_string($data) ? $data : 'Unknown error';
                 if (stripos($errMsg, 'authorization') !== false || stripos($errMsg, 'authentication') !== false) {
                     throw new AuthenticationException("Server error: {$errMsg}");
                 }
@@ -483,10 +479,10 @@ final class Connection
         };
     }
 
-    private function handleMessage(array $data): ?Message
+    private function handleMessage(array $data): Message
     {
         $headers = null;
-        if (isset($data['headers']) && $data['headers'] !== null) {
+        if (isset($data['headers'])) {
             $headers = Headers::fromWire($data['headers']);
         }
 
@@ -535,7 +531,7 @@ final class Connection
 
     private function handleError(mixed $data): never
     {
-        $message = is_string($data) ? $data : 'Unknown server error';
+        $message = \is_string($data) ? $data : 'Unknown server error';
 
         if ($this->options->onError !== null) {
             ($this->options->onError)(new NatsException($message));
@@ -556,7 +552,7 @@ final class Connection
 
     private function handleInfo(mixed $data): null
     {
-        if (is_array($data)) {
+        if (\is_array($data)) {
             $this->serverInfo = ServerInfo::fromArray($data);
         }
         return null;
@@ -617,9 +613,7 @@ final class Connection
             foreach ($this->serverPool as $index => $url) {
                 try {
                     $this->connectToServer($url);
-                    $this->currentServerIndex = $index;
                     $this->status = self::STATUS_CONNECTED;
-                    $this->reconnectAttempts = 0;
                     $this->outstandingPings = 0;
 
                     // Re-subscribe all active subscriptions
@@ -692,7 +686,7 @@ final class Connection
             return null;
         }
 
-        return substr($subject, strlen($this->inboxPrefix) + 1);
+        return substr($subject, \strlen($this->inboxPrefix) + 1);
     }
 
     private function resolveAuthenticator(ConnectionOptions $options): Authenticator
@@ -737,7 +731,7 @@ final class Connection
     {
         $servers = array_map(fn(string $url) => $this->normalizeUrl($url), $options->servers);
 
-        if (!$options->noRandomize && count($servers) > 1) {
+        if (!$options->noRandomize && \count($servers) > 1) {
             shuffle($servers);
         }
 

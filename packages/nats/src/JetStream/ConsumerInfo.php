@@ -15,8 +15,7 @@ final class ConsumerInfo
         public readonly int $numRedelivered,
         public readonly int $numWaiting,
         public readonly int $numPending,
-    ) {
-    }
+    ) {}
 
     public static function fromArray(array $data): self
     {

@@ -14,8 +14,7 @@ final class TlsTransport implements Transport
 
     public function __construct(
         private readonly array $tlsOptions = [],
-    ) {
-    }
+    ) {}
 
     public function connect(string $host, int $port, float $timeout): void
     {
@@ -72,7 +71,7 @@ final class TlsTransport implements Transport
 
         if ($data === false) {
             $info = stream_get_meta_data($stream);
-            if ($info['timed_out'] ?? false) {
+            if ($info['timed_out']) {
                 throw new TimeoutException('Read timed out');
             }
             throw new ConnectionException('Failed to read from TLS socket');
@@ -99,7 +98,7 @@ final class TlsTransport implements Transport
 
         if ($line === false) {
             $info = stream_get_meta_data($stream);
-            if ($info['timed_out'] ?? false) {
+            if ($info['timed_out']) {
                 throw new TimeoutException('Read timed out');
             }
             if (feof($stream)) {

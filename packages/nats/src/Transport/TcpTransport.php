@@ -124,7 +124,7 @@ final class TcpTransport implements Transport
         $merged = array_merge_recursive($context, $contextOptions);
         foreach ($merged as $wrapper => $opts) {
             foreach ($opts as $key => $value) {
-                stream_context_set_option($stream, $wrapper, $key, is_array($value) ? end($value) : $value);
+                stream_context_set_option($stream, $wrapper, $key, \is_array($value) ? end($value) : $value);
             }
         }
 
@@ -170,6 +170,6 @@ final class TcpTransport implements Transport
     private function isTimedOut($stream): bool
     {
         $info = stream_get_meta_data($stream);
-        return $info['timed_out'] ?? false;
+        return $info['timed_out'];
     }
 }

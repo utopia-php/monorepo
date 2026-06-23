@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Utopia\NATS\Tests\Unit\Protocol;
 
+use PHPUnit\Framework\TestCase;
 use Utopia\NATS\Exception\ProtocolException;
 use Utopia\NATS\Protocol\Parser;
 use Utopia\NATS\Protocol\ServerOp;
 use Utopia\NATS\Transport\Transport;
-use PHPUnit\Framework\TestCase;
 
 final class ParserTest extends TestCase
 {
     private function createParser(string $data): Parser
     {
-        $transport = new class($data) implements Transport {
+        $transport = new class ($data) implements Transport {
             private int $pos = 0;
 
             public function __construct(private readonly string $data) {}
@@ -23,16 +23,16 @@ final class ParserTest extends TestCase
 
             public function write(string $data): int
             {
-                return strlen($data);
+                return \strlen($data);
             }
 
             public function read(int $maxBytes, ?float $timeout = null): string
             {
-                if ($this->pos >= strlen($this->data)) {
+                if ($this->pos >= \strlen($this->data)) {
                     return '';
                 }
                 $chunk = substr($this->data, $this->pos, $maxBytes);
-                $this->pos += strlen($chunk);
+                $this->pos += \strlen($chunk);
                 return $chunk;
             }
 
@@ -48,7 +48,10 @@ final class ParserTest extends TestCase
             }
 
             public function upgradeTls(array $options): void {}
-            public function isConnected(): bool { return true; }
+            public function isConnected(): bool
+            {
+                return true;
+            }
             public function close(): void {}
         };
 
@@ -127,9 +130,9 @@ final class ParserTest extends TestCase
     public function testParseHmsg(): void
     {
         $headers = "NATS/1.0\r\nX-Test: value\r\n\r\n";
-        $headerLen = strlen($headers);
+        $headerLen = \strlen($headers);
         $payload = 'hello';
-        $totalLen = $headerLen + strlen($payload);
+        $totalLen = $headerLen + \strlen($payload);
         $parser = $this->createParser("HMSG foo.bar 1 {$headerLen} {$totalLen}\r\n{$headers}{$payload}\r\n");
         [$op, $data] = $parser->next();
         $this->assertSame(ServerOp::HMsg, $op);
@@ -141,7 +144,7 @@ final class ParserTest extends TestCase
     public function testParseHmsgWithReply(): void
     {
         $headers = "NATS/1.0\r\n\r\n";
-        $headerLen = strlen($headers);
+        $headerLen = \strlen($headers);
         $totalLen = $headerLen + 3;
         $parser = $this->createParser("HMSG foo 1 reply {$headerLen} {$totalLen}\r\n{$headers}bar\r\n");
         [$op, $data] = $parser->next();

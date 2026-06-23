@@ -10,8 +10,7 @@ final class StreamInfo
         public readonly StreamConfig $config,
         public readonly StreamState $state,
         public readonly string $created,
-    ) {
-    }
+    ) {}
 
     public static function fromArray(array $data): self
     {

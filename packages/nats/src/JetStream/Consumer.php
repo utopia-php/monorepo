@@ -6,7 +6,6 @@ namespace Utopia\NATS\JetStream;
 
 use Utopia\NATS\Connection;
 use Utopia\NATS\Exception\TimeoutException;
-use Utopia\NATS\Headers;
 
 final class Consumer
 {
@@ -15,8 +14,7 @@ final class Consumer
         private readonly string $stream,
         private ConsumerInfo $info,
         private readonly string $apiPrefix = '$JS.API',
-    ) {
-    }
+    ) {}
 
     /**
      * Fetch a batch of messages from the consumer.
@@ -39,7 +37,7 @@ final class Consumer
         $messageBatch = new MessageBatch($this->conn);
         $deadline = microtime(true) + $timeout;
 
-        while (count($messageBatch) < $batch) {
+        while (\count($messageBatch) < $batch) {
             $remaining = $deadline - microtime(true);
             if ($remaining <= 0) {
                 break;

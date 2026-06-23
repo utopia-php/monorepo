@@ -51,6 +51,6 @@ final class ConnectionOptions
         public readonly ?\Closure $onClose = null,
         public readonly ?\Closure $onError = null,
     ) {
-        $this->servers = is_string($servers) ? [$servers] : $servers;
+        $this->servers = \is_string($servers) ? [$servers] : $servers;
     }
 }

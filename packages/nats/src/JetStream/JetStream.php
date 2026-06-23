@@ -7,6 +7,8 @@ namespace Utopia\NATS\JetStream;
 use Utopia\NATS\Connection;
 use Utopia\NATS\Exception\JetStreamException;
 use Utopia\NATS\Headers;
+use Utopia\NATS\KeyValue\KeyValue;
+use Utopia\NATS\KeyValue\KeyValueConfig;
 
 final class JetStream
 {
@@ -160,7 +162,7 @@ final class JetStream
             $headers->set('Nats-Expected-Stream', $expectedStream);
         }
 
-        $useHeaders = count($headers) > 0 ? $headers : null;
+        $useHeaders = \count($headers) > 0 ? $headers : null;
         $response = $this->conn->request($subject, $data, headers: $useHeaders);
 
         $responseData = json_decode($response->data, true, 512, JSON_THROW_ON_ERROR);
@@ -171,18 +173,18 @@ final class JetStream
 
     // --- Key-Value ---
 
-    public function createKeyValue(KeyValue\KeyValueConfig $config): KeyValue\KeyValue
+    public function createKeyValue(KeyValueConfig $config): KeyValue
     {
         $streamConfig = $config->toStreamConfig();
         $this->createOrUpdateStream($streamConfig);
-        return new KeyValue\KeyValue($this->conn, $this, $config->bucket);
+        return new KeyValue($this->conn, $this, $config->bucket);
     }
 
-    public function getKeyValue(string $bucket): KeyValue\KeyValue
+    public function getKeyValue(string $bucket): KeyValue
     {
         // Verify the KV stream exists
         $this->getStreamInfo("KV_{$bucket}");
-        return new KeyValue\KeyValue($this->conn, $this, $bucket);
+        return new KeyValue($this->conn, $this, $bucket);
     }
 
     public function deleteKeyValue(string $bucket): void

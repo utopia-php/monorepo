@@ -15,7 +15,7 @@ final class NKeyAuth implements Authenticator
         string $nkey,
         string $nkeySeed,
     ) {
-        if (!function_exists('sodium_crypto_sign_detached')) {
+        if (!\function_exists('sodium_crypto_sign_detached')) {
             throw new AuthenticationException('NKey authentication requires the sodium PHP extension');
         }
 
@@ -43,7 +43,7 @@ final class NKeyAuth implements Authenticator
     private static function decodeSeed(string $seed): string
     {
         $decoded = self::base32Decode($seed);
-        if (strlen($decoded) < 4) {
+        if (\strlen($decoded) < 4) {
             throw new AuthenticationException('Invalid NKey seed');
         }
 
@@ -59,7 +59,7 @@ final class NKeyAuth implements Authenticator
         $buffer = 0;
         $bitsLeft = 0;
 
-        for ($i = 0, $len = strlen($input); $i < $len; $i++) {
+        for ($i = 0, $len = \strlen($input); $i < $len; $i++) {
             $val = strpos($alphabet, $input[$i]);
             if ($val === false) {
                 throw new AuthenticationException('Invalid base32 character in NKey seed');
@@ -69,7 +69,7 @@ final class NKeyAuth implements Authenticator
 
             if ($bitsLeft >= 8) {
                 $bitsLeft -= 8;
-                $output .= chr(($buffer >> $bitsLeft) & 0xFF);
+                $output .= \chr(($buffer >> $bitsLeft) & 0xFF);
             }
         }
 
@@ -83,8 +83,8 @@ final class NKeyAuth implements Authenticator
         $buffer = 0;
         $bitsLeft = 0;
 
-        for ($i = 0, $len = strlen($input); $i < $len; $i++) {
-            $buffer = ($buffer << 8) | ord($input[$i]);
+        for ($i = 0, $len = \strlen($input); $i < $len; $i++) {
+            $buffer = ($buffer << 8) | \ord($input[$i]);
             $bitsLeft += 8;
 
             while ($bitsLeft >= 5) {

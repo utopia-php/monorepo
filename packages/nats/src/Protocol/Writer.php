@@ -13,7 +13,7 @@ final class Writer
 
     public function pub(string $subject, string $payload, ?string $replyTo = null): string
     {
-        $size = strlen($payload);
+        $size = \strlen($payload);
 
         if ($replyTo !== null) {
             return "PUB {$subject} {$replyTo} {$size}\r\n{$payload}\r\n";
@@ -24,8 +24,8 @@ final class Writer
 
     public function hpub(string $subject, string $headers, string $payload, ?string $replyTo = null): string
     {
-        $headerSize = strlen($headers);
-        $totalSize = $headerSize + strlen($payload);
+        $headerSize = \strlen($headers);
+        $totalSize = $headerSize + \strlen($payload);
 
         if ($replyTo !== null) {
             return "HPUB {$subject} {$replyTo} {$headerSize} {$totalSize}\r\n{$headers}{$payload}\r\n";

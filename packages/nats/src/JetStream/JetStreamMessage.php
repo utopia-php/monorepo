@@ -15,8 +15,7 @@ final class JetStreamMessage
     public function __construct(
         private readonly Connection $conn,
         public readonly Message $message,
-    ) {
-    }
+    ) {}
 
     public function ack(): void
     {

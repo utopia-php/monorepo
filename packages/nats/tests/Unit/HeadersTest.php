@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Utopia\NATS\Tests\Unit;
 
-use Utopia\NATS\Headers;
 use PHPUnit\Framework\TestCase;
+use Utopia\NATS\Headers;
 
 final class HeadersTest extends TestCase
 {

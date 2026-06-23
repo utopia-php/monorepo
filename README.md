@@ -69,6 +69,7 @@ graph TD
     servers --> di
     servers --> validators
     auth
+    nats
     replication
     system
 ```

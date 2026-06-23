@@ -23,8 +23,7 @@ final class KeyValueConfig
         public readonly int $maxBytes = -1,
         public readonly StorageType $storage = StorageType::File,
         public readonly int $replicas = 1,
-    ) {
-    }
+    ) {}
 
     public function toStreamConfig(): StreamConfig
     {
