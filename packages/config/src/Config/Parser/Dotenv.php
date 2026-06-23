@@ -7,7 +7,6 @@ use Utopia\Config\Attribute\Key;
 use Utopia\Config\Exception\Parse;
 use Utopia\Config\Parser;
 
-// TODO: Once important, handle quoted values to allow symbol # in values
 class Dotenv extends Parser
 {
     /**
@@ -38,6 +37,35 @@ class Dotenv extends Parser
     }
 
     /**
+     * Resolve the raw right-hand side of a dotenv line into its value.
+     *
+     * A quoted value is returned verbatim between its quotes, so a `#` inside
+     * keeps its place instead of being mistaken for a comment. An unquoted
+     * value has any inline comment (from the first `#`) stripped.
+     */
+    protected function parseValue(string $raw): string
+    {
+        $raw = trim($raw);
+
+        if ($raw !== '') {
+            $quote = $raw[0];
+            if ($quote === '"' || $quote === "'") {
+                $end = strpos($raw, $quote, 1);
+                if ($end !== false) {
+                    return substr($raw, 1, $end - 1);
+                }
+            }
+        }
+
+        $hash = strpos($raw, '#');
+        if ($hash !== false) {
+            $raw = substr($raw, 0, $hash);
+        }
+
+        return trim($raw);
+    }
+
+    /**
      * @param \ReflectionClass<covariant object>|null $reflection
      * @return array<string, mixed>
      */
@@ -55,22 +83,24 @@ class Dotenv extends Parser
 
         $lines = explode("\n", $contents);
         foreach ($lines as $line) {
-            // Remove everything after #
-            $pair = strstr($line, '#', true);
-            if ($pair === false) {
-                $pair = $line;
-            }
-            $pair = trim($pair);
+            $line = trim($line);
 
-            // Empty line can be ignored (after removing comments)
-            if (empty($pair)) {
+            // Blank line or whole-line comment
+            if ($line === '' || $line[0] === '#') {
                 continue;
             }
 
             // Split into KEY=value
-            $parts = explode('=', $pair, 2);
+            $parts = explode('=', $line, 2);
+
+            // A line without '=' is malformed; fail fast rather than load it
+            // as a key with an empty value.
+            if (\count($parts) < 2) {
+                throw new Parse('Config file is not a valid dotenv file.');
+            }
+
             $name = trim($parts[0]);
-            $value = trim($parts[1] ?? '');
+            $value = $this->parseValue($parts[1]);
 
             // Missing name likely means bad syntax
             if (empty($name)) {

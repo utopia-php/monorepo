@@ -23,8 +23,14 @@ class JSON extends Parser
 
         $config = json_decode($contents, true);
 
-        if (\is_null($config) || json_last_error() !== JSON_ERROR_NONE) {
+        if (json_last_error() !== JSON_ERROR_NONE) {
             throw new Parse('Config file is not a valid JSON file.');
+        }
+
+        // Valid JSON need not be an object/array (e.g. "foo", 123, true, null);
+        // a config must decode to a key/value map.
+        if (!\is_array($config)) {
+            throw new Parse('Config file must decode to a JSON object.');
         }
 
         return $config;

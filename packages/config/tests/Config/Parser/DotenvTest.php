@@ -99,6 +99,29 @@ class DotenvTest extends TestCase
         $this->assertArrayNotHasKey('PASSWORD2', $data);
     }
 
+    public function testDotenvLineWithoutEqualsThrows(): void
+    {
+        $this->expectException(Parse::class);
+        $this->parser->parse("HOST=127.0.0.1\nDATABASE_PASSWORD");
+    }
+
+    public function testDotenvHashInsideQuotesPreserved(): void
+    {
+        $data = $this->parser->parse(
+            <<<DOTENV
+            PASSWORD="abc#123"
+            TOKEN='x#y#z'
+            URL="https://example.com/path#fragment"
+            PLAIN=value # trailing comment
+            DOTENV
+        );
+
+        $this->assertSame('abc#123', $data['PASSWORD']);
+        $this->assertSame('x#y#z', $data['TOKEN']);
+        $this->assertSame('https://example.com/path#fragment', $data['URL']);
+        $this->assertSame('value', $data['PLAIN']);
+    }
+
     public function testValueConvertor(): void
     {
         $data = $this->parser->parse(
