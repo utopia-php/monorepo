@@ -1,5 +1,5 @@
 {
-    "name": "nats/nats",
+    "name": "utopia-php/nats",
     "description": "Modern PHP client for NATS messaging system",
     "type": "library",
     "license": "Apache-2.0",
@@ -16,12 +16,12 @@
     },
     "autoload": {
         "psr-4": {
-            "Nats\\": "src/"
+            "Utopia\\NATS\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Nats\\Tests\\": "tests/"
+            "Utopia\\NATS\\Tests\\": "tests/"
         }
     },
     "config": {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Nats\Tests\Unit;
+namespace Utopia\NATS\Tests\Unit;
 
-use Nats\Inbox;
+use Utopia\NATS\Inbox;
 use PHPUnit\Framework\TestCase;
 
 final class InboxTest extends TestCase

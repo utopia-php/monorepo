@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Nats\KeyValue;
+namespace Utopia\NATS\KeyValue;
 
-use Nats\Connection;
-use Nats\Exception\KeyValueException;
-use Nats\Headers;
-use Nats\JetStream\JetStream;
-use Nats\JetStream\StreamConfig;
+use Utopia\NATS\Connection;
+use Utopia\NATS\Exception\KeyValueException;
+use Utopia\NATS\Headers;
+use Utopia\NATS\JetStream\JetStream;
+use Utopia\NATS\JetStream\StreamConfig;
 
 final class KeyValue
 {

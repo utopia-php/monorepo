@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Nats;
+namespace Utopia\NATS;
 
-use Nats\Exception\ProtocolException;
+use Utopia\NATS\Exception\ProtocolException;
 
 final class Headers implements \IteratorAggregate, \Countable
 {

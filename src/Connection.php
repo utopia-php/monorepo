@@ -2,27 +2,27 @@
 
 declare(strict_types=1);
 
-namespace Nats;
+namespace Utopia\NATS;
 
-use Nats\Auth\Authenticator;
-use Nats\Auth\CredentialsAuth;
-use Nats\Auth\NKeyAuth;
-use Nats\Auth\NoAuth;
-use Nats\Auth\TokenAuth;
-use Nats\Auth\UserPassAuth;
-use Nats\Exception\AuthenticationException;
-use Nats\Exception\ConnectionException;
-use Nats\Exception\MaxPayloadException;
-use Nats\Exception\NatsException;
-use Nats\Exception\PermissionException;
-use Nats\Exception\ProtocolException;
-use Nats\Exception\TimeoutException;
-use Nats\Protocol\Parser;
-use Nats\Protocol\ServerOp;
-use Nats\Protocol\Writer;
-use Nats\Transport\TcpTransport;
-use Nats\Transport\TlsTransport;
-use Nats\Transport\Transport;
+use Utopia\NATS\Auth\Authenticator;
+use Utopia\NATS\Auth\CredentialsAuth;
+use Utopia\NATS\Auth\NKeyAuth;
+use Utopia\NATS\Auth\NoAuth;
+use Utopia\NATS\Auth\TokenAuth;
+use Utopia\NATS\Auth\UserPassAuth;
+use Utopia\NATS\Exception\AuthenticationException;
+use Utopia\NATS\Exception\ConnectionException;
+use Utopia\NATS\Exception\MaxPayloadException;
+use Utopia\NATS\Exception\NatsException;
+use Utopia\NATS\Exception\PermissionException;
+use Utopia\NATS\Exception\ProtocolException;
+use Utopia\NATS\Exception\TimeoutException;
+use Utopia\NATS\Protocol\Parser;
+use Utopia\NATS\Protocol\ServerOp;
+use Utopia\NATS\Protocol\Writer;
+use Utopia\NATS\Transport\TcpTransport;
+use Utopia\NATS\Transport\TlsTransport;
+use Utopia\NATS\Transport\Transport;
 
 final class Connection
 {

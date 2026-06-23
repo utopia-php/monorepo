@@ -11,13 +11,13 @@ A modern PHP client for [NATS](https://nats.io) messaging system with JetStream 
 ## Installation
 
 ```bash
-composer require nats/nats
+composer require utopia-php/nats
 ```
 
 ## Quick Start
 
 ```php
-use Nats\Connection;
+use Utopia\NATS\Connection;
 
 $conn = Connection::connect('nats://127.0.0.1:4222');
 
@@ -38,8 +38,8 @@ $conn->wait();
 ### Connecting
 
 ```php
-use Nats\Connection;
-use Nats\ConnectionOptions;
+use Utopia\NATS\Connection;
+use Utopia\NATS\ConnectionOptions;
 
 // Simple
 $conn = Connection::connect('nats://127.0.0.1:4222');
@@ -62,7 +62,7 @@ $conn = Connection::connect('nats://user:pass@127.0.0.1:4222');
 ### Publishing
 
 ```php
-use Nats\Headers;
+use Utopia\NATS\Headers;
 
 // Simple publish
 $conn->publish('orders.new', '{"id": 1}');
@@ -132,9 +132,9 @@ $conn->getServerInfo()->version;   // Server info
 ### Streams
 
 ```php
-use Nats\JetStream\StreamConfig;
-use Nats\JetStream\StorageType;
-use Nats\JetStream\RetentionPolicy;
+use Utopia\NATS\JetStream\StreamConfig;
+use Utopia\NATS\JetStream\StorageType;
+use Utopia\NATS\JetStream\RetentionPolicy;
 
 $js = $conn->jetStream();
 
@@ -175,9 +175,9 @@ $ack = $js->publish('orders.new', $data, expectedLastSeq: 42);
 ### Consumers
 
 ```php
-use Nats\JetStream\ConsumerConfig;
-use Nats\JetStream\AckPolicy;
-use Nats\JetStream\DeliverPolicy;
+use Utopia\NATS\JetStream\ConsumerConfig;
+use Utopia\NATS\JetStream\AckPolicy;
+use Utopia\NATS\JetStream\DeliverPolicy;
 
 // Create a pull consumer
 $consumer = $js->createConsumer('ORDERS', new ConsumerConfig(
@@ -211,8 +211,8 @@ echo "Deliveries: {$meta->numDelivered}\n";
 ## Key-Value Store
 
 ```php
-use Nats\KeyValue\KeyValueConfig;
-use Nats\JetStream\StorageType;
+use Utopia\NATS\KeyValue\KeyValueConfig;
+use Utopia\NATS\JetStream\StorageType;
 
 $js = $conn->jetStream();
 
@@ -252,7 +252,7 @@ echo "Values: {$status->values}, Bytes: {$status->bytes}\n";
 ## Authentication
 
 ```php
-use Nats\ConnectionOptions;
+use Utopia\NATS\ConnectionOptions;
 
 // User/Password
 $conn = Connection::connect(new ConnectionOptions(
@@ -284,7 +284,7 @@ $conn = Connection::connect(new ConnectionOptions(
 ## TLS
 
 ```php
-use Nats\ConnectionOptions;
+use Utopia\NATS\ConnectionOptions;
 
 // TLS with system CA
 $conn = Connection::connect(new ConnectionOptions(

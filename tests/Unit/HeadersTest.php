@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Nats\Tests\Unit;
+namespace Utopia\NATS\Tests\Unit;
 
-use Nats\Headers;
+use Utopia\NATS\Headers;
 use PHPUnit\Framework\TestCase;
 
 final class HeadersTest extends TestCase

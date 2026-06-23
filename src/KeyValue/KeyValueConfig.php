@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Nats\KeyValue;
+namespace Utopia\NATS\KeyValue;
 
-use Nats\JetStream\DiscardPolicy;
-use Nats\JetStream\RetentionPolicy;
-use Nats\JetStream\StorageType;
-use Nats\JetStream\StreamConfig;
+use Utopia\NATS\JetStream\DiscardPolicy;
+use Utopia\NATS\JetStream\RetentionPolicy;
+use Utopia\NATS\JetStream\StorageType;
+use Utopia\NATS\JetStream\StreamConfig;
 
 final class KeyValueConfig
 {
