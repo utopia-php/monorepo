@@ -27,12 +27,6 @@ class JSON extends Parser
             throw new Parse('Config file is not a valid JSON file.');
         }
 
-        // Valid JSON need not be an object/array (e.g. "foo", 123, true, null);
-        // a config must decode to a key/value map.
-        if (!\is_array($config)) {
-            throw new Parse('Config file must decode to a JSON object.');
-        }
-
-        return $config;
+        return $this->requireMap($config, 'Config file must decode to a JSON object.');
     }
 }

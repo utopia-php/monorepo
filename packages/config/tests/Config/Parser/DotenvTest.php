@@ -122,6 +122,24 @@ class DotenvTest extends TestCase
         $this->assertSame('value', $data['PLAIN']);
     }
 
+    public function testDotenvEscapedQuoteInsideValue(): void
+    {
+        $data = $this->parser->parse('KEY="abc\"#def"');
+        $this->assertSame('abc"#def', $data['KEY']);
+    }
+
+    public function testDotenvTrailingGarbageAfterQuoteThrows(): void
+    {
+        $this->expectException(Parse::class);
+        $this->parser->parse('KEY="prod"oops');
+    }
+
+    public function testDotenvUnterminatedQuoteThrows(): void
+    {
+        $this->expectException(Parse::class);
+        $this->parser->parse('KEY="abc');
+    }
+
     public function testValueConvertor(): void
     {
         $data = $this->parser->parse(

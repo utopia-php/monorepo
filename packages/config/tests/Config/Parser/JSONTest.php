@@ -166,6 +166,13 @@ class JSONTest extends TestCase
         }
     }
 
+    public function testJSONTopLevelListThrows(): void
+    {
+        // A non-empty list is not a config map (its keys would be 0, 1, 2, …).
+        $this->expectException(Parse::class);
+        $this->parser->parse('["secret", "other"]');
+    }
+
     public function testJSONEdgeCases(): void
     {
         $data = $this->parser->parse('');

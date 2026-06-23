@@ -39,22 +39,16 @@ class Dotenv extends Parser
     /**
      * Resolve the raw right-hand side of a dotenv line into its value.
      *
-     * A quoted value is returned verbatim between its quotes, so a `#` inside
-     * keeps its place instead of being mistaken for a comment. An unquoted
-     * value has any inline comment (from the first `#`) stripped.
+     * A quoted value keeps a `#` inside its quotes instead of having it treated
+     * as a comment; an unquoted value has any inline comment (from the first
+     * `#`) stripped.
      */
     protected function parseValue(string $raw): string
     {
         $raw = trim($raw);
 
-        if ($raw !== '') {
-            $quote = $raw[0];
-            if ($quote === '"' || $quote === "'") {
-                $end = strpos($raw, $quote, 1);
-                if ($end !== false) {
-                    return substr($raw, 1, $end - 1);
-                }
-            }
+        if ($raw !== '' && ($raw[0] === '"' || $raw[0] === "'")) {
+            return $this->parseQuoted($raw, $raw[0]);
         }
 
         $hash = strpos($raw, '#');
@@ -63,6 +57,44 @@ class Dotenv extends Parser
         }
 
         return trim($raw);
+    }
+
+    /**
+     * Read a quoted value, scanning to the matching closing quote. Double quotes
+     * honour backslash escapes (so `\"` stays in the value); single quotes are
+     * literal. Anything other than an inline comment after the closing quote, or
+     * a missing closing quote, is malformed.
+     *
+     * @throws Parse
+     */
+    protected function parseQuoted(string $raw, string $quote): string
+    {
+        $value = '';
+        $length = \strlen($raw);
+
+        for ($i = 1; $i < $length; $i++) {
+            $char = $raw[$i];
+
+            if ($char === '\\' && $quote === '"' && $i + 1 < $length) {
+                $value .= $raw[$i + 1];
+                $i++;
+                continue;
+            }
+
+            if ($char === $quote) {
+                // Only whitespace or an inline comment may follow the close
+                $rest = trim(substr($raw, $i + 1));
+                if ($rest !== '' && $rest[0] !== '#') {
+                    throw new Parse('Config file is not a valid dotenv file.');
+                }
+
+                return $value;
+            }
+
+            $value .= $char;
+        }
+
+        throw new Parse('Config file is not a valid dotenv file.');
     }
 
     /**

@@ -170,6 +170,13 @@ class YAMLTest extends TestCase
         }
     }
 
+    public function testYAMLTopLevelSequenceThrows(): void
+    {
+        // A non-empty sequence is not a config map.
+        $this->expectException(Parse::class);
+        $this->parser->parse("- a\n- b");
+    }
+
     public function testYAMLEdgeCases(): void
     {
         $data = $this->parser->parse('');
