@@ -34,6 +34,12 @@ class YAML extends Parser
             throw new Parse('Config file is not a valid YAML file.');
         }
 
+        // Valid YAML need not be a mapping (e.g. a bare scalar like `123`);
+        // a config must parse to a key/value map.
+        if (!\is_array($config)) {
+            throw new Parse('Config file must decode to a YAML mapping.');
+        }
+
         // TODO: Consider to cast depending on reflection, similar to Dotenv
         // Source: https://softwareengineering.stackexchange.com/questions/387827/is-it-wrong-to-parse-yaml-true-as-a-string
 

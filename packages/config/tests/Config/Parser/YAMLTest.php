@@ -157,6 +157,19 @@ class YAMLTest extends TestCase
         $this->parser->parse(null);
     }
 
+    public function testYAMLScalarTopLevelThrows(): void
+    {
+        // Valid YAML, but not a mapping — must raise Parse, not a TypeError.
+        foreach (['123', '3.14', 'true', 'plain string'] as $scalar) {
+            try {
+                $this->parser->parse($scalar);
+                $this->fail("Expected Parse for scalar YAML input: {$scalar}");
+            } catch (Parse) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
     public function testYAMLEdgeCases(): void
     {
         $data = $this->parser->parse('');
