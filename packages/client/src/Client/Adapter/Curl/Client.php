@@ -25,6 +25,7 @@ use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
 use Utopia\Client\Response\Builder as ResponseBuilder;
 use Utopia\Client\Tls;
+use Utopia\Psr7\Header;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
@@ -195,9 +196,12 @@ class Client implements Adapter
             throw new InvalidUriException($request, 'Requests must use an absolute URI.');
         }
 
+        // Skipped when the caller negotiates encoding themselves.
+        $decompress = !$request->hasHeader(Header::ACCEPT_ENCODING);
+
         $headers = '';
         $handle = $this->handle($request);
-        $options = $this->options($request, $headers, $sink);
+        $options = $this->options($request, $headers, $sink, $decompress);
 
         try {
             if (curl_setopt_array($handle, $options) === false) {
@@ -224,6 +228,10 @@ class Client implements Adapter
 
         if ($parsed['status'] < 100 || $parsed['status'] > 599) {
             throw new InvalidResponseException($request, 'Received an invalid HTTP response.');
+        }
+
+        if ($decompress) {
+            $parsed['headers'] = $this->decoded($parsed['headers']);
         }
 
         return $parsed;
@@ -262,7 +270,7 @@ class Client implements Adapter
      *
      * @return array<int, mixed>
      */
-    private function options(RequestInterface $request, string &$headers, callable $sink): array
+    private function options(RequestInterface $request, string &$headers, callable $sink, bool $decompress): array
     {
         $options = [
             \CURLOPT_URL => (string) $request->getUri(),
@@ -308,6 +316,11 @@ class Client implements Adapter
             if ($size !== null) {
                 $options[\CURLOPT_INFILESIZE] = $size;
             }
+        }
+
+        // '' advertises every codec cURL was built with and decodes the response.
+        if ($decompress) {
+            $options[\CURLOPT_ENCODING] = '';
         }
 
         $merged = $this->options + $options;
@@ -453,6 +466,38 @@ class Client implements Adapter
         }
 
         return $uri->getHost() . ':' . $port;
+    }
+
+    /**
+     * cURL decodes the body but leaves the original Content-Encoding and
+     * Content-Length, which now misdescribe the plaintext body, so drop both
+     * when an encoding was present.
+     *
+     * @param array<string, array<int, string>> $headers
+     *
+     * @return array<string, array<int, string>>
+     */
+    private function decoded(array $headers): array
+    {
+        $encoded = false;
+
+        foreach (array_keys($headers) as $name) {
+            if (strcasecmp($name, Header::CONTENT_ENCODING) === 0) {
+                $encoded = true;
+            }
+        }
+
+        if (!$encoded) {
+            return $headers;
+        }
+
+        foreach (array_keys($headers) as $name) {
+            if (strcasecmp($name, Header::CONTENT_ENCODING) === 0 || strcasecmp($name, Header::CONTENT_LENGTH) === 0) {
+                unset($headers[$name]);
+            }
+        }
+
+        return $headers;
     }
 
     /**

@@ -662,6 +662,132 @@ abstract class AdapterContract extends TestCase
         });
     }
 
+    public function testItAdvertisesCompressionAndTransparentlyDecodesResponses(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/gzip');
+            $client = $this->createAdapter();
+
+            $response = $this->send($client, $request);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertStringContainsString('gzip', $response->getHeaderLine('X-Accept-Encoding'));
+            $this->assertSame(str_repeat('utopia ', 64), (string) $response->getBody());
+            $this->assertFalse($response->hasHeader(Header::CONTENT_ENCODING));
+            $this->assertFalse($response->hasHeader(Header::CONTENT_LENGTH));
+        });
+    }
+
+    public function testItDecodesLargeCompressedResponses(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/gzip?repeat=40000');
+            $client = $this->createAdapter();
+
+            $response = $this->send($client, $request);
+            $body = (string) $response->getBody();
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame(40_000 * 7, \strlen($body));
+            $this->assertSame(hash('sha256', str_repeat('utopia ', 40_000)), hash('sha256', $body));
+            $this->assertFalse($response->hasHeader(Header::CONTENT_ENCODING));
+        });
+    }
+
+    public function testItDecodesCompressedBinaryResponsesByteForByte(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/gzip?type=binary&repeat=16');
+            $client = $this->createAdapter();
+
+            $expected = '';
+            for ($byte = 0; $byte < 256; $byte++) {
+                $expected .= \chr($byte);
+            }
+
+            $expected = str_repeat($expected, 16);
+
+            $response = $this->send($client, $request);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame($expected, (string) $response->getBody());
+            $this->assertFalse($response->hasHeader(Header::CONTENT_ENCODING));
+        });
+    }
+
+    public function testItLeavesUncompressedResponsesAndTheirContentLengthIntact(): void
+    {
+        Http::serve(function (int $port): void {
+            // Advertised-to but answered in plaintext: body and Content-Length pass through.
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/gzip?compress=0');
+            $client = $this->createAdapter();
+
+            $response = $this->send($client, $request);
+            $body = (string) $response->getBody();
+
+            $this->assertSame(str_repeat('utopia ', 64), $body);
+            $this->assertStringContainsString('gzip', $response->getHeaderLine('X-Accept-Encoding'));
+            $this->assertFalse($response->hasHeader(Header::CONTENT_ENCODING));
+            $this->assertSame((string) \strlen($body), $response->getHeaderLine(Header::CONTENT_LENGTH));
+        });
+    }
+
+    public function testItDeliversDecodedBodiesWhenStreaming(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/gzip?repeat=20000');
+            $client = $this->createAdapter();
+
+            $received = '';
+
+            $response = $this->sendStream($client, $request, function (string $chunk) use (&$received): void {
+                $received .= $chunk;
+            });
+
+            // cURL decodes the stream; Swoole asks for identity. Either way the sink sees plaintext.
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame(str_repeat('utopia ', 20_000), $received);
+            $this->assertSame('', (string) $response->getBody());
+        });
+    }
+
+    public function testItDecodesCompressedResponsesOverAReusedConnection(): void
+    {
+        $bodies = [];
+
+        Http::serve(function (int $port) use (&$bodies): void {
+            $client = $this->createAdapter()->withConnectionReuse();
+            $requestFactory = new Request\Factory();
+            $uri = 'http://127.0.0.1:' . $port . '/gzip';
+
+            // A reused connection only persists within one coroutine run.
+            $this->runAdapter(function () use ($client, $requestFactory, $uri, &$bodies): void {
+                for ($i = 0; $i < 3; $i++) {
+                    $bodies[] = (string) $client->sendRequest($requestFactory->createRequest(Method::GET, $uri))->getBody();
+                }
+            });
+        });
+
+        $this->assertSame(array_fill(0, 3, str_repeat('utopia ', 64)), $bodies);
+    }
+
+    public function testItDoesNotOverrideAnExplicitAcceptEncoding(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()
+                ->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/gzip')
+                ->withHeader(Header::ACCEPT_ENCODING, 'identity');
+            $client = $this->createAdapter();
+
+            $response = $this->send($client, $request);
+
+            // The caller's identity is left untouched, so the server stays plaintext.
+            $this->assertSame('identity', $response->getHeaderLine('X-Accept-Encoding'));
+            $this->assertSame(str_repeat('utopia ', 64), (string) $response->getBody());
+            $this->assertFalse($response->hasHeader(Header::CONTENT_ENCODING));
+        });
+    }
+
     public function testItStreamsResponseBodiesToASink(): void
     {
         Http::serve(function (int $port): void {
