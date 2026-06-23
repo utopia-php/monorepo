@@ -27,6 +27,7 @@ use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
 use Utopia\Client\Response\Builder as ResponseBuilder;
 use Utopia\Client\Tls;
+use Utopia\Psr7\Header;
 use Utopia\Psr7\Request\Multipart\Body;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
@@ -201,6 +202,10 @@ class Client implements Adapter
 
         $this->validateSettings();
 
+        // Swoole decodes a buffered body itself, but its streaming write_func
+        // delivers it undecoded — so a stream must ask for identity instead.
+        $streaming = $sink !== null;
+
         $client = $this->connect($request);
 
         $settings = $this->settings + [self::SETTING_HTTP2 => false];
@@ -228,6 +233,10 @@ class Client implements Adapter
             $multipart = $body instanceof Body && $this->streamableMultipart($body) ? $body : null;
 
             $headers = $this->requestHeaders($request);
+
+            if ($streaming && !$request->hasHeader(Header::ACCEPT_ENCODING)) {
+                $headers[Header::ACCEPT_ENCODING] = 'identity';
+            }
 
             // Swoole generates its own multipart Content-Type (with its own
             // boundary) when files are attached, so drop ours to avoid a clash.
@@ -290,6 +299,12 @@ class Client implements Adapter
             $headers = [];
         }
 
+        $headers = $this->headers($headers);
+
+        if (!$streaming) {
+            $headers = $this->decoded($headers);
+        }
+
         $responseBody = $sink === null ? $client->body : '';
 
         if (!\is_string($responseBody)) {
@@ -300,7 +315,7 @@ class Client implements Adapter
         return $this->responseBuilder->build(
             $statusCode,
             '',
-            $this->headers($headers),
+            $headers,
             $responseBody,
         );
     }
@@ -665,6 +680,44 @@ class Client implements Adapter
         }
 
         return $uri->getHost() . ':' . $port;
+    }
+
+    /**
+     * Swoole decodes a buffered gzip/deflate/br body but leaves the original
+     * Content-Encoding and Content-Length, which now misdescribe the plaintext
+     * body, so drop both for an encoding Swoole decodes.
+     *
+     * @param array<string, array<int, string>> $headers
+     *
+     * @return array<string, array<int, string>>
+     */
+    private function decoded(array $headers): array
+    {
+        $decoded = false;
+
+        foreach ($headers as $name => $values) {
+            if (strcasecmp($name, Header::CONTENT_ENCODING) !== 0) {
+                continue;
+            }
+
+            foreach ($values as $value) {
+                if (\in_array(strtolower(trim($value)), ['gzip', 'deflate', 'br'], true)) {
+                    $decoded = true;
+                }
+            }
+        }
+
+        if (!$decoded) {
+            return $headers;
+        }
+
+        foreach (array_keys($headers) as $name) {
+            if (strcasecmp($name, Header::CONTENT_ENCODING) === 0 || strcasecmp($name, Header::CONTENT_LENGTH) === 0) {
+                unset($headers[$name]);
+            }
+        }
+
+        return $headers;
     }
 
     /**

@@ -204,6 +204,45 @@ if ($path === '/slow') {
     return;
 }
 
+if ($path === '/gzip') {
+    $accept = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? '';
+    $accept = is_string($accept) ? $accept : '';
+
+    // ?repeat sizes the payload, ?type=binary returns all 256 byte values,
+    // ?compress=0 forces plaintext even when gzip was offered.
+    $repeat = isset($_GET['repeat']) && is_numeric($_GET['repeat']) ? max(1, (int) $_GET['repeat']) : 64;
+    $binary = ($_GET['type'] ?? '') === 'binary';
+    $compressible = ($_GET['compress'] ?? '1') !== '0';
+
+    if ($binary) {
+        $unit = '';
+        for ($byte = 0; $byte < 256; $byte++) {
+            $unit .= chr($byte);
+        }
+
+        $payload = str_repeat($unit, $repeat);
+    } else {
+        $payload = str_repeat('utopia ', $repeat);
+    }
+
+    http_response_code(200);
+    header('Content-Type: ' . ($binary ? 'application/octet-stream' : 'text/plain;charset=UTF-8'));
+    // Echo what the client advertised so a test can assert negotiation.
+    header('X-Accept-Encoding: ' . $accept);
+
+    if ($compressible && str_contains($accept, 'gzip')) {
+        header('Content-Encoding: gzip');
+        echo gzencode($payload);
+
+        return;
+    }
+
+    header('Content-Length: ' . strlen($payload));
+    echo $payload;
+
+    return;
+}
+
 http_response_code(202);
 header('Content-Type: text/plain;charset=UTF-8');
 
