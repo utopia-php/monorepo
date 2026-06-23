@@ -48,6 +48,7 @@ graph TD
     cli --> servers
     client --> pools
     client --> span
+    config --> validators
     console --> validators
     fastly --> client
     http --> di
