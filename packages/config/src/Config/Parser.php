@@ -19,6 +19,12 @@ abstract class Parser
      * receive a non-map. An empty array is allowed (an empty object and an empty
      * list are indistinguishable once decoded, and both are harmless).
      *
+     * Limitation: a top-level map whose keys are all sequential integers from 0
+     * (e.g. `{"0": ...}`) is rejected, because it decodes to a list-shaped PHP
+     * array that is indistinguishable from a real sequence — yaml_parse() in
+     * particular gives identical output for `0: x` and `- x`. Config keys are
+     * names, so this degenerate shape is not supported.
+     *
      * @return array<string, mixed>
      * @throws Parse
      */

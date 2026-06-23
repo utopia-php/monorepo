@@ -128,6 +128,15 @@ class DotenvTest extends TestCase
         $this->assertSame('abc"#def', $data['KEY']);
     }
 
+    public function testDotenvLiteralBackslashPreserved(): void
+    {
+        // \t is not a supported escape, so the backslash is kept verbatim
+        // (e.g. a Windows path); \\ collapses to a single backslash.
+        $data = $this->parser->parse("PATH=\"C:\\tmp\"\nESCAPED=\"a\\\\b\"");
+        $this->assertSame('C:\tmp', $data['PATH']);
+        $this->assertSame('a\b', $data['ESCAPED']);
+    }
+
     public function testDotenvTrailingGarbageAfterQuoteThrows(): void
     {
         $this->expectException(Parse::class);

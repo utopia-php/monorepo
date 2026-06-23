@@ -75,7 +75,10 @@ class Dotenv extends Parser
         for ($i = 1; $i < $length; $i++) {
             $char = $raw[$i];
 
-            if ($char === '\\' && $quote === '"' && $i + 1 < $length) {
+            // In double quotes, only \" and \\ are escapes; every other
+            // backslash is literal (e.g. a Windows path like C:\tmp).
+            if ($char === '\\' && $quote === '"' && $i + 1 < $length
+                && ($raw[$i + 1] === '"' || $raw[$i + 1] === '\\')) {
                 $value .= $raw[$i + 1];
                 $i++;
                 continue;
