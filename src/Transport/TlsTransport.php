@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Nats\Transport;
+namespace Utopia\NATS\Transport;
 
-use Nats\Exception\ConnectionException;
-use Nats\Exception\TimeoutException;
+use Utopia\NATS\Exception\ConnectionException;
+use Utopia\NATS\Exception\TimeoutException;
 
 final class TlsTransport implements Transport
 {

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Nats\Tests\Integration;
+namespace Utopia\NATS\Tests\Integration;
 
-use Nats\Connection;
-use Nats\Headers;
+use Utopia\NATS\Connection;
+use Utopia\NATS\Headers;
 use PHPUnit\Framework\TestCase;
 
 /**

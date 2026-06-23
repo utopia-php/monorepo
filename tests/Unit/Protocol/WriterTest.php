@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Nats\Tests\Unit\Protocol;
+namespace Utopia\NATS\Tests\Unit\Protocol;
 
-use Nats\Protocol\Writer;
+use Utopia\NATS\Protocol\Writer;
 use PHPUnit\Framework\TestCase;
 
 final class WriterTest extends TestCase

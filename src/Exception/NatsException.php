@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Nats\Exception;
+namespace Utopia\NATS\Exception;
 
 class NatsException extends \RuntimeException
 {

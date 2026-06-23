@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Nats\Connection;
-use Nats\JetStream\AckPolicy;
-use Nats\JetStream\ConsumerConfig;
-use Nats\JetStream\StreamConfig;
+use Utopia\NATS\Connection;
+use Utopia\NATS\JetStream\AckPolicy;
+use Utopia\NATS\JetStream\ConsumerConfig;
+use Utopia\NATS\JetStream\StreamConfig;
 
 $conn = Connection::connect('nats://127.0.0.1:4222');
 $js = $conn->jetStream();

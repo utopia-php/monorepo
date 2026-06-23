@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Nats\Tests\Unit\Protocol;
+namespace Utopia\NATS\Tests\Unit\Protocol;
 
-use Nats\Exception\ProtocolException;
-use Nats\Protocol\Parser;
-use Nats\Protocol\ServerOp;
-use Nats\Transport\Transport;
+use Utopia\NATS\Exception\ProtocolException;
+use Utopia\NATS\Protocol\Parser;
+use Utopia\NATS\Protocol\ServerOp;
+use Utopia\NATS\Transport\Transport;
 use PHPUnit\Framework\TestCase;
 
 final class ParserTest extends TestCase

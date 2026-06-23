@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Nats\Protocol;
+namespace Utopia\NATS\Protocol;
 
 final class Writer
 {

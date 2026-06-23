@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Nats\Exception;
+namespace Utopia\NATS\Exception;
 
-use Nats\JetStream\ApiError;
+use Utopia\NATS\JetStream\ApiError;
 
 class JetStreamException extends NatsException
 {

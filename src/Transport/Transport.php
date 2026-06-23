@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Nats\Transport;
+namespace Utopia\NATS\Transport;
 
 interface Transport
 {

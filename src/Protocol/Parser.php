@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Nats\Protocol;
+namespace Utopia\NATS\Protocol;
 
-use Nats\Exception\ProtocolException;
-use Nats\Transport\Transport;
+use Utopia\NATS\Exception\ProtocolException;
+use Utopia\NATS\Transport\Transport;
 
 final class Parser
 {

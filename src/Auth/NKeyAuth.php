@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Nats\Auth;
+namespace Utopia\NATS\Auth;
 
-use Nats\Exception\AuthenticationException;
+use Utopia\NATS\Exception\AuthenticationException;
 
 final class NKeyAuth implements Authenticator
 {

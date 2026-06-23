@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Nats\Auth;
+namespace Utopia\NATS\Auth;
 
 final class NoAuth implements Authenticator
 {

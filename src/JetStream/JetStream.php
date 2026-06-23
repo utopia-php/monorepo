@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Nats\JetStream;
+namespace Utopia\NATS\JetStream;
 
-use Nats\Connection;
-use Nats\Exception\JetStreamException;
-use Nats\Headers;
+use Utopia\NATS\Connection;
+use Utopia\NATS\Exception\JetStreamException;
+use Utopia\NATS\Headers;
 
 final class JetStream
 {

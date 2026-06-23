@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Nats\KeyValue;
+namespace Utopia\NATS\KeyValue;
 
 final class KeyValueEntry
 {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Nats\KeyValue;
+namespace Utopia\NATS\KeyValue;
 
-use Nats\JetStream\StreamInfo;
+use Utopia\NATS\JetStream\StreamInfo;
 
 final class KeyValueStatus
 {

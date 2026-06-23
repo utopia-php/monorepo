@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Nats\Connection;
-use Nats\Message;
+use Utopia\NATS\Connection;
+use Utopia\NATS\Message;
 
 $conn = Connection::connect('nats://127.0.0.1:4222');
 

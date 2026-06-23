@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Nats\JetStream;
+namespace Utopia\NATS\JetStream;
 
-use Nats\Connection;
-use Nats\Message;
+use Utopia\NATS\Connection;
+use Utopia\NATS\Message;
 
 final class MessageBatch implements \IteratorAggregate, \Countable
 {
