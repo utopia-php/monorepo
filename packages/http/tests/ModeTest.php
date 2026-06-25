@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Swoole\Constant;
 use Utopia\Http\Adapter\Swoole\Mode;
 
-class ModeTest extends TestCase
+final class ModeTest extends TestCase
 {
     public function testProcessMode(): void
     {

@@ -47,7 +47,7 @@ Http::get('/work')
 $settings = match (getenv('MODE') ?: 'b') {
     'defaults' => [],
     'a' => Mode::HYPERLOOP_A->settings(),
-    'b' => Mode::HYPERLOOP_B->settings(),
+    default => Mode::HYPERLOOP_B->settings(),
 };
 
 $settings[Constant::OPTION_WORKER_NUM] = (int) max(1, ceil(System::getCPU()));
