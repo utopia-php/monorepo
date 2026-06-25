@@ -24,18 +24,17 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.packages }}" ]; then
             CHANGED="${{ inputs.packages }}"
           else
+            # Benchmarks are an opt-in per-package concern, so scope to the
+            # packages actually changed (use workflow_dispatch to run others).
             RANGE="origin/${{ github.base_ref }}...HEAD"
             CHANGED=$(git diff --name-only "$RANGE" -- packages/ | cut -d/ -f2)
-            # benchmark tooling changes re-run every benchmark
-            if git diff --name-only "$RANGE" | grep -qE '^(bin/|\.github/workflows/benchmark\.yml)'; then
-              CHANGED=$(ls packages)
-            fi
           fi
 
           # Benchmarks are opt-in: only packages that declare a `bench` script.
           BENCH=$(echo "$CHANGED" | tr ' ' '\n' | sort -u | while read -r package; do
-            [ -f "packages/$package/composer.json" ] || continue
-            jq -e '.scripts.bench' "packages/$package/composer.json" > /dev/null 2>&1 && echo "$package"
+            if [ -f "packages/$package/composer.json" ] && jq -e '.scripts.bench' "packages/$package/composer.json" > /dev/null 2>&1; then
+              echo "$package"
+            fi
           done)
 
           MATRIX=$(echo "$BENCH" | jq -R 'select(. != "") | {package: .}' | jq --compact-output --slurp 'unique')
