@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Swoole\Constant;
+use Swoole\Coroutine;
 use Utopia\Http\Adapter\Swoole\Mode;
 use Utopia\Http\Adapter\Swoole\Server;
 use Utopia\Http\Http;
@@ -47,7 +48,8 @@ Http::get('/work')
         $response->send($payload);
     });
 
-$settings = match (getenv('MODE') ?: 'b') {
+$mode = getenv('MODE') ?: 'b';
+$settings = match ($mode) {
     'defaults' => [],
     'a' => Mode::HYPERLOOP_A->settings(),
     default => Mode::HYPERLOOP_B->settings(),
@@ -57,7 +59,14 @@ if (getenv('PIN_WORKERS')) {
     $settings[Constant::OPTION_WORKER_NUM] = (int) max(1, ceil(System::getCPU()));
 }
 
-$server = new Server('0.0.0.0', '80', $settings);
+// HYPERLOOP_B is coroutine mode, so enable the runtime hooks that make
+// native blocking I/O (the usleep above, PDO, file reads, streams) yield
+// instead of stalling the worker. This is the expected way to run mode B.
+if ($mode !== 'a' && $mode !== 'defaults') {
+    Coroutine::set(['hook_flags' => SWOOLE_HOOK_ALL]);
+}
+
+$server = new Server('0.0.0.0', getenv('PORT') ?: '80', $settings);
 $http = new Http($server, 'UTC');
 
 $http->start();
