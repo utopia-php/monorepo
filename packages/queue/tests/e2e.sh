@@ -2,7 +2,8 @@
 # Run the e2e suite against local workers and a kind cluster. Expects the
 # compose services (redis, redis-cluster) to be up — see docker-compose.yml.
 # The KubernetesJob suite needs docker + kind + tilt; missing CLI tools are
-# downloaded on the fly, and the suite self-skips when no cluster is available.
+# downloaded at pinned versions and checksum-verified before use, and the suite
+# self-skips when no cluster is available.
 set -e
 cd "$(dirname "$0")/.."
 
@@ -13,22 +14,40 @@ KIND_READY=0
 mkdir -p "$TOOLS"
 PATH="$TOOLS:$PATH"
 
+# Pinned tool versions + linux/amd64 SHA-256 digests (CI runners). Bump together.
+KIND_VERSION='v0.30.0'
+KIND_SHA256='517ab7fc89ddeed5fa65abf71530d90648d9638ef0c4cde22c2c11f8097b8889'
+KUBECTL_VERSION='v1.31.4'
+KUBECTL_SHA256='298e19e9c6c17199011404278f0ff8168a7eca4217edad9097af577023a5620f'
+TILT_VERSION='0.35.0'
+TILT_SHA256='801d79890dfa884f732c310fb2af8b7a959e4ec1352cd5ee7d91d0972305cf2b'
+
+verify() {
+    # $1 = file, $2 = expected sha256
+    echo "$2  $1" | sha256sum -c - > /dev/null 2>&1 || { echo "checksum mismatch for $1"; return 1; }
+}
+
 setup_kind() {
     command -v docker > /dev/null 2>&1 || { echo "docker unavailable — skipping KubernetesJob e2e"; return 1; }
 
     if ! command -v kind > /dev/null 2>&1; then
-        echo "installing kind..."
-        curl -fsSL -o "$TOOLS/kind" "https://kind.sigs.k8s.io/dl/v0.30.0/kind-$(uname | tr '[:upper:]' '[:lower:]')-amd64"
+        echo "installing kind $KIND_VERSION..."
+        curl -fsSL -o "$TOOLS/kind" "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-amd64" || return 1
+        verify "$TOOLS/kind" "$KIND_SHA256" || return 1
         chmod +x "$TOOLS/kind"
     fi
     if ! command -v kubectl > /dev/null 2>&1; then
-        echo "installing kubectl..."
-        curl -fsSL -o "$TOOLS/kubectl" "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/$(uname | tr '[:upper:]' '[:lower:]')/amd64/kubectl"
+        echo "installing kubectl $KUBECTL_VERSION..."
+        curl -fsSL -o "$TOOLS/kubectl" "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl" || return 1
+        verify "$TOOLS/kubectl" "$KUBECTL_SHA256" || return 1
         chmod +x "$TOOLS/kubectl"
     fi
     if ! command -v tilt > /dev/null 2>&1; then
-        echo "installing tilt..."
-        curl -fsSL https://github.com/tilt-dev/tilt/releases/download/v0.35.0/tilt.0.35.0.linux.x86_64.tar.gz | tar -xz -C "$TOOLS" tilt
+        echo "installing tilt $TILT_VERSION..."
+        curl -fsSL -o "$TOOLS/tilt.tar.gz" "https://github.com/tilt-dev/tilt/releases/download/v$TILT_VERSION/tilt.$TILT_VERSION.linux.x86_64.tar.gz" || return 1
+        verify "$TOOLS/tilt.tar.gz" "$TILT_SHA256" || return 1
+        tar -xz -C "$TOOLS" -f "$TOOLS/tilt.tar.gz" tilt
+        rm -f "$TOOLS/tilt.tar.gz"
     fi
 
     if ! kind get clusters 2> /dev/null | grep -qx "$KIND_CLUSTER"; then

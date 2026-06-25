@@ -178,7 +178,19 @@ class KubernetesJob implements Publisher
 
     private function isFailed(Manifest $job): bool
     {
-        return $job->getFailedPodsCount() > 0 && !$job->hasCompleted();
+        // Terminal failure only: the "Failed" condition is set once backoffLimit
+        // is exhausted, unlike getFailedPodsCount() which counts in-flight retries.
+        foreach ($job->getConditions() as $condition) {
+            if (!\is_array($condition)) {
+                continue;
+            }
+
+            if (($condition['type'] ?? null) === 'Failed' && ($condition['status'] ?? null) === 'True') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function jobName(Queue $queue, string $pid): string
