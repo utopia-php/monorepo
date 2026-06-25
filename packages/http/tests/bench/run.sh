@@ -63,15 +63,19 @@ table="| workload | mode | req/s | p95 |
 |---|---|---|---|
 ${rows%$'\n'}"
 
+section="### http — Swoole modes ($(nproc) cores, ${VUS} VUs, ${DURATION}/run)
+
+${table}
+
+_a = HYPERLOOP_A (process), b = HYPERLOOP_B (coroutine)_"
+
 echo
 echo "$table"
 
-if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-    {
-        echo "### http Swoole modes — $(nproc) cores, ${VUS} VUs, ${DURATION}/run"
-        echo
-        echo "$table"
-        echo
-        echo "_a = HYPERLOOP_A (process), b = HYPERLOOP_B (coroutine)_"
-    } >> "$GITHUB_STEP_SUMMARY"
-fi
+# GITHUB_STEP_SUMMARY: the run's own job summary.
+# BENCH_REPORT: shared file a bench script appends its section to, so a
+# caller (the Benchmark workflow) can collect every package into one place.
+[ -n "${GITHUB_STEP_SUMMARY:-}" ] && printf '%s\n\n' "$section" >> "$GITHUB_STEP_SUMMARY"
+[ -n "${BENCH_REPORT:-}" ] && printf '%s\n\n' "$section" >> "$BENCH_REPORT"
+
+exit 0
