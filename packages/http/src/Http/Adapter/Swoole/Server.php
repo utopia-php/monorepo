@@ -226,7 +226,8 @@ class Server extends Adapter
      */
     public static function telemetryName(string $statKey): string
     {
-        return 'swoole.' . str_replace(['_count', '_num'], '.count', $statKey);
+        // Anchor to the trailing suffix so an infix _count/_num isn't rewritten.
+        return 'swoole.' . (preg_replace('/_(count|num)$/', '.count', $statKey) ?? $statKey);
     }
 
     public function onStart(callable $callback): void

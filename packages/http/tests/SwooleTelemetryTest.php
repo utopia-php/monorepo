@@ -18,6 +18,8 @@ final class SwooleTelemetryTest extends TestCase
         $this->assertSame('swoole.worker_request.count', Server::telemetryName('worker_request_count'));
         // keys without those suffixes are namespaced verbatim
         $this->assertSame('swoole.start_time', Server::telemetryName('start_time'));
+        // only the trailing suffix is rewritten, never an infix occurrence
+        $this->assertSame('swoole.request_num_bytes', Server::telemetryName('request_num_bytes'));
     }
 
     public function testPerWorkerStatsKeys(): void
