@@ -5,30 +5,52 @@ declare(strict_types=1);
 namespace Utopia\Http;
 
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use Utopia\Http\Adapter\Swoole\Server;
 
 final class SwooleTelemetryTest extends TestCase
 {
-    public function testTelemetryNameMapsStatsKeys(): void
+    /**
+     * @return list<string>
+     */
+    private function metricNames(): array
     {
-        // the _count / _num substring becomes a ".count" segment under swoole.*;
-        // other underscores are left as-is
-        $this->assertSame('swoole.request.count', Server::telemetryName('request_count'));
-        $this->assertSame('swoole.connection.count', Server::telemetryName('connection_num'));
-        $this->assertSame('swoole.worker_request.count', Server::telemetryName('worker_request_count'));
-        // keys without those suffixes are namespaced verbatim
-        $this->assertSame('swoole.start_time', Server::telemetryName('start_time'));
-        // only the trailing suffix is rewritten, never an infix occurrence
-        $this->assertSame('swoole.request_num_bytes', Server::telemetryName('request_num_bytes'));
+        $ref = new ReflectionClass(Server::class);
+        $names = [];
+        foreach (['WORKER_STATS', 'SERVER_STATS', 'COROUTINE_STATS'] as $map) {
+            /** @var array<string, string> $value */
+            $value = $ref->getConstant($map);
+            $names = [...$names, ...array_values($value)];
+        }
+        foreach ($ref->getConstants() as $name => $value) {
+            if (str_starts_with($name, 'METRIC_')) {
+                $names[] = $value;
+            }
+        }
+
+        return $names;
     }
 
-    public function testPerWorkerStatsKeys(): void
+    public function testEveryMetricNameIsUniqueAndNamespaced(): void
     {
-        // Per-worker keys must stay disjoint from global ones, and keep the
-        // upstream "coroutine_peek_num" typo so they match Server::stats().
-        $this->assertContains('worker_request_count', Server::PER_WORKER_STATS_KEYS);
-        $this->assertContains('coroutine_peek_num', Server::PER_WORKER_STATS_KEYS);
-        $this->assertNotContains('coroutine_peak_num', Server::PER_WORKER_STATS_KEYS);
-        $this->assertSame(Server::PER_WORKER_STATS_KEYS, array_values(array_unique(Server::PER_WORKER_STATS_KEYS)));
+        $names = $this->metricNames();
+
+        $this->assertNotEmpty($names);
+        $this->assertSame($names, array_values(array_unique($names)), 'duplicate telemetry metric name');
+        foreach ($names as $name) {
+            $this->assertStringStartsWith('swoole.', $name);
+        }
+    }
+
+    public function testWorkerAndServerStatKeysAreDisjoint(): void
+    {
+        $ref = new ReflectionClass(Server::class);
+        /** @var array<string, string> $worker */
+        $worker = $ref->getConstant('WORKER_STATS');
+        /** @var array<string, string> $server */
+        $server = $ref->getConstant('SERVER_STATS');
+
+        // A stats() key is either worker-local or server-wide, never both.
+        $this->assertSame([], array_intersect(array_keys($worker), array_keys($server)));
     }
 }

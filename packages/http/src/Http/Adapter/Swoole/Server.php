@@ -17,24 +17,64 @@ class Server extends Adapter
     protected const string CONTEXT_KEY = '__utopia__';
 
     /**
-     * Keys in Server::stats() scoped to the calling worker process rather than
-     * the whole server, so they must be emitted from every worker for a
-     * sum() across instances to be correct.
+     * Server::stats() keys scoped to the calling worker, mapped to their
+     * telemetry name. Emitted from every worker so a sum across instances is
+     * accurate. "coroutine_peek_num" is the upstream Swoole key, typo and all.
      *
-     * "coroutine_peek_num" is the upstream Swoole key, typo and all
-     * (Co::stats() exposes the corrected "coroutine_peak_num"); this matches
-     * Server::stats() so we keep the typo.
-     *
-     * @var list<string>
+     * @var array<string, string>
      */
-    public const array PER_WORKER_STATS_KEYS = [
-        'worker_request_count',
-        'worker_response_count',
-        'worker_dispatch_count',
-        'worker_concurrency',
-        'coroutine_num',
-        'coroutine_peek_num',
+    private const array WORKER_STATS = [
+        'worker_request_count' => 'swoole.worker_request.count',
+        'worker_response_count' => 'swoole.worker_response.count',
+        'worker_dispatch_count' => 'swoole.worker_dispatch.count',
+        'worker_concurrency' => 'swoole.worker.concurrency',
+        'coroutine_num' => 'swoole.coroutine.count',
+        'coroutine_peek_num' => 'swoole.coroutine.peak',
     ];
+
+    /**
+     * Server::stats() keys tracked by the master, mapped to their telemetry
+     * name. Emitted from worker 0 only so each server instance reports once.
+     *
+     * @var array<string, string>
+     */
+    private const array SERVER_STATS = [
+        'connection_num' => 'swoole.connection.count',
+        'accept_count' => 'swoole.accept.count',
+        'close_count' => 'swoole.close.count',
+        'abort_count' => 'swoole.abort.count',
+        'dispatch_count' => 'swoole.dispatch.count',
+        'request_count' => 'swoole.request.count',
+        'response_count' => 'swoole.response.count',
+        'total_recv_bytes' => 'swoole.recv.bytes',
+        'total_send_bytes' => 'swoole.send.bytes',
+        'concurrency' => 'swoole.concurrency',
+        'worker_num' => 'swoole.worker.count',
+        'idle_worker_num' => 'swoole.idle_worker.count',
+        'task_worker_num' => 'swoole.task_worker.count',
+    ];
+
+    /**
+     * Co::stats() keys (per worker), mapped to their telemetry name.
+     * coroutine_last_cid is the cumulative count of coroutines created.
+     *
+     * @var array<string, string>
+     */
+    private const array COROUTINE_STATS = [
+        'coroutine_last_cid' => 'swoole.coroutine.created',
+        'aio_task_num' => 'swoole.aio.tasks_pending',
+        'aio_worker_num' => 'swoole.aio.workers',
+        'event_num' => 'swoole.reactor.events',
+        'signal_listener_num' => 'swoole.signal_listeners',
+    ];
+
+    // Standalone metrics derived from server settings, timers and the process.
+    private const string METRIC_REACTOR_THREADS = 'swoole.reactor.threads';
+    private const string METRIC_COROUTINE_MAX = 'swoole.coroutine.max';
+    private const string METRIC_TIMERS_ACTIVE = 'swoole.timers.active';
+    private const string METRIC_MEMORY_USAGE = 'swoole.memory.usage_bytes';
+    private const string METRIC_MEMORY_PEAK = 'swoole.memory.peak_bytes';
+    private const string METRIC_SCHEDULER_LAG = 'swoole.scheduler.lag_ms';
 
     /**
      * Request context for non-coroutine modes, where a worker handles
@@ -172,45 +212,24 @@ class Server extends Adapter
         // Per-worker stats: registered on every worker so a sum across
         // service.instance.id is accurate. max_coroutine is a per-worker ceiling
         // (PHPCoroutine::config is thread-local), so it pairs with coroutine_num.
-        foreach (self::PER_WORKER_STATS_KEYS as $key) {
-            $observe(self::telemetryName($key), fn() => $server->stats()[$key] ?? null);
+        foreach (self::WORKER_STATS as $key => $name) {
+            $observe($name, fn() => $server->stats()[$key] ?? null);
         }
-        $observe('swoole.coroutine.max', fn() => $settings['max_coroutine'] ?? 100_000);
+        $observe(self::METRIC_COROUTINE_MAX, fn() => $settings['max_coroutine'] ?? 100_000);
 
-        // Global server stats are master-tracked, so emit them from worker 0
-        // only to avoid every worker reporting the same numbers. The key set is
-        // stable once the server is running, so enumerate it here at registration.
-        if ($workerId === 0) {
-            foreach ($server->stats() as $key => $value) {
-                if (\in_array($key, self::PER_WORKER_STATS_KEYS, true)) {
-                    continue;
-                }
-                if (!is_numeric($value)) {
-                    continue;
-                }
-                $observe(self::telemetryName($key), fn() => $server->stats()[$key] ?? null);
-            }
-            // reactor threads run in the master (SWOOLE_PROCESS mode), so this
-            // ceiling is server-wide, not per-worker.
-            $observe('swoole.reactor.threads', fn() => $settings['reactor_num'] ?? swoole_cpu_num());
+        // Co::stats() reflects this worker's coroutine scheduler.
+        foreach (self::COROUTINE_STATS as $key => $name) {
+            $observe($name, fn() => Coroutine::stats()[$key] ?? 0);
         }
-
-        // coroutine_last_cid is the cumulative count of coroutines created in
-        // this worker; report it directly so the backend can rate() it.
-        $observe('swoole.coroutine.created', fn() => Coroutine::stats()['coroutine_last_cid'] ?? 0);
-        $observe('swoole.aio.tasks_pending', fn() => Coroutine::stats()['aio_task_num'] ?? 0);
-        $observe('swoole.aio.workers', fn() => Coroutine::stats()['aio_worker_num'] ?? 0);
-        $observe('swoole.reactor.events', fn() => Coroutine::stats()['event_num'] ?? 0);
-        $observe('swoole.signal_listeners', fn() => Coroutine::stats()['signal_listener_num'] ?? 0);
-        $observe('swoole.timers.active', fn() => Timer::stats()['num'] ?? 0);
+        $observe(self::METRIC_TIMERS_ACTIVE, fn() => Timer::stats()['num'] ?? 0);
         // real_usage=false reports the in-use script heap, not the OS pool (which
         // grows in slabs and rarely shrinks), revealing per-request churn.
-        $observe('swoole.memory.usage_bytes', fn() => memory_get_usage(false));
-        $observe('swoole.memory.peak_bytes', fn() => memory_get_peak_usage(false));
+        $observe(self::METRIC_MEMORY_USAGE, fn() => memory_get_usage(false));
+        $observe(self::METRIC_MEMORY_PEAK, fn() => memory_get_peak_usage(false));
 
         // Co::sleep(10ms) should take ~10ms; any extra is how long the event loop
         // was blocked. Needs a coroutine, so it's skipped in non-coroutine mode.
-        $telemetry->createObservableGauge('swoole.scheduler.lag_ms')->observe(function (callable $observer): void {
+        $telemetry->createObservableGauge(self::METRIC_SCHEDULER_LAG)->observe(function (callable $observer): void {
             if (Coroutine::getCid() === -1) {
                 return;
             }
@@ -218,16 +237,16 @@ class Server extends Adapter
             Coroutine::sleep(0.01);
             $observer(max(0.0, (hrtime(true) - $startNs) / 1_000_000 - 10), []);
         });
-    }
 
-    /**
-     * Map a Swoole stats() key to its `swoole.*` telemetry metric name,
-     * collapsing the `_count`/`_num` suffixes to a `.count` segment.
-     */
-    public static function telemetryName(string $statKey): string
-    {
-        // Anchor to the trailing suffix so an infix _count/_num isn't rewritten.
-        return 'swoole.' . (preg_replace('/_(count|num)$/', '.count', $statKey) ?? $statKey);
+        // Server-wide stats are master-tracked, so emit them from worker 0 only
+        // to avoid every worker reporting the same numbers. reactor threads run
+        // in the master (SWOOLE_PROCESS mode) too.
+        if ($workerId === 0) {
+            foreach (self::SERVER_STATS as $key => $name) {
+                $observe($name, fn() => $server->stats()[$key] ?? null);
+            }
+            $observe(self::METRIC_REACTOR_THREADS, fn() => $settings['reactor_num'] ?? swoole_cpu_num());
+        }
     }
 
     public function onStart(callable $callback): void
