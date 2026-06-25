@@ -12,6 +12,12 @@
     ],
     "license": "MIT",
     "minimum-stability": "stable",
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/appwrite-labs/php-k8s"
+        }
+    ],
     "authors": [
         {
             "name": "Torsten Dittmann",

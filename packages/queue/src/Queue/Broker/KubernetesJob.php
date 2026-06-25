@@ -6,14 +6,12 @@ use RenokiCo\PhpK8s\K8s;
 use RenokiCo\PhpK8s\Kinds\K8sJob as Manifest;
 use RenokiCo\PhpK8s\KubernetesCluster;
 use RenokiCo\PhpK8s\ResourcesList;
-use Utopia\Queue\Message;
 use Utopia\Queue\Publisher;
 use Utopia\Queue\Queue;
 
 class KubernetesJob implements Publisher
 {
     private const string LABEL_PREFIX = 'queue.utopia-php.com';
-    private const string ENV_MESSAGE = 'UTOPIA_QUEUE_MESSAGE';
     private const string CONTAINER_NAME = 'job';
 
     /**
@@ -86,27 +84,6 @@ class KubernetesJob implements Publisher
     }
 
     /**
-     * Rebuilds the queue Message from the environment of the running pod.
-     * Intended to be called from inside the container the Job triggers.
-     */
-    public static function message(): Message
-    {
-        $raw = getenv(self::ENV_MESSAGE);
-        if ($raw === false || $raw === '') {
-            throw new \RuntimeException(\sprintf('Environment variable "%s" is not set.', self::ENV_MESSAGE));
-        }
-
-        $decoded = json_decode($raw, true);
-        if (!\is_array($decoded)) {
-            throw new \RuntimeException(\sprintf('Invalid JSON in environment variable "%s".', self::ENV_MESSAGE));
-        }
-
-        $decoded['timestamp'] = (int) ($decoded['timestamp'] ?? 0);
-
-        return new Message($decoded);
-    }
-
-    /**
      * @param array{pid: string, queue: string, timestamp: int, payload: array<mixed>} $message
      */
     protected function buildJob(Queue $queue, array $message, bool $priority = false): Manifest
@@ -115,7 +92,7 @@ class KubernetesJob implements Publisher
             ->setName(self::CONTAINER_NAME)
             ->setAttribute('image', $this->image)
             ->setEnv(array_merge($this->env, [
-                self::ENV_MESSAGE => json_encode($message, JSON_THROW_ON_ERROR),
+                KubernetesJobEnvelope::ENV => json_encode($message, JSON_THROW_ON_ERROR),
             ]));
 
         if ($this->command !== []) {
