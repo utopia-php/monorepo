@@ -107,124 +107,81 @@ class Server extends Adapter
      *
      * Call this from inside a worker-start handler (Swoole allows only one
      * handler per event, so the application owns that hook and forwards the
-     * per-worker telemetry adapter and worker id here). It schedules timers
-     * that emit Swoole's own server/coroutine/runtime metrics under the
-     * `swoole.*` namespace:
+     * per-worker telemetry adapter and worker id here). It registers
+     * observable gauges that read Swoole's own server/coroutine/runtime state
+     * lazily — the application drives collection with its normal
+     * `$telemetry->collect()`, no extra timers needed. Metrics are emitted
+     * under the `swoole.*` namespace:
      *
      *  - per-worker stats from {@see self::PER_WORKER_STATS_KEYS} (every worker)
      *  - global server stats + the reactor/coroutine config ceilings (worker 0)
      *  - coroutine creations, AIO backlog, reactor events, signal listeners,
      *    active timers, memory, and event-loop scheduler lag
-     *
-     * Instruments are created once and reused on every tick. Timers are
-     * cleared by Swoole on worker exit (or call Timer::clearAll() yourself).
      */
-    public function collectTelemetry(Telemetry $telemetry, int $workerId, int $intervalMs = 10_000): void
+    public function collectTelemetry(Telemetry $telemetry, int $workerId): void
     {
         $server = $this->server;
 
-        $gauges = [];
-        $gauge = function (string $name) use ($telemetry, &$gauges) {
-            return $gauges[$name] ??= $telemetry->createGauge($name);
+        // Register an observable gauge whose value is read on each collect().
+        // A null reading is skipped so absent keys don't emit a 0 series.
+        $observe = function (string $name, callable $value) use ($telemetry): void {
+            $telemetry->createObservableGauge($name)->observe(function (callable $observer) use ($value): void {
+                $reading = $value();
+                if ($reading !== null) {
+                    $observer($reading, []);
+                }
+            });
         };
 
-        // Global server stats are master-tracked, so emit them from worker 0
-        // only to avoid every worker reporting the same numbers.
-        if ($workerId === 0) {
-            // Server::setting only holds values passed to the constructor; when
-            // a key is absent Swoole uses its built-in default.
-            $settings = $server->setting ?? [];
-            $reactorThreads = $gauge('swoole.reactor.threads');
-            $coroutineMax = $gauge('swoole.coroutine.max');
-
-            Timer::tick($intervalMs, function () use ($server, $gauge, $settings, $reactorThreads, $coroutineMax) {
-                foreach ($server->stats() as $key => $value) {
-                    if (\in_array($key, self::PER_WORKER_STATS_KEYS, true)) {
-                        continue;
-                    }
-                    if (!is_numeric($value)) {
-                        continue;
-                    }
-                    $gauge(self::telemetryName($key))->record($value);
-                }
-                $reactorThreads->record($settings['reactor_num'] ?? swoole_cpu_num());
-                $coroutineMax->record($settings['max_coroutine'] ?? 100_000);
-            });
-        }
-
-        // coroutine_last_cid is a thread-local counter incremented on every
-        // Coroutine::create(); emit the delta as a monotonic Counter so rate()
-        // handles worker restarts instead of seeing a negative spike.
-        $coroutineCreated = $telemetry->createCounter(
-            'swoole.coroutine.created',
-            'coroutines',
-            'Total coroutines created in this worker process.',
-        );
-        $lastCid = 0;
-
-        $perWorker = [];
+        // Per-worker stats: registered on every worker so a sum across
+        // service.instance.id is accurate.
         foreach (self::PER_WORKER_STATS_KEYS as $key) {
-            $perWorker[$key] = $gauge(self::telemetryName($key));
+            $observe(self::telemetryName($key), fn() => $server->stats()[$key] ?? null);
         }
-        $aioTasksPending = $gauge('swoole.aio.tasks_pending'); // file-I/O thread-pool backlog
-        $aioWorkers = $gauge('swoole.aio.workers');
-        $reactorEvents = $gauge('swoole.reactor.events'); // FDs in reactor, not a backlog
-        $signalListeners = $gauge('swoole.signal_listeners');
-        $timersActive = $gauge('swoole.timers.active');
-        $memoryUsage = $gauge('swoole.memory.usage_bytes');
-        $memoryPeak = $gauge('swoole.memory.peak_bytes');
-        $schedulerLag = $gauge('swoole.scheduler.lag_ms');
 
-        // Per-worker stats: emit from every worker so a sum across instances is
-        // accurate.
-        Timer::tick($intervalMs, function () use (
-            $server,
-            $workerId,
-            $coroutineCreated,
-            &$lastCid,
-            $perWorker,
-            $aioTasksPending,
-            $aioWorkers,
-            $reactorEvents,
-            $signalListeners,
-            $timersActive,
-            $memoryUsage,
-            $memoryPeak,
-            $schedulerLag,
-        ) {
-            $stats = $server->stats();
-            foreach ($perWorker as $key => $instrument) {
-                if (isset($stats[$key])) {
-                    $instrument->record($stats[$key]);
+        // Global server stats are master-tracked, so emit them from worker 0
+        // only to avoid every worker reporting the same numbers. The key set is
+        // stable once the server is running, so enumerate it here at registration.
+        if ($workerId === 0) {
+            foreach ($server->stats() as $key => $value) {
+                if (\in_array($key, self::PER_WORKER_STATS_KEYS, true)) {
+                    continue;
                 }
+                if (!is_numeric($value)) {
+                    continue;
+                }
+                $observe(self::telemetryName($key), fn() => $server->stats()[$key] ?? null);
             }
+            // Static config ceilings for utilisation dashboards. Server::setting
+            // only holds values passed to the constructor; absent keys fall back
+            // to Swoole's built-in defaults.
+            $settings = $server->setting ?? [];
+            $observe('swoole.reactor.threads', fn() => $settings['reactor_num'] ?? swoole_cpu_num());
+            $observe('swoole.coroutine.max', fn() => $settings['max_coroutine'] ?? 100_000);
+        }
 
-            $co = Coroutine::stats();
-            $aioTasksPending->record($co['aio_task_num'] ?? 0);
-            $aioWorkers->record($co['aio_worker_num'] ?? 0);
-            $reactorEvents->record($co['event_num'] ?? 0);
-            $signalListeners->record($co['signal_listener_num'] ?? 0);
+        // coroutine_last_cid is the cumulative count of coroutines created in
+        // this worker; report it directly so the backend can rate() it.
+        $observe('swoole.coroutine.created', fn() => Coroutine::stats()['coroutine_last_cid'] ?? 0);
+        $observe('swoole.aio.tasks_pending', fn() => Coroutine::stats()['aio_task_num'] ?? 0);
+        $observe('swoole.aio.workers', fn() => Coroutine::stats()['aio_worker_num'] ?? 0);
+        $observe('swoole.reactor.events', fn() => Coroutine::stats()['event_num'] ?? 0);
+        $observe('swoole.signal_listeners', fn() => Coroutine::stats()['signal_listener_num'] ?? 0);
+        $observe('swoole.timers.active', fn() => Timer::stats()['num'] ?? 0);
+        // real_usage=false reports the in-use script heap, not the OS pool (which
+        // grows in slabs and rarely shrinks), revealing per-request churn.
+        $observe('swoole.memory.usage_bytes', fn() => memory_get_usage(false));
+        $observe('swoole.memory.peak_bytes', fn() => memory_get_peak_usage(false));
 
-            $cid = $co['coroutine_last_cid'] ?? 0;
-            if ($cid > $lastCid) {
-                $coroutineCreated->add($cid - $lastCid);
+        // Co::sleep(10ms) should take ~10ms; any extra is how long the event loop
+        // was blocked. Needs a coroutine, so it's skipped in non-coroutine mode.
+        $telemetry->createObservableGauge('swoole.scheduler.lag_ms')->observe(function (callable $observer): void {
+            if (Coroutine::getCid() === -1) {
+                return;
             }
-            $lastCid = $cid;
-
-            $timersActive->record(Timer::stats()['num'] ?? 0);
-            // real_usage=false reports the in-use script heap, not the OS pool
-            // (which grows in slabs and rarely shrinks), revealing per-request churn.
-            $memoryUsage->record(memory_get_usage(false));
-            $memoryPeak->record(memory_get_peak_usage(false));
-
-            // Co::sleep(10ms) should take ~10ms; any extra is how long the event
-            // loop was blocked. Needs a coroutine, so skip in non-coroutine mode.
-            if (Coroutine::getCid() !== -1) {
-                $startNs = hrtime(true);
-                Coroutine::sleep(0.01);
-                $lagMs = max(0.0, (hrtime(true) - $startNs) / 1_000_000 - 10);
-                $schedulerLag->record($lagMs, ['worker_id' => (string) $workerId]);
-            }
+            $startNs = hrtime(true);
+            Coroutine::sleep(0.01);
+            $observer(max(0.0, (hrtime(true) - $startNs) / 1_000_000 - 10), []);
         });
     }
 
