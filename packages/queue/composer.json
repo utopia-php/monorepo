@@ -40,7 +40,6 @@
     },
     "require": {
         "php": ">=8.4",
-        "appwrite-labs/php-k8s": "^0.1",
         "utopia-php/di": "^0.3",
         "utopia-php/lock": "^0.2",
         "utopia-php/servers": "^0.4",
@@ -50,11 +49,13 @@
     },
     "require-dev": {
         "ext-redis": "*",
+        "appwrite-labs/php-k8s": "^0.1",
         "swoole/ide-helper": "4.8.8",
         "workerman/workerman": "^4.0"
     },
     "suggest": {
         "ext-swoole": "Needed to support Swoole.",
+        "appwrite-labs/php-k8s": "Needed to support the KubernetesJob broker.",
         "workerman/workerman": "Needed to support Workerman."
     },
     "config": {
