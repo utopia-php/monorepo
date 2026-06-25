@@ -1,0 +1,73 @@
+name: Benchmark
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Space-separated package names (default: changed)'
+        required: false
+        default: ''
+
+jobs:
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.changed.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.packages }}" ]; then
+            CHANGED="${{ inputs.packages }}"
+          else
+            RANGE="origin/${{ github.base_ref }}...HEAD"
+            CHANGED=$(git diff --name-only "$RANGE" -- packages/ | cut -d/ -f2)
+            # benchmark tooling changes re-run every benchmark
+            if git diff --name-only "$RANGE" | grep -qE '^(bin/|\.github/workflows/benchmark\.yml)'; then
+              CHANGED=$(ls packages)
+            fi
+          fi
+
+          # Benchmarks are opt-in: only packages that declare a `bench` script.
+          BENCH=$(echo "$CHANGED" | tr ' ' '\n' | sort -u | while read -r package; do
+            [ -f "packages/$package/composer.json" ] || continue
+            jq -e '.scripts.bench' "packages/$package/composer.json" > /dev/null 2>&1 && echo "$package"
+          done)
+
+          MATRIX=$(echo "$BENCH" | jq -R 'select(. != "") | {package: .}' | jq --compact-output --slurp 'unique')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+  benchmark:
+    name: benchmark (${{ matrix.package }})
+    needs: changed
+    if: needs.changed.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.changed.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6
+
+      - id: meta
+        run: |
+          EXTENSIONS=$(jq -r '[(.require, ."require-dev", .suggest | select(. != null)) | keys[] | select(startswith("ext-")) | ltrimstr("ext-")] | unique | join(", ")' packages/${{ matrix.package }}/composer.json)
+          echo "extensions=$EXTENSIONS" >> "$GITHUB_OUTPUT"
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # ratchet:shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: ${{ steps.meta.outputs.extensions }}
+          coverage: none
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://github.com/grafana/k6/releases/download/v0.50.0/k6-v0.50.0-linux-amd64.tar.gz | tar xz
+          sudo install k6-v0.50.0-linux-amd64/k6 /usr/local/bin/k6
+          k6 version
+
+      - run: bin/monorepo benchmark ${{ matrix.package }}

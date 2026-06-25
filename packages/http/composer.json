@@ -23,7 +23,8 @@
     },
     "scripts": {
         "test": "phpunit --configuration phpunit.xml --testsuite unit",
-        "test:e2e": "phpunit --configuration phpunit.xml --testsuite e2e-fpm,e2e-swoole"
+        "test:e2e": "phpunit --configuration phpunit.xml --testsuite e2e-fpm,e2e-swoole",
+        "bench": "bash tests/bench/run.sh"
     },
     "require": {
         "php": ">=8.3",

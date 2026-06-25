@@ -5,3 +5,4 @@
 - Releases are git tags shaped `<package>/<semver>` (e.g. `http/2.1.0`) — never edit a changelog to "release".
 - All monorepo tooling lives in `bin/monorepo`; do not add monorepo packages or frameworks for this.
 - Run a package's tests with `bin/monorepo test <name>`; add `--linked` to test against monorepo siblings instead of released versions (CI does this for dependents of changed packages). Test contract: `composer test` = unit tier, bare host; `composer test:e2e` = host-run tests against the package's compose services (offset host ports, never tests inside containers).
+- Benchmarks are opt-in and run separately from tests: a package joins by declaring a `composer bench` script, and `bin/monorepo benchmark <name>` runs it. The Benchmark workflow runs these on Linux runners (informational, not a pass/fail gate); packages without a `bench` script are skipped.

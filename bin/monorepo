@@ -673,6 +673,37 @@ switch ($command) {
         out('all tests passed');
         break;
 
+    case 'benchmark':
+        $targets = $arguments !== [] ? $arguments : packages();
+        $failed = [];
+        $ran = false;
+        foreach ($targets as $package) {
+            is_dir("packages/{$package}") || fail("unknown package: {$package}");
+
+            // Benchmarks are opt-in: a package joins by declaring a `bench`
+            // script, mirroring the `test`/`test:e2e` contract.
+            if (!isset(manifest($package)['scripts']['bench'])) {
+                continue;
+            }
+            $ran = true;
+
+            out("==> {$package}");
+            $directory = "packages/{$package}";
+
+            passthru("cd {$directory} && composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs", $code);
+            if ($code === 0) {
+                passthru("cd {$directory} && composer bench", $code);
+            }
+            if ($code !== 0) {
+                $failed[] = $package;
+            }
+        }
+        if ($failed !== []) {
+            fail('benchmarks failed: ' . implode(', ', $failed));
+        }
+        out($ran ? 'all benchmarks passed' : 'no benchmarks to run');
+        break;
+
     default:
         out(<<<'HELP'
         usage: bin/monorepo <command>
@@ -687,6 +718,7 @@ switch ($command) {
           check [name...] [--fix]             run pint, phpstan and rector against packages
           test [name...] [--linked]           install dependencies and run package test suites
                                               (--linked resolves monorepo siblings from the local checkout)
+          benchmark [name...]                 run the `bench` script of packages that declare one
           dependents <name...>                list packages that depend on the given ones (transitively)
           graph                               regenerate the dependency graph in README.md
         HELP);
