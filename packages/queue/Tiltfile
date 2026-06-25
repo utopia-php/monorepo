@@ -1,0 +1,23 @@
+# Provisions the cluster-side dependencies for the KubernetesJob e2e suite:
+# builds the worker image every queue Job runs, loads it into the kind cluster,
+# and creates the namespace the suite schedules Jobs into. Drive it with
+# `tilt ci` (tests/e2e.sh does this); use `tilt up` for an interactive loop.
+
+cluster = os.getenv('KIND_CLUSTER', 'utopia-queue-e2e')
+
+allow_k8s_contexts('kind-' + cluster)
+
+k8s_yaml('tests/Queue/servers/KubernetesJob/k8s.yaml')
+
+local_resource(
+    'worker-image',
+    cmd='docker build -t utopia-queue-worker:e2e -f tests/Queue/servers/KubernetesJob/Dockerfile . && kind load docker-image utopia-queue-worker:e2e --name ' + cluster,
+    deps=[
+        'tests/Queue/servers/KubernetesJob/Dockerfile',
+        'tests/Queue/servers/KubernetesJob/worker.php',
+        'tests/Queue/servers/tests.php',
+        'src',
+        'composer.json',
+        'composer.lock',
+    ],
+)

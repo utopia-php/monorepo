@@ -6,12 +6,14 @@
         >
     <testsuites>
         <testsuite name="unit">
+            <file>./tests/Queue/E2E/Adapter/KubernetesJobManifestTest.php</file>
             <file>./tests/Queue/E2E/Adapter/LockingTest.php</file>
             <file>./tests/Queue/E2E/Adapter/RedisReconnectCallbackTest.php</file>
             <file>./tests/Queue/E2E/Adapter/ServerTelemetryTest.php</file>
             <file>./tests/Queue/E2E/Adapter/SwooleConcurrencyTest.php</file>
         </testsuite>
         <testsuite name="e2e">
+            <file>./tests/Queue/E2E/Adapter/KubernetesJobTest.php</file>
             <file>./tests/Queue/E2E/Adapter/PoolTest.php</file>
             <file>./tests/Queue/E2E/Adapter/SwooleTest.php</file>
             <file>./tests/Queue/E2E/Adapter/SwooleRedisClusterTest.php</file>

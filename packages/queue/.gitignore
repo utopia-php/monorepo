@@ -1,3 +1,5 @@
 /vendor/
 .phpunit*
 .idea
+/.e2e-bin/
+/.kubeconfig.e2e

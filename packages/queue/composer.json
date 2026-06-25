@@ -34,6 +34,7 @@
     },
     "require": {
         "php": ">=8.4",
+        "appwrite-labs/php-k8s": "^0.1",
         "utopia-php/di": "^0.3",
         "utopia-php/lock": "^0.2",
         "utopia-php/servers": "^0.4",

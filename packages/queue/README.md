@@ -73,6 +73,56 @@ $client->enqueue([
 ]);
 ```
 
+## Kubernetes Jobs
+
+The `KubernetesJob` publisher triggers each queued message as a native [Kubernetes Job](https://kubernetes.io/docs/concepts/workloads/controllers/job/) instead of pushing it onto a broker. The cluster scheduler runs a pod to completion for every message, so no long-running worker process is required.
+
+```php
+<?php
+
+use RenokiCo\PhpK8s\KubernetesCluster;
+use Utopia\Queue\Broker\KubernetesJob;
+use Utopia\Queue\Queue;
+
+// Authenticate however you like — in-cluster, kubeconfig, EKS, etc.
+$cluster = KubernetesCluster::inClusterConfiguration();
+
+$publisher = new KubernetesJob(
+    cluster: $cluster,
+    image: 'registry.example.com/my-worker:1.0',
+    kubernetesNamespace: 'queues',
+);
+
+$publisher->enqueue(new Queue('my-queue'), [
+    'type' => 'test_number',
+    'value' => 123,
+]);
+```
+
+Each enqueued message is serialized into the `UTOPIA_QUEUE_MESSAGE` environment variable of the Job's container. Inside the worker image, rebuild the `Message` and run your job:
+
+```php
+<?php
+
+use Utopia\Queue\Broker\KubernetesJob;
+
+$message = KubernetesJob::message();
+
+// ... process $message->getPayload() ...
+```
+
+`getQueueSize()` counts active (or failed) Jobs for the queue. Per-job retries are handled natively by the Job's `backoffLimit`, so `retry()` is a no-op. A queue's `jobTtl` (or the broker's `ttlSecondsAfterFinished`) controls how long finished Jobs are kept. Use `configureJob()` for advanced manifest tweaks (resource limits, image pull secrets, node selectors, volumes):
+
+```php
+$publisher->configureJob(function ($job) {
+    $job->setSpec('activeDeadlineSeconds', 120);
+});
+```
+
+> Note: the payload travels in an environment variable, so keep payloads small enough to fit inside the Job manifest (etcd objects are limited to ~1.5MB by default).
+
+The end-to-end suite (`tests/e2e.sh`) provisions a [kind](https://kind.sigs.k8s.io/) cluster and uses the package `Tiltfile` to build and load the worker image — see `tests/Queue/servers/KubernetesJob`.
+
 ## System Requirements
 
 Utopia Framework requires PHP 8.0 or later. We recommend using the latest PHP version whenever possible.
