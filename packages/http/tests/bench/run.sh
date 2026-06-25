@@ -8,7 +8,12 @@
 #
 # Worker counts follow each mode's cgroup-aware sizing, so on a 4-core
 # box (e.g. a GitHub runner) this is the "4 CPU pod" scenario directly.
-set -euo pipefail
+#
+# No pipefail on purpose: the metric parsers below pipe into `head`, which
+# closes the pipe early and SIGPIPEs the upstream grep. Under pipefail that
+# non-zero would trip `set -e` and abort mid-sweep (dropping a row), so we
+# let the parsers fall back to n/a instead.
+set -eu
 
 cd "$(dirname "$0")" # packages/http/tests/bench
 
@@ -19,6 +24,7 @@ PORT="${PORT:-9501}"
 VUS="${VUS:-200}"
 WARMUP="${WARMUP:-5s}"
 DURATION="${DURATION:-20s}"
+CORES=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo '?')
 
 rows=""
 bench() { # name mode sleep_ms cpu_iters
@@ -43,7 +49,8 @@ bench() { # name mode sleep_ms cpu_iters
     kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
 
     rps=$(echo "$out" | grep -E 'http_reqs' | grep -oE '[0-9.]+/s' | head -1)
-    p95=$(echo "$out" | grep -E 'http_req_duration' | grep -oE 'p\(95\)=[0-9.]+m?s' | head -1 | cut -d= -f2)
+    # value+unit until the next space, so µs/ms/s are all captured
+    p95=$(echo "$out" | grep -E 'http_req_duration' | grep -oE 'p\(95\)=[^ ]+' | head -1 | cut -d= -f2)
     rows+="| $name | $mode | ${rps:-n/a} | ${p95:-n/a} |
 "
     echo "  $name mode=$mode -> ${rps:-n/a} (p95 ${p95:-n/a})" >&2
@@ -63,7 +70,7 @@ table="| workload | mode | req/s | p95 |
 |---|---|---|---|
 ${rows%$'\n'}"
 
-section="### http — Swoole modes ($(nproc) cores, ${VUS} VUs, ${DURATION}/run)
+section="### http — Swoole modes (${CORES} cores, ${VUS} VUs, ${DURATION}/run)
 
 ${table}
 
