@@ -1,0 +1,114 @@
+name: Benchmark
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Space-separated package names (default: changed)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.changed.outputs.packages }}
+      extensions: ${{ steps.changed.outputs.extensions }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: changed
+        env:
+          # Pass user-controllable input through env so the shell never sees
+          # the raw ${{ }} expansion (expression injection).
+          INPUT_PACKAGES: ${{ inputs.packages }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_PACKAGES" ]; then
+            CHANGED="$INPUT_PACKAGES"
+          else
+            # Benchmarks are an opt-in per-package concern, so scope to the
+            # packages actually changed (use workflow_dispatch to run others).
+            RANGE="origin/$BASE_REF...HEAD"
+            CHANGED=$(git diff --name-only "$RANGE" -- packages/ | cut -d/ -f2)
+          fi
+
+          # Benchmarks are opt-in: only packages that declare a `bench` script.
+          PACKAGES=$(echo "$CHANGED" | tr ' ' '\n' | sort -u | while read -r package; do
+            if [ -f "packages/$package/composer.json" ] && jq -e '.scripts.bench' "packages/$package/composer.json" > /dev/null 2>&1; then
+              echo "$package"
+            fi
+          done | tr '\n' ' ' | xargs || true)
+          echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+
+          # Union of declared ext-* across the benchmarked packages, so the
+          # single benchmark job can install everything they need.
+          EXTENSIONS=$(for package in $PACKAGES; do
+            jq -r '[(.require, ."require-dev", .suggest | select(. != null)) | keys[] | select(startswith("ext-")) | ltrimstr("ext-")][]' "packages/$package/composer.json"
+          done | sort -u | paste -sd, - || true)
+          echo "extensions=$EXTENSIONS" >> "$GITHUB_OUTPUT"
+
+  benchmark:
+    needs: changed
+    if: needs.changed.outputs.packages != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # ratchet:shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: ${{ needs.changed.outputs.extensions }}
+          coverage: none
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://github.com/grafana/k6/releases/download/v0.50.0/k6-v0.50.0-linux-amd64.tar.gz | tar xz
+          sudo install k6-v0.50.0-linux-amd64/k6 /usr/local/bin/k6
+          k6 version
+
+      - name: Run benchmarks
+        env:
+          BENCH_REPORT: ${{ github.workspace }}/bench-report.md
+          # via env so the package list is data, not shell-interpolated
+          PACKAGES: ${{ needs.changed.outputs.packages }}
+        run: bin/monorepo benchmark $PACKAGES
+
+      - name: Upsert PR comment
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT: ${{ github.workspace }}/bench-report.md
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          [ -s "$REPORT" ] || { echo "no benchmark report to post"; exit 0; }
+          MARKER="<!-- utopia-benchmark -->"
+          {
+            echo "$MARKER"
+            echo "## Benchmark results"
+            echo
+            cat "$REPORT"
+            echo "_Shared CI runners — treat absolute numbers as rough, compare modes within a run. Commit ${{ github.sha }}._"
+          } > comment.md
+          jq -n --rawfile body comment.md '{body: $body}' > payload.json
+
+          ID=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq "map(select(.body | startswith(\"$MARKER\"))) | .[0].id // empty")
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$ID" --input payload.json > /dev/null
+            echo "updated comment $ID"
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" --input payload.json > /dev/null
+            echo "created comment"
+          fi
