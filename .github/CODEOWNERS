@@ -13,11 +13,13 @@
 /packages/cli/          @eldadfux @lohanidamodar
 /packages/client/       @loks0n
 /packages/compression/  @loks0n @ChiragAgg5k
+/packages/config/       @Meldiron @eldadfux
 /packages/console/      @eldadfux @lohanidamodar
 /packages/di/           @eldadfux @ChiragAgg5k
 /packages/fastly/       @loks0n
 /packages/http/         @lohanidamodar @eldadfux @Meldiron
 /packages/lock/         @abnegate
+/packages/nats/         @loks0n @levivannoort
 /packages/platform/     @lohanidamodar @shimonewman
 /packages/pools/        @eldadfux @ArnabChatterjee20k @abnegate
 /packages/queue/        @lohanidamodar @ChiragAgg5k @abnegate
