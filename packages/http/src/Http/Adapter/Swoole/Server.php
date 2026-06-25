@@ -154,6 +154,9 @@ class Server extends Adapter
     private function registerTelemetryGauges(Telemetry $telemetry, int $workerId): void
     {
         $server = $this->server;
+        // Server::setting only holds values passed to the constructor; absent
+        // keys fall back to Swoole's built-in defaults.
+        $settings = $server->setting ?? [];
 
         // Register an observable gauge whose value is read on each collect().
         // A null reading is skipped so absent keys don't emit a 0 series.
@@ -167,10 +170,12 @@ class Server extends Adapter
         };
 
         // Per-worker stats: registered on every worker so a sum across
-        // service.instance.id is accurate.
+        // service.instance.id is accurate. max_coroutine is a per-worker ceiling
+        // (PHPCoroutine::config is thread-local), so it pairs with coroutine_num.
         foreach (self::PER_WORKER_STATS_KEYS as $key) {
             $observe(self::telemetryName($key), fn() => $server->stats()[$key] ?? null);
         }
+        $observe('swoole.coroutine.max', fn() => $settings['max_coroutine'] ?? 100_000);
 
         // Global server stats are master-tracked, so emit them from worker 0
         // only to avoid every worker reporting the same numbers. The key set is
@@ -185,12 +190,9 @@ class Server extends Adapter
                 }
                 $observe(self::telemetryName($key), fn() => $server->stats()[$key] ?? null);
             }
-            // Static config ceilings for utilisation dashboards. Server::setting
-            // only holds values passed to the constructor; absent keys fall back
-            // to Swoole's built-in defaults.
-            $settings = $server->setting ?? [];
+            // reactor threads run in the master (SWOOLE_PROCESS mode), so this
+            // ceiling is server-wide, not per-worker.
             $observe('swoole.reactor.threads', fn() => $settings['reactor_num'] ?? swoole_cpu_num());
-            $observe('swoole.coroutine.max', fn() => $settings['max_coroutine'] ?? 100_000);
         }
 
         // coroutine_last_cid is the cumulative count of coroutines created in
