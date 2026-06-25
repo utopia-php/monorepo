@@ -50,6 +50,8 @@ class Server extends Adapter
      */
     private array $workerStartCallbacks = [];
 
+    private ?Telemetry $telemetry = null;
+
     /**
      * @param  Mode|array<string, mixed>  $settings
      */
@@ -123,19 +125,30 @@ class Server extends Adapter
     }
 
     /**
-     * Register Swoole runtime telemetry. Observable gauges are registered on
-     * each worker start and read Swoole's own server/coroutine/runtime state
-     * lazily, so the application's normal `$telemetry->collect()` drives them —
-     * no extra timers. Metrics are emitted under the `swoole.*` namespace:
+     * Publish Swoole's own server/coroutine/runtime metrics through the given
+     * telemetry adapter. Observable gauges are registered on each worker start
+     * and read live state lazily, so the application's normal
+     * `$telemetry->collect()` drives them — no extra timers. Metrics are emitted
+     * under the `swoole.*` namespace:
      *
      *  - per-worker stats from {@see self::PER_WORKER_STATS_KEYS} (every worker)
      *  - global server stats + the reactor/coroutine config ceilings (worker 0)
      *  - coroutine creations, AIO backlog, reactor events, signal listeners,
      *    active timers, memory, and event-loop scheduler lag
      */
-    public function collectTelemetry(Telemetry $telemetry): void
+    public function setTelemetry(Telemetry $telemetry): void
     {
-        $this->onWorkerStart(fn(int $workerId) => $this->registerTelemetryGauges($telemetry, $workerId));
+        // Wire the worker-start hook once; later calls just swap the adapter
+        // the single registration reads at collection time.
+        $register = $this->telemetry === null;
+        $this->telemetry = $telemetry;
+        if ($register) {
+            $this->onWorkerStart(function (int $workerId): void {
+                if ($this->telemetry !== null) {
+                    $this->registerTelemetryGauges($this->telemetry, $workerId);
+                }
+            });
+        }
     }
 
     private function registerTelemetryGauges(Telemetry $telemetry, int $workerId): void

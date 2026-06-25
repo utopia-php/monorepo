@@ -22,10 +22,11 @@ abstract class Adapter
     public function onWorkerStart(callable $callback): void {}
 
     /**
-     * Register server runtime telemetry. No-op unless the adapter exposes
-     * runtime stats (see the Swoole worker server).
+     * Receive the telemetry adapter so the server can publish its own runtime
+     * metrics. No-op unless the adapter exposes runtime stats (see the Swoole
+     * worker server).
      */
-    public function collectTelemetry(Telemetry $telemetry): void {}
+    public function setTelemetry(Telemetry $telemetry): void {}
 
     /**
      * Static resources container.
