@@ -24,13 +24,19 @@ jobs:
           fetch-depth: 0
 
       - id: changed
+        env:
+          # Pass user-controllable input through env so the shell never sees
+          # the raw ${{ }} expansion (expression injection).
+          INPUT_PACKAGES: ${{ inputs.packages }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.packages }}" ]; then
-            CHANGED="${{ inputs.packages }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_PACKAGES" ]; then
+            CHANGED="$INPUT_PACKAGES"
           else
             # Benchmarks are an opt-in per-package concern, so scope to the
             # packages actually changed (use workflow_dispatch to run others).
-            RANGE="origin/${{ github.base_ref }}...HEAD"
+            RANGE="origin/$BASE_REF...HEAD"
             CHANGED=$(git diff --name-only "$RANGE" -- packages/ | cut -d/ -f2)
           fi
 
@@ -74,7 +80,9 @@ jobs:
       - name: Run benchmarks
         env:
           BENCH_REPORT: ${{ github.workspace }}/bench-report.md
-        run: bin/monorepo benchmark ${{ needs.changed.outputs.packages }}
+          # via env so the package list is data, not shell-interpolated
+          PACKAGES: ${{ needs.changed.outputs.packages }}
+        run: bin/monorepo benchmark $PACKAGES
 
       - name: Upsert PR comment
         if: ${{ always() && github.event_name == 'pull_request' }}

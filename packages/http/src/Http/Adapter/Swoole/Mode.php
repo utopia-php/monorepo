@@ -94,10 +94,15 @@ enum Mode
             // terminationGracePeriodSeconds.
             Constant::OPTION_MAX_WAIT_TIME => 30,
 
-            // Default: unlimited (swoole_server.h:1558-1562 coerces 0 to
-            // UINT_MAX). Without a cap, slow upstreams cause unbounded
-            // request/coroutine accumulation until OOM. 1000 is a generous
-            // server-wide ceiling; tune to measured downstream capacity.
+            // Default: unlimited (Server::set_max_concurrency coerces 0 to
+            // UINT_MAX). Server-wide: the atomic gs->concurrency (sum of
+            // per-worker in-flight) is compared to gs->max_concurrency by
+            // is_unavailable(), which 503s past the cap. Without it, slow
+            // upstreams let coroutines pile up until OOM. 1000 mainly backstops
+            // HYPERLOOP_B — in HYPERLOOP_A in-flight is already bounded by
+            // worker_num, so the cap only bites past ~167 cores. This is not
+            // the per-worker `worker_max_concurrency` option. Tune to measured
+            // downstream capacity.
             Constant::OPTION_MAX_CONCURRENCY => 1_000,
 
             // Default: true (swoole_server.h:859). Restated explicitly:

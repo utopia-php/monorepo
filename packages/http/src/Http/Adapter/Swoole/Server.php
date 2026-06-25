@@ -41,13 +41,23 @@ class Server extends Adapter
             $context->set('swooleRequest', fn() => $request);
             $context->set('swooleResponse', fn() => $response);
 
-            if (Coroutine::getCid() !== -1) {
+            $cid = Coroutine::getCid();
+            if ($cid !== -1) {
                 Coroutine::getContext()[self::CONTEXT_KEY] = $context;
             } else {
                 $this->context = $context;
             }
 
-            \call_user_func($callback, new Request($request), new Response($response));
+            try {
+                \call_user_func($callback, new Request($request), new Response($response));
+            } finally {
+                // Coroutine mode discards its context slot when the coroutine
+                // ends; the non-coroutine slot is shared across requests, so
+                // clear it to keep the "no context between requests" invariant.
+                if ($cid === -1) {
+                    $this->context = null;
+                }
+            }
         });
     }
 
