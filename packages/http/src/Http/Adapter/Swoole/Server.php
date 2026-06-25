@@ -43,6 +43,14 @@ class Server extends Adapter
     protected ?Container $context = null;
 
     /**
+     * Worker-start callbacks, multiplexed onto Swoole's single workerStart
+     * handler so telemetry and application init can coexist.
+     *
+     * @var list<callable(int): void>
+     */
+    private array $workerStartCallbacks = [];
+
+    /**
      * @param  Mode|array<string, mixed>  $settings
      */
     public function __construct(
@@ -102,23 +110,35 @@ class Server extends Adapter
         return $this->server;
     }
 
+    public function onWorkerStart(callable $callback): void
+    {
+        if ($this->workerStartCallbacks === []) {
+            $this->server->on('workerStart', function (SwooleServer $server, int $workerId): void {
+                foreach ($this->workerStartCallbacks as $cb) {
+                    $cb($workerId);
+                }
+            });
+        }
+        $this->workerStartCallbacks[] = $callback;
+    }
+
     /**
-     * Register Swoole runtime telemetry for the calling worker.
-     *
-     * Call this from inside a worker-start handler (Swoole allows only one
-     * handler per event, so the application owns that hook and forwards the
-     * per-worker telemetry adapter and worker id here). It registers
-     * observable gauges that read Swoole's own server/coroutine/runtime state
-     * lazily — the application drives collection with its normal
-     * `$telemetry->collect()`, no extra timers needed. Metrics are emitted
-     * under the `swoole.*` namespace:
+     * Register Swoole runtime telemetry. Observable gauges are registered on
+     * each worker start and read Swoole's own server/coroutine/runtime state
+     * lazily, so the application's normal `$telemetry->collect()` drives them —
+     * no extra timers. Metrics are emitted under the `swoole.*` namespace:
      *
      *  - per-worker stats from {@see self::PER_WORKER_STATS_KEYS} (every worker)
      *  - global server stats + the reactor/coroutine config ceilings (worker 0)
      *  - coroutine creations, AIO backlog, reactor events, signal listeners,
      *    active timers, memory, and event-loop scheduler lag
      */
-    public function collectTelemetry(Telemetry $telemetry, int $workerId): void
+    public function collectTelemetry(Telemetry $telemetry): void
+    {
+        $this->onWorkerStart(fn(int $workerId) => $this->registerTelemetryGauges($telemetry, $workerId));
+    }
+
+    private function registerTelemetryGauges(Telemetry $telemetry, int $workerId): void
     {
         $server = $this->server;
 

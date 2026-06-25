@@ -107,6 +107,8 @@ class Http
 
     protected mixed $compressionSupported = [];
 
+    private Telemetry $telemetry;
+
     private Histogram $requestDuration;
 
     private UpDownCounter $activeRequests;
@@ -132,6 +134,8 @@ class Http
      */
     public function setTelemetry(Telemetry $telemetry): void
     {
+        $this->telemetry = $telemetry;
+
         // https://opentelemetry.io/docs/specs/semconv/http/http-metrics/#metric-httpserverrequestduration
         $this->requestDuration = $telemetry->createHistogram(
             'http.server.request.duration',
@@ -509,6 +513,10 @@ class Http
         $this->adapter->onRequest(
             fn(Request $request, Response $response) => $this->run($request, $response),
         );
+
+        // Adapters with a worker model (Swoole) register their runtime gauges
+        // on worker start; a no-op elsewhere. The app's collect() drives them.
+        $this->adapter->collectTelemetry($this->telemetry);
 
         $this->adapter->onStart(function ($server) {
             $this->resources()->set('server', fn() => $server);

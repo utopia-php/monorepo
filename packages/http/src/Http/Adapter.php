@@ -5,12 +5,27 @@ declare(strict_types=1);
 namespace Utopia\Http;
 
 use Utopia\DI\Container;
+use Utopia\Telemetry\Adapter as Telemetry;
 
 abstract class Adapter
 {
     abstract public function onStart(callable $callback): void;
     abstract public function onRequest(callable $callback): void;
     abstract public function start(): void;
+
+    /**
+     * Register a callback to run on each worker start, receiving the worker id.
+     * No-op for adapters without a worker lifecycle (FPM, coroutine server).
+     *
+     * @param callable(int): void $callback
+     */
+    public function onWorkerStart(callable $callback): void {}
+
+    /**
+     * Register server runtime telemetry. No-op unless the adapter exposes
+     * runtime stats (see the Swoole worker server).
+     */
+    public function collectTelemetry(Telemetry $telemetry): void {}
 
     /**
      * Static resources container.
