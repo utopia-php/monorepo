@@ -146,6 +146,17 @@ enum Mode
                 // entire mode is built around coroutine concurrency.
                 Constant::OPTION_ENABLE_COROUTINE => true,
 
+                // Default: 0 / no hooks (swoole_runtime.cc). enable_coroutine
+                // only wraps each request in a coroutine — it does NOT make
+                // native blocking I/O (PDO, file_get_contents, sleep, streams)
+                // yield. Without hooks the coroutine just blocks its worker on
+                // the first I/O call, so concurrency collapses to worker_num.
+                // hook_flags rewrites those calls to be coroutine-aware, which
+                // is the whole point of this mode. Swoole applies it per worker
+                // for every server-spawned coroutine; no Runtime::enableCoroutine
+                // call needed.
+                Constant::OPTION_HOOK_FLAGS => SWOOLE_HOOK_ALL,
+
                 // Default: DISPATCH_FDMOD = 2. Restated because it's a
                 // precondition for send_yield (master.cc:401-402 force-
                 // disables yield outside hash-dispatch modes; eligible

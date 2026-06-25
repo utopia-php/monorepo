@@ -19,6 +19,9 @@ final class ModeTest extends TestCase
 
         // Blocking workers need more processes than cores
         $this->assertGreaterThanOrEqual($settings[Constant::OPTION_REACTOR_NUM], $settings[Constant::OPTION_WORKER_NUM]);
+
+        // No coroutine runtime, so hooks would be meaningless here
+        $this->assertArrayNotHasKey(Constant::OPTION_HOOK_FLAGS, $settings);
     }
 
     public function testCoroutineMode(): void
@@ -28,6 +31,9 @@ final class ModeTest extends TestCase
         $this->assertTrue($settings[Constant::OPTION_ENABLE_COROUTINE]);
         $this->assertSame(2, $settings[Constant::OPTION_DISPATCH_MODE]);
         $this->assertTrue($settings[Constant::OPTION_SEND_YIELD]);
+
+        // Hooks make native blocking I/O yield — the point of this mode
+        $this->assertSame(SWOOLE_HOOK_ALL, $settings[Constant::OPTION_HOOK_FLAGS]);
     }
 
     public function testSharedDefaults(): void
