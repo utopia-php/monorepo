@@ -56,6 +56,7 @@ graph TD
     http --> compression
     http --> telemetry
     http --> validators
+    http --> system
     platform --> cli
     platform --> http
     platform --> queue
@@ -72,7 +73,6 @@ graph TD
     auth
     nats
     replication
-    system
 ```
 <!-- /graph -->
 
