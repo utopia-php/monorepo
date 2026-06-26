@@ -140,8 +140,8 @@ final class HookTest extends TestCase
             ->param('x', '', new Numeric())
             ->param('y', '', new Numeric());
 
-        foreach (array_keys($this->hook->getParams()) as $key) {
-            $this->hook->setParamValue($key, $values[$key]);
+        foreach ($values as $key => $value) {
+            $this->hook->setParamValue($key, $value);
         }
 
         $this->assertCount(2, $this->hook->getParams());

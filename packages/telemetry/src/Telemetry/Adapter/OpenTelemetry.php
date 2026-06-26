@@ -113,6 +113,7 @@ class OpenTelemetry implements Adapter
             $this->meterStorage[$type][$name] = $creator();
         }
 
+        /** @var T */
         return $this->meterStorage[$type][$name];
     }
 
