@@ -1,6 +1,6 @@
 <?php
 
-namespace Utopia\Queue\Broker;
+namespace Utopia\Queue\Broker\KubernetesJob;
 
 use Utopia\Queue\Message;
 
@@ -9,7 +9,7 @@ use Utopia\Queue\Message;
  * environment variable. KubernetesJob (the publisher) writes it; the worker the
  * Job runs reads it back with read() — neither side needs the other's class.
  */
-final class KubernetesJobEnvelope
+final class Envelope
 {
     public const string ENV = 'UTOPIA_QUEUE_MESSAGE';
 

@@ -6,6 +6,7 @@ use RenokiCo\PhpK8s\K8s;
 use RenokiCo\PhpK8s\Kinds\K8sJob as Manifest;
 use RenokiCo\PhpK8s\KubernetesCluster;
 use RenokiCo\PhpK8s\ResourcesList;
+use Utopia\Queue\Broker\KubernetesJob\Envelope;
 use Utopia\Queue\Publisher;
 use Utopia\Queue\Queue;
 
@@ -92,7 +93,7 @@ class KubernetesJob implements Publisher
             ->setName(self::CONTAINER_NAME)
             ->setAttribute('image', $this->image)
             ->setEnv(array_merge($this->env, [
-                KubernetesJobEnvelope::ENV => json_encode($message, JSON_THROW_ON_ERROR),
+                Envelope::ENV => json_encode($message, JSON_THROW_ON_ERROR),
             ]));
 
         if ($this->command !== []) {

@@ -5,7 +5,7 @@ namespace Tests\E2E\Adapter;
 use PHPUnit\Framework\TestCase;
 use RenokiCo\PhpK8s\KubernetesCluster;
 use Utopia\Queue\Broker\KubernetesJob;
-use Utopia\Queue\Broker\KubernetesJobEnvelope;
+use Utopia\Queue\Broker\KubernetesJob\Envelope;
 use Utopia\Queue\Queue;
 
 class KubernetesJobManifestTest extends TestCase
@@ -179,24 +179,24 @@ class KubernetesJobManifestTest extends TestCase
     public function testEnvelopeRoundTrip(): void
     {
         $message = $this->message();
-        putenv(KubernetesJobEnvelope::ENV . '=' . json_encode($message));
+        putenv(Envelope::ENV . '=' . json_encode($message));
 
         try {
-            $rebuilt = KubernetesJobEnvelope::read();
+            $rebuilt = Envelope::read();
             $this->assertSame($message['pid'], $rebuilt->getPid());
             $this->assertSame($message['queue'], $rebuilt->getQueue());
             $this->assertSame($message['timestamp'], $rebuilt->getTimestamp());
             $this->assertSame($message['payload'], $rebuilt->getPayload());
         } finally {
-            putenv(KubernetesJobEnvelope::ENV);
+            putenv(Envelope::ENV);
         }
     }
 
     public function testEnvelopeThrowsWhenMissing(): void
     {
-        putenv(KubernetesJobEnvelope::ENV);
+        putenv(Envelope::ENV);
 
         $this->expectException(\RuntimeException::class);
-        KubernetesJobEnvelope::read();
+        Envelope::read();
     }
 }

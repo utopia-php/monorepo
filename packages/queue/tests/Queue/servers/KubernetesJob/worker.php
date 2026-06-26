@@ -3,10 +3,10 @@
 require_once __DIR__ . '/../../../../vendor/autoload.php';
 require_once __DIR__ . '/../tests.php';
 
-use Utopia\Queue\Broker\KubernetesJobEnvelope;
+use Utopia\Queue\Broker\KubernetesJob\Envelope;
 
 try {
-    $message = KubernetesJobEnvelope::read();
+    $message = Envelope::read();
     handleRequest($message);
     fwrite(STDOUT, "Job {$message->getPid()} completed\n");
     exit(0);
