@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class FloatValidatorTest extends TestCase
+final class FloatValidatorTest extends TestCase
 {
     public function testCanValidateStrictly(): void
     {

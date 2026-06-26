@@ -34,27 +34,20 @@ class AnyOf extends Validator
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
         if (!(\is_null($this->failedRule))) {
-            $description = $this->failedRule->getDescription();
-        } else {
-            $description = $this->validators[0]->getDescription();
+            return $this->failedRule->getDescription();
         }
 
-        return $description;
+        return $this->validators[0]->getDescription();
     }
 
     /**
      * Is valid
      *
      * Validation will pass when all rules are valid if only one of the rules is invalid validation will fail.
-     *
-     * @param  mixed $value
-     * @return bool
      */
     public function isValid(mixed $value): bool
     {
@@ -75,8 +68,6 @@ class AnyOf extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
@@ -87,8 +78,6 @@ class AnyOf extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {

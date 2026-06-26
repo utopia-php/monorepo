@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Console\Tests;
 
 use InvalidArgumentException;
@@ -7,16 +9,16 @@ use PHPUnit\Framework\TestCase;
 use Utopia\Command;
 use Utopia\Console;
 
-class ConsoleTest extends TestCase
+final class ConsoleTest extends TestCase
 {
     public function testLogs(): void
     {
-        $this->assertEquals(4, Console::log('log'));
-        $this->assertEquals(17, Console::success('success'));
-        $this->assertEquals(14, Console::info('info'));
-        $this->assertEquals(19, Console::warning('warning'));
-        $this->assertEquals(15, Console::error('error'));
-        $this->assertEquals('this is an answer', Console::confirm('this is a question'));
+        $this->assertSame(4, Console::log('log'));
+        $this->assertSame(17, Console::success('success'));
+        $this->assertSame(14, Console::info('info'));
+        $this->assertSame(19, Console::warning('warning'));
+        $this->assertSame(15, Console::error('error'));
+        $this->assertSame('this is an answer', Console::confirm('this is a question'));
     }
 
     public function testExecuteBasic(): void
@@ -28,8 +30,8 @@ class ConsoleTest extends TestCase
         $input = '';
         $code = Console::execute($command, $input, $output, $stderr, 10);
 
-        $this->assertEquals('hello world', $output);
-        $this->assertEquals(0, $code);
+        $this->assertSame('hello world', $output);
+        $this->assertSame(0, $code);
     }
 
     public function testCommandToArray(): void
@@ -110,8 +112,8 @@ class ConsoleTest extends TestCase
         $cmd = ['php', '-r', "echo 'hello world';"];
         $code = Console::execute($cmd, $input, $output, $stderr, 10);
 
-        $this->assertEquals('hello world', $output);
-        $this->assertEquals(0, $code);
+        $this->assertSame('hello world', $output);
+        $this->assertSame(0, $code);
     }
 
     public function testExecuteEnvVariables(): void
@@ -125,21 +127,23 @@ class ConsoleTest extends TestCase
         $cmd = ['printenv'];
         $code = Console::execute($cmd, $input, $output, $stderr, 10);
 
-        $this->assertEquals(0, $code);
+        $this->assertSame(0, $code);
 
         $data = [];
         foreach (explode("\n", $output) as $row) {
-            if (empty($row)) {
+            if ($row === '') {
                 continue;
             }
-
+            if ($row === '0') {
+                continue;
+            }
             $kv = explode('=', $row, 2);
-            $this->assertEquals(2, \count($kv), $row);
+            $this->assertCount(2, $kv, $row);
             $data[$kv[0]] = $kv[1];
         }
 
         $this->assertArrayHasKey('FOO', $data);
-        $this->assertEquals($randomData, $data['FOO']);
+        $this->assertSame($randomData, $data['FOO']);
     }
 
     public function testExecuteStream(): void
@@ -150,13 +154,13 @@ class ConsoleTest extends TestCase
         $stderr = '';
         $input = '';
         $outputStream = '';
-        $code = Console::execute($command, $input, $output, $stderr, 10, function ($output) use (&$outputStream) {
+        $code = Console::execute($command, $input, $output, $stderr, 10, function (string $output) use (&$outputStream): void {
             $outputStream .= $output;
         });
 
         $this->assertEquals('12345', $output);
         $this->assertEquals('12345', $outputStream);
-        $this->assertEquals(0, $code);
+        $this->assertSame(0, $code);
     }
 
     public function testExecuteStdOut(): void
@@ -168,9 +172,9 @@ class ConsoleTest extends TestCase
         $input = '';
         $code = Console::execute($command, $input, $output, $stderr, 3);
 
-        $this->assertEquals("success\n", $output);
-        $this->assertEquals('', $stderr);
-        $this->assertEquals(0, $code);
+        $this->assertSame("success\n", $output);
+        $this->assertSame('', $stderr);
+        $this->assertSame(0, $code);
     }
 
     public function testExecuteStdErr(): void
@@ -182,9 +186,9 @@ class ConsoleTest extends TestCase
         $input = '';
         $code = Console::execute($command, $input, $output, $stderr, 3);
 
-        $this->assertEquals('', $output);
-        $this->assertEquals("error\n", $stderr);
-        $this->assertEquals(0, $code);
+        $this->assertSame('', $output);
+        $this->assertSame("error\n", $stderr);
+        $this->assertSame(0, $code);
     }
 
     public function testExecuteExitCode(): void
@@ -196,8 +200,8 @@ class ConsoleTest extends TestCase
         $input = '';
         $code = Console::execute($command, $input, $output, $stderr, 10);
 
-        $this->assertEquals('hello world', $output);
-        $this->assertEquals(2, $code);
+        $this->assertSame('hello world', $output);
+        $this->assertSame(2, $code);
 
         $command = (new Command(PHP_BINARY))
             ->option('-r', "echo 'hello world'; exit(100);");
@@ -206,8 +210,8 @@ class ConsoleTest extends TestCase
         $input = '';
         $code = Console::execute($command, $input, $output, $stderr, 10);
 
-        $this->assertEquals('hello world', $output);
-        $this->assertEquals(100, $code);
+        $this->assertSame('hello world', $output);
+        $this->assertSame(100, $code);
     }
 
     public function testExecuteTimeout(): void
@@ -219,8 +223,8 @@ class ConsoleTest extends TestCase
         $input = '';
         $code = Console::execute($command, $input, $output, $stderr, 3);
 
-        $this->assertEquals('hello world', $output);
-        $this->assertEquals(0, $code);
+        $this->assertSame('hello world', $output);
+        $this->assertSame(0, $code);
 
         $command = (new Command(PHP_BINARY))
             ->option('-r', "sleep(4); echo 'hello world'; exit(0);");
@@ -229,8 +233,8 @@ class ConsoleTest extends TestCase
         $input = '';
         $code = Console::execute($command, $input, $output, $stderr, 3);
 
-        $this->assertEquals('', $output);
-        $this->assertEquals(1, $code);
+        $this->assertSame('', $output);
+        $this->assertSame(1, $code);
     }
 
     public function testLoop(): void
@@ -247,7 +251,7 @@ class ConsoleTest extends TestCase
 
         $this->assertGreaterThan(30, \count($lines));
         $this->assertLessThan(50, \count($lines));
-        $this->assertEquals(1, $code);
+        $this->assertSame(1, $code);
     }
 
     public function testCommandCompositionToString(): void

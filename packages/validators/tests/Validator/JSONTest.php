@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class JSONTest extends TestCase
+final class JSONTest extends TestCase
 {
     public function testCanValidateJson(): void
     {

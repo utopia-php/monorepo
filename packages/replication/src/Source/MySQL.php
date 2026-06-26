@@ -91,7 +91,7 @@ class MySQL implements Source
     {
         foreach ($this->transport->events() as $event) {
             $change = $this->decoder->decode($event);
-            if ($change !== null) {
+            if ($change instanceof \Utopia\Replication\Change) {
                 yield $change;
             }
         }
@@ -102,7 +102,7 @@ class MySQL implements Source
         if (isset($this->transport)) {
             $this->transport->close();
         }
-        if ($this->schemaClient !== null) {
+        if ($this->schemaClient instanceof \Utopia\Replication\Source\MySQL\Client) {
             $this->schemaClient->close();
             $this->schemaClient = null;
         }
@@ -119,7 +119,7 @@ class MySQL implements Source
     private function resolveColumns(string $schema, string $table): array
     {
         try {
-            if ($this->schemaClient === null) {
+            if (!$this->schemaClient instanceof \Utopia\Replication\Source\MySQL\Client) {
                 $this->schemaClient = new Client($this->host, $this->port, $this->username, $this->password, $this->ssl, $this->sslVerify, $this->sslCa);
                 $this->schemaClient->connect();
                 $this->schemaClient->execute('SET SESSION group_concat_max_len = 1048576');

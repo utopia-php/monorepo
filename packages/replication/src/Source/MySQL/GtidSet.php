@@ -11,7 +11,7 @@ namespace Utopia\Replication\Source\MySQL;
  *
  * Pure (no I/O) — unit-testable.
  */
-class GtidSet
+class GtidSet implements \Stringable
 {
     /**
      * Lower-cased UUID => sorted list of inclusive [start, end] intervals.
@@ -56,7 +56,7 @@ class GtidSet
         $intervals = $this->sids[$sid] ?? [];
         $intervals[] = [$start, $end];
 
-        usort($intervals, fn(array $a, array $b) => $a[0] <=> $b[0]);
+        usort($intervals, fn(array $a, array $b): int => $a[0] <=> $b[0]);
 
         /** @var list<array{int, int}> $merged */
         $merged = [];

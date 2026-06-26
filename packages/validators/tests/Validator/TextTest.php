@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class TextTest extends TestCase
+final class TextTest extends TestCase
 {
     public function testCanValidateText(): void
     {

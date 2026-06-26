@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class ArrayListTest extends TestCase
+final class ArrayListTest extends TestCase
 {
     public function testDescription(): void
     {
@@ -46,7 +48,7 @@ class ArrayListTest extends TestCase
         $this->assertTrue($arrayList->isValid([1]));
         $this->assertTrue($arrayList->isValid([1, 2]));
         $this->assertFalse($arrayList->isValid([1, 2, 3]));
-        $this->assertSame($arrayList->getType(), \Utopia\Validator::TYPE_MIXED);
+        $this->assertSame(\Utopia\Validator::TYPE_MIXED, $arrayList->getType());
         $this->assertInstanceOf(Numeric::class, $arrayList->getValidator());
     }
 }

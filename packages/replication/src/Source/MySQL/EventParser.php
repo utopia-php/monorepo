@@ -73,7 +73,7 @@ class EventParser
         }
         $signed = $this->computeSignedness($types, $signedness);
 
-        $this->tables[$tableId] = compact('schema', 'table', 'count', 'types', 'metadata', 'names', 'signed');
+        $this->tables[$tableId] = ['schema' => $schema, 'table' => $table, 'count' => $count, 'types' => $types, 'metadata' => $metadata, 'names' => $names, 'signed' => $signed];
     }
 
     /**
@@ -94,14 +94,14 @@ class EventParser
         }
 
         $names = [];
-        if ($this->columnResolver !== null) {
+        if ($this->columnResolver instanceof \Closure) {
             $resolved = ($this->columnResolver)($schema, $table);
             if (\count($resolved) === $count) {
                 $names = $resolved;
             }
         }
         if ($names === []) {
-            $names = array_map('strval', range(0, max(0, $count - 1)));
+            $names = array_map(strval(...), range(0, max(0, $count - 1)));
         }
 
         $this->resolvedNames[$key] = ['count' => $count, 'names' => $names];

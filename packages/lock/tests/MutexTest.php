@@ -55,7 +55,7 @@ final class MutexTest extends TestCase
             Coroutine::create(function () use ($mutex, &$threw): void {
                 System::sleep(0.01);
                 try {
-                    $mutex->withLock(fn() => null, timeout: 0.05);
+                    $mutex->withLock(fn(): null => null, timeout: 0.05);
                 } catch (Contention) {
                     $threw = true;
                 }

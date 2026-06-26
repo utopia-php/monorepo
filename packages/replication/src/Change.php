@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Replication;
 
 /**
@@ -7,7 +9,7 @@ namespace Utopia\Replication;
  *
  * For UPDATE events, {@see $rows} holds the after-image of each updated row.
  */
-final class Change
+final readonly class Change
 {
     public const string INSERT = 'insert';
     public const string UPDATE = 'update';
@@ -24,10 +26,10 @@ final class Change
      *                     idempotent consumers).
      */
     public function __construct(
-        public readonly string $action,
-        public readonly string $database,
-        public readonly string $table,
-        public readonly array $rows,
-        public readonly string $gtid,
+        public string $action,
+        public string $database,
+        public string $table,
+        public array $rows,
+        public string $gtid,
     ) {}
 }

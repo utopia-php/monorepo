@@ -87,9 +87,7 @@ final class Headers implements \IteratorAggregate, \Countable
             }
         }
 
-        $result .= "\r\n";
-
-        return $result;
+        return $result . "\r\n";
     }
 
     public static function fromWire(string $raw): self
@@ -97,7 +95,7 @@ final class Headers implements \IteratorAggregate, \Countable
         $headers = new self();
         $lines = explode("\r\n", $raw);
 
-        if (empty($lines)) {
+        if ($lines === []) {
             throw new ProtocolException('Empty header block');
         }
 

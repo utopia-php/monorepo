@@ -216,9 +216,6 @@ class Command implements Stringable
         return $value;
     }
 
-    /**
-     * @param  Validator|callable  $validator
-     */
     private function validate(string $argument, Validator|callable $validator): void
     {
         if ($validator instanceof Validator) {

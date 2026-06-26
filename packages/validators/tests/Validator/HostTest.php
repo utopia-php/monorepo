@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * Utopia Http
  *
@@ -16,7 +18,7 @@ namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class HostTest extends TestCase
+final class HostTest extends TestCase
 {
     protected Host $host;
 
@@ -25,18 +27,18 @@ class HostTest extends TestCase
         $this->host = new Host(['example.io', 'subdomain.example.test', 'localhost', '*.appwrite.io']);
     }
 
-    public function testIsValid()
+    public function testIsValid(): void
     {
         // Assertions
-        $this->assertSame(true, $this->host->isValid('https://example.io/link'));
-        $this->assertSame(true, $this->host->isValid('https://localhost'));
-        $this->assertSame(false, $this->host->isValid('localhost'));
-        $this->assertSame(true, $this->host->isValid('http://subdomain.example.test/path'));
-        $this->assertSame(false, $this->host->isValid('http://test.subdomain.example.test/path'));
-        $this->assertSame(false, $this->host->isValid('http://appwrite.io/path'));
-        $this->assertSame(true, $this->host->isValid('http://me.appwrite.io/path'));
-        $this->assertSame(true, $this->host->isValid('http://you.appwrite.io/path'));
-        $this->assertSame(true, $this->host->isValid('http://us.together.appwrite.io/path'));
+        $this->assertTrue($this->host->isValid('https://example.io/link'));
+        $this->assertTrue($this->host->isValid('https://localhost'));
+        $this->assertFalse($this->host->isValid('localhost'));
+        $this->assertTrue($this->host->isValid('http://subdomain.example.test/path'));
+        $this->assertFalse($this->host->isValid('http://test.subdomain.example.test/path'));
+        $this->assertFalse($this->host->isValid('http://appwrite.io/path'));
+        $this->assertTrue($this->host->isValid('http://me.appwrite.io/path'));
+        $this->assertTrue($this->host->isValid('http://you.appwrite.io/path'));
+        $this->assertTrue($this->host->isValid('http://us.together.appwrite.io/path'));
         $this->assertSame('string', $this->host->getType());
     }
 }

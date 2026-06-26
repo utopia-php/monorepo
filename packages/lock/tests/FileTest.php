@@ -90,7 +90,7 @@ final class FileTest extends TestCase
         $this->expectException(\RuntimeException::class);
 
         try {
-            $lock->withLock(function (): void {
+            $lock->withLock(function (): never {
                 throw new \RuntimeException('inner');
             });
         } finally {
@@ -131,7 +131,7 @@ final class FileTest extends TestCase
             $parent = new File($this->path);
             $this->expectException(Contention::class);
             try {
-                $parent->withLock(fn() => null, timeout: 0.1);
+                $parent->withLock(fn(): null => null, timeout: 0.1);
             } finally {
                 file_put_contents($done, '1');
             }

@@ -10,7 +10,7 @@ use Utopia\NATS\Exception\TimeoutException;
 final class TlsTransport implements Transport
 {
     /** @var resource|null */
-    private $stream = null;
+    private $stream;
 
     public function __construct(
         private readonly array $tlsOptions = [],

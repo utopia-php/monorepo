@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -12,8 +14,6 @@ class Nullable extends Validator
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -24,8 +24,6 @@ class Nullable extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -36,17 +34,12 @@ class Nullable extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
         return $this->validator->getType();
     }
 
-    /**
-     * @return Validator
-     */
     public function getValidator(): Validator
     {
         return $this->validator;
@@ -56,9 +49,6 @@ class Nullable extends Validator
      * Is valid
      *
      * Validation will pass when $value is text with valid length.
-     *
-     * @param  mixed  $value
-     * @return bool
      */
     public function isValid(mixed $value): bool
     {

@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class AssocTest extends TestCase
+final class AssocTest extends TestCase
 {
     protected ?Assoc $assoc;
 

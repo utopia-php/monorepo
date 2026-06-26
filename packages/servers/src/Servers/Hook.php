@@ -8,8 +8,6 @@ class Hook
 {
     /**
      * Description
-     *
-     * @var string
      */
     protected string $desc = '';
 
@@ -17,15 +15,11 @@ class Hook
      * Parameters
      *
      * List of route params names and validators
-     *
-     * @var array
      */
     protected array $params = [];
 
     /**
      * Group
-     *
-     * @var array
      */
     protected array $groups = [];
 
@@ -33,8 +27,6 @@ class Hook
      * Labels
      *
      * List of route label names
-     *
-     * @var array
      */
     protected array $labels = [];
 
@@ -49,8 +41,6 @@ class Hook
      * Injections
      *
      * List of route required injections for action callback
-     *
-     * @var array
      */
     protected array $injections = [];
 
@@ -61,9 +51,6 @@ class Hook
 
     /**
      * Add Description
-     *
-     * @param  string  $desc
-     * @return static
      */
     public function desc(string $desc): static
     {
@@ -74,8 +61,6 @@ class Hook
 
     /**
      * Get Description
-     *
-     * @return string
      */
     public function getDesc(): string
     {
@@ -84,9 +69,6 @@ class Hook
 
     /**
      * Add Group
-     *
-     * @param  array  $groups
-     * @return static
      */
     public function groups(array $groups): static
     {
@@ -97,8 +79,6 @@ class Hook
 
     /**
      * Get Groups
-     *
-     * @return array
      */
     public function getGroups(): array
     {
@@ -108,8 +88,6 @@ class Hook
     /**
      * Add Label
      *
-     * @param  string  $key
-     * @param  mixed  $value
      * @return $this
      */
     public function label(string $key, mixed $value): static
@@ -123,21 +101,14 @@ class Hook
      * Get Label
      *
      * Return given label value or default value if label doesn't exists
-     *
-     * @param  string  $key
-     * @param  mixed  $default
-     * @return mixed
      */
     public function getLabel(string $key, mixed $default): mixed
     {
-        return (isset($this->labels[$key])) ? $this->labels[$key] : $default;
+        return $this->labels[$key] ?? $default;
     }
 
     /**
      * Add Action
-     *
-     * @param  callable  $action
-     * @return static
      */
     public function action(callable $action): static
     {
@@ -158,8 +129,6 @@ class Hook
 
     /**
      * Get Injections
-     *
-     * @return array
      */
     public function getInjections(): array
     {
@@ -168,20 +137,16 @@ class Hook
 
     /**
      * Get Dependencies
-     *
-     * @return array
      */
     public function getDependencies(): array
     {
-        if (empty($this->injections)) {
+        if ($this->injections === []) {
             return [];
         }
 
         $injections = array_values($this->injections);
 
-        usort($injections, static function (array $left, array $right): int {
-            return $left['order'] <=> $right['order'];
-        });
+        usort($injections, static fn(array $left, array $right): int => $left['order'] <=> $right['order']);
 
         return array_column($injections, 'name');
     }
@@ -189,8 +154,6 @@ class Hook
     /**
      * Inject
      *
-     * @param  string  $injection
-     * @return static
      *
      * @throws \Exception
      */
@@ -210,20 +173,6 @@ class Hook
 
     /**
      * Add Param
-     *
-     * @param string $key
-     * @param mixed $default
-     * @param Validator|callable $validator
-     * @param string $description
-     * @param bool $optional
-     * @param array $injections
-     * @param bool $skipValidation
-     * @param bool $deprecated
-     * @param string $example
-     * @param string|null $model
-     * @param array $aliases
-     * @param object|null $enum
-     * @return static
      */
     public function param(string $key, mixed $default, Validator|callable $validator, string $description = '', bool $optional = false, array $injections = [], bool $skipValidation = false, bool $deprecated = false, string $example = '', ?string $model = null, array $aliases = [], ?object $enum = null): static
     {
@@ -248,8 +197,6 @@ class Hook
 
     /**
      * Get Params
-     *
-     * @return array
      */
     public function getParams(): array
     {
@@ -258,8 +205,6 @@ class Hook
 
     /**
      * Get Param Values
-     *
-     * @return array
      */
     public function getParamsValues(): array
     {
@@ -275,9 +220,6 @@ class Hook
     /**
      * Set Param Value
      *
-     * @param  string  $key
-     * @param  mixed  $value
-     * @return static
      *
      * @throws Exception
      */
@@ -295,8 +237,6 @@ class Hook
     /**
      * Get Param Value
      *
-     * @param  string  $key
-     * @return mixed
      *
      * @throws \Exception
      */

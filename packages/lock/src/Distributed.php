@@ -155,7 +155,7 @@ final class Distributed implements Lock
 
     private function log(string $message): void
     {
-        if ($this->logger !== null) {
+        if ($this->logger instanceof \Closure) {
             ($this->logger)($message);
         }
     }

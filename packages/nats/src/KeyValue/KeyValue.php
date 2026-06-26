@@ -32,7 +32,7 @@ final class KeyValue
         }
 
         // Check for delete/purge markers
-        if ($msg->headers !== null) {
+        if ($msg->headers instanceof \Utopia\NATS\Headers) {
             $op = $msg->headers->get('KV-Operation');
             if ($op === 'DEL' || $op === 'PURGE') {
                 throw new KeyValueException("Key not found: {$key}");
@@ -41,7 +41,7 @@ final class KeyValue
 
         $revision = 0;
         $created = null;
-        if ($msg->headers !== null) {
+        if ($msg->headers instanceof \Utopia\NATS\Headers) {
             $seqStr = $msg->headers->get('Nats-Sequence');
             if ($seqStr !== null) {
                 $revision = (int) $seqStr;
@@ -86,7 +86,7 @@ final class KeyValue
         try {
             $ack = $this->js->publish($subject, $value, $headers);
         } catch (\Throwable $e) {
-            throw new KeyValueException("Key already exists: {$key}", previous: $e);
+            throw new KeyValueException("Key already exists: {$key}", $e->getCode(), previous: $e);
         }
 
         return $ack->sequence;
@@ -108,7 +108,7 @@ final class KeyValue
                 expectedLastSubjectSeq: $revision,
             );
         } catch (\Throwable $e) {
-            throw new KeyValueException("Wrong last revision for key: {$key}", previous: $e);
+            throw new KeyValueException("Wrong last revision for key: {$key}", $e->getCode(), previous: $e);
         }
 
         return $ack->sequence;
@@ -156,8 +156,8 @@ final class KeyValue
             $prefix = "\$KV.{$this->bucket}.";
             $subjects = $data['state']['subjects'] ?? [];
             foreach ($subjects as $subj => $count) {
-                if (str_starts_with($subj, $prefix)) {
-                    $keys[] = substr($subj, \strlen($prefix));
+                if (str_starts_with((string) $subj, $prefix)) {
+                    $keys[] = substr((string) $subj, \strlen($prefix));
                 }
             }
 

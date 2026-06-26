@@ -12,7 +12,7 @@ final class File implements Lock
     /**
      * @var resource|null
      */
-    private $handle = null;
+    private $handle;
 
     public function __construct(
         private readonly string $path,

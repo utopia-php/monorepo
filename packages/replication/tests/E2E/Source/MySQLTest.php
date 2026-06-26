@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Replication\Tests\E2E\Source;
 
 use PDO;
@@ -20,7 +22,7 @@ use Utopia\Replication\Source\MySQL;
  *   REPLICATION_TEST_USER=root REPLICATION_TEST_PASS=password \
  *   vendor/bin/phpunit tests/E2E/Source/MySQLTest.php
  */
-class MySQLTest extends TestCase
+final class MySQLTest extends TestCase
 {
     private const string SCHEMA = 'replication_test';
     private const string TABLE = 'console15x_projects';
@@ -57,14 +59,14 @@ class MySQLTest extends TestCase
 
     public function testBasicCrudIsStreamed(): void
     {
-        $changes = $this->capture(3, function (PDO $pdo) {
+        $changes = $this->capture(3, function (PDO $pdo): void {
             $pdo->exec('INSERT INTO ' . self::TABLE . " (_uid, name) VALUES ('proj_a', 'First')");
             $pdo->exec('UPDATE ' . self::TABLE . " SET name = 'Second' WHERE _uid = 'proj_a'");
             $pdo->exec('DELETE FROM ' . self::TABLE . " WHERE _uid = 'proj_a'");
         });
 
         $this->assertCount(3, $changes);
-        $this->assertSame([Change::INSERT, Change::UPDATE, Change::DELETE], array_map(fn($c) => $c->action, $changes));
+        $this->assertSame([Change::INSERT, Change::UPDATE, Change::DELETE], array_map(fn(\Utopia\Replication\Change $c): string => $c->action, $changes));
         $this->assertSame('proj_a', $changes[0]->rows[0]['_uid']);
         $this->assertSame('Second', $changes[1]->rows[0]['name']); // UPDATE after-image
         $this->assertSame(self::SCHEMA, $changes[0]->database);
@@ -77,7 +79,7 @@ class MySQLTest extends TestCase
         $size = 18 * 1024 * 1024;
         $blob = str_repeat('x', $size);
 
-        $changes = $this->capture(1, function (PDO $pdo) use ($blob) {
+        $changes = $this->capture(1, function (PDO $pdo) use ($blob): void {
             $stmt = $pdo->prepare('INSERT INTO ' . self::TABLE . " (_uid, name, data) VALUES ('big', 'Big', :data)");
             $stmt->execute([':data' => $blob]);
         });
@@ -98,7 +100,7 @@ class MySQLTest extends TestCase
         $this->pdo->exec("GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'repl_full'@'%'");
         $this->pdo->exec('FLUSH PRIVILEGES');
 
-        $changes = $this->capture(1, function (PDO $pdo) {
+        $changes = $this->capture(1, function (PDO $pdo): void {
             $pdo->exec('INSERT INTO ' . self::TABLE . " (_uid, name) VALUES ('proj_fa', 'FullAuth')");
         }, user: 'repl_full', pass: 'Repl!Full#123');
 
@@ -110,7 +112,7 @@ class MySQLTest extends TestCase
     {
         // The test server presents MySQL's auto-generated self-signed cert, so
         // peer verification is disabled here; production defaults to verify=true.
-        $changes = $this->capture(1, function (PDO $pdo) {
+        $changes = $this->capture(1, function (PDO $pdo): void {
             $pdo->exec('INSERT INTO ' . self::TABLE . " (_uid, name) VALUES ('proj_tls', 'Secure')");
         }, ssl: true, sslVerify: false);
 
@@ -120,7 +122,7 @@ class MySQLTest extends TestCase
 
     public function testSignedAndUnsignedIntegers(): void
     {
-        $changes = $this->capture(1, function (PDO $pdo) {
+        $changes = $this->capture(1, function (PDO $pdo): void {
             $pdo->exec('INSERT INTO ' . self::TABLE . " (_uid, signed_val, unsigned_val) VALUES ('ints', -42, 200)");
         });
 
@@ -145,12 +147,12 @@ class MySQLTest extends TestCase
         $readerPass = $user !== '' ? $pass : $this->pass;
 
         $scheduler = new Scheduler();
-        $scheduler->add(function () use (&$collected, &$error, $writer, $expected, $dsn, $writerUser, $writerPass, $readerUser, $readerPass, $ssl, $sslVerify) {
+        $scheduler->add(function () use (&$collected, &$error, $writer, $expected, $dsn, $writerUser, $writerPass, $readerUser, $readerPass, $ssl, $sslVerify): void {
             try {
                 $replication = new MySQL($this->host, $this->port, $readerUser, $readerPass, self::SERVER_ID, self::SCHEMA, $ssl, $sslVerify);
-                $replication->start(null);
+                $replication->start();
 
-                Coroutine::create(function () use ($writer, $dsn, $writerUser, $writerPass) {
+                Coroutine::create(function () use ($writer, $dsn, $writerUser, $writerPass): void {
                     Coroutine::sleep(0.5);
                     $writer(new PDO($dsn, $writerUser, $writerPass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]));
                 });
@@ -169,7 +171,7 @@ class MySQLTest extends TestCase
         });
         $scheduler->start();
 
-        if ($error !== null) {
+        if ($error instanceof \Throwable) {
             throw $error;
         }
 

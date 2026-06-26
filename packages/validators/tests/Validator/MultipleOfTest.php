@@ -1,15 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Validator;
 
-class MultipleOfTest extends TestCase
+final class MultipleOfTest extends TestCase
 {
     public function setUp(): void {}
 
-    public function testIsValid()
+    public function testIsValid(): void
     {
         $validator = new AllOf([new Text(20), new URL()], Validator::TYPE_STRING);
 
@@ -31,7 +33,7 @@ class MultipleOfTest extends TestCase
         $this->assertFalse($validator->isValid(''));
     }
 
-    public function testRules()
+    public function testRules(): void
     {
         $validTextValidUrl = 'http://example.com';
         $validTextInvalidUrl = 'hello world';
@@ -51,8 +53,8 @@ class MultipleOfTest extends TestCase
         $this->assertFalse($vaidator->isValid($invalidTextInvalidUrl));
 
         $this->assertCount(2, $vaidator->getValidators());
-        $this->assertSame("Utopia\Validator\Text", \get_class($vaidator->getValidators()[0]));
-        $this->assertSame("Utopia\Validator\URL", \get_class($vaidator->getValidators()[1]));
+        $this->assertInstanceOf(\Utopia\Validator\Text::class, $vaidator->getValidators()[0]);
+        $this->assertInstanceOf(\Utopia\Validator\URL::class, $vaidator->getValidators()[1]);
 
         $vaidator = new NoneOf([new Text(20), new URL()], Validator::TYPE_STRING);
         $this->assertFalse($vaidator->isValid($validTextValidUrl));

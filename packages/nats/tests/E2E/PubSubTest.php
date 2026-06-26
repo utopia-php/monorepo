@@ -23,7 +23,7 @@ final class PubSubTest extends TestCase
         $conn = Connection::connect($this->getServerUrl());
 
         $received = null;
-        $sub = $conn->subscribe('test.pubsub', function ($msg) use (&$received) {
+        $sub = $conn->subscribe('test.pubsub', function ($msg) use (&$received): void {
             $received = $msg;
         });
 
@@ -47,7 +47,7 @@ final class PubSubTest extends TestCase
         $conn->publish('test.sync', 'sync-message');
         $msg = $sub->nextMessage(1.0);
 
-        $this->assertNotNull($msg);
+        $this->assertInstanceOf(\Utopia\NATS\Message::class, $msg);
         $this->assertSame('sync-message', $msg->data);
 
         $sub->unsubscribe();
@@ -59,7 +59,7 @@ final class PubSubTest extends TestCase
         $conn = Connection::connect($this->getServerUrl());
 
         $messages = [];
-        $sub = $conn->subscribe('test.wild.*', function ($msg) use (&$messages) {
+        $sub = $conn->subscribe('test.wild.*', function ($msg) use (&$messages): void {
             $messages[] = $msg;
         });
 
@@ -81,10 +81,10 @@ final class PubSubTest extends TestCase
         $count1 = 0;
         $count2 = 0;
 
-        $sub1 = $conn->queueSubscribe('test.queue', 'workers', function () use (&$count1) {
+        $sub1 = $conn->queueSubscribe('test.queue', 'workers', function () use (&$count1): void {
             $count1++;
         });
-        $sub2 = $conn->queueSubscribe('test.queue', 'workers', function () use (&$count2) {
+        $sub2 = $conn->queueSubscribe('test.queue', 'workers', function () use (&$count2): void {
             $count2++;
         });
 
@@ -108,7 +108,7 @@ final class PubSubTest extends TestCase
         $conn = Connection::connect($this->getServerUrl());
 
         $received = null;
-        $sub = $conn->subscribe('test.headers', function ($msg) use (&$received) {
+        $sub = $conn->subscribe('test.headers', function ($msg) use (&$received): void {
             $received = $msg;
         });
 

@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class WildcardTest extends TestCase
+final class WildcardTest extends TestCase
 {
-    public function testCanValidateWildcard()
+    public function testCanValidateWildcard(): void
     {
         $validator = new Wildcard();
         $this->assertTrue($validator->isValid([0 => 'string', 1 => 'string']));

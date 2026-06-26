@@ -7,25 +7,14 @@ use Utopia\Validator;
 class Hostname extends Validator
 {
     /**
-     * @var string[]
-     */
-    protected array $allowList = [];
-
-    /**
      * Constructor
      *
      * Sets allowed hostname patterns
      *
      * @param  string[]  $allowList
      */
-    public function __construct(array $allowList = [])
-    {
-        $this->allowList = $allowList;
-    }
+    public function __construct(protected array $allowList = []) {}
 
-    /**
-     * @return string
-     */
     public function getDescription(): string
     {
         return 'Value must be a valid hostname without path, port and protocol.';
@@ -35,8 +24,6 @@ class Hostname extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -47,22 +34,16 @@ class Hostname extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
         return self::TYPE_STRING;
     }
 
-    /**
-     * @param  mixed  $value
-     * @return bool
-     */
     public function isValid(mixed $value): bool
     {
         // Validate proper format
-        if (!\is_string($value) || empty($value)) {
+        if (!\is_string($value) || ($value === '' || $value === '0')) {
             return false;
         }
 
@@ -82,7 +63,7 @@ class Hostname extends Validator
         }
 
         // Logic #1: Empty allowList means everything is allowed
-        if (empty($this->allowList)) {
+        if ($this->allowList === []) {
             return true;
         }
 

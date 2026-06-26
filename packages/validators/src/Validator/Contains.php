@@ -11,40 +11,28 @@ use Utopia\Validator;
  */
 class Contains extends Validator
 {
-    /**
-     * @var array
-     */
     protected array $patterns;
-
-    /**
-     * @var bool
-     */
-    protected bool $strict;
 
     /**
      * Constructor
      *
      * Sets a list of substrings to search for and strict mode.
      *
-     * @param  array  $patterns
      * @param  bool  $strict enable case-sensitive matching
      */
-    public function __construct(array $patterns, bool $strict = false)
+    public function __construct(array $patterns, protected bool $strict = false)
     {
-        if (empty($patterns)) {
+        if ($patterns === []) {
             throw new \InvalidArgumentException('Patterns array cannot be empty');
         }
 
         $this->patterns = $patterns;
-        $this->strict = $strict;
     }
 
     /**
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -65,7 +53,6 @@ class Contains extends Validator
      * Validation will pass when $value contains at least one of the patterns.
      *
      * @param  mixed  $value
-     * @return bool
      */
     public function isValid($value): bool
     {
@@ -92,8 +79,6 @@ class Contains extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -104,8 +89,6 @@ class Contains extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {

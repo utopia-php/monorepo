@@ -18,8 +18,6 @@ class Multiple extends Validator
      */
     protected $rules = [];
 
-    protected $type = self::TYPE_MIXED;
-
     /**
      * Constructor
      *
@@ -30,23 +28,20 @@ class Multiple extends Validator
      * $multiple = new Multiple([$validator1, $validator2]);
      * $multiple = new Multiple([$validator1, $validator2, $validator3], self::TYPE_STRING);
      */
-    public function __construct(array $rules, ?string $type = self::TYPE_MIXED)
+    public function __construct(array $rules, protected ?string $type = self::TYPE_MIXED)
     {
         foreach ($rules as $rule) {
             $this->addRule($rule);
         }
-
-        $this->type = $type;
     }
     /**
      * Add rule
      *
      * Add a new rule to the end of the rules containing array
      *
-     * @param Validator $rule
      * @return $this
      */
-    public function addRule(Validator $rule)
+    public function addRule(Validator $rule): static
     {
         $this->rules[] = $rule;
 
@@ -57,8 +52,6 @@ class Multiple extends Validator
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -74,9 +67,6 @@ class Multiple extends Validator
      * Is valid
      *
      * Validation will pass when all rules are valid if only one of the rules is invalid validation will fail.
-     *
-     * @param  mixed $value
-     * @return bool
      */
     public function isValid(mixed $value): bool
     {
@@ -93,8 +83,6 @@ class Multiple extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
@@ -105,8 +93,6 @@ class Multiple extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {

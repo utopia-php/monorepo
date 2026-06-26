@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class HexColorTest extends TestCase
+final class HexColorTest extends TestCase
 {
-    public function testCanValidateHexColor()
+    public function testCanValidateHexColor(): void
     {
         $hexColor = new HexColor();
         $this->assertTrue($hexColor->isValid('000'));

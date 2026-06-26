@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -11,31 +13,19 @@ use Utopia\Validator;
  */
 class Integer extends Validator
 {
-    /**
-     * @var bool
-     */
-    protected bool $loose = false;
-
-    /**
-     * @var int
-     */
     protected int $bits = 32;
 
-    /**
-     * @var bool
-     */
     protected bool $unsigned = false;
 
     /**
      * Pass true to accept integer strings as valid integer values
      * This option is good for validating query string params.
      *
-     * @param  bool  $loose
      * @param  int  $bits  Integer bit size (8, 16, 32, or 64)
      * @param  bool  $unsigned  Whether the integer is unsigned
      * @throws \InvalidArgumentException
      */
-    public function __construct(bool $loose = false, int $bits = 32, bool $unsigned = false)
+    public function __construct(protected bool $loose = false, int $bits = 32, bool $unsigned = false)
     {
         if (!\in_array($bits, [8, 16, 32, 64])) {
             throw new \InvalidArgumentException('Bits must be 8, 16, 32, or 64');
@@ -45,8 +35,6 @@ class Integer extends Validator
         if ($bits === 64 && $unsigned) {
             throw new \InvalidArgumentException('64-bit unsigned integers are not supported due to PHP integer limitations');
         }
-
-        $this->loose = $loose;
         $this->bits = $bits;
         $this->unsigned = $unsigned;
     }
@@ -55,8 +43,6 @@ class Integer extends Validator
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -84,8 +70,6 @@ class Integer extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -96,8 +80,6 @@ class Integer extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
@@ -108,8 +90,6 @@ class Integer extends Validator
      * Get Bits
      *
      * Returns the bit size of the integer.
-     *
-     * @return int
      */
     public function getBits(): int
     {
@@ -120,8 +100,6 @@ class Integer extends Validator
      * Is Unsigned
      *
      * Returns whether the integer is unsigned.
-     *
-     * @return bool
      */
     public function isUnsigned(): bool
     {
@@ -132,8 +110,6 @@ class Integer extends Validator
      * Get Format
      *
      * Returns the OpenAPI/JSON Schema format string for this integer configuration.
-     *
-     * @return string
      */
     public function getFormat(): string
     {
@@ -145,9 +121,6 @@ class Integer extends Validator
      * Is valid
      *
      * Validation will pass when $value is integer and within the specified bit range.
-     *
-     * @param  mixed  $value
-     * @return bool
      */
     public function isValid(mixed $value): bool
     {
@@ -155,7 +128,7 @@ class Integer extends Validator
             if (!is_numeric($value)) {
                 return false;
             }
-            $value = $value + 0;
+            $value += 0;
         }
         if (!\is_int($value)) {
             return false;
@@ -169,12 +142,7 @@ class Integer extends Validator
             $min = -(2 ** ($this->bits - 1));
             $max = (2 ** ($this->bits - 1)) - 1;
         }
-
         // Check if value is within range
-        if ($value < $min || $value > $max) {
-            return false;
-        }
-
-        return true;
+        return $value >= $min && $value <= $max;
     }
 }

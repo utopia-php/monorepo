@@ -56,7 +56,7 @@ final class StreamConfig
             'allow_rollup_hdrs' => $this->allowRollup,
         ];
 
-        if (!empty($this->subjects)) {
+        if ($this->subjects !== []) {
             $data['subjects'] = $this->subjects;
         }
         if ($this->description !== null) {

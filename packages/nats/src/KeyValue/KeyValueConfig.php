@@ -32,16 +32,16 @@ final class KeyValueConfig
             subjects: ["\$KV.{$this->bucket}.>"],
             description: $this->description,
             retention: RetentionPolicy::Limits,
-            maxMsgsPerSubject: $this->history,
             maxBytes: $this->maxBytes,
+            maxMsgsPerSubject: $this->history,
             maxMsgSize: $this->maxValueSize > 0 ? $this->maxValueSize : null,
             maxAge: $this->ttl,
             storage: $this->storage,
             replicas: $this->replicas,
             discard: DiscardPolicy::New,
-            allowRollup: true,
             allowDirect: true,
             mirrorDirect: true,
+            allowRollup: true,
         );
     }
 }

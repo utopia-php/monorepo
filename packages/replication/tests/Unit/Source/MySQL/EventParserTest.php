@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Replication\Tests\Unit\Source\MySQL;
 
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -8,7 +10,7 @@ use Utopia\Replication\Exception;
 use Utopia\Replication\Source\MySQL\Constants;
 use Utopia\Replication\Source\MySQL\EventParser;
 
-class EventParserTest extends TestCase
+final class EventParserTest extends TestCase
 {
     use BinlogFixtures;
 
@@ -35,9 +37,8 @@ class EventParserTest extends TestCase
         // Optional metadata: SIGNEDNESS (skipped) then COLUMN_NAME.
         $body .= \chr(1) . \chr(1) . "\x00"; // SIGNEDNESS field, 1 byte payload
         $names = \chr(3) . '_id' . \chr(4) . '_uid';
-        $body .= \chr(Constants::METADATA_COLUMN_NAME) . pack('C', \strlen($names)) . $names;
 
-        return $body;
+        return $body . (\chr(Constants::METADATA_COLUMN_NAME) . pack('C', \strlen($names)) . $names);
     }
 
     /**
@@ -54,10 +55,9 @@ class EventParserTest extends TestCase
             . \chr(Constants::TYPE_LONGLONG) . \chr(Constants::TYPE_VAR_STRING);
 
         $metadata = pack('v', 1020);
-        $body .= pack('C', \strlen($metadata)) . $metadata;
-        $body .= "\x00"; // null bitmap, then no optional metadata
+        $body .= pack('C', \strlen($metadata)) . $metadata; // null bitmap, then no optional metadata
 
-        return $body;
+        return $body . "\x00";
     }
 
     private function rowsHeader(): string
@@ -241,16 +241,14 @@ class EventParserTest extends TestCase
     }
 
     /**
-     * @return array<string, array{string, int, int}>
+     * @return \Iterator<string, array{string, int, int}>
      */
-    public static function signednessProvider(): array
+    public static function signednessProvider(): \Iterator
     {
         // SIGNEDNESS bitmap: MSB set => UNSIGNED. One numeric column => bit 7.
-        return [
-            'signed -1'    => ["\x00", 0xFF, -1],
-            'signed 127'   => ["\x00", 0x7F, 127],
-            'unsigned 255' => ["\x80", 0xFF, 255],
-        ];
+        yield 'signed -1' => ["\x00", 0xFF, -1];
+        yield 'signed 127' => ["\x00", 0x7F, 127];
+        yield 'unsigned 255' => ["\x80", 0xFF, 255];
     }
 
     /**
@@ -277,45 +275,36 @@ class EventParserTest extends TestCase
     }
 
     /**
-     * @return array<string, array{int, string, string, mixed}>
+     * @return \Iterator<string, array{int, string, string, mixed}>
      */
-    public static function columnTypeProvider(): array
+    public static function columnTypeProvider(): \Iterator
     {
-        return [
-            // Integers (unsigned, no SIGNEDNESS metadata).
-            'TINY'      => [Constants::TYPE_TINY, '', \chr(200), 200],
-            'SHORT'     => [Constants::TYPE_SHORT, '', pack('v', 60000), 60000],
-            'INT24'     => [Constants::TYPE_INT24, '', "\x40\x42\x0F", 1000000],
-            'LONG'      => [Constants::TYPE_LONG, '', pack('V', 3000000000), 3000000000],
-            'LONGLONG'  => [Constants::TYPE_LONGLONG, '', pack('P', 9000000000), 9000000000],
-            'YEAR'      => [Constants::TYPE_YEAR, '', \chr(123), 123],
-
-            // Strings: 1-byte length prefix when max <= 255, else 2-byte.
-            'VARCHAR short' => [Constants::TYPE_VAR_STRING, pack('v', 100), \chr(3) . 'abc', 'abc'],
-            'VARCHAR long'  => [Constants::TYPE_VAR_STRING, pack('v', 300), pack('v', 3) . 'xyz', 'xyz'],
-
-            // BLOB: metadata = number of length bytes (here 2).
-            'BLOB' => [Constants::TYPE_BLOB, \chr(2), pack('v', 4) . 'blob', 'blob'],
-
-            // ENUM index: metadata low byte = storage width.
-            'ENUM' => [Constants::TYPE_ENUM, "\x00\x01", \chr(2), 2],
-
-            // Fixed-width temporals are returned as their raw bytes.
-            'TIMESTAMP' => [Constants::TYPE_TIMESTAMP, '', "\x01\x02\x03\x04", "\x01\x02\x03\x04"],
-            'DATETIME'  => [Constants::TYPE_DATETIME, '', "\x01\x02\x03\x04\x05\x06\x07\x08", "\x01\x02\x03\x04\x05\x06\x07\x08"],
-            'DATE'      => [Constants::TYPE_DATE, '', "\xAA\xBB\xCC", "\xAA\xBB\xCC"],
-
-            // Fractional temporals: width grows with the fsp metadata byte.
-            'TIMESTAMP2(6)' => [Constants::TYPE_TIMESTAMP2, \chr(6), "\x01\x02\x03\x04\x05\x06\x07", "\x01\x02\x03\x04\x05\x06\x07"],
-            'DATETIME2(0)'  => [Constants::TYPE_DATETIME2, \chr(0), "\x01\x02\x03\x04\x05", "\x01\x02\x03\x04\x05"],
-            'TIME2(0)'      => [Constants::TYPE_TIME2, \chr(0), "\xAA\xBB\xCC", "\xAA\xBB\xCC"],
-
-            // BIT: metadata packs (bytes, bits) -> 10 bits = ceil(10/8) = 2 bytes.
-            'BIT(10)' => [Constants::TYPE_BIT, pack('v', (1 << 8) | 2), "\x03\xFF", "\x03\xFF"],
-
-            // NEWDECIMAL(5,2): precision/scale metadata -> 3 storage bytes.
-            'NEWDECIMAL(5,2)' => [Constants::TYPE_NEWDECIMAL, \chr(5) . \chr(2), "\x80\x00\x05", "\x80\x00\x05"],
-        ];
+        // Integers (unsigned, no SIGNEDNESS metadata).
+        yield 'TINY' => [Constants::TYPE_TINY, '', \chr(200), 200];
+        yield 'SHORT' => [Constants::TYPE_SHORT, '', pack('v', 60000), 60000];
+        yield 'INT24' => [Constants::TYPE_INT24, '', "\x40\x42\x0F", 1000000];
+        yield 'LONG' => [Constants::TYPE_LONG, '', pack('V', 3000000000), 3000000000];
+        yield 'LONGLONG' => [Constants::TYPE_LONGLONG, '', pack('P', 9000000000), 9000000000];
+        yield 'YEAR' => [Constants::TYPE_YEAR, '', \chr(123), 123];
+        // Strings: 1-byte length prefix when max <= 255, else 2-byte.
+        yield 'VARCHAR short' => [Constants::TYPE_VAR_STRING, pack('v', 100), \chr(3) . 'abc', 'abc'];
+        yield 'VARCHAR long' => [Constants::TYPE_VAR_STRING, pack('v', 300), pack('v', 3) . 'xyz', 'xyz'];
+        // BLOB: metadata = number of length bytes (here 2).
+        yield 'BLOB' => [Constants::TYPE_BLOB, \chr(2), pack('v', 4) . 'blob', 'blob'];
+        // ENUM index: metadata low byte = storage width.
+        yield 'ENUM' => [Constants::TYPE_ENUM, "\x00\x01", \chr(2), 2];
+        // Fixed-width temporals are returned as their raw bytes.
+        yield 'TIMESTAMP' => [Constants::TYPE_TIMESTAMP, '', "\x01\x02\x03\x04", "\x01\x02\x03\x04"];
+        yield 'DATETIME' => [Constants::TYPE_DATETIME, '', "\x01\x02\x03\x04\x05\x06\x07\x08", "\x01\x02\x03\x04\x05\x06\x07\x08"];
+        yield 'DATE' => [Constants::TYPE_DATE, '', "\xAA\xBB\xCC", "\xAA\xBB\xCC"];
+        // Fractional temporals: width grows with the fsp metadata byte.
+        yield 'TIMESTAMP2(6)' => [Constants::TYPE_TIMESTAMP2, \chr(6), "\x01\x02\x03\x04\x05\x06\x07", "\x01\x02\x03\x04\x05\x06\x07"];
+        yield 'DATETIME2(0)' => [Constants::TYPE_DATETIME2, \chr(0), "\x01\x02\x03\x04\x05", "\x01\x02\x03\x04\x05"];
+        yield 'TIME2(0)' => [Constants::TYPE_TIME2, \chr(0), "\xAA\xBB\xCC", "\xAA\xBB\xCC"];
+        // BIT: metadata packs (bytes, bits) -> 10 bits = ceil(10/8) = 2 bytes.
+        yield 'BIT(10)' => [Constants::TYPE_BIT, pack('v', (1 << 8) | 2), "\x03\xFF", "\x03\xFF"];
+        // NEWDECIMAL(5,2): precision/scale metadata -> 3 storage bytes.
+        yield 'NEWDECIMAL(5,2)' => [Constants::TYPE_NEWDECIMAL, \chr(5) . \chr(2), "\x80\x00\x05", "\x80\x00\x05"];
     }
 
     public function testDecodesFloatAndDouble(): void

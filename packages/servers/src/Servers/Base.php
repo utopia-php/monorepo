@@ -16,8 +16,6 @@ abstract class Base
 
     /**
      * Current running mode
-     *
-     * @var string
      */
     protected static string $mode = '';
 
@@ -62,9 +60,6 @@ abstract class Base
      */
     protected static array $end = [];
 
-    /**
-     * @var Container
-     */
     protected Container $container;
 
     /**
@@ -80,13 +75,10 @@ abstract class Base
     //     $this->server = $server;
     //     $this->container = $container;
     // }
-
     /**
      * Init
      *
      * Set a callback function that will be initialized on application start
-     *
-     * @return Hook
      */
     public static function init(): Hook
     {
@@ -102,8 +94,6 @@ abstract class Base
      * Shutdown
      *
      * Set a callback function that will be initialized on application end
-     *
-     * @return Hook
      */
     public static function shutdown(): Hook
     {
@@ -119,8 +109,6 @@ abstract class Base
      * Error
      *
      * An error callback for failed or no matched requests
-     *
-     * @return Hook
      */
     public static function error(): Hook
     {
@@ -136,8 +124,6 @@ abstract class Base
      * Get Mode
      *
      * Get current mode
-     *
-     * @return string
      */
     public static function getMode(): string
     {
@@ -148,9 +134,6 @@ abstract class Base
      * Set Mode
      *
      * Set current mode
-     *
-     * @param  string  $value
-     * @return void
      */
     public static function setMode(string $value): void
     {
@@ -159,8 +142,6 @@ abstract class Base
 
     /**
      * Get Container
-     *
-     * @return Container
      */
     public function getContainer(): Container
     {
@@ -180,8 +161,6 @@ abstract class Base
 
     /**
      * Is http in production mode?
-     *
-     * @return bool
      */
     public static function isProduction(): bool
     {
@@ -190,8 +169,6 @@ abstract class Base
 
     /**
      * Is http in development mode?
-     *
-     * @return bool
      */
     public static function isDevelopment(): bool
     {
@@ -200,8 +177,6 @@ abstract class Base
 
     /**
      * Is http in stage mode?
-     *
-     * @return bool
      */
     public static function isStage(): bool
     {
@@ -227,10 +202,6 @@ abstract class Base
     /**
      * Prepare hook for injection, add dependencies, run validation.
      *
-     * @param  Hook  $hook
-     * @param  array  $values
-     * @param  array  $requestParams
-     * @return Container
      *
      * @throws Exception
      */
@@ -266,7 +237,7 @@ abstract class Base
 
             // Adding is string to avoid PHP built-in functions
             if (!\is_string($arg) && \is_callable($arg)) {
-                $injections = array_map(fn($injection) => $scope->get($injection), $param['injections']);
+                $injections = array_map($scope->get(...), $param['injections']);
                 $arg = \call_user_func_array($arg, $injections);
             }
             $value = $existsInValues ? $values[$valuesKey] : $arg;
@@ -297,10 +268,6 @@ abstract class Base
      *
      * Creates an validator instance and validate given value with given rules.
      *
-     * @param  string  $key
-     * @param  array  $param
-     * @param  mixed  $value
-     * @return void
      *
      * @throws Exception
      */
@@ -329,8 +296,6 @@ abstract class Base
 
     /**
      * Reset all the static variables
-     *
-     * @return void
      */
     public static function reset(): void
     {

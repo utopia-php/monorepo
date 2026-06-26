@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * Utopia Http
  * @package Http
@@ -15,64 +17,64 @@ namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class IPTest extends TestCase
+final class IPTest extends TestCase
 {
     protected IP $validator;
 
-    public function testIsValidIP()
+    public function testIsValidIP(): void
     {
         $validator = new IP();
 
         // Assertions
-        $this->assertSame(true, $validator->isValid('2001:0db8:85a3:08d3:1319:8a2e:0370:7334'));
-        $this->assertSame(true, $validator->isValid('109.67.204.101'));
-        $this->assertSame(false, $validator->isValid(23.5));
-        $this->assertSame(false, $validator->isValid('23.5'));
-        $this->assertSame(false, $validator->isValid(null));
-        $this->assertSame(false, $validator->isValid(true));
-        $this->assertSame(false, $validator->isValid(false));
+        $this->assertTrue($validator->isValid('2001:0db8:85a3:08d3:1319:8a2e:0370:7334'));
+        $this->assertTrue($validator->isValid('109.67.204.101'));
+        $this->assertFalse($validator->isValid(23.5));
+        $this->assertFalse($validator->isValid('23.5'));
+        $this->assertFalse($validator->isValid(null));
+        $this->assertFalse($validator->isValid(true));
+        $this->assertFalse($validator->isValid(false));
         $this->assertSame('string', $validator->getType());
     }
 
-    public function testIsValidIPALL()
+    public function testIsValidIPALL(): void
     {
         $validator = new IP(IP::ALL);
 
         // Assertions
-        $this->assertSame(true, $validator->isValid('2001:0db8:85a3:08d3:1319:8a2e:0370:7334'));
-        $this->assertSame(true, $validator->isValid('109.67.204.101'));
-        $this->assertSame(false, $validator->isValid(23.5));
-        $this->assertSame(false, $validator->isValid('23.5'));
-        $this->assertSame(false, $validator->isValid(null));
-        $this->assertSame(false, $validator->isValid(true));
-        $this->assertSame(false, $validator->isValid(false));
+        $this->assertTrue($validator->isValid('2001:0db8:85a3:08d3:1319:8a2e:0370:7334'));
+        $this->assertTrue($validator->isValid('109.67.204.101'));
+        $this->assertFalse($validator->isValid(23.5));
+        $this->assertFalse($validator->isValid('23.5'));
+        $this->assertFalse($validator->isValid(null));
+        $this->assertFalse($validator->isValid(true));
+        $this->assertFalse($validator->isValid(false));
     }
 
-    public function testIsValidIPV4()
+    public function testIsValidIPV4(): void
     {
         $validator = new IP(IP::V4);
 
         // Assertions
-        $this->assertSame(false, $validator->isValid('2001:0db8:85a3:08d3:1319:8a2e:0370:7334'));
-        $this->assertSame(true, $validator->isValid('109.67.204.101'));
-        $this->assertSame(false, $validator->isValid(23.5));
-        $this->assertSame(false, $validator->isValid('23.5'));
-        $this->assertSame(false, $validator->isValid(null));
-        $this->assertSame(false, $validator->isValid(true));
-        $this->assertSame(false, $validator->isValid(false));
+        $this->assertFalse($validator->isValid('2001:0db8:85a3:08d3:1319:8a2e:0370:7334'));
+        $this->assertTrue($validator->isValid('109.67.204.101'));
+        $this->assertFalse($validator->isValid(23.5));
+        $this->assertFalse($validator->isValid('23.5'));
+        $this->assertFalse($validator->isValid(null));
+        $this->assertFalse($validator->isValid(true));
+        $this->assertFalse($validator->isValid(false));
     }
 
-    public function testIsValidIPV6()
+    public function testIsValidIPV6(): void
     {
         $validator = new IP(IP::V6);
 
         // Assertions
-        $this->assertSame(true, $validator->isValid('2001:0db8:85a3:08d3:1319:8a2e:0370:7334'));
-        $this->assertSame(false, $validator->isValid('109.67.204.101'));
-        $this->assertSame(false, $validator->isValid(23.5));
-        $this->assertSame(false, $validator->isValid('23.5'));
-        $this->assertSame(false, $validator->isValid(null));
-        $this->assertSame(false, $validator->isValid(true));
-        $this->assertSame(false, $validator->isValid(false));
+        $this->assertTrue($validator->isValid('2001:0db8:85a3:08d3:1319:8a2e:0370:7334'));
+        $this->assertFalse($validator->isValid('109.67.204.101'));
+        $this->assertFalse($validator->isValid(23.5));
+        $this->assertFalse($validator->isValid('23.5'));
+        $this->assertFalse($validator->isValid(null));
+        $this->assertFalse($validator->isValid(true));
+        $this->assertFalse($validator->isValid(false));
     }
 }

@@ -13,22 +13,12 @@ use Utopia\Validator;
  */
 class Host extends Validator
 {
-    protected $whitelist = [];
-
-    /**
-     * @param array $whitelist
-     */
-    public function __construct(array $whitelist)
-    {
-        $this->whitelist = $whitelist;
-    }
+    public function __construct(protected array $whitelist) {}
 
     /**
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -41,7 +31,6 @@ class Host extends Validator
      * Validation will pass when $value starts with one of the given hosts
      *
      * @param  mixed $value
-     * @return bool
      */
     public function isValid($value): bool
     {
@@ -60,8 +49,6 @@ class Host extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -72,8 +59,6 @@ class Host extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {

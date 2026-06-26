@@ -8,19 +8,13 @@ use Utopia\NATS\Exception\AuthenticationException;
 
 final class NKeyAuth implements Authenticator
 {
-    private readonly string $publicKey;
-    private readonly string $seed;
-
     public function __construct(
-        string $nkey,
-        string $nkeySeed,
+        private readonly string $publicKey,
+        private readonly string $seed,
     ) {
         if (!\function_exists('sodium_crypto_sign_detached')) {
             throw new AuthenticationException('NKey authentication requires the sodium PHP extension');
         }
-
-        $this->publicKey = $nkey;
-        $this->seed = $nkeySeed;
     }
 
     public function authenticate(?string $nonce = null): array
@@ -29,20 +23,20 @@ final class NKeyAuth implements Authenticator
             throw new AuthenticationException('NKey authentication requires a server nonce');
         }
 
-        $rawSeed = self::decodeSeed($this->seed);
+        $rawSeed = $this->decodeSeed($this->seed);
         $keyPair = sodium_crypto_sign_seed_keypair($rawSeed);
         $secretKey = sodium_crypto_sign_secretkey($keyPair);
         $signature = sodium_crypto_sign_detached($nonce, $secretKey);
 
         return [
             'nkey' => $this->publicKey,
-            'sig' => self::base32Encode($signature),
+            'sig' => $this->base32Encode($signature),
         ];
     }
 
-    private static function decodeSeed(string $seed): string
+    private function decodeSeed(string $seed): string
     {
-        $decoded = self::base32Decode($seed);
+        $decoded = $this->base32Decode($seed);
         if (\strlen($decoded) < 4) {
             throw new AuthenticationException('Invalid NKey seed');
         }
@@ -51,7 +45,7 @@ final class NKeyAuth implements Authenticator
         return substr($decoded, 2, -2);
     }
 
-    private static function base32Decode(string $input): string
+    private function base32Decode(string $input): string
     {
         $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
         $input = strtoupper(rtrim($input, '='));
@@ -76,7 +70,7 @@ final class NKeyAuth implements Authenticator
         return $output;
     }
 
-    private static function base32Encode(string $input): string
+    private function base32Encode(string $input): string
     {
         $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
         $output = '';

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -12,35 +14,16 @@ use Utopia\Validator;
 class ArrayList extends Validator
 {
     /**
-     * @var Validator
-     */
-    protected Validator $validator;
-
-    /**
-     * @var int
-     */
-    protected int $length;
-
-    /**
      * Array constructor.
      *
      * Pass a validator that must be applied to each element in this array
-     *
-     * @param  Validator  $validator
-     * @param  int  $length
      */
-    public function __construct(Validator $validator, int $length = 0)
-    {
-        $this->validator = $validator;
-        $this->length = $length;
-    }
+    public function __construct(protected Validator $validator, protected int $length = 0) {}
 
     /**
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -50,7 +33,7 @@ class ArrayList extends Validator
             $msg .= ' no longer than ' . $this->length . ' items';
         }
 
-        if (!empty($this->validator->getDescription())) {
+        if (!\in_array($this->validator->getDescription(), ['', '0'], true)) {
             $msg .= ' and ' . $this->validator->getDescription();
         }
 
@@ -61,8 +44,6 @@ class ArrayList extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -73,8 +54,6 @@ class ArrayList extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
@@ -83,8 +62,6 @@ class ArrayList extends Validator
 
     /**
      * Get Nested Validator
-     *
-     * @return Validator
      */
     public function getValidator(): Validator
     {
@@ -95,9 +72,6 @@ class ArrayList extends Validator
      * Is valid
      *
      * Validation will pass when $value is valid array and validator is valid.
-     *
-     * @param  mixed  $value
-     * @return bool
      */
     public function isValid(mixed $value): bool
     {
@@ -110,11 +84,6 @@ class ArrayList extends Validator
                 return false;
             }
         }
-
-        if ($this->length && \count($value) > $this->length) {
-            return false;
-        }
-
-        return true;
+        return !($this->length && \count($value) > $this->length);
     }
 }

@@ -1,13 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Unit\Base;
 
 use PHPUnit\Framework\TestCase;
 
-class Base extends TestCase
+final class Base extends TestCase
 {
-    protected array $payloads;
-
     public function setUp(): void
     {
         // TODO

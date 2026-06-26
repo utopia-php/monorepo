@@ -42,7 +42,7 @@ final class LockTest extends TestCase
         $this->expectException(\RuntimeException::class);
 
         try {
-            $mutex->withLock(function (): void {
+            $mutex->withLock(function (): never {
                 throw new \RuntimeException('inner');
             });
         } finally {

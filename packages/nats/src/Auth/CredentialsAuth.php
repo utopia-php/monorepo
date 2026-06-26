@@ -22,8 +22,8 @@ final class CredentialsAuth implements Authenticator
             throw new AuthenticationException("Failed to read credentials file: {$credentialsFile}");
         }
 
-        $jwt = self::extractBetween($contents, '-----BEGIN NATS USER JWT-----', '------END NATS USER JWT------');
-        $seed = self::extractBetween($contents, '-----BEGIN USER NKEY SEED-----', '------END USER NKEY SEED------');
+        $jwt = $this->extractBetween($contents, '-----BEGIN NATS USER JWT-----', '------END NATS USER JWT------');
+        $seed = $this->extractBetween($contents, '-----BEGIN USER NKEY SEED-----', '------END USER NKEY SEED------');
 
         if ($jwt === null) {
             throw new AuthenticationException('No JWT found in credentials file');
@@ -49,7 +49,7 @@ final class CredentialsAuth implements Authenticator
         ];
     }
 
-    private static function extractBetween(string $content, string $begin, string $end): ?string
+    private function extractBetween(string $content, string $begin, string $end): ?string
     {
         $startPos = strpos($content, $begin);
         if ($startPos === false) {

@@ -24,7 +24,7 @@ final class RequestReplyTest extends TestCase
         $conn = Connection::connect($this->getServerUrl());
 
         // Set up responder
-        $sub = $conn->subscribe('test.echo', function ($msg) use ($conn) {
+        $sub = $conn->subscribe('test.echo', function ($msg) use ($conn): void {
             if ($msg->replyTo !== null) {
                 $conn->publish($msg->replyTo, 'echo: ' . $msg->data);
             }

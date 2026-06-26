@@ -6,13 +6,10 @@ namespace Utopia\NATS;
 
 final class Subscription
 {
-    private \SplQueue $pendingMessages;
+    private readonly \SplQueue $pendingMessages;
     private bool $active = true;
     private ?int $maxMessages = null;
     private int $received = 0;
-
-    /** @var \Closure|null */
-    private ?\Closure $callback;
 
     /** @var Connection|null Back-reference for sync operations */
     private ?Connection $connection = null;
@@ -21,9 +18,8 @@ final class Subscription
         public readonly string $sid,
         public readonly string $subject,
         public readonly ?string $queue = null,
-        ?\Closure $callback = null,
+        private readonly ?\Closure $callback = null,
     ) {
-        $this->callback = $callback;
         $this->pendingMessages = new \SplQueue();
     }
 
@@ -42,7 +38,7 @@ final class Subscription
                 return $this->pendingMessages->dequeue();
             }
 
-            if (!$this->active || $this->connection === null) {
+            if (!$this->active || !$this->connection instanceof \Utopia\NATS\Connection) {
                 return null;
             }
 
@@ -57,7 +53,7 @@ final class Subscription
 
     public function unsubscribe(?int $afterMessages = null): void
     {
-        if ($this->connection !== null) {
+        if ($this->connection instanceof \Utopia\NATS\Connection) {
             $this->connection->unsubscribe($this, $afterMessages);
         }
     }
@@ -71,7 +67,7 @@ final class Subscription
     {
         $this->received++;
 
-        if ($this->callback !== null) {
+        if ($this->callback instanceof \Closure) {
             ($this->callback)($msg);
         } else {
             $this->pendingMessages->enqueue($msg);
@@ -102,6 +98,6 @@ final class Subscription
 
     public function hasCallback(): bool
     {
-        return $this->callback !== null;
+        return $this->callback instanceof \Closure;
     }
 }

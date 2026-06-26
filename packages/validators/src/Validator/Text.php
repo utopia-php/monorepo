@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -18,43 +20,19 @@ class Text extends Validator
     public const ALPHABET_LOWER = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
 
     /**
-     * @var int
-     */
-    protected int $length;
-
-    /**
-     * @var int
-     */
-    protected int $min;
-
-    /**
-     * @var string[]
-     */
-    protected array $allowList;
-
-    /**
      * Text constructor.
      *
      * Validate text with maximum length $length. Use $length = 0 for unlimited length.
      * Optionally, provide allowList characters array $allowList to only allow specific character.
      *
-     * @param  int  $length
-     * @param  int  $min
      * @param  string[]  $allowList
      */
-    public function __construct(int $length, int $min = 1, array $allowList = [])
-    {
-        $this->length = $length;
-        $this->min = $min;
-        $this->allowList = $allowList;
-    }
+    public function __construct(protected int $length, protected int $min = 1, protected array $allowList = []) {}
 
     /**
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -63,11 +41,11 @@ class Text extends Validator
         if ($this->min === $this->length) {
             $message .= ' and exactly ' . $this->length . ' chars';
         } else {
-            if ($this->min) {
+            if ($this->min !== 0) {
                 $message .= ' and at least ' . $this->min . ' chars';
             }
 
-            if ($this->length) {
+            if ($this->length !== 0) {
                 $message .= ' and no longer than ' . $this->length . ' chars';
             }
         }
@@ -83,8 +61,6 @@ class Text extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -95,8 +71,6 @@ class Text extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
@@ -107,9 +81,6 @@ class Text extends Validator
      * Is valid
      *
      * Validation will pass when $value is text with valid length.
-     *
-     * @param  mixed  $value
-     * @return bool
      */
     public function isValid(mixed $value): bool
     {

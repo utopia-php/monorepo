@@ -13,34 +13,16 @@ use Utopia\Validator;
  */
 class URL extends Validator
 {
-    protected array $allowedSchemes;
-
-    protected bool $allowEmpty;
-
-    protected bool $allowFragments;
-
-    /**
-     * @param array $allowedSchemes
-     * @param bool $allowEmpty
-     * @param bool $allowFragments
-     */
-    public function __construct(array $allowedSchemes = [], bool $allowEmpty = false, bool $allowFragments = true)
-    {
-        $this->allowedSchemes = $allowedSchemes;
-        $this->allowEmpty = $allowEmpty;
-        $this->allowFragments = $allowFragments;
-    }
+    public function __construct(protected array $allowedSchemes = [], protected bool $allowEmpty = false, protected bool $allowFragments = true) {}
 
     /**
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
-        if (!empty($this->allowedSchemes)) {
+        if ($this->allowedSchemes !== []) {
             $description = 'Value must be a valid URL with following schemes (' . implode(', ', $this->allowedSchemes) . ')';
 
             if (!$this->allowFragments) {
@@ -63,7 +45,6 @@ class URL extends Validator
      * Validation will pass when $value is valid URL.
      *
      * @param  mixed $value
-     * @return bool
      */
     public function isValid($value): bool
     {
@@ -75,7 +56,7 @@ class URL extends Validator
             return false;
         }
 
-        if (!empty($this->allowedSchemes) && !\in_array(parse_url($value, PHP_URL_SCHEME), $this->allowedSchemes)) {
+        if ($this->allowedSchemes !== [] && !\in_array(parse_url($value, PHP_URL_SCHEME), $this->allowedSchemes)) {
             return false;
         }
 
@@ -90,8 +71,6 @@ class URL extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -102,8 +81,6 @@ class URL extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {

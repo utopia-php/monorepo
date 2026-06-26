@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Replication\Tests\Unit\Source\MySQL;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Replication\Source\MySQL\GtidSet;
 
-class GtidSetTest extends TestCase
+final class GtidSetTest extends TestCase
 {
     private const string SID = '3e11fa47-71ca-11e1-9e33-c80aa9429562';
 

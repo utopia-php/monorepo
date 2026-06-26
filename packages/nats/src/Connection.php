@@ -38,7 +38,7 @@ final class Connection
 
     private Transport $transport;
     private Parser $parser;
-    private Writer $writer;
+    private readonly Writer $writer;
     private Authenticator $auth;
     private ServerInfo $serverInfo;
     private ConnectionOptions $options;
@@ -78,7 +78,7 @@ final class Connection
     ): self {
         if ($urlOrOptions instanceof ConnectionOptions) {
             $options = $urlOrOptions;
-        } elseif ($options === null) {
+        } elseif (!$options instanceof \Utopia\NATS\ConnectionOptions) {
             $options = new ConnectionOptions(servers: $urlOrOptions);
         }
 
@@ -101,7 +101,7 @@ final class Connection
             );
         }
 
-        if ($headers !== null && !empty($headers->all())) {
+        if ($headers instanceof \Utopia\NATS\Headers && $headers->all() !== []) {
             $headerWire = $headers->toWire();
             $cmd = $this->writer->hpub($subject, $headerWire, $data, $replyTo);
         } else {
@@ -226,7 +226,7 @@ final class Connection
             }
 
             $msg = $this->processMessage($remaining);
-            if ($msg !== null) {
+            if ($msg instanceof \Utopia\NATS\Message) {
                 $processed++;
             }
         }
@@ -276,7 +276,7 @@ final class Connection
 
         // Process remaining messages
         $deadline = microtime(true) + $timeout;
-        while (!empty($this->subscriptions)) {
+        while ($this->subscriptions !== []) {
             $remaining = $deadline - microtime(true);
             if ($remaining <= 0) {
                 break;
@@ -311,7 +311,7 @@ final class Connection
             $this->transport->close();
         }
 
-        if ($previousStatus === self::STATUS_CONNECTED && $this->options->onClose !== null) {
+        if ($previousStatus === self::STATUS_CONNECTED && $this->options->onClose instanceof \Closure) {
             ($this->options->onClose)();
         }
     }
@@ -348,7 +348,7 @@ final class Connection
         $this->status = self::STATUS_CONNECTING;
         $lastError = null;
 
-        foreach ($this->serverPool as $index => $url) {
+        foreach ($this->serverPool as $url) {
             try {
                 $this->connectToServer($url);
                 $this->status = self::STATUS_CONNECTED;
@@ -462,9 +462,8 @@ final class Connection
         }
 
         $authFields = $this->auth->authenticate($this->serverInfo->nonce);
-        $payload = array_merge($payload, $authFields);
 
-        return $payload;
+        return array_merge($payload, $authFields);
     }
 
     private function dispatchOp(ServerOp $op, mixed $data): ?Message
@@ -495,7 +494,7 @@ final class Connection
         );
 
         // Check if this is a reply to a pending request (mux inbox)
-        if ($this->inboxSub !== null && $data['sid'] === $this->inboxSub->sid) {
+        if ($this->inboxSub instanceof \Utopia\NATS\Subscription && $data['sid'] === $this->inboxSub->sid) {
             $token = $this->extractInboxToken($data['subject']);
             if ($token !== null && isset($this->pendingRequests[$token])) {
                 $this->pendingRequests[$token] = ['message' => $msg, 'resolved' => true];
@@ -533,7 +532,7 @@ final class Connection
     {
         $message = \is_string($data) ? $data : 'Unknown server error';
 
-        if ($this->options->onError !== null) {
+        if ($this->options->onError instanceof \Closure) {
             ($this->options->onError)(new NatsException($message));
         }
 
@@ -595,7 +594,7 @@ final class Connection
 
         $this->status = self::STATUS_RECONNECTING;
 
-        if ($this->options->onDisconnect !== null) {
+        if ($this->options->onDisconnect instanceof \Closure) {
             ($this->options->onDisconnect)();
         }
 
@@ -610,7 +609,7 @@ final class Connection
                 usleep((int) ($wait * 1_000_000));
             }
 
-            foreach ($this->serverPool as $index => $url) {
+            foreach ($this->serverPool as $url) {
                 try {
                     $this->connectToServer($url);
                     $this->status = self::STATUS_CONNECTED;
@@ -629,7 +628,7 @@ final class Connection
                     }
                     $this->pendingBuffer = [];
 
-                    if ($this->options->onReconnect !== null) {
+                    if ($this->options->onReconnect instanceof \Closure) {
                         ($this->options->onReconnect)();
                     }
 
@@ -672,7 +671,7 @@ final class Connection
 
     private function ensureInboxSub(): void
     {
-        if ($this->inboxSub !== null) {
+        if ($this->inboxSub instanceof \Utopia\NATS\Subscription) {
             return;
         }
 
@@ -729,7 +728,7 @@ final class Connection
      */
     private function buildServerPool(ConnectionOptions $options): array
     {
-        $servers = array_map(fn(string $url) => $this->normalizeUrl($url), $options->servers);
+        $servers = array_map($this->normalizeUrl(...), $options->servers);
 
         if (!$options->noRandomize && \count($servers) > 1) {
             shuffle($servers);
@@ -741,7 +740,7 @@ final class Connection
     private function normalizeUrl(string $url): string
     {
         if (!preg_match('#^(nats|tls|ws|wss)://#', $url)) {
-            $url = 'nats://' . $url;
+            return 'nats://' . $url;
         }
         return $url;
     }
