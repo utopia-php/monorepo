@@ -52,25 +52,26 @@ final class Decoder
         if ($this->checksum) {
             $body = substr($body, 0, -4);
         }
-
-        switch (true) {
-            case $eventType === Constants::GTID_EVENT:
-                $this->trackGtid($body);
-                return null;
-            case $eventType === Constants::QUERY_EVENT:
-                $this->commitIfStatement($body);
-                return null;
-            case $eventType === Constants::XID_EVENT:
-                $this->commit();
-                return null;
-            case $eventType === Constants::TABLE_MAP_EVENT:
-                $this->parser->parseTableMap($body);
-                return null;
-            case isset(self::ROWS_EVENTS[$eventType]):
-                return $this->buildChange($eventType, $body);
-            default:
-                return null;
+        if ($eventType === Constants::GTID_EVENT) {
+            $this->trackGtid($body);
+            return null;
         }
+        if ($eventType === Constants::QUERY_EVENT) {
+            $this->commitIfStatement($body);
+            return null;
+        }
+        if ($eventType === Constants::XID_EVENT) {
+            $this->commit();
+            return null;
+        }
+        if ($eventType === Constants::TABLE_MAP_EVENT) {
+            $this->parser->parseTableMap($body);
+            return null;
+        }
+        if (isset(self::ROWS_EVENTS[$eventType])) {
+            return $this->buildChange($eventType, $body);
+        }
+        return null;
     }
 
     /**

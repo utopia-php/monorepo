@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class WhiteListTest extends TestCase
+final class WhiteListTest extends TestCase
 {
-    public function testCanValidateStrictly()
+    public function testCanValidateStrictly(): void
     {
         $whiteList = new WhiteList(['string1', 'string2', 3, 4], true);
 

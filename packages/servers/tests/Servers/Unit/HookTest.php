@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Servers\Unit;
 
 use PHPUnit\Framework\TestCase;
@@ -7,11 +9,8 @@ use Utopia\Servers\Hook;
 use Utopia\Validator\Numeric;
 use Utopia\Validator\Text;
 
-class HookTest extends TestCase
+final class HookTest extends TestCase
 {
-    /**
-     * @var Hook
-     */
     protected ?Hook $hook;
 
     public function setUp(): void
@@ -19,38 +18,38 @@ class HookTest extends TestCase
         $this->hook = new Hook();
     }
 
-    public function testDescriptionCanBeSet()
+    public function testDescriptionCanBeSet(): void
     {
-        $this->assertEquals('', $this->hook->getDesc());
+        $this->assertSame('', $this->hook->getDesc());
 
         $this->hook->desc('new hook');
 
-        $this->assertEquals('new hook', $this->hook->getDesc());
+        $this->assertSame('new hook', $this->hook->getDesc());
     }
 
-    public function testGroupsCanBeSet()
+    public function testGroupsCanBeSet(): void
     {
-        $this->assertEquals([], $this->hook->getGroups());
+        $this->assertSame([], $this->hook->getGroups());
 
         $this->hook->groups(['api', 'homepage']);
 
-        $this->assertEquals(['api', 'homepage'], $this->hook->getGroups());
+        $this->assertSame(['api', 'homepage'], $this->hook->getGroups());
     }
 
-    public function testActionCanBeSet()
+    public function testActionCanBeSet(): void
     {
         $default = $this->hook->getAction();
         $this->assertInstanceOf(\Closure::class, $default);
         $this->assertNull($default());
 
-        $this->hook->action(fn() => 'hello world');
+        $this->hook->action(fn(): string => 'hello world');
 
         $this->assertEquals('hello world', $this->hook->getAction()());
     }
 
-    public function testParamCanBeSet()
+    public function testParamCanBeSet(): void
     {
-        $this->assertEquals([], $this->hook->getParams());
+        $this->assertSame([], $this->hook->getParams());
 
         $this->hook
             ->param('x', '', new Text(10))
@@ -59,7 +58,7 @@ class HookTest extends TestCase
         $this->assertCount(2, $this->hook->getParams());
     }
 
-    public function testParamAliasesDefaultEmpty()
+    public function testParamAliasesDefaultEmpty(): void
     {
         $this->hook->param('x', '', new Text(10));
 
@@ -68,7 +67,7 @@ class HookTest extends TestCase
         $this->assertSame([], $params['x']['aliases']);
     }
 
-    public function testParamAliasesCanBeSet()
+    public function testParamAliasesCanBeSet(): void
     {
         $this->hook->param(
             'projectId',
@@ -82,7 +81,7 @@ class HookTest extends TestCase
         $this->assertSame(['project', 'project_id'], $params['projectId']['aliases']);
     }
 
-    public function testParamEnumCanBeSet()
+    public function testParamEnumCanBeSet(): void
     {
         $enum = new \stdClass();
         $enum->name = 'ArticleStatus';
@@ -101,23 +100,23 @@ class HookTest extends TestCase
         $this->assertSame($enum, $params['status']['enum']);
     }
 
-    public function testResourcesCanBeInjected()
+    public function testResourcesCanBeInjected(): void
     {
-        $this->assertEquals([], $this->hook->getInjections());
+        $this->assertSame([], $this->hook->getInjections());
 
         $this->hook
             ->inject('user')
             ->inject('time')
-            ->action(function () {});
+            ->action(function (): void {});
 
         $this->assertCount(2, $this->hook->getInjections());
         $this->assertEquals('user', $this->hook->getInjections()['user']['name']);
         $this->assertEquals('time', $this->hook->getInjections()['time']['name']);
     }
 
-    public function testDependenciesAreReturnedInInjectionOrder()
+    public function testDependenciesAreReturnedInInjectionOrder(): void
     {
-        $this->assertEquals([], $this->hook->getDependencies());
+        $this->assertSame([], $this->hook->getDependencies());
 
         $this->hook
             ->inject('user')
@@ -125,12 +124,12 @@ class HookTest extends TestCase
             ->inject('time')
             ->inject('locale');
 
-        $this->assertEquals(['user', 'time', 'locale'], $this->hook->getDependencies());
+        $this->assertSame(['user', 'time', 'locale'], $this->hook->getDependencies());
     }
 
-    public function testParamValuesCanBeSet()
+    public function testParamValuesCanBeSet(): void
     {
-        $this->assertEquals([], $this->hook->getParams());
+        $this->assertSame([], $this->hook->getParams());
 
         $values = [
             'x' => 'hello',
@@ -141,7 +140,7 @@ class HookTest extends TestCase
             ->param('x', '', new Numeric())
             ->param('y', '', new Numeric());
 
-        foreach ($this->hook->getParams() as $key => $param) {
+        foreach (array_keys($this->hook->getParams()) as $key) {
             $this->hook->setParamValue($key, $values[$key]);
         }
 

@@ -557,11 +557,10 @@ switch ($command) {
             // A package phpstan.neon overrides the root level-5 baseline; without one, fall back to it.
             $checks['phpstan'] = '../../vendor/bin/phpstan analyse --memory-limit=1G'
                 . (glob("{$directory}/phpstan.neon*") !== [] ? '' : ' -c ../../phpstan.neon');
-            // Rector is opt-in: a package's rector.php may `require` the root
-            // baseline (../../rector.php) and layer its own rules on top.
-            if (is_file("{$directory}/rector.php")) {
-                $checks['rector'] = '../../vendor/bin/rector process' . ($fix ? '' : ' --dry-run');
-            }
+            // A package rector.php overrides the root baseline; without one, fall back to it.
+            $checks['rector'] = '../../vendor/bin/rector process'
+                . (is_file("{$directory}/rector.php") ? '' : ' -c ../../rector.php')
+                . ($fix ? '' : ' --dry-run');
 
             foreach ($checks as $tool => $command) {
                 passthru("cd {$directory} && {$command}", $code);

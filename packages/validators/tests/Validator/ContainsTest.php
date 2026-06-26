@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-class ContainsTest extends TestCase
+final class ContainsTest extends TestCase
 {
     public function testCanValidateWithSinglePattern(): void
     {

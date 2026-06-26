@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Replication\Tests\Unit\Source\MySQL;
 
 use PHPUnit\Framework\TestCase;
@@ -9,7 +11,7 @@ use Utopia\Replication\Source\MySQL\Decoder;
 use Utopia\Replication\Source\MySQL\EventParser;
 use Utopia\Replication\Source\MySQL\GtidSet;
 
-class DecoderTest extends TestCase
+final class DecoderTest extends TestCase
 {
     use BinlogFixtures;
 
@@ -23,7 +25,7 @@ class DecoderTest extends TestCase
     {
         $decoder = $this->decoder();
 
-        $this->assertNull($decoder->decode($this->tableMapEvent()));
+        $this->assertNotInstanceOf(\Utopia\Replication\Change::class, $decoder->decode($this->tableMapEvent()));
         $change = $decoder->decode($this->writeEvent(1, 'a'));
 
         $this->assertInstanceOf(Change::class, $change);
@@ -68,9 +70,9 @@ class DecoderTest extends TestCase
     {
         $decoder = $this->decoder();
 
-        $this->assertNull($decoder->decode($this->binlogEvent(Constants::ROTATE_EVENT, str_repeat("\x00", 30))));
-        $this->assertNull($decoder->decode($this->binlogEvent(Constants::QUERY_EVENT, str_repeat("\x00", 30))));
-        $this->assertNull($decoder->decode($this->binlogEvent(Constants::FORMAT_DESCRIPTION_EVENT, str_repeat("\x00", 80))));
+        $this->assertNotInstanceOf(\Utopia\Replication\Change::class, $decoder->decode($this->binlogEvent(Constants::ROTATE_EVENT, str_repeat("\x00", 30))));
+        $this->assertNotInstanceOf(\Utopia\Replication\Change::class, $decoder->decode($this->binlogEvent(Constants::QUERY_EVENT, str_repeat("\x00", 30))));
+        $this->assertNotInstanceOf(\Utopia\Replication\Change::class, $decoder->decode($this->binlogEvent(Constants::FORMAT_DESCRIPTION_EVENT, str_repeat("\x00", 80))));
     }
 
     public function testRowsWithoutAPriorTableMapAreSkipped(): void
@@ -78,7 +80,7 @@ class DecoderTest extends TestCase
         $decoder = $this->decoder();
 
         // No TABLE_MAP seen for this table id yet (e.g. starting mid-stream).
-        $this->assertNull($decoder->decode($this->writeEvent(1, 'a')));
+        $this->assertNotInstanceOf(\Utopia\Replication\Change::class, $decoder->decode($this->writeEvent(1, 'a')));
     }
 
     public function testCheckpointStaysEmptyUntilCommit(): void
@@ -147,7 +149,7 @@ class DecoderTest extends TestCase
 
         // TABLE_MAP for a different schema -> its rows are decoded but not emitted.
         $decoder->decode($this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(self::TABLE_ID, 'other', self::TABLE, $this->columns())));
-        $this->assertNull($decoder->decode($this->writeEvent(1, 'a')));
+        $this->assertNotInstanceOf(\Utopia\Replication\Change::class, $decoder->decode($this->writeEvent(1, 'a')));
     }
 
     public function testNullSchemaEmitsEveryDatabase(): void

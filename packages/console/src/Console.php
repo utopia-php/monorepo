@@ -8,9 +8,6 @@ class Console
      * Title
      *
      * Sets the process title visible in tools such as top and ps.
-     *
-     * @param  string  $title
-     * @return bool
      */
     public static function title(string $title): bool
     {
@@ -22,7 +19,6 @@ class Console
      *
      * Log messages to console
      *
-     * @param  string  $message
      * @return int|false
      */
     public static function log(string $message): int|false
@@ -35,7 +31,6 @@ class Console
      *
      * Log success messages to console
      *
-     * @param  string  $message
      * @return int|false
      */
     public static function success(string $message): int|false
@@ -48,7 +43,6 @@ class Console
      *
      * Log error messages to console
      *
-     * @param  string  $message
      * @return int|false
      */
     public static function error(string $message): int|false
@@ -61,7 +55,6 @@ class Console
      *
      * Log informative messages to console
      *
-     * @param  string  $message
      * @return int|false
      */
     public static function info(string $message): int|false
@@ -74,7 +67,6 @@ class Console
      *
      * Log warning messages to console
      *
-     * @param  string  $message
      * @return int|false
      */
     public static function warning(string $message): int|false
@@ -86,9 +78,6 @@ class Console
      * Confirm
      *
      * Prompt for user input in interactive mode
-     *
-     * @param  string  $question
-     * @return string
      */
     public static function confirm(string $question): string
     {
@@ -110,9 +99,6 @@ class Console
      * Exit
      *
      * Terminate the current process with the provided exit status.
-     *
-     * @param  int  $status
-     * @return void
      */
     public static function exit(int $status = 0): void
     {
@@ -124,13 +110,8 @@ class Console
      *
      * This function was inspired by: https://stackoverflow.com/a/13287902/2299554
      *
-     * @param  Command|array|string  $cmd
-     * @param  string  $stdin
      * @param  string  $stdout  Stdout contents (by reference).
      * @param  string  $stderr  Stderr contents (by reference).
-     * @param  int  $timeout
-     * @param  callable|null  $onProgress
-     * @return int
      */
     public static function execute(Command|array|string $cmd, string $stdin, string &$stdout, string &$stderr, int $timeout = -1, ?callable $onProgress = null): int
     {
@@ -175,7 +156,7 @@ class Console
 
             $outputContents = $stdoutContents;
 
-            if (isset($onProgress) && (! empty($outputContents))) {
+            if (isset($onProgress) && ($outputContents !== '' && $outputContents !== '0')) {
                 $onProgress($outputContents, $process);
             }
 
@@ -194,11 +175,9 @@ class Console
                 fclose($pipes[2]);
                 proc_close($process);
 
-                $exitCode = ($status !== '')
+                return ($status !== '')
                     ? (int) str_replace("\n", '', $status)
                     : $procStatus['exitcode'];
-
-                return $exitCode;
             }
 
             usleep(10000);
@@ -209,8 +188,6 @@ class Console
 
     /**
      * Is Interactive Mode?
-     *
-     * @return bool
      */
     public static function isInteractive(): bool
     {
@@ -222,10 +199,8 @@ class Console
      *
      * Repeatedly execute a callback while limiting CPU consumption.
      *
-     * @param  callable  $callback
      * @param  int  $sleep Sleep duration in seconds.
      * @param  int  $delay Initial delay in seconds.
-     * @param  callable|null  $onError
      *
      * @throws \Exception
      */
@@ -239,7 +214,7 @@ class Console
             sleep($delay);
         }
 
-        while (! connection_aborted() || PHP_SAPI == 'cli') {
+        while (! connection_aborted() || PHP_SAPI === 'cli') {
             $suspend = $sleep;
 
             try {
@@ -254,7 +229,7 @@ class Console
             }
 
             $execTotal = time() - $execStart;
-            $suspend = $suspend - $execTotal;
+            $suspend -= $execTotal;
 
             $intSeconds = \intval($suspend);
             $microSeconds = ($suspend - $intSeconds) * 1000000;
@@ -267,13 +242,13 @@ class Console
                 usleep($microSeconds);
             }
 
-            $time = $time + $suspend;
+            $time += $suspend;
 
-            if (PHP_SAPI == 'cli') {
-                if ($time >= 60 * 5) { // Every 5 minutes
-                    $time = 0;
-                    gc_collect_cycles(); //Forces collection of any existing garbage cycles
-                }
+            if (PHP_SAPI === 'cli' && $time >= 60 * 5) {
+                // Every 5 minutes
+                $time = 0;
+                gc_collect_cycles();
+                //Forces collection of any existing garbage cycles
             }
         }
     }

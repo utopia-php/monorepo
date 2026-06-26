@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class RangeTest extends TestCase
+final class RangeTest extends TestCase
 {
-    public function testCanValidateIntegerRange()
+    public function testCanValidateIntegerRange(): void
     {
         $range = new Range(0, 5, \Utopia\Validator::TYPE_INTEGER);
 
@@ -26,7 +28,7 @@ class RangeTest extends TestCase
         $this->assertSame(\Utopia\Validator::TYPE_INTEGER, $range->getType());
     }
 
-    public function testCanValidateFloatRange()
+    public function testCanValidateFloatRange(): void
     {
         $range = new Range(0, 1, \Utopia\Validator::TYPE_FLOAT);
 
@@ -45,7 +47,7 @@ class RangeTest extends TestCase
         $this->assertSame(\Utopia\Validator::TYPE_FLOAT, $range->getType(), \Utopia\Validator::TYPE_FLOAT);
     }
 
-    public function canValidateInfinityRange()
+    public function canValidateInfinityRange(): void
     {
         $integer = new Range(5, INF, \Utopia\Validator::TYPE_INTEGER);
         $float = new Range(-INF, 45.6, \Utopia\Validator::TYPE_FLOAT);

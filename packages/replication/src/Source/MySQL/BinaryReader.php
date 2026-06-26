@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Replication\Source\MySQL;
 
 /**
@@ -10,14 +12,12 @@ namespace Utopia\Replication\Source\MySQL;
  */
 class BinaryReader
 {
-    private string $buffer;
     private int $position = 0;
-    private int $length;
+    private readonly int $length;
 
-    public function __construct(string $buffer)
+    public function __construct(private readonly string $buffer)
     {
-        $this->buffer = $buffer;
-        $this->length = \strlen($buffer);
+        $this->length = \strlen($this->buffer);
     }
 
     public function eof(): bool

@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class GlobstarTest extends TestCase
+final class GlobstarTest extends TestCase
 {
     // -------------------------------------------------------------------------
     // Empty patterns

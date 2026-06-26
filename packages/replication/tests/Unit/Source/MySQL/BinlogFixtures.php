@@ -93,9 +93,8 @@ trait BinlogFixtures
         if ($signedness !== '') {
             $body .= \chr(Constants::METADATA_SIGNEDNESS) . \chr(\strlen($signedness)) . $signedness;
         }
-        $body .= \chr(Constants::METADATA_COLUMN_NAME) . \chr(\strlen($names)) . $names;
 
-        return $body;
+        return $body . (\chr(Constants::METADATA_COLUMN_NAME) . \chr(\strlen($names)) . $names);
     }
 
     /** WRITE_ROWS/DELETE_ROWS v2 body: one present bitmap then the rows. */

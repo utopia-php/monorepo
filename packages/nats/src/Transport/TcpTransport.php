@@ -10,7 +10,7 @@ use Utopia\NATS\Exception\TimeoutException;
 final class TcpTransport implements Transport
 {
     /** @var resource|null */
-    private $stream = null;
+    private $stream;
 
     public function connect(string $host, int $port, float $timeout): void
     {
@@ -109,16 +109,8 @@ final class TcpTransport implements Transport
         if (isset($options['local_pk'])) {
             $contextOptions['ssl']['local_pk'] = $options['local_pk'];
         }
-        if (isset($options['verify_peer'])) {
-            $contextOptions['ssl']['verify_peer'] = $options['verify_peer'];
-        } else {
-            $contextOptions['ssl']['verify_peer'] = true;
-        }
-        if (isset($options['verify_peer_name'])) {
-            $contextOptions['ssl']['verify_peer_name'] = $options['verify_peer_name'];
-        } else {
-            $contextOptions['ssl']['verify_peer_name'] = true;
-        }
+        $contextOptions['ssl']['verify_peer'] = $options['verify_peer'] ?? true;
+        $contextOptions['ssl']['verify_peer_name'] = $options['verify_peer_name'] ?? true;
 
         $context = stream_context_get_options($stream);
         $merged = array_merge_recursive($context, $contextOptions);

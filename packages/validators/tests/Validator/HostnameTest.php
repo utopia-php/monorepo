@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class HostnameTest extends TestCase
+final class HostnameTest extends TestCase
 {
     public function testCanValidateHostname(): void
     {

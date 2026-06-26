@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia;
 
 abstract class Validator
@@ -22,8 +24,6 @@ abstract class Validator
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     abstract public function getDescription(): string;
 
@@ -31,8 +31,6 @@ abstract class Validator
      * Is array
      *
      * Returns true if an array or false if not.
-     *
-     * @return bool
      */
     abstract public function isArray(): bool;
 
@@ -42,7 +40,6 @@ abstract class Validator
      * Returns true if valid or false if not.
      *
      * @param  mixed  $value
-     * @return bool
      */
     abstract public function isValid($value): bool;
 
@@ -50,8 +47,6 @@ abstract class Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     abstract public function getType(): string;
 }

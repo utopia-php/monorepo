@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class BooleanTest extends TestCase
+final class BooleanTest extends TestCase
 {
-    public function testCanValidateStrictly()
+    public function testCanValidateStrictly(): void
     {
         $boolean = new Boolean();
 
@@ -22,10 +24,10 @@ class BooleanTest extends TestCase
         $this->assertFalse($boolean->isValid('string'));
         $this->assertFalse($boolean->isValid(1.2));
         $this->assertFalse($boolean->isArray());
-        $this->assertSame($boolean->getType(), \Utopia\Validator::TYPE_BOOLEAN);
+        $this->assertSame(\Utopia\Validator::TYPE_BOOLEAN, $boolean->getType());
     }
 
-    public function testCanValidateLoosely()
+    public function testCanValidateLoosely(): void
     {
         $boolean = new Boolean(true);
 

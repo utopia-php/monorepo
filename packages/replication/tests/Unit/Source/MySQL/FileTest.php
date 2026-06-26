@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Replication\Tests\Unit\Source\MySQL;
 
 use PHPUnit\Framework\TestCase;
@@ -16,7 +18,7 @@ use Utopia\Replication\Source\MySQL\GtidSet;
  * {@see Decoder} turns them into changes — no socket, no server. This is the
  * offline path edge uses to read archived binlogs.
  */
-class FileTest extends TestCase
+final class FileTest extends TestCase
 {
     use BinlogFixtures;
 
@@ -99,7 +101,7 @@ class FileTest extends TestCase
         $changes = [];
         foreach ($source->events() as $event) {
             $change = $decoder->decode($event);
-            if ($change !== null) {
+            if ($change instanceof \Utopia\Replication\Change) {
                 $changes[] = $change;
             }
         }
@@ -119,7 +121,7 @@ class FileTest extends TestCase
         // event() helper then appends the 4-byte CRC trailer after it.
         $fde = str_repeat("\x00", 50) . \chr(1);
 
-        return self::MAGIC()
+        return $this->MAGIC()
             . $this->event(Constants::FORMAT_DESCRIPTION_EVENT, $fde)
             . $this->transaction(5, 100, 'proj123')
             . $this->transaction(6, 101, 'proj456');
@@ -140,7 +142,7 @@ class FileTest extends TestCase
             . $this->event(Constants::XID_EVENT, pack('P', 1));
     }
 
-    private static function MAGIC(): string
+    private function MAGIC(): string
     {
         return "\xfe\x62\x69\x6e";
     }
@@ -182,9 +184,8 @@ class FileTest extends TestCase
 
         $body .= \chr(Constants::METADATA_SIGNEDNESS) . \chr(1) . "\x00";
         $names = \chr(3) . '_id' . \chr(4) . '_uid';
-        $body .= \chr(Constants::METADATA_COLUMN_NAME) . pack('C', \strlen($names)) . $names;
 
-        return $body;
+        return $body . (\chr(Constants::METADATA_COLUMN_NAME) . pack('C', \strlen($names)) . $names);
     }
 
     private function rowsHeader(): string

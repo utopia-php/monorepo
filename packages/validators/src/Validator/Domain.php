@@ -31,7 +31,7 @@ class Domain extends Validator
      * @param array<string> $prefixDenyList Disallowed beginning of domain, useful for reserved behaviours, such as prefixing "branch-" for preview domains
      *
      */
-    public static function createRestriction(string $hostname, ?int $levels = null, array $prefixDenyList = [])
+    public static function createRestriction(string $hostname, ?int $levels = null, array $prefixDenyList = []): array
     {
         return [
             'hostname' => $hostname,
@@ -44,8 +44,6 @@ class Domain extends Validator
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -60,7 +58,6 @@ class Domain extends Validator
      * Validates domain names against RFC 1034, RFC 1035, RFC 952, RFC 1123, RFC 2732, RFC 2181, and RFC 1123.
      *
      * @param  mixed $value
-     * @return bool
      */
     public function isValid($value): bool
     {
@@ -126,8 +123,6 @@ class Domain extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -138,8 +133,6 @@ class Domain extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {

@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class NullableTest extends TestCase
+final class NullableTest extends TestCase
 {
     public function testCanValidateNull(): void
     {
@@ -17,6 +19,6 @@ class NullableTest extends TestCase
     public function testCanReturnValidator(): void
     {
         $validator = new Nullable(new Text(0));
-        $this->assertTrue($validator->getValidator() instanceof Text);
+        $this->assertInstanceOf(\Utopia\Validator\Text::class, $validator->getValidator());
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Exception;
@@ -18,17 +20,12 @@ class IP extends Validator
     public const V4 = 'ipv4';
     public const V6 = 'ipv6';
 
-    /**
-     * @var string
-     */
-    protected $type = self::ALL;
+    protected string $type;
 
     /**
      * Constructor
      *
      * Set a the type of IP check.
-     *
-     * @param string $type
      */
     public function __construct(string $type = self::ALL)
     {
@@ -43,8 +40,6 @@ class IP extends Validator
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -57,7 +52,6 @@ class IP extends Validator
      * Validation will pass when $value is valid IP address.
      *
      * @param  mixed $value
-     * @return bool
      */
     public function isValid($value): bool
     {
@@ -91,8 +85,6 @@ class IP extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -103,8 +95,6 @@ class IP extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {

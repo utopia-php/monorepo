@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class NumericTest extends TestCase
+final class NumericTest extends TestCase
 {
     public function testCanValidateNumerics(): void
     {

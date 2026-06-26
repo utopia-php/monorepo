@@ -25,8 +25,6 @@ class Globstar extends Validator
 
     /**
      * Get Description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -39,7 +37,6 @@ class Globstar extends Validator
      * Returns true if $value matches the configured glob patterns.
      *
      * @param  mixed  $value
-     * @return bool
      */
     public function isValid($value): bool
     {
@@ -47,7 +44,7 @@ class Globstar extends Validator
             return false;
         }
 
-        if (empty($this->patterns)) {
+        if ($this->patterns === []) {
             return true;
         }
 
@@ -74,7 +71,7 @@ class Globstar extends Validator
         //
         // Step 1 — literal (no *, ?, [) inclusion patterns always win:
         //   if any specific inclusion matches, the value is valid regardless of later exclusions.
-        $isWildcard = fn($p) => str_contains($p, '*') || str_contains($p, '?') || str_contains($p, '[');
+        $isWildcard = fn($p): bool => str_contains($p, '*') || str_contains($p, '?') || str_contains($p, '[');
 
         foreach ($this->patterns as $pattern) {
             if (!str_starts_with($pattern, '!') && !$isWildcard($pattern) && $this->match($value, $pattern)) {
@@ -105,8 +102,6 @@ class Globstar extends Validator
 
     /**
      * Is array
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -115,8 +110,6 @@ class Globstar extends Validator
 
     /**
      * Get Type
-     *
-     * @return string
      */
     public function getType(): string
     {

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -11,37 +13,10 @@ use Utopia\Validator;
  */
 class Range extends Numeric
 {
-    /**
-     * @var int|float
-     */
-    protected int|float $min;
-
-    /**
-     * @var int|float
-     */
-    protected int|float $max;
-
-    /**
-     * @var string
-     */
-    protected string $format;
-
-    /**
-     * @param  int|float  $min
-     * @param  int|float  $max
-     * @param  string  $format
-     */
-    public function __construct(int|float $min, int|float $max, string $format = self::TYPE_INTEGER)
-    {
-        $this->min = $min;
-        $this->max = $max;
-        $this->format = $format;
-    }
+    public function __construct(protected int|float $min, protected int|float $max, protected string $format = self::TYPE_INTEGER) {}
 
     /**
      * Get Range Minimum Value
-     *
-     * @return int|float
      */
     public function getMin(): int|float
     {
@@ -50,8 +25,6 @@ class Range extends Numeric
 
     /**
      * Get Range Maximum Value
-     *
-     * @return int|float
      */
     public function getMax(): int|float
     {
@@ -60,8 +33,6 @@ class Range extends Numeric
 
     /**
      * Get Range Format
-     *
-     * @return string
      */
     public function getFormat(): string
     {
@@ -72,8 +43,6 @@ class Range extends Numeric
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -84,8 +53,6 @@ class Range extends Numeric
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -96,8 +63,6 @@ class Range extends Numeric
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
@@ -110,9 +75,6 @@ class Range extends Numeric
      * Validation will pass when $value number is bigger or equal than $min number and lower or equal than $max.
      * Not strict, considers any valid integer to be a valid float
      * Considers infinity to be a valid integer
-     *
-     * @param  mixed  $value
-     * @return bool
      */
     public function isValid(mixed $value): bool
     {
@@ -127,7 +89,7 @@ class Range extends Numeric
                 if ($value === INF || $value === -INF) {
                     break; // move to check if value is within range
                 }
-                $value = $value + 0;
+                $value += 0;
                 if (!\is_int($value)) {
                     return false;
                 }
@@ -136,16 +98,11 @@ class Range extends Numeric
                 if (!is_numeric($value)) {
                     return false;
                 }
-                $value = $value + 0.0;
+                $value += 0.0;
                 break;
             default:
                 return false;
         }
-
-        if ($this->min <= $value && $this->max >= $value) {
-            return true;
-        }
-
-        return false;
+        return $this->min <= $value && $this->max >= $value;
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -15,8 +17,6 @@ class Wildcard extends Validator
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -29,7 +29,6 @@ class Wildcard extends Validator
      * Validation will always pass irrespective of input
      *
      * @param  mixed  $value
-     * @return bool
      */
     public function isValid($value): bool
     {
@@ -40,8 +39,6 @@ class Wildcard extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -52,8 +49,6 @@ class Wildcard extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {

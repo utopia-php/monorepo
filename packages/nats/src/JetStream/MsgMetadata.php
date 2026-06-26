@@ -42,7 +42,6 @@ final class MsgMetadata
             // Domain format has extra parts
             if (\count($parts) >= 11) {
                 return new self(
-                    domain: $parts[2],
                     stream: $parts[4],
                     consumer: $parts[5],
                     numDelivered: (int) $parts[6],
@@ -50,6 +49,7 @@ final class MsgMetadata
                     consumerSequence: (int) $parts[8],
                     timestamp: $parts[9],
                     numPending: (int) $parts[10],
+                    domain: $parts[2],
                 );
             }
         }

@@ -33,7 +33,7 @@ function handleRequest(Queue\Message $job): void
         case 'test_array':
             assert(is_array($value));
             assert(count($value) === 3);
-            assert(empty(array_diff([1, 2, 3], $value)));
+            assert(array_diff([1, 2, 3], $value) === []);
 
             break;
         case 'test_assoc':

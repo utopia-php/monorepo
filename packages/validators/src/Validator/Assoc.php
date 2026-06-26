@@ -12,26 +12,14 @@ use Utopia\Validator;
 class Assoc extends Validator
 {
     /**
-     * @var int
-     */
-    protected int $length;
-
-    /**
      * Pass integer length to allow larger json objects
-     *
-     * @param  int  $length
      */
-    public function __construct(int $length = 65535)
-    {
-        $this->length = $length;
-    }
+    public function __construct(protected int $length = 65535) {}
 
     /**
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -42,8 +30,6 @@ class Assoc extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -54,8 +40,6 @@ class Assoc extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
@@ -68,7 +52,6 @@ class Assoc extends Validator
      * Validation will pass when $value is valid assoc array.
      *
      * @param  mixed  $value
-     * @return bool
      */
     public function isValid($value): bool
     {

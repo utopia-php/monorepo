@@ -11,20 +11,20 @@ $adapter = new Queue\Adapter\Workerman($connection, 12, 'workerman');
 $server = new Queue\Server($adapter);
 $server->job()
     ->inject('message')
-    ->action(function (Message $message) {
+    ->action(function (Message $message): void {
         handleRequest($message);
     });
 
 $server
     ->error()
     ->inject('error')
-    ->action(function ($th) {
+    ->action(function ($th): void {
         echo $th->getMessage() . PHP_EOL;
     });
 
 $server
     ->workerStart()
-    ->action(function () {
+    ->action(function (): void {
         echo 'Worker Started' . PHP_EOL;
     });
 

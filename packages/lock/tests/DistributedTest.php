@@ -97,7 +97,7 @@ final class DistributedTest extends TestCase
 
         try {
             $this->expectException(Contention::class);
-            $waiter->withLock(fn() => null, timeout: 0.2);
+            $waiter->withLock(fn(): null => null, timeout: 0.2);
         } finally {
             $holder->release();
         }
@@ -109,7 +109,7 @@ final class DistributedTest extends TestCase
         $result = $lock->withLock(fn(): string => 'done', timeout: 1.0);
 
         $this->assertSame('done', $result);
-        $this->assertFalse($this->redis->exists($this->key) > 0);
+        $this->assertLessThanOrEqual(0, $this->redis->exists($this->key));
     }
 
     public function testRefreshExtendsTtl(): void

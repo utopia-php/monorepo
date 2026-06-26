@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -12,27 +14,15 @@ use Utopia\Validator;
 class Boolean extends Validator
 {
     /**
-     * @var bool
-     */
-    protected bool $loose = false;
-
-    /**
      * Pass true to accept true and false strings and integers 0 and 1 as valid boolean values
      * This option is good for validating query string params.
-     *
-     * @param  bool  $loose
      */
-    public function __construct(bool $loose = false)
-    {
-        $this->loose = $loose;
-    }
+    public function __construct(protected bool $loose = false) {}
 
     /**
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -43,8 +33,6 @@ class Boolean extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -55,8 +43,6 @@ class Boolean extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
@@ -69,7 +55,6 @@ class Boolean extends Validator
      * Validation will pass when $value has a boolean value.
      *
      * @param  mixed  $value
-     * @return bool
      */
     public function isValid($value): bool
     {
@@ -84,11 +69,6 @@ class Boolean extends Validator
         if ($this->loose && ($value === 1 || $value === 0)) { // Accept integers
             return true;
         }
-
-        if (\is_bool($value)) {
-            return true;
-        }
-
-        return false;
+        return \is_bool($value);
     }
 }

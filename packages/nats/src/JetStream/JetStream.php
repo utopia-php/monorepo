@@ -47,7 +47,7 @@ final class JetStream
         try {
             return $this->updateStream($config);
         } catch (JetStreamException $e) {
-            if ($e->apiError !== null && $e->apiError->code === 404) {
+            if ($e->apiError instanceof \Utopia\NATS\JetStream\ApiError && $e->apiError->code === 404) {
                 return $this->createStream($config);
             }
             throw $e;
@@ -85,7 +85,7 @@ final class JetStream
         $payload = $subject !== null ? ['subject' => $subject] : null;
         $data = $this->apiRequest('STREAM.LIST', $payload);
         return array_map(
-            fn(array $s) => StreamInfo::fromArray($s),
+            StreamInfo::fromArray(...),
             $data['streams'] ?? [],
         );
     }
@@ -102,11 +102,7 @@ final class JetStream
     {
         $consumerName = $config->name ?? $config->durableName;
 
-        if ($consumerName !== null) {
-            $subject = "CONSUMER.CREATE.{$stream}.{$consumerName}";
-        } else {
-            $subject = "CONSUMER.CREATE.{$stream}";
-        }
+        $subject = $consumerName !== null ? "CONSUMER.CREATE.{$stream}.{$consumerName}" : "CONSUMER.CREATE.{$stream}";
 
         $payload = [
             'stream_name' => $stream,

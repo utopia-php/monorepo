@@ -199,11 +199,11 @@ class Client
         $authDataLen = $handshake->readUInt8();
         $handshake->skip(10); // reserved
 
-        if ($capabilities & Constants::CLIENT_SECURE_CONNECTION) {
+        if (($capabilities & Constants::CLIENT_SECURE_CONNECTION) !== 0) {
             $authData .= $handshake->read(max(13, $authDataLen - 8));
         }
 
-        $plugin = ($capabilities & Constants::CLIENT_PLUGIN_AUTH)
+        $plugin = (($capabilities & Constants::CLIENT_PLUGIN_AUTH) !== 0)
             ? $handshake->readNullTerminatedString()
             : 'mysql_native_password';
 
@@ -224,7 +224,7 @@ class Client
      */
     private function upgradeToTls(int $serverCapabilities): void
     {
-        if (!($serverCapabilities & Constants::CLIENT_SSL)) {
+        if (($serverCapabilities & Constants::CLIENT_SSL) === 0) {
             throw new Exception('TLS requested but the server does not support it');
         }
 

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\PHPStan;
 
 use PHPStan\Analyser\Scope;
@@ -18,7 +20,7 @@ class DisallowAssertEqualsExtension implements RestrictedMethodUsageExtension
         }
 
         $declaringClass = $methodReflection->getDeclaringClass();
-        if ($declaringClass->getName() !== 'PHPUnit\Framework\Assert') {
+        if ($declaringClass->getName() !== \PHPUnit\Framework\Assert::class) {
             return null;
         }
 

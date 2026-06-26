@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -15,8 +17,6 @@ class Numeric extends Validator
      * Get Description
      *
      * Returns validator description
-     *
-     * @return string
      */
     public function getDescription(): string
     {
@@ -27,8 +27,6 @@ class Numeric extends Validator
      * Is array
      *
      * Function will return true if object is array.
-     *
-     * @return bool
      */
     public function isArray(): bool
     {
@@ -39,8 +37,6 @@ class Numeric extends Validator
      * Get Type
      *
      * Returns validator type.
-     *
-     * @return string
      */
     public function getType(): string
     {
@@ -51,16 +47,9 @@ class Numeric extends Validator
      * Is valid
      *
      * Validation will pass when $value is numeric.
-     *
-     * @param  mixed  $value
-     * @return bool
      */
     public function isValid(mixed $value): bool
     {
-        if (!is_numeric($value)) {
-            return false;
-        }
-
-        return true;
+        return is_numeric($value);
     }
 }

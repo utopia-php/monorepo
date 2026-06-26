@@ -44,14 +44,14 @@ final class Consumer
             }
 
             $msg = $sub->nextMessage($remaining);
-            if ($msg === null) {
+            if (!$msg instanceof \Utopia\NATS\Message) {
                 break;
             }
 
             // Check for status messages (408 = Request Timeout, 404 = No Messages, 409 = Leadership Change)
-            if ($msg->headers !== null) {
+            if ($msg->headers instanceof \Utopia\NATS\Headers) {
                 $status = $msg->headers->getStatus();
-                if ($status === '408' || $status === '404' || $status === '409') {
+                if (\in_array($status, ['408', '404', '409'], true)) {
                     break;
                 }
             }

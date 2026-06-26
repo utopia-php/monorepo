@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use PHPUnit\Framework\TestCase;
 
-class IntegerTest extends TestCase
+final class IntegerTest extends TestCase
 {
-    public function testCanValidateStrictly()
+    public function testCanValidateStrictly(): void
     {
         $validator = new Integer();
         $this->assertTrue($validator->isValid(23));
@@ -20,7 +22,7 @@ class IntegerTest extends TestCase
         $this->assertSame(\Utopia\Validator::TYPE_INTEGER, $validator->getType());
     }
 
-    public function testCanValidateLoosely()
+    public function testCanValidateLoosely(): void
     {
         $validator = new Integer(true);
         $this->assertTrue($validator->isValid(23));
@@ -34,7 +36,7 @@ class IntegerTest extends TestCase
         $this->assertSame(\Utopia\Validator::TYPE_INTEGER, $validator->getType());
     }
 
-    public function testBitSizeAndSignedness()
+    public function testBitSizeAndSignedness(): void
     {
         // Default: 32-bit signed
         $validator = new Integer();
@@ -73,14 +75,14 @@ class IntegerTest extends TestCase
         $this->assertSame('int64', $validator64->getFormat());
     }
 
-    public function testInvalidBitSize()
+    public function testInvalidBitSize(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Bits must be 8, 16, 32, or 64');
         new Integer(false, 128);
     }
 
-    public function test64BitUnsignedNotSupported()
+    public function test64BitUnsignedNotSupported(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('64-bit unsigned integers are not supported due to PHP integer limitations');
