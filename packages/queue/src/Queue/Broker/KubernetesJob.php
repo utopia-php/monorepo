@@ -172,16 +172,32 @@ class KubernetesJob implements Publisher
 
     private function jobName(Queue $queue, string $pid): string
     {
-        $slug = preg_replace('/[^a-z0-9-]+/', '-', strtolower($queue->name . '-' . $pid)) ?? '';
-        $slug = trim($slug, '-');
-
-        return trim(substr($slug, 0, 63), '-');
+        return $this->slug(strtolower($queue->name . '-' . $pid), 'abcdefghijklmnopqrstuvwxyz0123456789-');
     }
 
     private function sanitizeLabel(string $value): string
     {
-        $value = preg_replace('/[^A-Za-z0-9_.-]+/', '-', $value) ?? '';
+        return $this->slug($value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-');
+    }
 
-        return trim(substr(trim($value, '-_.'), 0, 63), '-_.');
+    /**
+     * Replace runs of characters outside $allowed with a single '-', then trim
+     * and cap at 63 (the Kubernetes name/label length limit).
+     */
+    private function slug(string $value, string $allowed): string
+    {
+        $out = '';
+        $replaced = false;
+        foreach (str_split($value) as $char) {
+            if (str_contains($allowed, $char)) {
+                $out .= $char;
+                $replaced = false;
+            } elseif (!$replaced) {
+                $out .= '-';
+                $replaced = true;
+            }
+        }
+
+        return trim(substr($out, 0, 63), '-_.');
     }
 }
