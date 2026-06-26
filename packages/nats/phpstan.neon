@@ -1,8 +1,5 @@
+includes:
+    - ../../phpstan.neon
+
 parameters:
-    level: 5
-    paths:
-        - src
-        - tests
-    excludePaths:
-        - vendor
     treatPhpDocTypesAsCertain: false

@@ -3,21 +3,11 @@
 declare(strict_types=1);
 
 use Rector\CodeQuality\Rector\Catch_\ThrowWithPreviousExceptionRector;
-use Rector\Config\RectorConfig;
+use Rector\Config\RectorConfigBuilder;
 
-return RectorConfig::configure()
-    ->withPaths([
-        __DIR__ . '/src',
-        __DIR__ . '/tests',
-    ])
-    ->withSkip([
-        __DIR__ . '/vendor',
-        ThrowWithPreviousExceptionRector::class,
-    ])
-    ->withPhpSets(php82: true)
-    ->withPreparedSets(
-        deadCode: true,
-        codeQuality: true,
-        typeDeclarations: true,
-        phpunitCodeQuality: true,
-    );
+/** @var RectorConfigBuilder $config */
+$config = require __DIR__ . '/../../rector.php';
+
+return $config->withSkip([
+    ThrowWithPreviousExceptionRector::class,
+]);

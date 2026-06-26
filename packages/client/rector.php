@@ -2,21 +2,13 @@
 
 declare(strict_types=1);
 
-use Rector\Config\RectorConfig;
+use Rector\Config\RectorConfigBuilder;
 
-return RectorConfig::configure()
-    ->withPaths([
-        __DIR__ . '/src',
-        __DIR__ . '/tests',
-    ])
-    ->withPhpSets(php84: true)
-    ->withPreparedSets(
-        codeQuality: true,
-        codingStyle: true,
-        deadCode: true,
-        earlyReturn: true,
-        instanceOf: true,
-        privatization: true,
-        phpunitCodeQuality: true,
-        typeDeclarations: true,
-    );
+/** @var RectorConfigBuilder $config */
+$config = require __DIR__ . '/../../rector.php';
+
+return $config->withPreparedSets(
+    codingStyle: true,
+    instanceOf: true,
+    privatization: true,
+);
