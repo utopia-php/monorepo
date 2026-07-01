@@ -18,7 +18,15 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-keda_up
+# KEDA is required in CI: under `set -e` any provisioning failure aborts so KEDA
+# regressions surface instead of KedaTest silently skipping. Locally it's
+# best-effort — without Docker the rest of the suite still runs and KedaTest
+# skips itself.
+if [ -n "$CI" ] || { command -v docker > /dev/null 2>&1 && docker info > /dev/null 2>&1; }; then
+    keda_up
+else
+    echo "e2e.sh: Docker unavailable, skipping KEDA setup — KedaTest will skip" >&2
+fi
 
 sleep 3
 
