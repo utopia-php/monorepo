@@ -50,27 +50,15 @@ class OpenTelemetry implements Adapter
     ];
 
     /**
-     * The PSR-17 factories fall back to php-http PSR-17 discovery when null, so
-     * callers only have to wire the PSR-18 client in the common case.
-     *
-     * @param TransportInterface<string>|null $transport
+     * @param TransportInterface<string> $transport
      */
     public function __construct(
-        string $endpoint,
         string $serviceNamespace,
         string $serviceName,
         string $serviceInstanceId,
-        ClientInterface $client,
-        ?RequestFactoryInterface $requestFactory = null,
-        ?StreamFactoryInterface $streamFactory = null,
-        protected ?TransportInterface $transport = null,
+        TransportInterface $transport,
     ) {
-        if (!$this->transport instanceof \OpenTelemetry\SDK\Common\Export\TransportInterface) {
-            $this->transport = (new PsrTransportFactory($client, $requestFactory, $streamFactory))
-                ->create($endpoint, ContentTypes::PROTOBUF);
-        }
-
-        $exporter = $this->createExporter($this->transport);
+        $exporter = $this->createExporter($transport);
 
         $attributes = Attributes::create([
             'service.namespace' => $serviceNamespace,
@@ -79,6 +67,26 @@ class OpenTelemetry implements Adapter
         ]);
 
         $this->meter = $this->initMeter($exporter, $attributes);
+    }
+
+    /**
+     * Build an adapter that exports over OTLP HTTP using the given PSR-18 client.
+     * The PSR-17 factories fall back to php-http PSR-17 discovery when null, so
+     * callers only have to wire the client in the common case.
+     */
+    public static function fromClient(
+        string $endpoint,
+        string $serviceNamespace,
+        string $serviceName,
+        string $serviceInstanceId,
+        ClientInterface $client,
+        ?RequestFactoryInterface $requestFactory = null,
+        ?StreamFactoryInterface $streamFactory = null,
+    ): self {
+        $transport = (new PsrTransportFactory($client, $requestFactory, $streamFactory))
+            ->create($endpoint, ContentTypes::PROTOBUF);
+
+        return new self($serviceNamespace, $serviceName, $serviceInstanceId, $transport);
     }
 
     /**
