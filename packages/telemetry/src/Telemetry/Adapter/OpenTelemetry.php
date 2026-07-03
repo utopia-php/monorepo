@@ -10,9 +10,9 @@ use OpenTelemetry\API\Metrics\ObserverInterface;
 use OpenTelemetry\API\Metrics\UpDownCounterInterface;
 use OpenTelemetry\Contrib\Otlp\ContentTypes;
 use OpenTelemetry\Contrib\Otlp\MetricExporter;
-use OpenTelemetry\Contrib\Otlp\OtlpHttpTransportFactory;
 use OpenTelemetry\SDK\Common\Attribute\Attributes;
 use OpenTelemetry\SDK\Common\Attribute\AttributesInterface;
+use OpenTelemetry\SDK\Common\Export\Http\PsrTransportFactory;
 use OpenTelemetry\SDK\Common\Export\TransportInterface;
 use OpenTelemetry\SDK\Metrics\Data\Temporality;
 use OpenTelemetry\SDK\Metrics\MeterProvider;
@@ -22,6 +22,9 @@ use OpenTelemetry\SDK\Metrics\MetricReaderInterface;
 use OpenTelemetry\SDK\Resource\ResourceInfo;
 use OpenTelemetry\SDK\Sdk;
 use OpenTelemetry\SemConv\ResourceAttributes;
+use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\StreamFactoryInterface;
 use Utopia\Telemetry\Adapter;
 use Utopia\Telemetry\Counter;
 use Utopia\Telemetry\Gauge;
@@ -47,6 +50,9 @@ class OpenTelemetry implements Adapter
     ];
 
     /**
+     * The PSR-17 factories fall back to php-http PSR-17 discovery when null, so
+     * callers only have to wire the PSR-18 client in the common case.
+     *
      * @param TransportInterface<string>|null $transport
      */
     public function __construct(
@@ -54,10 +60,13 @@ class OpenTelemetry implements Adapter
         string $serviceNamespace,
         string $serviceName,
         string $serviceInstanceId,
+        ClientInterface $client,
+        ?RequestFactoryInterface $requestFactory = null,
+        ?StreamFactoryInterface $streamFactory = null,
         protected ?TransportInterface $transport = null,
     ) {
         if (!$this->transport instanceof \OpenTelemetry\SDK\Common\Export\TransportInterface) {
-            $this->transport = (new OtlpHttpTransportFactory())
+            $this->transport = (new PsrTransportFactory($client, $requestFactory, $streamFactory))
                 ->create($endpoint, ContentTypes::PROTOBUF);
         }
 
