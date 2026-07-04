@@ -7,7 +7,7 @@ namespace Tests\E2E\Adapter;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
 use Utopia\Queue\Broker\Async;
-use Utopia\Queue\Publisher;
+use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
 
 final class AsyncTest extends TestCase
@@ -81,19 +81,19 @@ final class AsyncTest extends TestCase
     }
 
     /**
-     * A Publisher that records enqueued payloads into the given buffer.
+     * A synchronous publisher that records published payloads into the buffer.
      *
      * @param array<int, array<mixed>> $buffer
      */
-    private function recordingPublisher(array &$buffer): Publisher
+    private function recordingPublisher(array &$buffer): Synchronous
     {
-        return new class ($buffer) implements Publisher {
+        return new class ($buffer) implements Synchronous {
             /**
              * @param array<int, array<mixed>> $buffer
              */
             public function __construct(private array &$buffer) {}
 
-            public function enqueue(Queue $queue, array $payload, bool $priority = false): bool
+            public function publish(Queue $queue, array $payload, bool $priority = false): bool
             {
                 $this->buffer[] = $payload;
 

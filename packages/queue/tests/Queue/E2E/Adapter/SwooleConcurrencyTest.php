@@ -48,7 +48,7 @@ final class SwooleConcurrencyTest extends TestCase
 
         \Swoole\Coroutine\run(function () use ($broker, $queue, $messages, $maxCoroutines, &$active, &$maxActive, &$processed): void {
             for ($i = 0; $i < $messages; $i++) {
-                $broker->enqueue($queue, ['n' => $i]);
+                $broker->publish($queue, ['n' => $i]);
             }
 
             $adapter = new Swoole($broker, 1, self::QUEUE, self::NAMESPACE, maxCoroutines: $maxCoroutines);

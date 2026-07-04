@@ -2,14 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Utopia\Queue;
+namespace Utopia\Queue\Publisher;
 
-interface Publisher
+use Utopia\Queue\Queue;
+
+interface Synchronous
 {
     /**
-     * Publishes a new message onto the queue.
+     * Publishes a message onto the queue, blocking until the broker accepts it.
      */
-    public function enqueue(Queue $queue, array $payload, bool $priority = false): bool;
+    public function publish(Queue $queue, array $payload, bool $priority = false): bool;
 
     /**
      * Retries failed jobs.
