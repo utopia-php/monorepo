@@ -6,7 +6,7 @@
         >
     <testsuites>
         <testsuite name="unit">
-            <file>./tests/Queue/E2E/Adapter/AsyncTest.php</file>
+            <file>./tests/Queue/E2E/Adapter/BackgroundTest.php</file>
             <file>./tests/Queue/E2E/Adapter/LockingTest.php</file>
             <file>./tests/Queue/E2E/Adapter/RedisReconnectCallbackTest.php</file>
             <file>./tests/Queue/E2E/Adapter/ServerTelemetryTest.php</file>
