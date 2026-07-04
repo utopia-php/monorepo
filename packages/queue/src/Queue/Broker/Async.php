@@ -7,22 +7,25 @@ namespace Utopia\Queue\Broker;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use Swoole\Coroutine\WaitGroup;
-use Utopia\Queue\Publisher;
+use Utopia\Queue\Publisher\Asynchronous;
+use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
 
 /**
- * Publisher decorator that dispatches publishes from a background Swoole
- * coroutine, decoupling producers from the broker round-trip.
+ * Wraps a synchronous publisher and adds asynchronous, background dispatch on
+ * top of a Swoole coroutine — so it satisfies both the Synchronous and
+ * Asynchronous contracts.
  *
  * enqueue() pushes the publish onto a bounded channel and returns; a reader
  * coroutine loops over the channel and delegates each dispatch to the wrapped
- * publisher. The channel capacity is the back-pressure bound — once it fills,
- * enqueue() blocks the producing coroutine until the reader drains a slot, so a
- * slow broker throttles producers instead of piling up unbounded work.
+ * synchronous publisher. The channel capacity is the back-pressure bound — once
+ * it fills, enqueue() blocks the producing coroutine until the reader drains a
+ * slot, so a slow broker throttles producers instead of piling up unbounded
+ * work.
  *
- * publish() bypasses the channel and publishes synchronously.
+ * publish() bypasses the channel and delegates synchronously.
  */
-class Async implements Publisher
+class Async implements Synchronous, Asynchronous
 {
     private readonly Channel $channel;
 
@@ -31,7 +34,7 @@ class Async implements Publisher
     private bool $started = false;
 
     public function __construct(
-        private readonly Publisher $publisher,
+        private readonly Synchronous $publisher,
         int $capacity = 512,
     ) {
         $this->channel = new Channel(max(1, $capacity));
@@ -88,7 +91,7 @@ class Async implements Publisher
      */
     public function publish(Queue $queue, array $payload, bool $priority = false): bool
     {
-        return $this->publisher->enqueue($queue, $payload, $priority);
+        return $this->publisher->publish($queue, $payload, $priority);
     }
 
     /**
@@ -103,7 +106,7 @@ class Async implements Publisher
         }
 
         return $this->channel->push(function () use ($queue, $payload, $priority): void {
-            $this->publisher->enqueue($queue, $payload, $priority);
+            $this->publisher->publish($queue, $payload, $priority);
         });
     }
 
