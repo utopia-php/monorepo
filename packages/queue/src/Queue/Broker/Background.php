@@ -25,7 +25,7 @@ use Utopia\Queue\Queue;
  *
  * publish() bypasses the channel and delegates synchronously.
  */
-class Async implements Synchronous, Asynchronous
+class Background implements Synchronous, Asynchronous
 {
     private readonly Channel $channel;
 
