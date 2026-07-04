@@ -5,20 +5,83 @@ declare(strict_types=1);
 namespace Utopia\Queue\Broker;
 
 use Swoole\Coroutine;
+use Swoole\Coroutine\Channel;
+use Swoole\Coroutine\WaitGroup;
 use Utopia\Queue\Publisher;
 use Utopia\Queue\Queue;
 
 /**
- * Publisher decorator that can hand a publish off to a background Swoole
- * coroutine, so the caller isn't blocked on the broker round-trip.
+ * Publisher decorator that dispatches publishes from a background Swoole
+ * coroutine, decoupling producers from the broker round-trip.
  *
- * - publish() runs synchronously and returns the broker's result.
- * - enqueue() schedules the publish on a coroutine and returns immediately;
- *   with no coroutine runtime active it publishes synchronously instead.
+ * enqueue() pushes the publish onto a bounded channel and returns; a reader
+ * coroutine loops over the channel and delegates each dispatch to the wrapped
+ * publisher. The channel capacity is the back-pressure bound — once it fills,
+ * enqueue() blocks the producing coroutine until the reader drains a slot, so a
+ * slow broker throttles producers instead of piling up unbounded work.
+ *
+ * publish() bypasses the channel and publishes synchronously.
  */
-readonly class Async implements Publisher
+class Async implements Publisher
 {
-    public function __construct(private Publisher $publisher) {}
+    private readonly Channel $channel;
+
+    private readonly WaitGroup $waitGroup;
+
+    private bool $started = false;
+
+    public function __construct(
+        private readonly Publisher $publisher,
+        int $capacity = 512,
+    ) {
+        $this->channel = new Channel(max(1, $capacity));
+        $this->waitGroup = new WaitGroup();
+    }
+
+    /**
+     * Spawn the reader coroutine that drains the channel into the wrapped
+     * publisher. Call once from within a coroutine runtime; until then
+     * enqueue() publishes synchronously.
+     */
+    public function start(): void
+    {
+        if ($this->started) {
+            return;
+        }
+
+        $this->started = true;
+        $this->waitGroup->add();
+
+        Coroutine::create(function (): void {
+            try {
+                while (($task = $this->channel->pop()) instanceof \Closure) {
+                    try {
+                        $task();
+                    } catch (\Throwable $error) {
+                        // Fire-and-forget: no producer to surface to, so log and move on.
+                        error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
+                    }
+                }
+            } finally {
+                $this->waitGroup->done();
+            }
+        });
+    }
+
+    /**
+     * Drain the channel and stop the reader, blocking until it has finished.
+     * Messages already enqueued are published before the reader exits.
+     */
+    public function shutdown(): void
+    {
+        if (!$this->started) {
+            return;
+        }
+
+        $this->channel->push(null); // sentinel: pop() returns non-Closure → loop ends
+        $this->waitGroup->wait();
+        $this->started = false;
+    }
 
     /**
      * Publish synchronously, blocking until the broker accepts the message.
@@ -29,25 +92,19 @@ readonly class Async implements Publisher
     }
 
     /**
-     * Publish in the background. Returns true once the coroutine is scheduled;
-     * outside a coroutine runtime it falls back to publishing synchronously.
+     * Hand the publish to the background reader via the channel, blocking only
+     * when the channel is full (back pressure). Falls back to a synchronous
+     * publish when no reader loop is running.
      */
     public function enqueue(Queue $queue, array $payload, bool $priority = false): bool
     {
-        if (Coroutine::getCid() === -1) {
+        if (!$this->started || Coroutine::getCid() === -1) {
             return $this->publish($queue, $payload, $priority);
         }
 
-        Coroutine::create(function () use ($queue, $payload, $priority): void {
-            try {
-                $this->publisher->enqueue($queue, $payload, $priority);
-            } catch (\Throwable $error) {
-                // Fire-and-forget: no caller to surface to, so log and move on.
-                error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
-            }
+        return $this->channel->push(function () use ($queue, $payload, $priority): void {
+            $this->publisher->enqueue($queue, $payload, $priority);
         });
-
-        return true;
     }
 
     public function retry(Queue $queue, ?int $limit = null): void
