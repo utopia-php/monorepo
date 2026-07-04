@@ -23,7 +23,7 @@ final class AsyncTest extends TestCase
         $this->assertSame([['id' => 1]], $published);
     }
 
-    public function testEnqueueFallsBackToSyncOutsideCoroutine(): void
+    public function testEnqueueFallsBackToSyncWhenNotStarted(): void
     {
         $published = [];
         $async = new Async($this->recordingPublisher($published));
@@ -31,22 +31,45 @@ final class AsyncTest extends TestCase
         $result = $async->enqueue(new Queue('emails'), ['id' => 1]);
 
         $this->assertTrue($result);
-        $this->assertSame([['id' => 1]], $published, 'no coroutine runtime → publish synchronously');
+        $this->assertSame([['id' => 1]], $published, 'no reader loop running → publish synchronously');
     }
 
-    public function testEnqueuePublishesOnBackgroundCoroutine(): void
+    public function testReaderDrainsChannelIntoPublisher(): void
     {
         $published = [];
         $async = new Async($this->recordingPublisher($published));
 
-        // Inside a coroutine runtime enqueue() takes the Coroutine::create()
-        // path; the scheduled publishes complete before Coroutine\run() returns.
         Coroutine\run(function () use ($async): void {
-            $this->assertTrue($async->enqueue(new Queue('emails'), ['id' => 1]));
-            $this->assertTrue($async->enqueue(new Queue('emails'), ['id' => 2]));
+            $async->start();
+
+            for ($i = 1; $i <= 5; $i++) {
+                $async->enqueue(new Queue('emails'), ['id' => $i]);
+            }
+
+            $async->shutdown(); // drains queued publishes, then waits for the reader
         });
 
-        $this->assertSame([['id' => 1], ['id' => 2]], $published);
+        $this->assertSame([1, 2, 3, 4, 5], array_column($published, 'id'));
+    }
+
+    public function testBackPressureBoundDeliversEveryMessageInOrder(): void
+    {
+        $published = [];
+        // Capacity 1 forces enqueue() to block on nearly every push, so the
+        // producer only advances as the reader drains — exercising back pressure.
+        $async = new Async($this->recordingPublisher($published), capacity: 1);
+
+        Coroutine\run(function () use ($async): void {
+            $async->start();
+
+            for ($i = 1; $i <= 20; $i++) {
+                $async->enqueue(new Queue('emails'), ['id' => $i]);
+            }
+
+            $async->shutdown();
+        });
+
+        $this->assertSame(range(1, 20), array_column($published, 'id'));
     }
 
     public function testDelegatesManagementCalls(): void
@@ -58,7 +81,7 @@ final class AsyncTest extends TestCase
     }
 
     /**
-     * A Publisher that records enqueued payloads in the given buffer.
+     * A Publisher that records enqueued payloads into the given buffer.
      *
      * @param array<int, array<mixed>> $buffer
      */
