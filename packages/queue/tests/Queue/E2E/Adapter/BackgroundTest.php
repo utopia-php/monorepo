@@ -6,6 +6,7 @@ namespace Tests\E2E\Adapter;
 
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
+use Swoole\Coroutine\Channel;
 use Utopia\Queue\Broker\Background;
 use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
@@ -101,6 +102,47 @@ final class BackgroundTest extends TestCase
         $background = new Background($this->recordingPublisher($published));
 
         $this->assertSame(2, $background->getQueueSize(new Queue('emails')));
+    }
+
+    public function testEnqueueTimesOutWhenBufferStaysFull(): void
+    {
+        // A publisher that parks in publish() until the test releases the gate,
+        // so the single reader can't drain the channel.
+        $gate = new Channel(2);
+        $publisher = new readonly class ($gate) implements Synchronous {
+            public function __construct(private Channel $gate) {}
+
+            public function publish(Queue $queue, array $payload, bool $priority = false): bool
+            {
+                $this->gate->pop();
+
+                return true;
+            }
+
+            public function retry(Queue $queue, ?int $limit = null): void {}
+
+            public function getQueueSize(Queue $queue, bool $failedJobs = false): int
+            {
+                return 0;
+            }
+        };
+
+        $background = new Background($publisher, capacity: 1, timeout: 0.05);
+        $results = [];
+
+        Coroutine\run(function () use ($background, $gate, &$results): void {
+            $background->start();
+
+            $background->enqueue(new Queue('emails'), ['id' => 1]); // reader pops it, parks in publish()
+            $results[] = $background->enqueue(new Queue('emails'), ['id' => 2]); // fills the one slot
+            $results[] = $background->enqueue(new Queue('emails'), ['id' => 3]); // full + parked → times out
+
+            $gate->push(true); // release the parked publishes so the run can finish
+            $gate->push(true);
+            $background->shutdown();
+        });
+
+        $this->assertSame([true, false], $results);
     }
 
     public function testReportsBufferDepthGauge(): void
