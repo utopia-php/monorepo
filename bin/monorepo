@@ -121,7 +121,8 @@ function mirror_workflow(string $package): string
 function toolchain(): void
 {
     if (!is_file('vendor/bin/phpunit')) {
-        passthru('composer update --no-interaction --prefer-dist --no-progress', $code);
+        $install = is_file('composer.lock') ? 'install' : 'update';
+        passthru("composer {$install} --no-interaction --prefer-dist --no-progress", $code);
         $code === 0 || fail('failed to install the monorepo toolchain');
     }
     putenv('PATH=' . getcwd() . '/vendor/bin:' . getenv('PATH'));
@@ -646,6 +647,7 @@ switch ($command) {
                     $manifest['repositories'] = array_merge([[
                         'type' => 'path',
                         'url' => '../*',
+                        'only' => array_keys($versions),
                         'options' => ['symlink' => true, 'versions' => $versions],
                     ]], $manifest['repositories'] ?? []);
                     file_put_contents("{$directory}/composer.linked.json", json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");

@@ -5,7 +5,7 @@ namespace Utopia\Auth\OAuth2;
 class ResourceIndicators
 {
     /**
-     * @var array<int, string>
+     * @var list<non-empty-string>
      */
     private readonly array $resources;
 
@@ -35,7 +35,7 @@ class ResourceIndicators
             $seen[] = $resource;
         }
 
-        /** @var array<int, string> $resources */
+        /** @var list<non-empty-string> $resources */
         $this->resources = $resources;
     }
 
@@ -82,7 +82,7 @@ class ResourceIndicators
     }
 
     /**
-     * @return array<int, string>
+     * @return list<non-empty-string>
      */
     public function audience(string $defaultAudience): array
     {
@@ -94,7 +94,7 @@ class ResourceIndicators
     }
 
     /**
-     * @return array<int, string>
+     * @return list<non-empty-string>
      */
     public function toArray(): array
     {

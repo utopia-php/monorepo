@@ -62,6 +62,6 @@ class FloatValidator extends Validator
             }
             $value += 0;
         }
-        return !(!\is_float($value) && !\is_int($value));
+        return \is_float($value) || \is_int($value);
     }
 }
