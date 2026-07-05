@@ -12,7 +12,6 @@ use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
 use Utopia\Telemetry\Adapter as Telemetry;
 use Utopia\Telemetry\Adapter\None as NoTelemetry;
-use Utopia\Telemetry\Counter;
 
 /**
  * Wraps a synchronous publisher and adds asynchronous, background dispatch on
@@ -32,8 +31,9 @@ use Utopia\Telemetry\Counter;
  * — wrap a connection Pool instead, so each dispatch leases its own connection.
  * More than one coroutine also gives up FIFO dispatch order.
  *
- * Telemetry (no-op by default) reports the buffer depth as an observable gauge
- * and counts background dispatches and failures.
+ * Telemetry (no-op by default) reports the buffer depth as an observable gauge.
+ * Dispatch counts and failures aren't metered here — the wrapped synchronous
+ * publisher already sees every publish and can report those itself.
  *
  * publish() bypasses the channel and delegates synchronously.
  */
@@ -44,10 +44,6 @@ class Background implements Synchronous, Asynchronous
     private readonly WaitGroup $waitGroup;
 
     private readonly int $coroutines;
-
-    private readonly Counter $dispatched;
-
-    private readonly Counter $errors;
 
     private bool $started = false;
 
@@ -61,16 +57,6 @@ class Background implements Synchronous, Asynchronous
         $this->waitGroup = new WaitGroup();
         $this->coroutines = max(1, $coroutines);
 
-        $this->dispatched = $telemetry->createCounter(
-            'messaging.publisher.dispatched',
-            '{message}',
-            'Messages published from the background buffer.',
-        );
-        $this->errors = $telemetry->createCounter(
-            'messaging.publisher.errors',
-            '{message}',
-            'Messages that failed to publish from the background buffer.',
-        );
         $telemetry->createObservableGauge(
             'messaging.publisher.buffer.depth',
             '{message}',
@@ -146,16 +132,9 @@ class Background implements Synchronous, Asynchronous
         }
 
         return $this->channel->push(function () use ($queue, $payload, $priority): void {
-            $attributes = [
-                'messaging.destination.name' => $queue->name,
-                'messaging.destination.namespace' => $queue->namespace,
-            ];
-
             try {
                 $this->publisher->publish($queue, $payload, $priority);
-                $this->dispatched->add(1, $attributes);
             } catch (\Throwable $error) {
-                $this->errors->add(1, $attributes);
                 // Fire-and-forget: no producer to surface to, so log and move on.
                 error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
             }
