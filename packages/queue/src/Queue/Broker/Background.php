@@ -23,11 +23,11 @@ use Utopia\Queue\Queue;
  * drains a slot, so a slow broker throttles producers instead of piling up
  * unbounded work.
  *
- * $workers sets how many reader coroutines dispatch concurrently. Values above
+ * $coroutines sets how many reader coroutines dispatch concurrently. Values above
  * 1 only make sense when the wrapped publisher tolerates concurrent use across
  * coroutines: a single-connection broker (e.g. a bare Redis) must not be shared
  * — wrap a connection Pool instead, so each dispatch leases its own connection.
- * More than one worker also gives up FIFO dispatch order.
+ * More than one coroutine also gives up FIFO dispatch order.
  *
  * publish() bypasses the channel and delegates synchronously.
  */
@@ -37,18 +37,18 @@ class Background implements Synchronous, Asynchronous
 
     private readonly WaitGroup $waitGroup;
 
-    private readonly int $workers;
+    private readonly int $coroutines;
 
     private bool $started = false;
 
     public function __construct(
         private readonly Synchronous $publisher,
         int $capacity = 512,
-        int $workers = 1,
+        int $coroutines = 1,
     ) {
         $this->channel = new Channel(max(1, $capacity));
         $this->waitGroup = new WaitGroup();
-        $this->workers = max(1, $workers);
+        $this->coroutines = max(1, $coroutines);
     }
 
     /**
@@ -64,7 +64,7 @@ class Background implements Synchronous, Asynchronous
 
         $this->started = true;
 
-        for ($i = 0; $i < $this->workers; $i++) {
+        for ($i = 0; $i < $this->coroutines; $i++) {
             $this->waitGroup->add();
 
             Coroutine::create(function (): void {
@@ -94,7 +94,7 @@ class Background implements Synchronous, Asynchronous
             return;
         }
 
-        for ($i = 0; $i < $this->workers; $i++) {
+        for ($i = 0; $i < $this->coroutines; $i++) {
             $this->channel->push(null); // one sentinel per reader; pop() returns non-Closure → loop ends
         }
 
