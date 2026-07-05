@@ -23,7 +23,8 @@ use Utopia\Telemetry\Adapter\None as NoTelemetry;
  * wrapped synchronous publisher. The channel capacity is the back-pressure
  * bound — once it fills, enqueue() blocks the producing coroutine until a reader
  * drains a slot, so a slow broker throttles producers instead of piling up
- * unbounded work.
+ * unbounded work. $timeout caps that wait: enqueue() gives up and returns false
+ * if no slot frees within it; -1 (the default) waits indefinitely.
  *
  * $coroutines sets how many reader coroutines dispatch concurrently. Values above
  * 1 only make sense when the wrapped publisher tolerates concurrent use across
@@ -51,6 +52,7 @@ class Background implements Synchronous, Asynchronous
         private readonly Synchronous $publisher,
         int $capacity = 512,
         int $coroutines = 1,
+        private readonly float $timeout = -1,
         Telemetry $telemetry = new NoTelemetry(),
     ) {
         $this->channel = new Channel(max(1, $capacity));
@@ -121,9 +123,10 @@ class Background implements Synchronous, Asynchronous
     }
 
     /**
-     * Hand the publish to the background reader via the channel, blocking only
-     * when the channel is full (back pressure). Falls back to a synchronous
-     * publish when no reader loop is running.
+     * Hand the publish to the background reader via the channel. Blocks when the
+     * channel is full (back pressure), up to the configured timeout — returning
+     * false if no slot frees in time. Falls back to a synchronous publish when
+     * no reader loop is running.
      */
     public function enqueue(Queue $queue, array $payload, bool $priority = false): bool
     {
@@ -138,7 +141,7 @@ class Background implements Synchronous, Asynchronous
                 // Fire-and-forget: no producer to surface to, so log and move on.
                 error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
             }
-        });
+        }, $this->timeout);
     }
 
     public function retry(Queue $queue, ?int $limit = null): void
