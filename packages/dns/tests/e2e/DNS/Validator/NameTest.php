@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Unit\Utopia\DNS\Validator;
 
 use PHPUnit\Framework\TestCase;
@@ -31,7 +33,7 @@ final class NameTest extends TestCase
 
         // Type that allows underscores in name
         $validator = new Name(Record::TYPE_SRV);
-        $this->assertTrue($validator->isValid('example._tcp.com'), "Expected valid: example._tcp.com");
+        $this->assertTrue($validator->isValid('example._tcp.com'), 'Expected valid: example._tcp.com');
     }
 
     public function testInvalid(): void

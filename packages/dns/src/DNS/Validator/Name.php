@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\DNS\Validator;
 
 use Utopia\DNS\Message\Domain;
@@ -24,18 +26,10 @@ class Name extends Validator
 
     public string $reason = '';
 
-    private int $recordType;
-
-    public function __construct(int $recordType)
-    {
-        $this->recordType = $recordType;
-    }
+    public function __construct(private readonly int $recordType) {}
 
     /**
      * Check if the provided value matches the Name record format
-     *
-     * @param mixed $name
-     * @return bool
      */
     public function isValid(mixed $name): bool
     {
@@ -60,8 +54,8 @@ class Name extends Validator
         }
 
         // If the name ends with '.', strip it (absolute FQDN); allow trailing '.'.
-        $trimmed = (\substr($name, -1) === '.') ? \substr($name, 0, -1) : $name;
-        $labels = \explode('.', $trimmed);
+        $trimmed = (str_ends_with($name, '.')) ? substr($name, 0, -1) : $name;
+        $labels = explode('.', $trimmed);
 
         $isUnderscoreAllowed = \in_array($this->recordType, self::RECORD_TYPES_WITH_UNDERSCORE_IN_NAME);
 
@@ -94,9 +88,9 @@ class Name extends Validator
     private function isValidCharacter(string $char, bool $isFirstOrLast, bool $isUnderscoreAllowed): bool
     {
         if ($isFirstOrLast) {
-            return \ctype_alnum($char) || ($isUnderscoreAllowed && $char === '_');
+            return ctype_alnum($char) || ($isUnderscoreAllowed && $char === '_');
         }
-        return \ctype_alnum($char) || $char === '-' || ($isUnderscoreAllowed && $char === '_');
+        return ctype_alnum($char) || $char === '-' || ($isUnderscoreAllowed && $char === '_');
     }
 
     /**
@@ -104,7 +98,7 @@ class Name extends Validator
      */
     public function getDescription(): string
     {
-        if (!empty($this->reason)) {
+        if ($this->reason !== '' && $this->reason !== '0') {
             return $this->reason;
         }
 
