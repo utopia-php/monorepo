@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use Utopia\Queue\Broker\Background;
-use Utopia\Queue\Publisher\BackpressureException;
+use Utopia\Queue\Publisher\BufferFullException;
 use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
 use Utopia\Telemetry\Adapter\Test as TestTelemetry;
@@ -104,7 +104,7 @@ final class BackgroundTest extends TestCase
         $this->assertSame(2, $background->getQueueSize(new Queue('emails')));
     }
 
-    public function testEnqueueThrowsBackpressureWhenBufferStaysFull(): void
+    public function testEnqueueThrowsWhenBufferStaysFull(): void
     {
         // A publisher that parks in publish() until the test releases the gate,
         // so the single reader can't drain the channel.
@@ -138,7 +138,7 @@ final class BackgroundTest extends TestCase
 
             try {
                 $background->enqueue(new Queue('emails'), ['id' => 3]); // full + parked → back pressure
-            } catch (BackpressureException) {
+            } catch (BufferFullException) {
                 $threw = true;
             }
 
@@ -147,7 +147,7 @@ final class BackgroundTest extends TestCase
             $background->shutdown();
         });
 
-        $this->assertTrue($threw, 'a full buffer past the timeout throws BackpressureException');
+        $this->assertTrue($threw, 'a full buffer past the timeout throws BufferFullException');
     }
 
     public function testReportsBufferDepthGauge(): void
