@@ -16,12 +16,18 @@ use Utopia\Queue\Queue;
  * top of a Swoole coroutine — so it satisfies both the Synchronous and
  * Asynchronous contracts.
  *
- * enqueue() pushes the publish onto a bounded channel and returns; a reader
- * coroutine loops over the channel and delegates each dispatch to the wrapped
- * synchronous publisher. The channel capacity is the back-pressure bound — once
- * it fills, enqueue() blocks the producing coroutine until the reader drains a
- * slot, so a slow broker throttles producers instead of piling up unbounded
- * work.
+ * enqueue() pushes the publish onto a bounded channel and returns; one or more
+ * reader coroutines loop over the channel and delegate each dispatch to the
+ * wrapped synchronous publisher. The channel capacity is the back-pressure
+ * bound — once it fills, enqueue() blocks the producing coroutine until a reader
+ * drains a slot, so a slow broker throttles producers instead of piling up
+ * unbounded work.
+ *
+ * $workers sets how many reader coroutines dispatch concurrently. Values above
+ * 1 only make sense when the wrapped publisher tolerates concurrent use across
+ * coroutines: a single-connection broker (e.g. a bare Redis) must not be shared
+ * — wrap a connection Pool instead, so each dispatch leases its own connection.
+ * More than one worker also gives up FIFO dispatch order.
  *
  * publish() bypasses the channel and delegates synchronously.
  */
@@ -31,18 +37,22 @@ class Background implements Synchronous, Asynchronous
 
     private readonly WaitGroup $waitGroup;
 
+    private readonly int $workers;
+
     private bool $started = false;
 
     public function __construct(
         private readonly Synchronous $publisher,
         int $capacity = 512,
+        int $workers = 1,
     ) {
         $this->channel = new Channel(max(1, $capacity));
         $this->waitGroup = new WaitGroup();
+        $this->workers = max(1, $workers);
     }
 
     /**
-     * Spawn the reader coroutine that drains the channel into the wrapped
+     * Spawn the reader coroutines that drain the channel into the wrapped
      * publisher. Call once from within a coroutine runtime; until then
      * enqueue() publishes synchronously.
      */
@@ -53,27 +63,30 @@ class Background implements Synchronous, Asynchronous
         }
 
         $this->started = true;
-        $this->waitGroup->add();
 
-        Coroutine::create(function (): void {
-            try {
-                while (($task = $this->channel->pop()) instanceof \Closure) {
-                    try {
-                        $task();
-                    } catch (\Throwable $error) {
-                        // Fire-and-forget: no producer to surface to, so log and move on.
-                        error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
+        for ($i = 0; $i < $this->workers; $i++) {
+            $this->waitGroup->add();
+
+            Coroutine::create(function (): void {
+                try {
+                    while (($task = $this->channel->pop()) instanceof \Closure) {
+                        try {
+                            $task();
+                        } catch (\Throwable $error) {
+                            // Fire-and-forget: no producer to surface to, so log and move on.
+                            error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
+                        }
                     }
+                } finally {
+                    $this->waitGroup->done();
                 }
-            } finally {
-                $this->waitGroup->done();
-            }
-        });
+            });
+        }
     }
 
     /**
-     * Drain the channel and stop the reader, blocking until it has finished.
-     * Messages already enqueued are published before the reader exits.
+     * Drain the channel and stop the readers, blocking until they have finished.
+     * Messages already enqueued are published before the readers exit.
      */
     public function shutdown(): void
     {
@@ -81,7 +94,10 @@ class Background implements Synchronous, Asynchronous
             return;
         }
 
-        $this->channel->push(null); // sentinel: pop() returns non-Closure → loop ends
+        for ($i = 0; $i < $this->workers; $i++) {
+            $this->channel->push(null); // one sentinel per reader; pop() returns non-Closure → loop ends
+        }
+
         $this->waitGroup->wait();
         $this->started = false;
     }
