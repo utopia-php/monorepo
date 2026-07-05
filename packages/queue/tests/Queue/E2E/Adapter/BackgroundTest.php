@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use Utopia\Queue\Broker\Background;
+use Utopia\Queue\Publisher\BackpressureException;
 use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
 use Utopia\Telemetry\Adapter\Test as TestTelemetry;
@@ -30,9 +31,8 @@ final class BackgroundTest extends TestCase
         $published = [];
         $background = new Background($this->recordingPublisher($published));
 
-        $result = $background->enqueue(new Queue('emails'), ['id' => 1]);
+        $background->enqueue(new Queue('emails'), ['id' => 1]);
 
-        $this->assertTrue($result);
         $this->assertSame([['id' => 1]], $published, 'no reader loop running → publish synchronously');
     }
 
@@ -104,7 +104,7 @@ final class BackgroundTest extends TestCase
         $this->assertSame(2, $background->getQueueSize(new Queue('emails')));
     }
 
-    public function testEnqueueTimesOutWhenBufferStaysFull(): void
+    public function testEnqueueThrowsBackpressureWhenBufferStaysFull(): void
     {
         // A publisher that parks in publish() until the test releases the gate,
         // so the single reader can't drain the channel.
@@ -128,21 +128,26 @@ final class BackgroundTest extends TestCase
         };
 
         $background = new Background($publisher, capacity: 1, timeout: 0.05);
-        $results = [];
+        $threw = false;
 
-        Coroutine\run(function () use ($background, $gate, &$results): void {
+        Coroutine\run(function () use ($background, $gate, &$threw): void {
             $background->start();
 
             $background->enqueue(new Queue('emails'), ['id' => 1]); // reader pops it, parks in publish()
-            $results[] = $background->enqueue(new Queue('emails'), ['id' => 2]); // fills the one slot
-            $results[] = $background->enqueue(new Queue('emails'), ['id' => 3]); // full + parked → times out
+            $background->enqueue(new Queue('emails'), ['id' => 2]); // fills the one slot
+
+            try {
+                $background->enqueue(new Queue('emails'), ['id' => 3]); // full + parked → back pressure
+            } catch (BackpressureException) {
+                $threw = true;
+            }
 
             $gate->push(true); // release the parked publishes so the run can finish
             $gate->push(true);
             $background->shutdown();
         });
 
-        $this->assertSame([true, false], $results);
+        $this->assertTrue($threw, 'a full buffer past the timeout throws BackpressureException');
     }
 
     public function testReportsBufferDepthGauge(): void
