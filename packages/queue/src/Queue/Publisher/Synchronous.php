@@ -6,6 +6,12 @@ namespace Utopia\Queue\Publisher;
 
 use Utopia\Queue\Queue;
 
+/**
+ * A publisher that hands messages to the broker synchronously: publish() blocks
+ * until the broker accepts the message and returns whether it did. Brokers such
+ * as Redis and Pool implement this directly; Broker\Background wraps one to add
+ * background dispatch.
+ */
 interface Synchronous
 {
     /**
