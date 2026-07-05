@@ -8,6 +8,7 @@ use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use Swoole\Coroutine\WaitGroup;
 use Utopia\Queue\Publisher\Asynchronous;
+use Utopia\Queue\Publisher\BackpressureException;
 use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
 use Utopia\Telemetry\Adapter as Telemetry;
@@ -23,7 +24,7 @@ use Utopia\Telemetry\Adapter\None as NoTelemetry;
  * wrapped synchronous publisher. The channel capacity is the back-pressure
  * bound — once it fills, enqueue() blocks the producing coroutine until a reader
  * drains a slot, so a slow broker throttles producers instead of piling up
- * unbounded work. $timeout caps that wait: enqueue() gives up and returns false
+ * unbounded work. $timeout caps that wait: enqueue() throws BackpressureException
  * if no slot frees within it; -1 (the default) waits indefinitely.
  *
  * $coroutines sets how many reader coroutines dispatch concurrently. Values above
@@ -124,17 +125,21 @@ class Background implements Synchronous, Asynchronous
 
     /**
      * Hand the publish to the background reader via the channel. Blocks when the
-     * channel is full (back pressure), up to the configured timeout — returning
-     * false if no slot frees in time. Falls back to a synchronous publish when
-     * no reader loop is running.
+     * channel is full (back pressure), up to the configured timeout, then throws
+     * BackpressureException if no slot frees in time. Falls back to a synchronous
+     * publish when no reader loop is running.
+     *
+     * @throws BackpressureException when the buffer stays full past the timeout.
      */
-    public function enqueue(Queue $queue, array $payload, bool $priority = false): bool
+    public function enqueue(Queue $queue, array $payload, bool $priority = false): void
     {
         if (!$this->started || Coroutine::getCid() === -1) {
-            return $this->publish($queue, $payload, $priority);
+            $this->publish($queue, $payload, $priority);
+
+            return;
         }
 
-        return $this->channel->push(function () use ($queue, $payload, $priority): void {
+        $accepted = $this->channel->push(function () use ($queue, $payload, $priority): void {
             try {
                 $this->publisher->publish($queue, $payload, $priority);
             } catch (\Throwable $error) {
@@ -142,6 +147,10 @@ class Background implements Synchronous, Asynchronous
                 error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
             }
         }, $this->timeout);
+
+        if ($accepted === false) {
+            throw new BackpressureException('Publisher buffer full; enqueue timed out.');
+        }
     }
 
     public function retry(Queue $queue, ?int $limit = null): void
