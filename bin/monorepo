@@ -89,15 +89,9 @@ function mirror_workflow(string $package): string
 
     jobs:
       redirect:
-        runs-on: ubuntu-latest
-        steps:
-          - name: Redirect pull request to the monorepo
-            env:
-              GH_TOKEN: ${{ github.token }}
-              PR: ${{ github.event.pull_request.html_url }}
-            run: |
-              gh pr comment "$PR" --body "Thanks for contributing! This repository is a read-only mirror — development for this library happens in [\`packages/{package}\`](https://github.com/utopia-php/monorepo/tree/main/packages/{package}) in the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Please open this pull request there instead."
-              gh pr close "$PR"
+        uses: utopia-php/monorepo/.github/workflows/mirror-redirect.yml@main
+        with:
+          package: {package}
     YAML;
 
     return str_replace('{package}', $package, $yaml) . "\n";
