@@ -9,6 +9,7 @@ use Swoole\Coroutine;
 use Utopia\Queue\Broker\Background;
 use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
+use Utopia\Telemetry\Adapter\Test as TestTelemetry;
 
 final class BackgroundTest extends TestCase
 {
@@ -100,6 +101,80 @@ final class BackgroundTest extends TestCase
         $background = new Background($this->recordingPublisher($published));
 
         $this->assertSame(2, $background->getQueueSize(new Queue('emails')));
+    }
+
+    public function testCountsDispatchesAndErrors(): void
+    {
+        $telemetry = new TestTelemetry();
+        $background = new Background($this->flakyPublisher(), telemetry: $telemetry);
+
+        Coroutine\run(function () use ($background): void {
+            $background->start();
+
+            $background->enqueue(new Queue('emails'), ['id' => 1]);
+            $background->enqueue(new Queue('emails'), ['fail' => true]);
+            $background->enqueue(new Queue('emails'), ['id' => 2]);
+
+            $background->shutdown();
+        });
+
+        $this->assertCount(2, $telemetry->counters['messaging.publisher.dispatched']->values ?? []);
+        $this->assertCount(1, $telemetry->counters['messaging.publisher.errors']->values ?? []);
+    }
+
+    public function testReportsBufferDepthGauge(): void
+    {
+        $telemetry = new TestTelemetry();
+        $buffer = [];
+        new Background($this->recordingPublisher($buffer), telemetry: $telemetry);
+
+        // An idle buffer observes a depth of zero; the gauge is wired to the channel.
+        $this->assertArrayHasKey('messaging.publisher.buffer.depth', $telemetry->observableGauges);
+        $this->assertSame([0], $this->collectObservations($telemetry, 'messaging.publisher.buffer.depth'));
+    }
+
+    /**
+     * Reads an observable gauge by invoking its registered callbacks.
+     *
+     * @return array<int, float|int>
+     */
+    private function collectObservations(TestTelemetry $telemetry, string $name): array
+    {
+        /** @var object{callbacks: array<int, \Closure>} $gauge */
+        $gauge = $telemetry->observableGauges[$name];
+
+        $values = [];
+        foreach ($gauge->callbacks as $callback) {
+            $callback(function (float|int $value, iterable $attributes = []) use (&$values): void {
+                $values[] = $value;
+            });
+        }
+
+        return $values;
+    }
+
+    /**
+     * A publisher that throws when the payload carries a 'fail' flag.
+     */
+    private function flakyPublisher(): Synchronous
+    {
+        return new class implements Synchronous {
+            public function publish(Queue $queue, array $payload, bool $priority = false): bool
+            {
+                if ($payload['fail'] ?? false) {
+                    throw new \RuntimeException('publish failed');
+                }
+
+                return true;
+            }
+
+            public function retry(Queue $queue, ?int $limit = null): void {}
+
+            public function getQueueSize(Queue $queue, bool $failedJobs = false): int
+            {
+                return 0;
+            }
+        };
     }
 
     /**
