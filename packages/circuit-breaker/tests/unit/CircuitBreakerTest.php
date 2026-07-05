@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\unit;
 
+use PHPUnit\Framework\TestCase;
 use Utopia\CircuitBreaker\Adapter;
 use Utopia\CircuitBreaker\CircuitBreaker;
 use Utopia\CircuitBreaker\CircuitState;
-use PHPUnit\Framework\TestCase;
 use Utopia\Telemetry\Adapter\Test as TestTelemetry;
 use Utopia\Telemetry\UpDownCounter;
 
@@ -16,22 +18,22 @@ final class CircuitBreakerTest extends TestCase
         $breaker = new CircuitBreaker(threshold: 2, timeout: 30, successThreshold: 1);
 
         $first = $breaker->call(
-            open: static fn () => 'fallback',
-            close: static function (): void {
+            open: static fn(): string => 'fallback',
+            close: static function (): never {
                 throw new \RuntimeException('failed');
-            }
+            },
         );
         $second = $breaker->call(
-            open: static fn () => 'fallback',
-            close: static function (): void {
+            open: static fn(): string => 'fallback',
+            close: static function (): never {
                 throw new \RuntimeException('failed');
-            }
+            },
         );
 
-        self::assertSame('fallback', $first);
-        self::assertSame('fallback', $second);
-        self::assertSame(CircuitState::OPEN, $breaker->getState());
-        self::assertSame(2, $breaker->getFailureCount());
+        $this->assertSame('fallback', $first);
+        $this->assertSame('fallback', $second);
+        $this->assertSame(CircuitState::OPEN, $breaker->getState());
+        $this->assertSame(2, $breaker->getFailureCount());
     }
 
     public function testCachedStateIsSharedAcrossBreakerInstances(): void
@@ -41,34 +43,34 @@ final class CircuitBreakerTest extends TestCase
         $second = new CircuitBreaker(threshold: 2, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
 
         $first->call(
-            open: static fn () => 'fallback',
-            close: static function (): void {
+            open: static fn(): string => 'fallback',
+            close: static function (): never {
                 throw new \RuntimeException('failed');
-            }
+            },
         );
         $first->call(
-            open: static fn () => 'fallback',
-            close: static function (): void {
+            open: static fn(): string => 'fallback',
+            close: static function (): never {
                 throw new \RuntimeException('failed');
-            }
+            },
         );
 
-        self::assertTrue($second->isOpen());
-        self::assertSame(2, $second->getFailureCount());
+        $this->assertTrue($second->isOpen());
+        $this->assertSame(2, $second->getFailureCount());
 
         $result = $second->call(
-            open: static fn () => 'shared fallback',
-            close: function (): void {
+            open: static fn(): string => 'shared fallback',
+            close: function (): never {
                 self::fail('Closed callback should not run while the shared circuit is open.');
-            }
+            },
         );
 
-        self::assertSame('shared fallback', $result);
+        $this->assertSame('shared fallback', $result);
     }
 
     public function testClosedSuccessDoesNotWriteZeroFailuresWhenAlreadyZero(): void
     {
-        $cache = new class () implements Adapter {
+        $cache = new class implements Adapter {
             /**
              * @var list<array{string, string, int|string|null}>
              */
@@ -98,17 +100,17 @@ final class CircuitBreakerTest extends TestCase
         };
         $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
 
-        self::assertSame('ok', $breaker->call(
-            open: static fn () => 'fallback',
-            close: static fn () => 'ok'
+        $this->assertSame('ok', $breaker->call(
+            open: static fn(): string => 'fallback',
+            close: static fn(): string => 'ok',
         ));
 
-        self::assertSame([], $cache->writes);
+        $this->assertSame([], $cache->writes);
     }
 
     public function testCachedTransitionsWriteStateLast(): void
     {
-        $cache = new class () implements Adapter {
+        $cache = new class implements Adapter {
             /**
              * @var array<string, int|string>
              */
@@ -149,18 +151,18 @@ final class CircuitBreakerTest extends TestCase
         $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
 
         $breaker->call(
-            open: static fn () => 'fallback',
-            close: static function (): void {
+            open: static fn(): string => 'fallback',
+            close: static function (): never {
                 throw new \RuntimeException('failed');
-            }
+            },
         );
 
         $setWrites = array_values(array_filter(
             $cache->writes,
-            static fn (array $write): bool => $write[0] === 'set'
+            static fn(array $write): bool => $write[0] === 'set',
         ));
 
-        self::assertSame(['set', 'users-api:state', CircuitState::OPEN->value], $setWrites[array_key_last($setWrites)]);
+        $this->assertSame(['set', 'users-api:state', CircuitState::OPEN->value], $setWrites[array_key_last($setWrites)]);
     }
 
     public function testHalfOpenSuccessesCloseTheCircuit(): void
@@ -168,29 +170,29 @@ final class CircuitBreakerTest extends TestCase
         $breaker = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2);
 
         $breaker->call(
-            open: static fn () => 'fallback',
-            close: static function (): void {
+            open: static fn(): string => 'fallback',
+            close: static function (): never {
                 throw new \RuntimeException('failed');
-            }
+            },
         );
 
-        self::assertSame('probe-1', $breaker->call(
-            open: static fn () => 'fallback',
-            close: static fn () => 'closed',
-            halfOpen: static fn () => 'probe-1'
+        $this->assertSame('probe-1', $breaker->call(
+            open: static fn(): string => 'fallback',
+            close: static fn(): string => 'closed',
+            halfOpen: static fn(): string => 'probe-1',
         ));
-        self::assertTrue($breaker->isHalfOpen());
-        self::assertSame(1, $breaker->getSuccessCount());
+        $this->assertTrue($breaker->isHalfOpen());
+        $this->assertSame(1, $breaker->getSuccessCount());
 
-        self::assertSame('probe-2', $breaker->call(
-            open: static fn () => 'fallback',
-            close: static fn () => 'closed',
-            halfOpen: static fn () => 'probe-2'
+        $this->assertSame('probe-2', $breaker->call(
+            open: static fn(): string => 'fallback',
+            close: static fn(): string => 'closed',
+            halfOpen: static fn(): string => 'probe-2',
         ));
 
-        self::assertTrue($breaker->isClosed());
-        self::assertSame(0, $breaker->getFailureCount());
-        self::assertSame(0, $breaker->getSuccessCount());
+        $this->assertTrue($breaker->isClosed());
+        $this->assertSame(0, $breaker->getFailureCount());
+        $this->assertSame(0, $breaker->getSuccessCount());
     }
 
     public function testRecordsTelemetryForCallsFallbacksAndTransitions(): void
@@ -199,22 +201,22 @@ final class CircuitBreakerTest extends TestCase
         $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, telemetry: $telemetry);
 
         $result = $breaker->call(
-            open: static fn () => 'fallback',
-            close: static function (): void {
+            open: static fn(): string => 'fallback',
+            close: static function (): never {
                 throw new \RuntimeException('failed');
-            }
+            },
         );
 
-        self::assertSame('fallback', $result);
-        self::assertSame([1], $telemetry->counters['breaker.calls']->values);
-        self::assertSame([1], $telemetry->counters['breaker.callback_failures']->values);
-        self::assertSame([1], $telemetry->counters['breaker.fallbacks']->values);
-        self::assertSame([1], $telemetry->counters['breaker.transitions']->values);
-        self::assertSame([1, -1], $telemetry->upDownCounters['breaker.active_calls']->values);
-        self::assertSame([1], $telemetry->gauges['breaker.state']->values);
-        self::assertSame([1], $telemetry->gauges['breaker.failures']->values);
-        self::assertSame([0], $telemetry->gauges['breaker.successes']->values);
-        self::assertCount(1, $telemetry->gauges['breaker.event.timestamp']->values);
+        $this->assertSame('fallback', $result);
+        $this->assertSame([1], $telemetry->counters['breaker.calls']->values);
+        $this->assertSame([1], $telemetry->counters['breaker.callback_failures']->values);
+        $this->assertSame([1], $telemetry->counters['breaker.fallbacks']->values);
+        $this->assertSame([1], $telemetry->counters['breaker.transitions']->values);
+        $this->assertSame([1, -1], $telemetry->upDownCounters['breaker.active_calls']->values);
+        $this->assertSame([1], $telemetry->gauges['breaker.state']->values);
+        $this->assertSame([1], $telemetry->gauges['breaker.failures']->values);
+        $this->assertSame([0], $telemetry->gauges['breaker.successes']->values);
+        $this->assertCount(1, $telemetry->gauges['breaker.event.timestamp']->values);
     }
 
     public function testPrefixesTelemetryMetricNames(): void
@@ -224,23 +226,23 @@ final class CircuitBreakerTest extends TestCase
         $breaker->setTelemetry($telemetry);
 
         $result = $breaker->call(
-            open: static fn () => 'fallback',
-            close: static function (): void {
+            open: static fn(): string => 'fallback',
+            close: static function (): never {
                 throw new \RuntimeException('failed');
-            }
+            },
         );
 
-        self::assertSame('fallback', $result);
-        self::assertSame([1], $telemetry->counters['edge.breaker.calls']->values);
-        self::assertSame([1], $telemetry->counters['edge.breaker.callback_failures']->values);
-        self::assertSame([1], $telemetry->counters['edge.breaker.fallbacks']->values);
-        self::assertSame([1], $telemetry->counters['edge.breaker.transitions']->values);
-        self::assertSame([1, -1], $telemetry->upDownCounters['edge.breaker.active_calls']->values);
-        self::assertSame([1], $telemetry->gauges['edge.breaker.state']->values);
-        self::assertSame([1], $telemetry->gauges['edge.breaker.failures']->values);
-        self::assertSame([0], $telemetry->gauges['edge.breaker.successes']->values);
-        self::assertCount(1, $telemetry->gauges['edge.breaker.event.timestamp']->values);
-        self::assertArrayNotHasKey('breaker.calls', $telemetry->counters);
+        $this->assertSame('fallback', $result);
+        $this->assertSame([1], $telemetry->counters['edge.breaker.calls']->values);
+        $this->assertSame([1], $telemetry->counters['edge.breaker.callback_failures']->values);
+        $this->assertSame([1], $telemetry->counters['edge.breaker.fallbacks']->values);
+        $this->assertSame([1], $telemetry->counters['edge.breaker.transitions']->values);
+        $this->assertSame([1, -1], $telemetry->upDownCounters['edge.breaker.active_calls']->values);
+        $this->assertSame([1], $telemetry->gauges['edge.breaker.state']->values);
+        $this->assertSame([1], $telemetry->gauges['edge.breaker.failures']->values);
+        $this->assertSame([0], $telemetry->gauges['edge.breaker.successes']->values);
+        $this->assertCount(1, $telemetry->gauges['edge.breaker.event.timestamp']->values);
+        $this->assertArrayNotHasKey('breaker.calls', $telemetry->counters);
     }
 
     public function testInspectionMethodsDoNotEmitTelemetry(): void
@@ -248,17 +250,17 @@ final class CircuitBreakerTest extends TestCase
         $telemetry = new TestTelemetry();
         $breaker = new CircuitBreaker(telemetry: $telemetry);
 
-        self::assertSame(CircuitState::CLOSED, $breaker->getState());
-        self::assertSame(0, $breaker->getFailureCount());
-        self::assertSame(0, $breaker->getSuccessCount());
-        self::assertSame([], $telemetry->gauges['breaker.state']->values);
-        self::assertSame([], $telemetry->gauges['breaker.failures']->values);
-        self::assertSame([], $telemetry->gauges['breaker.successes']->values);
-        self::assertSame([], $telemetry->counters['breaker.calls']->values);
-        self::assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
-        self::assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
-        self::assertArrayNotHasKey('breaker.transitions', $telemetry->counters);
-        self::assertArrayNotHasKey('breaker.event.timestamp', $telemetry->gauges);
+        $this->assertSame(CircuitState::CLOSED, $breaker->getState());
+        $this->assertSame(0, $breaker->getFailureCount());
+        $this->assertSame(0, $breaker->getSuccessCount());
+        $this->assertSame([], $telemetry->gauges['breaker.state']->values);
+        $this->assertSame([], $telemetry->gauges['breaker.failures']->values);
+        $this->assertSame([], $telemetry->gauges['breaker.successes']->values);
+        $this->assertSame([], $telemetry->counters['breaker.calls']->values);
+        $this->assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
+        $this->assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
+        $this->assertArrayNotHasKey('breaker.transitions', $telemetry->counters);
+        $this->assertArrayNotHasKey('breaker.event.timestamp', $telemetry->gauges);
     }
 
     public function testRareTelemetryInstrumentsAreCreatedOnFirstRecord(): void
@@ -266,17 +268,17 @@ final class CircuitBreakerTest extends TestCase
         $telemetry = new TestTelemetry();
         $breaker = new CircuitBreaker(telemetry: $telemetry);
 
-        self::assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
-        self::assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
-        self::assertArrayNotHasKey('breaker.transitions', $telemetry->counters);
-        self::assertArrayNotHasKey('breaker.event.timestamp', $telemetry->gauges);
+        $this->assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
+        $this->assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
+        $this->assertArrayNotHasKey('breaker.transitions', $telemetry->counters);
+        $this->assertArrayNotHasKey('breaker.event.timestamp', $telemetry->gauges);
 
         $breaker->trip();
 
-        self::assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
-        self::assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
-        self::assertSame([1], $telemetry->counters['breaker.transitions']->values);
-        self::assertCount(1, $telemetry->gauges['breaker.event.timestamp']->values);
+        $this->assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
+        $this->assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
+        $this->assertSame([1], $telemetry->counters['breaker.transitions']->values);
+        $this->assertCount(1, $telemetry->gauges['breaker.event.timestamp']->values);
     }
 
     public function testSuccessfulCallsDoNotCreateRareTelemetryInstruments(): void
@@ -284,23 +286,23 @@ final class CircuitBreakerTest extends TestCase
         $telemetry = new TestTelemetry();
         $breaker = new CircuitBreaker(telemetry: $telemetry);
 
-        self::assertSame('ok', $breaker->call(
-            open: static fn () => 'fallback',
-            close: static fn () => 'ok',
+        $this->assertSame('ok', $breaker->call(
+            open: static fn(): string => 'fallback',
+            close: static fn(): string => 'ok',
         ));
 
-        self::assertSame([1], $telemetry->counters['breaker.calls']->values);
-        self::assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
-        self::assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
-        self::assertArrayNotHasKey('breaker.transitions', $telemetry->counters);
-        self::assertArrayNotHasKey('breaker.event.timestamp', $telemetry->gauges);
+        $this->assertSame([1], $telemetry->counters['breaker.calls']->values);
+        $this->assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
+        $this->assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
+        $this->assertArrayNotHasKey('breaker.transitions', $telemetry->counters);
+        $this->assertArrayNotHasKey('breaker.event.timestamp', $telemetry->gauges);
     }
 
     public function testActiveCallTelemetryUsesPostUpdateState(): void
     {
         $store = new ActiveCallAttributeStore();
         $telemetry = new ActiveCallTelemetry($store);
-        $cache = new class () implements Adapter {
+        $cache = new class implements Adapter {
             /**
              * @var array<string, int|string>
              */
@@ -345,19 +347,19 @@ final class CircuitBreakerTest extends TestCase
             successThreshold: 1,
             cache: $cache,
             key: 'users-api',
-            telemetry: $telemetry
+            telemetry: $telemetry,
         );
 
         $result = $breaker->call(
-            open: static fn () => 'fallback',
-            close: static fn () => 'closed',
-            halfOpen: static fn () => 'probe'
+            open: static fn(): string => 'fallback',
+            close: static fn(): string => 'closed',
+            halfOpen: static fn(): string => 'probe',
         );
 
-        self::assertSame('probe', $result);
-        self::assertCount(2, $store->attributes);
-        self::assertSame(CircuitState::HALF_OPEN->value, $store->attributes[0]['circuit_breaker.state']);
-        self::assertSame(CircuitState::HALF_OPEN->value, $store->attributes[1]['circuit_breaker.state']);
+        $this->assertSame('probe', $result);
+        $this->assertCount(2, $store->attributes);
+        $this->assertSame(CircuitState::HALF_OPEN->value, $store->attributes[0]['circuit_breaker.state']);
+        $this->assertSame(CircuitState::HALF_OPEN->value, $store->attributes[1]['circuit_breaker.state']);
     }
 
     public function testRejectsEmptyCacheKeyWhenCacheIsConfigured(): void
@@ -371,12 +373,12 @@ final class CircuitBreakerTest extends TestCase
     {
         $breaker = new CircuitBreaker();
 
-        self::assertSame(CircuitState::CLOSED, $breaker->getState());
+        $this->assertSame(CircuitState::CLOSED, $breaker->getState());
 
         $breaker->trip();
 
-        self::assertSame(CircuitState::OPEN, $breaker->getState());
-        self::assertTrue($breaker->isOpen());
+        $this->assertSame(CircuitState::OPEN, $breaker->getState());
+        $this->assertTrue($breaker->isOpen());
     }
 
     public function testTrippedBreakerShortCircuitsCalls(): void
@@ -385,14 +387,14 @@ final class CircuitBreakerTest extends TestCase
         $breaker->trip();
 
         $result = $breaker->call(
-            open: static fn () => 'fallback',
-            close: function (): void {
+            open: static fn(): string => 'fallback',
+            close: function (): never {
                 self::fail('Closed callback should not run when the breaker has been tripped.');
-            }
+            },
         );
 
-        self::assertSame('fallback', $result);
-        self::assertTrue($breaker->isOpen());
+        $this->assertSame('fallback', $result);
+        $this->assertTrue($breaker->isOpen());
     }
 
     public function testTripIsIdempotent(): void
@@ -403,7 +405,7 @@ final class CircuitBreakerTest extends TestCase
         $breaker->trip();
         $breaker->trip();
 
-        self::assertSame(CircuitState::OPEN, $breaker->getState());
+        $this->assertSame(CircuitState::OPEN, $breaker->getState());
     }
 
     public function testTripPersistsStateThroughCacheAdapter(): void
@@ -414,7 +416,7 @@ final class CircuitBreakerTest extends TestCase
 
         $second = new CircuitBreaker(cache: $cache, key: 'users-api');
 
-        self::assertTrue($second->isOpen());
+        $this->assertTrue($second->isOpen());
     }
 
     public function testTripEmitsTransitionTelemetry(): void
@@ -424,13 +426,13 @@ final class CircuitBreakerTest extends TestCase
 
         $breaker->trip();
 
-        self::assertSame([1], $telemetry->counters['breaker.transitions']->values);
-        self::assertSame([1], $telemetry->gauges['breaker.state']->values);
+        $this->assertSame([1], $telemetry->counters['breaker.transitions']->values);
+        $this->assertSame([1], $telemetry->gauges['breaker.state']->values);
     }
 
     private function createArrayAdapter(): Adapter
     {
-        return new class () implements Adapter {
+        return new class implements Adapter {
             /**
              * @var array<string, int|string>
              */
@@ -473,9 +475,7 @@ final class ActiveCallAttributeStore
 
 final class ActiveCallTelemetry extends TestTelemetry
 {
-    public function __construct(private ActiveCallAttributeStore $store)
-    {
-    }
+    public function __construct(private readonly ActiveCallAttributeStore $store) {}
 
     /**
      * @param array<string, mixed> $advisory
@@ -484,16 +484,14 @@ final class ActiveCallTelemetry extends TestTelemetry
         string $name,
         ?string $unit = null,
         ?string $description = null,
-        array $advisory = []
+        array $advisory = [],
     ): UpDownCounter {
         if ($name !== 'breaker.active_calls') {
             return parent::createUpDownCounter($name, $unit, $description, $advisory);
         }
 
         $counter = new class ($this->store) extends UpDownCounter {
-            public function __construct(private ActiveCallAttributeStore $store)
-            {
-            }
+            public function __construct(private readonly ActiveCallAttributeStore $store) {}
 
             /**
              * @param iterable<non-empty-string, array<mixed>|bool|float|int|string|null> $attributes

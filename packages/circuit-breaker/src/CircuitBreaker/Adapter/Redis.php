@@ -4,21 +4,21 @@ namespace Utopia\CircuitBreaker\Adapter;
 
 use Utopia\CircuitBreaker\Adapter as CircuitBreakerAdapter;
 
-final class Redis implements CircuitBreakerAdapter
+final readonly class Redis implements CircuitBreakerAdapter
 {
     /**
      * @param object $redis A Redis-compatible client exposing get, set, incrBy, and del.
      */
     public function __construct(
         private object $redis,
-        private string $prefix = 'breaker:'
+        private string $prefix = 'breaker:',
     ) {
         foreach (['get', 'set', 'incrBy', 'del'] as $method) {
             if (!method_exists($this->redis, $method)) {
-                throw new \InvalidArgumentException(sprintf(
+                throw new \InvalidArgumentException(\sprintf(
                     '%s requires a Redis-compatible client with a %s() method.',
                     self::class,
-                    $method
+                    $method,
                 ));
             }
         }
@@ -32,7 +32,7 @@ final class Redis implements CircuitBreakerAdapter
             return null;
         }
 
-        if (is_int($value) || is_string($value)) {
+        if (\is_int($value) || \is_string($value)) {
             return $value;
         }
 
@@ -44,7 +44,7 @@ final class Redis implements CircuitBreakerAdapter
         $result = $this->command('set', [$this->key($key), (string) $value]);
 
         if (!$this->isSuccessfulSet($result)) {
-            throw new AdapterException(sprintf('Failed to set cache key "%s".', $key));
+            throw new AdapterException(\sprintf('Failed to set cache key "%s".', $key));
         }
     }
 
@@ -53,7 +53,7 @@ final class Redis implements CircuitBreakerAdapter
         $value = $this->command('incrBy', [$this->key($key), $by]);
 
         if ($value === false || $value === null) {
-            throw new AdapterException(sprintf('Failed to increment cache key "%s".', $key));
+            throw new AdapterException(\sprintf('Failed to increment cache key "%s".', $key));
         }
 
         return (int) $value;
@@ -64,7 +64,7 @@ final class Redis implements CircuitBreakerAdapter
         $result = $this->command('del', [$this->key($key)]);
 
         if ($result === false) {
-            throw new AdapterException(sprintf('Failed to delete cache key "%s".', $key));
+            throw new AdapterException(\sprintf('Failed to delete cache key "%s".', $key));
         }
     }
 
@@ -87,15 +87,15 @@ final class Redis implements CircuitBreakerAdapter
 
     private function isSuccessfulSet(mixed $result): bool
     {
-        if (is_bool($result)) {
+        if (\is_bool($result)) {
             return $result;
         }
 
-        if (is_string($result)) {
+        if (\is_string($result)) {
             return strtoupper($result) === 'OK';
         }
 
-        if (is_object($result) && method_exists($result, 'getPayload')) {
+        if (\is_object($result) && method_exists($result, 'getPayload')) {
             return $result->getPayload() === 'OK';
         }
 

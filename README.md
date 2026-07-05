@@ -74,6 +74,7 @@ graph TD
     servers --> di
     servers --> validators
     auth
+    circuit-breaker
     nats
     replication
 ```

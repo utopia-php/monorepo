@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\e2e;
 
+use PHPUnit\Framework\TestCase;
 use Utopia\CircuitBreaker\Adapter\Redis as RedisAdapter;
 use Utopia\CircuitBreaker\CircuitBreaker;
-use PHPUnit\Framework\TestCase;
 
 final class RedisAdapterTest extends TestCase
 {
@@ -13,7 +15,7 @@ final class RedisAdapterTest extends TestCase
 
     protected function setUp(): void
     {
-        if (!extension_loaded('redis') || !class_exists('Redis')) {
+        if (!\extension_loaded('redis') || !class_exists('Redis')) {
             self::markTestSkipped('The redis extension is required for Redis E2E tests.');
         }
 
@@ -26,8 +28,8 @@ final class RedisAdapterTest extends TestCase
         try {
             if (!$this->redis->connect($host, $port, 2.0)) {
                 $error = method_exists($this->redis, 'getLastError') ? $this->redis->getLastError() : null;
-                $message = is_string($error) && $error !== '' ? ': ' . $error : '.';
-                self::markTestSkipped(sprintf('Redis E2E server is not reachable at %s:%d%s', $host, $port, $message));
+                $message = \is_string($error) && $error !== '' ? ': ' . $error : '.';
+                self::markTestSkipped(\sprintf('Redis E2E server is not reachable at %s:%d%s', $host, $port, $message));
             }
         } catch (\Throwable $exception) {
             self::markTestSkipped('Redis E2E server is not reachable: ' . $exception->getMessage());
@@ -54,15 +56,15 @@ final class RedisAdapterTest extends TestCase
         $adapter->set('state', 'open');
         $adapter->set('count', 2);
 
-        self::assertSame('open', $adapter->get('state'));
-        self::assertSame('2', $adapter->get('count'));
-        self::assertSame(3, $adapter->increment('count'));
-        self::assertSame('3', $adapter->get('count'));
-        self::assertSame('3', $this->redis->get($this->prefix . 'count'));
+        $this->assertSame('open', $adapter->get('state'));
+        $this->assertSame('2', $adapter->get('count'));
+        $this->assertSame(3, $adapter->increment('count'));
+        $this->assertSame('3', $adapter->get('count'));
+        $this->assertSame('3', $this->redis->get($this->prefix . 'count'));
 
         $adapter->delete('count');
 
-        self::assertNull($adapter->get('count'));
+        $this->assertNull($adapter->get('count'));
     }
 
     public function testCircuitBreakerSharesStateThroughRedis(): void
@@ -72,29 +74,29 @@ final class RedisAdapterTest extends TestCase
         $second = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2, cache: $cache, key: 'users-api');
 
         $first->call(
-            open: static fn () => 'fallback',
-            close: static function (): void {
+            open: static fn(): string => 'fallback',
+            close: static function (): never {
                 throw new \RuntimeException('failed');
-            }
+            },
         );
 
-        self::assertTrue($second->isHalfOpen());
-        self::assertSame(0, $second->getFailureCount());
+        $this->assertTrue($second->isHalfOpen());
+        $this->assertSame(0, $second->getFailureCount());
 
-        self::assertSame('probe-1', $second->call(
-            open: static fn () => 'fallback',
-            close: static fn () => 'closed',
-            halfOpen: static fn () => 'probe-1'
+        $this->assertSame('probe-1', $second->call(
+            open: static fn(): string => 'fallback',
+            close: static fn(): string => 'closed',
+            halfOpen: static fn(): string => 'probe-1',
         ));
-        self::assertSame(1, $first->getSuccessCount());
+        $this->assertSame(1, $first->getSuccessCount());
 
-        self::assertSame('probe-2', $first->call(
-            open: static fn () => 'fallback',
-            close: static fn () => 'closed',
-            halfOpen: static fn () => 'probe-2'
+        $this->assertSame('probe-2', $first->call(
+            open: static fn(): string => 'fallback',
+            close: static fn(): string => 'closed',
+            halfOpen: static fn(): string => 'probe-2',
         ));
 
-        self::assertTrue($second->isClosed());
-        self::assertSame('closed', $this->redis->get($this->prefix . 'users-api:state'));
+        $this->assertTrue($second->isClosed());
+        $this->assertSame('closed', $this->redis->get($this->prefix . 'users-api:state'));
     }
 }

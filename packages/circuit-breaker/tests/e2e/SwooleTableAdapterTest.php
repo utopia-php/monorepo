@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\e2e;
 
+use PHPUnit\Framework\TestCase;
 use Utopia\CircuitBreaker\Adapter\AdapterException;
 use Utopia\CircuitBreaker\Adapter\SwooleTable;
 use Utopia\CircuitBreaker\CircuitBreaker;
-use PHPUnit\Framework\TestCase;
 
 final class SwooleTableAdapterTest extends TestCase
 {
@@ -25,18 +27,18 @@ final class SwooleTableAdapterTest extends TestCase
         $first->set('state', 'half_open');
         $first->set('failures', 2);
 
-        self::assertSame('half_open', $second->get('state'));
-        self::assertSame(2, $second->get('failures'));
-        self::assertSame(3, $second->increment('failures'));
-        self::assertSame(3, $first->get('failures'));
-        self::assertSame(1, $first->increment('missing-counter'));
-        self::assertSame(1, $second->get('missing-counter'));
+        $this->assertSame('half_open', $second->get('state'));
+        $this->assertSame(2, $second->get('failures'));
+        $this->assertSame(3, $second->increment('failures'));
+        $this->assertSame(3, $first->get('failures'));
+        $this->assertSame(1, $first->increment('missing-counter'));
+        $this->assertSame(1, $second->get('missing-counter'));
         $first->set('empty-string', '');
-        self::assertSame('', $second->get('empty-string'));
+        $this->assertSame('', $second->get('empty-string'));
 
         $first->delete('failures');
 
-        self::assertNull($second->get('failures'));
+        $this->assertNull($second->get('failures'));
     }
 
     public function testSwooleTableAdapterRejectsIncrementingStrings(): void
@@ -56,7 +58,7 @@ final class SwooleTableAdapterTest extends TestCase
 
         $adapter->set($key, 'open');
 
-        self::assertSame('open', $adapter->get($key));
+        $this->assertSame('open', $adapter->get($key));
     }
 
     public function testCircuitBreakerSharesStateThroughSwooleTable(): void
@@ -66,29 +68,29 @@ final class SwooleTableAdapterTest extends TestCase
         $second = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2, cache: $cache, key: 'billing-api');
 
         $first->call(
-            open: static fn () => 'fallback',
-            close: static function (): void {
+            open: static fn(): string => 'fallback',
+            close: static function (): never {
                 throw new \RuntimeException('failed');
-            }
+            },
         );
 
-        self::assertTrue($second->isHalfOpen());
+        $this->assertTrue($second->isHalfOpen());
 
-        self::assertSame('probe-1', $second->call(
-            open: static fn () => 'fallback',
-            close: static fn () => 'closed',
-            halfOpen: static fn () => 'probe-1'
+        $this->assertSame('probe-1', $second->call(
+            open: static fn(): string => 'fallback',
+            close: static fn(): string => 'closed',
+            halfOpen: static fn(): string => 'probe-1',
         ));
-        self::assertSame(1, $first->getSuccessCount());
+        $this->assertSame(1, $first->getSuccessCount());
 
-        self::assertSame('probe-2', $first->call(
-            open: static fn () => 'fallback',
-            close: static fn () => 'closed',
-            halfOpen: static fn () => 'probe-2'
+        $this->assertSame('probe-2', $first->call(
+            open: static fn(): string => 'fallback',
+            close: static fn(): string => 'closed',
+            halfOpen: static fn(): string => 'probe-2',
         ));
 
-        self::assertTrue($second->isClosed());
-        self::assertSame(0, $second->getFailureCount());
-        self::assertSame(0, $second->getSuccessCount());
+        $this->assertTrue($second->isClosed());
+        $this->assertSame(0, $second->getFailureCount());
+        $this->assertSame(0, $second->getSuccessCount());
     }
 }

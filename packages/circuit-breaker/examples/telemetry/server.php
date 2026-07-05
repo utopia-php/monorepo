@@ -109,7 +109,7 @@ function createTelemetry(): Telemetry
         $endpoint,
         'breaker',
         'circuit-breaker-demo',
-        (gethostname() ?: 'local') . '-' . getmypid()
+        (gethostname() ?: 'local') . '-' . getmypid(),
     );
 }
 
@@ -124,7 +124,7 @@ function createBreaker(Telemetry $telemetry, array $options): CircuitBreaker
         successThreshold: $options['successThreshold'],
         cache: new RedisAdapter(redis(), $options['prefix']),
         key: $options['key'],
-        telemetry: $telemetry
+        telemetry: $telemetry,
     );
 }
 
@@ -135,9 +135,9 @@ function performCall(CircuitBreaker $breaker, string $mode, int $latency): array
 {
     $before = $breaker->getState()->value;
     $result = $breaker->call(
-        open: static fn (): array => ['path' => 'fallback', 'message' => 'fallback response'],
-        close: static fn (): array => runDependency($mode, $latency, 'closed'),
-        halfOpen: static fn (): array => runDependency($mode, $latency, 'half_open')
+        open: static fn(): array => ['path' => 'fallback', 'message' => 'fallback response'],
+        close: static fn(): array => runDependency($mode, $latency, 'closed'),
+        halfOpen: static fn(): array => runDependency($mode, $latency, 'half_open'),
     );
     $after = $breaker->getState()->value;
 

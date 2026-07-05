@@ -22,9 +22,6 @@
         "php": ">=8.2"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.0",
-        "phpstan/phpstan": "^2.1",
-        "laravel/pint": "^1.29",
         "utopia-php/telemetry": "^0.4"
     },
     "suggest": {
@@ -36,32 +33,23 @@
     },
     "autoload": {
         "psr-4": {
-            "Utopia\\CircuitBreaker\\": "src/CircuitBreaker"
+            "Utopia\\CircuitBreaker\\": "src/CircuitBreaker/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Utopia\\Tests\\": "tests"
+            "Utopia\\Tests\\": "tests/"
         }
     },
     "scripts": {
-        "lint": "./vendor/bin/pint --test",
-        "format": "./vendor/bin/pint",
-        "check": "./vendor/bin/phpstan analyse",
-        "test": "@test:unit",
-        "test:unit": "./vendor/bin/phpunit --testsuite unit",
-        "test:e2e": "./vendor/bin/phpunit --testsuite e2e",
-        "test:e2e:docker": "sh -c 'docker compose -p breaker-e2e -f docker-compose.yml up --build --abort-on-container-exit --exit-code-from php; status=$?; docker compose -p breaker-e2e -f docker-compose.yml down -v --remove-orphans; exit $status'",
+        "test": "phpunit --testsuite unit",
+        "test:e2e": "phpunit --testsuite e2e",
         "telemetry:up": "docker compose -p breaker-telemetry -f docker-compose.telemetry.yml up -d --build",
         "telemetry:scenario": [
             "Composer\\Config::disableProcessTimeout",
             "docker compose -p breaker-telemetry -f docker-compose.telemetry.yml exec -T demo php examples/telemetry/scenario.php"
         ],
-        "telemetry:down": "docker compose -p breaker-telemetry -f docker-compose.telemetry.yml down -v --remove-orphans",
-        "test:all": [
-            "@test:unit",
-            "@test:e2e:docker"
-        ]
+        "telemetry:down": "docker compose -p breaker-telemetry -f docker-compose.telemetry.yml down -v --remove-orphans"
     },
     "minimum-stability": "stable",
     "config": {

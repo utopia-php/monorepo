@@ -43,9 +43,9 @@ while ((time() - $start) < $duration) {
     $before = $breaker->getState()->value;
 
     $result = $breaker->call(
-        open: static fn (): array => ['path' => 'fallback'],
-        close: static fn (): array => dependency($mode, $latency),
-        halfOpen: static fn (): array => dependency($mode, $latency)
+        open: static fn(): array => ['path' => 'fallback'],
+        close: static fn(): array => dependency($mode, $latency),
+        halfOpen: static fn(): array => dependency($mode, $latency),
     );
 
     $counts['calls']++;
@@ -76,7 +76,7 @@ while ((time() - $start) < $duration) {
             $counts['fallback'],
             $counts['short_circuit'],
             $breaker->getFailureCount(),
-            $breaker->getSuccessCount()
+            $breaker->getSuccessCount(),
         );
         $lastReport = time();
     }
@@ -93,7 +93,7 @@ printf(
     $counts['fallback'],
     $counts['short_circuit'],
     $counts['requested_success'],
-    $counts['requested_failure']
+    $counts['requested_failure'],
 );
 
 function createTelemetry(): Telemetry
@@ -108,7 +108,7 @@ function createTelemetry(): Telemetry
         $endpoint,
         'breaker',
         'circuit-breaker-demo',
-        (gethostname() ?: 'local') . '-scenario-' . getmypid()
+        (gethostname() ?: 'local') . '-scenario-' . getmypid(),
     );
 }
 
@@ -123,7 +123,7 @@ function createBreaker(Telemetry $telemetry, array $config): CircuitBreaker
         successThreshold: $config['successThreshold'],
         cache: new RedisAdapter(redis(), $config['prefix']),
         key: $config['key'],
-        telemetry: $telemetry
+        telemetry: $telemetry,
     );
 }
 

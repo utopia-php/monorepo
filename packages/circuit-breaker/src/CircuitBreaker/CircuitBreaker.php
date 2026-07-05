@@ -29,19 +29,19 @@ class CircuitBreaker
     private ?Gauge $eventTimestamp = null;
 
     public function __construct(
-        private int $threshold = 3,
-        private int $timeout = 30,
-        private int $successThreshold = 2,
-        private ?Adapter $cache = null,
-        private string $key = 'default',
+        private readonly int $threshold = 3,
+        private readonly int $timeout = 30,
+        private readonly int $successThreshold = 2,
+        private readonly ?Adapter $cache = null,
+        private readonly string $key = 'default',
         ?Telemetry $telemetry = null,
-        private string $metricPrefix = ''
+        private readonly string $metricPrefix = '',
     ) {
-        if ($this->cache !== null && $this->key === '') {
+        if ($this->cache instanceof \Utopia\CircuitBreaker\Adapter && $this->key === '') {
             throw new \InvalidArgumentException('Key must not be empty when a cache adapter is configured.');
         }
 
-        if ($telemetry !== null) {
+        if ($telemetry instanceof \Utopia\Telemetry\Adapter) {
             $this->setTelemetry($telemetry);
         }
         $this->syncFromCache();
@@ -109,7 +109,7 @@ class CircuitBreaker
                 return $open();
             }
         } catch (\Throwable $e) {
-            $exceptionType = $exceptionType ?? $e::class;
+            $exceptionType ??= $e::class;
             $outcome = $outcome === 'unknown' ? 'exception' : $outcome . '_exception';
             throw $e;
         } finally {
@@ -207,7 +207,7 @@ class CircuitBreaker
 
     private function syncFromCache(): void
     {
-        if ($this->cache === null) {
+        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return;
         }
 
@@ -231,7 +231,7 @@ class CircuitBreaker
 
     private function incrementFailures(): int
     {
-        if ($this->cache === null) {
+        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return ++$this->failures;
         }
 
@@ -246,7 +246,7 @@ class CircuitBreaker
 
     private function incrementSuccesses(): int
     {
-        if ($this->cache === null) {
+        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return ++$this->successes;
         }
 
@@ -257,7 +257,7 @@ class CircuitBreaker
     {
         $this->openedAt = $openedAt;
 
-        if ($this->cache === null) {
+        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return;
         }
 
@@ -272,12 +272,12 @@ class CircuitBreaker
 
     private function loadState(): CircuitState
     {
-        if ($this->cache === null) {
+        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return $this->state;
         }
 
         $value = $this->cache->get($this->cacheField(self::STATE_FIELD));
-        if (!is_string($value)) {
+        if (!\is_string($value)) {
             return CircuitState::CLOSED;
         }
 
@@ -286,7 +286,7 @@ class CircuitBreaker
 
     private function loadInteger(string $field): int
     {
-        if ($this->cache === null) {
+        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return 0;
         }
 
@@ -297,7 +297,7 @@ class CircuitBreaker
 
     private function loadNullableInteger(string $field): ?int
     {
-        if ($this->cache === null) {
+        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return null;
         }
 
