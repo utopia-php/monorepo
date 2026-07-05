@@ -72,10 +72,10 @@ final class BackgroundTest extends TestCase
         $this->assertSame(range(1, 20), array_column($published, 'id'));
     }
 
-    public function testConcurrentWorkersDeliverEveryMessage(): void
+    public function testConcurrentCoroutinesDeliverEveryMessage(): void
     {
         $published = [];
-        $background = new Background($this->recordingPublisher($published), workers: 4);
+        $background = new Background($this->recordingPublisher($published), coroutines: 4);
 
         Coroutine\run(function () use ($background): void {
             $background->start();
