@@ -72,6 +72,28 @@ final class BackgroundTest extends TestCase
         $this->assertSame(range(1, 20), array_column($published, 'id'));
     }
 
+    public function testConcurrentWorkersDeliverEveryMessage(): void
+    {
+        $published = [];
+        $background = new Background($this->recordingPublisher($published), workers: 4);
+
+        Coroutine\run(function () use ($background): void {
+            $background->start();
+
+            for ($i = 1; $i <= 20; $i++) {
+                $background->enqueue(new Queue('emails'), ['id' => $i]);
+            }
+
+            $background->shutdown();
+        });
+
+        // Four readers dispatch concurrently, so order isn't guaranteed — but
+        // every message must land exactly once.
+        $ids = array_column($published, 'id');
+        sort($ids);
+        $this->assertSame(range(1, 20), $ids);
+    }
+
     public function testDelegatesManagementCalls(): void
     {
         $published = [['id' => 1], ['id' => 2]];
