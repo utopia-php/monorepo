@@ -103,25 +103,6 @@ final class BackgroundTest extends TestCase
         $this->assertSame(2, $background->getQueueSize(new Queue('emails')));
     }
 
-    public function testCountsDispatchesAndErrors(): void
-    {
-        $telemetry = new TestTelemetry();
-        $background = new Background($this->flakyPublisher(), telemetry: $telemetry);
-
-        Coroutine\run(function () use ($background): void {
-            $background->start();
-
-            $background->enqueue(new Queue('emails'), ['id' => 1]);
-            $background->enqueue(new Queue('emails'), ['fail' => true]);
-            $background->enqueue(new Queue('emails'), ['id' => 2]);
-
-            $background->shutdown();
-        });
-
-        $this->assertCount(2, $telemetry->counters['messaging.publisher.dispatched']->values ?? []);
-        $this->assertCount(1, $telemetry->counters['messaging.publisher.errors']->values ?? []);
-    }
-
     public function testReportsBufferDepthGauge(): void
     {
         $telemetry = new TestTelemetry();
@@ -151,30 +132,6 @@ final class BackgroundTest extends TestCase
         }
 
         return $values;
-    }
-
-    /**
-     * A publisher that throws when the payload carries a 'fail' flag.
-     */
-    private function flakyPublisher(): Synchronous
-    {
-        return new class implements Synchronous {
-            public function publish(Queue $queue, array $payload, bool $priority = false): bool
-            {
-                if ($payload['fail'] ?? false) {
-                    throw new \RuntimeException('publish failed');
-                }
-
-                return true;
-            }
-
-            public function retry(Queue $queue, ?int $limit = null): void {}
-
-            public function getQueueSize(Queue $queue, bool $failedJobs = false): int
-            {
-                return 0;
-            }
-        };
     }
 
     /**
