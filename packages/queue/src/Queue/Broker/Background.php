@@ -10,6 +10,9 @@ use Swoole\Coroutine\WaitGroup;
 use Utopia\Queue\Publisher\Asynchronous;
 use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
+use Utopia\Telemetry\Adapter as Telemetry;
+use Utopia\Telemetry\Adapter\None as NoTelemetry;
+use Utopia\Telemetry\Counter;
 
 /**
  * Wraps a synchronous publisher and adds asynchronous, background dispatch on
@@ -29,6 +32,9 @@ use Utopia\Queue\Queue;
  * — wrap a connection Pool instead, so each dispatch leases its own connection.
  * More than one coroutine also gives up FIFO dispatch order.
  *
+ * Telemetry (no-op by default) reports the buffer depth as an observable gauge
+ * and counts background dispatches and failures.
+ *
  * publish() bypasses the channel and delegates synchronously.
  */
 class Background implements Synchronous, Asynchronous
@@ -39,16 +45,39 @@ class Background implements Synchronous, Asynchronous
 
     private readonly int $coroutines;
 
+    private readonly Counter $dispatched;
+
+    private readonly Counter $errors;
+
     private bool $started = false;
 
     public function __construct(
         private readonly Synchronous $publisher,
         int $capacity = 512,
         int $coroutines = 1,
+        Telemetry $telemetry = new NoTelemetry(),
     ) {
         $this->channel = new Channel(max(1, $capacity));
         $this->waitGroup = new WaitGroup();
         $this->coroutines = max(1, $coroutines);
+
+        $this->dispatched = $telemetry->createCounter(
+            'messaging.publisher.dispatched',
+            '{message}',
+            'Messages published from the background buffer.',
+        );
+        $this->errors = $telemetry->createCounter(
+            'messaging.publisher.errors',
+            '{message}',
+            'Messages that failed to publish from the background buffer.',
+        );
+        $telemetry->createObservableGauge(
+            'messaging.publisher.buffer.depth',
+            '{message}',
+            'Publishes buffered awaiting background dispatch.',
+        )->observe(function (callable $observe): void {
+            $observe($this->channel->length(), []);
+        });
     }
 
     /**
@@ -70,12 +99,7 @@ class Background implements Synchronous, Asynchronous
             Coroutine::create(function (): void {
                 try {
                     while (($task = $this->channel->pop()) instanceof \Closure) {
-                        try {
-                            $task();
-                        } catch (\Throwable $error) {
-                            // Fire-and-forget: no producer to surface to, so log and move on.
-                            error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
-                        }
+                        $task();
                     }
                 } finally {
                     $this->waitGroup->done();
@@ -122,7 +146,19 @@ class Background implements Synchronous, Asynchronous
         }
 
         return $this->channel->push(function () use ($queue, $payload, $priority): void {
-            $this->publisher->publish($queue, $payload, $priority);
+            $attributes = [
+                'messaging.destination.name' => $queue->name,
+                'messaging.destination.namespace' => $queue->namespace,
+            ];
+
+            try {
+                $this->publisher->publish($queue, $payload, $priority);
+                $this->dispatched->add(1, $attributes);
+            } catch (\Throwable $error) {
+                $this->errors->add(1, $attributes);
+                // Fire-and-forget: no producer to surface to, so log and move on.
+                error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
+            }
         });
     }
 
