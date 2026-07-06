@@ -47,6 +47,7 @@ Arrows point at dependencies (`platform --> http` means platform requires http).
 graph TD
     cli --> servers
     client --> pools
+    client --> psr7
     client --> span
     config --> validators
     console --> validators
@@ -54,9 +55,11 @@ graph TD
     dns --> telemetry
     dns --> validators
     fastly --> client
+    fastly --> psr7
     http --> di
     http --> servers
     http --> compression
+    http --> psr7
     http --> telemetry
     http --> validators
     http --> system
