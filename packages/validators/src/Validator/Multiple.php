@@ -38,8 +38,6 @@ class Multiple extends Validator
      * Add rule
      *
      * Add a new rule to the end of the rules containing array
-     *
-     * @return $this
      */
     public function addRule(Validator $rule): static
     {

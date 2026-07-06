@@ -38,6 +38,20 @@ function sh(string $command): string
     return trim(implode(PHP_EOL, $output));
 }
 
+function rm(string $path): void
+{
+    if (is_file($path) || is_link($path)) {
+        unlink($path);
+
+        return;
+    }
+
+    foreach (array_diff(scandir($path) ?: [], ['.', '..']) as $entry) {
+        rm("{$path}/{$entry}");
+    }
+    rmdir($path);
+}
+
 /**
  * @return string[]
  */
@@ -83,21 +97,18 @@ function mirror_workflow(string $package): string
     on:
       pull_request_target:
         types: [opened]
+      issues:
+        types: [opened]
 
     permissions:
+      issues: write
       pull-requests: write
 
     jobs:
       redirect:
-        runs-on: ubuntu-latest
-        steps:
-          - name: Redirect pull request to the monorepo
-            env:
-              GH_TOKEN: ${{ github.token }}
-              PR: ${{ github.event.pull_request.html_url }}
-            run: |
-              gh pr comment "$PR" --body "Thanks for contributing! This repository is a read-only mirror — development for this library happens in [\`packages/{package}\`](https://github.com/utopia-php/monorepo/tree/main/packages/{package}) in the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Please open this pull request there instead."
-              gh pr close "$PR"
+        uses: utopia-php/monorepo/.github/workflows/mirror-redirect.yml@main
+        with:
+          package: {package}
     YAML;
 
     return str_replace('{package}', $package, $yaml) . "\n";
@@ -110,7 +121,8 @@ function mirror_workflow(string $package): string
 function toolchain(): void
 {
     if (!is_file('vendor/bin/phpunit')) {
-        passthru('composer update --no-interaction --prefer-dist --no-progress', $code);
+        $install = is_file('composer.lock') ? 'install' : 'update';
+        passthru("composer {$install} --no-interaction --prefer-dist --no-progress", $code);
         $code === 0 || fail('failed to install the monorepo toolchain');
     }
     putenv('PATH=' . getcwd() . '/vendor/bin:' . getenv('PATH'));
@@ -330,14 +342,19 @@ switch ($command) {
             }
         }
 
-        // The monorepo's own CI gates every package pre-merge, so the mirror
-        // needs no test or QA workflows — only the redirect that closes PRs
-        // opened against it. Drop whatever the upstream shipped, write just that.
+        // The monorepo owns CI and issue tracking, so the mirror needs no test,
+        // QA, or issue-template files - only the redirect workflow.
         $workflows = "{$directory}/.github/workflows";
         @mkdir($workflows, 0755, true);
         array_map('unlink', glob("{$workflows}/*.{yml,yaml}", GLOB_BRACE) ?: []);
         file_put_contents("{$workflows}/mirror.yml", mirror_workflow($package));
-        out('wrote .github/workflows/mirror.yml (closes mirror PRs with a redirect)');
+        out('wrote .github/workflows/mirror.yml (closes mirror PRs and issues with a redirect)');
+        foreach (["{$directory}/.github/ISSUE_TEMPLATE", "{$directory}/ISSUE_TEMPLATE"] as $templates) {
+            if (is_dir($templates)) {
+                rm($templates);
+                out("removed " . str_replace("{$directory}/", '', $templates) . ' (monorepo issue tracking is canonical)');
+            }
+        }
 
         // Point readers at the monorepo.
         $readme = "{$directory}/README.md";
@@ -630,6 +647,7 @@ switch ($command) {
                     $manifest['repositories'] = array_merge([[
                         'type' => 'path',
                         'url' => '../*',
+                        'only' => array_keys($versions),
                         'options' => ['symlink' => true, 'versions' => $versions],
                     ]], $manifest['repositories'] ?? []);
                     file_put_contents("{$directory}/composer.linked.json", json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");

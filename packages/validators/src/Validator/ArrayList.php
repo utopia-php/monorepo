@@ -84,6 +84,6 @@ class ArrayList extends Validator
                 return false;
             }
         }
-        return !($this->length && \count($value) > $this->length);
+        return !$this->length || \count($value) <= $this->length;
     }
 }

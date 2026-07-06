@@ -70,7 +70,6 @@ class Scrypt extends Hash
      * Set CPU cost parameter
      *
      * @param  int  $cost  CPU cost parameter N. Must be larger than 1 and a power of 2
-     * @return static
      *
      * @throws \InvalidArgumentException
      */
