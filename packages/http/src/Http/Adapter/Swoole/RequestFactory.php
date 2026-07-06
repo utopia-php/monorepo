@@ -4,44 +4,43 @@ declare(strict_types=1);
 
 namespace Utopia\Http\Adapter\Swoole;
 
+use Psr\Http\Message\ServerRequestInterface;
 use Swoole\Http\Request as SwooleRequest;
 use Utopia\Psr7\ServerRequest;
 use Utopia\Psr7\Stream;
 use Utopia\Psr7\UploadedFile;
 use Utopia\Psr7\Uri;
 
-class Request extends ServerRequest
+/**
+ * @internal
+ */
+final class RequestFactory
 {
-    public function __construct(private readonly SwooleRequest $swoole)
+    public function create(SwooleRequest $request): ServerRequestInterface
     {
-        $rawBody = $swoole->rawContent() ?: '';
-        $headers = $this->headersFromSwoole();
-        $server = $swoole->server ?? [];
+        $rawBody = $request->rawContent() ?: '';
+        $headers = $this->headersFromSwoole($request);
+        $server = $request->server ?? [];
         $method = $server['request_method'] ?? 'UNKNOWN';
 
-        parent::__construct(
+        return new ServerRequest(
             method: (string) $method,
-            uri: $this->uriFromSwoole($headers),
+            uri: $this->uriFromSwoole($request, $headers),
             serverParams: $server,
-            cookieParams: $swoole->cookie ?? [],
-            queryParams: $swoole->get ?? [],
-            uploadedFiles: UploadedFile::normalizeFiles($swoole->files ?? []),
-            parsedBody: $this->parsedBody((string) $method, $headers, $rawBody),
+            cookieParams: $request->cookie ?? [],
+            queryParams: $request->get ?? [],
+            uploadedFiles: UploadedFile::normalizeFiles($request->files ?? []),
+            parsedBody: $this->parsedBody($request, (string) $method, $headers, $rawBody),
             body: new Stream($rawBody),
             headers: $headers,
         );
-    }
-
-    public function getSwooleRequest(): SwooleRequest
-    {
-        return $this->swoole;
     }
 
     /**
      * @param array<string, string|array<int, string>> $headers
      * @return array<string, mixed>|null
      */
-    private function parsedBody(string $method, array $headers, string $rawBody): ?array
+    private function parsedBody(SwooleRequest $request, string $method, array $headers, string $rawBody): ?array
     {
         if (!\in_array(strtoupper($method), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
             return null;
@@ -57,15 +56,15 @@ class Request extends ServerRequest
             return \is_array($decoded) ? $decoded : [];
         }
 
-        return $this->swoole->post ?? [];
+        return $request->post ?? [];
     }
 
     /**
      * @param array<string, string|array<int, string>> $headers
      */
-    private function uriFromSwoole(array $headers): Uri
+    private function uriFromSwoole(SwooleRequest $request, array $headers): Uri
     {
-        $server = $this->swoole->server ?? [];
+        $server = $request->server ?? [];
         $requestUri = (string) ($server['request_uri'] ?? '/');
         $query = (string) ($server['query_string'] ?? '');
 
@@ -80,13 +79,13 @@ class Request extends ServerRequest
             return Uri::parse($requestUri);
         }
 
-        return Uri::parse($this->schemeFromSwoole($headers) . '://' . $host . $requestUri);
+        return Uri::parse($this->schemeFromSwoole($request, $headers) . '://' . $host . $requestUri);
     }
 
     /**
      * @param array<string, string|array<int, string>> $headers
      */
-    private function schemeFromSwoole(array $headers): string
+    private function schemeFromSwoole(SwooleRequest $request, array $headers): string
     {
         $forwarded = $headers['x-forwarded-proto'] ?? $headers['X-Forwarded-Proto'] ?? null;
         $forwarded = \is_array($forwarded) ? ($forwarded[0] ?? null) : $forwarded;
@@ -95,17 +94,17 @@ class Request extends ServerRequest
             return (string) $forwarded;
         }
 
-        return ($this->swoole->server['server_protocol'] ?? '') === 'HTTP/1.1' ? 'http' : 'https';
+        return ($request->server['server_protocol'] ?? '') === 'HTTP/1.1' ? 'http' : 'https';
     }
 
     /**
      * @return array<string, string|array<int, string>>
      */
-    private function headersFromSwoole(): array
+    private function headersFromSwoole(SwooleRequest $request): array
     {
         $headers = [];
 
-        foreach ($this->swoole->header ?? [] as $name => $value) {
+        foreach ($request->header ?? [] as $name => $value) {
             $headers[(string) $name] = \is_array($value)
                 ? array_values(array_map(strval(...), $value))
                 : (string) $value;

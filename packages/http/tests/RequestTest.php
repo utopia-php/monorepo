@@ -6,7 +6,7 @@ namespace Utopia\Http\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ServerRequestInterface;
-use Utopia\Http\Adapter\FPM\Request;
+use Utopia\Http\Adapter\FPM\RequestFactory;
 
 final class RequestTest extends TestCase
 {
@@ -35,7 +35,7 @@ final class RequestTest extends TestCase
         $_GET = ['active' => '1'];
         $_COOKIE = ['session' => 'abc'];
 
-        $request = new Request();
+        $request = new RequestFactory()->create();
 
         $this->assertInstanceOf(ServerRequestInterface::class, $request);
         $this->assertSame('GET', $request->getMethod());
@@ -50,7 +50,7 @@ final class RequestTest extends TestCase
         $_SERVER['REQUEST_METHOD'] = 'GET';
         $_SERVER['REQUEST_URI'] = '/';
 
-        $request = new Request();
+        $request = new RequestFactory()->create();
         $changed = $request
             ->withMethod('POST')
             ->withQueryParams(['key' => 'value'])

@@ -9,11 +9,16 @@ class Server extends Adapter
 {
     private ?Container $context = null;
 
-    public function __construct(private Container $resources) {}
+    private RequestFactory $requestFactory;
+
+    public function __construct(private Container $resources)
+    {
+        $this->requestFactory = new RequestFactory();
+    }
 
     public function onRequest(callable $callback): void
     {
-        $request = new Request();
+        $request = $this->requestFactory->create();
         $response = new Response();
 
         $this->context = new Container($this->resources);

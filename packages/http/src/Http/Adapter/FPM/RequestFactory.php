@@ -4,20 +4,24 @@ declare(strict_types=1);
 
 namespace Utopia\Http\Adapter\FPM;
 
+use Psr\Http\Message\ServerRequestInterface;
 use Utopia\Psr7\ServerRequest;
 use Utopia\Psr7\Stream;
 use Utopia\Psr7\UploadedFile;
 use Utopia\Psr7\Uri;
 
-class Request extends ServerRequest
+/**
+ * @internal
+ */
+final class RequestFactory
 {
-    public function __construct()
+    public function create(): ServerRequestInterface
     {
         $rawBody = file_get_contents('php://input') ?: '';
         $headers = $this->headersFromGlobals();
         $method = $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN';
 
-        parent::__construct(
+        return new ServerRequest(
             method: $method,
             uri: $this->uriFromGlobals(),
             serverParams: $_SERVER,
