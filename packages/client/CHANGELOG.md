@@ -12,9 +12,7 @@ This project follows semantic versioning.
 - Immutable client defaults for headers, base URI, basic auth, and bearer auth.
 - cURL adapter for regular PHP runtimes.
 - Swoole coroutine adapter for coroutine runtimes.
-- PSR-7 message implementations and PSR-17 factories under `Utopia\Psr7`.
-- Request factories for JSON, XML, plain-text, form-encoded, query-string, raw-body, and multipart requests.
-- Direct response helpers for JSON, XML, plain-text, form-encoded, and multipart decoding, plus `contentType()` for the parameter-stripped media type.
+- Dependency on `utopia-php/psr7` for `Utopia\Psr7` PSR-7 messages and PSR-17 factories.
 - End-to-end response streaming via `stream()`, delivering the body to a sink chunk-by-chunk with bounded memory.
 - `Utopia\Psr18\StreamingClientInterface` for the streaming counterpart to PSR-18; the `Adapter` interface composes it with `Psr\Http\Client\ClientInterface`, and `Utopia\Client` implements `Adapter`.
 - Bounded-memory request uploads on the cURL adapter, streaming the body through a read callback; `Stream\Factory::createStreamFromFile()` opens files lazily and `Stream::fromResource()` wraps a resource without copying it.
@@ -28,4 +26,3 @@ This project follows semantic versioning.
 - Opt-in W3C Trace Context propagation via `withTracePropagation()` (off by default): forwards the active `utopia-php/span` trace downstream as a `traceparent` header.
 - `Utopia\Client\Decorator` base class for composing adapter decorators.
 - PHP 8.4+ tooling with Pint, PHPStan level 10, Rector, PHPUnit, Composer audit, and GitHub Actions CI.
-- Local PSR/RFC spec copies and translated testing requirements.

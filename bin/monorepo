@@ -648,7 +648,7 @@ switch ($command) {
                         'type' => 'path',
                         'url' => '../*',
                         'only' => array_keys($versions),
-                        'options' => ['symlink' => true, 'versions' => $versions],
+                        'options' => ['symlink' => false, 'versions' => $versions],
                     ]], $manifest['repositories'] ?? []);
                     file_put_contents("{$directory}/composer.linked.json", json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
                     $environment = 'COMPOSER=composer.linked.json ';
@@ -709,9 +709,28 @@ switch ($command) {
             out("==> {$package}");
             $directory = "packages/{$package}";
 
-            passthru("cd {$directory} && composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs", $code);
+            $environment = '';
+            if (isset($options['linked'])) {
+                $versions = linked_versions($package);
+                if ($versions === []) {
+                    out('no local siblings to link; running registry-resolved');
+                } else {
+                    $manifest = manifest($package);
+                    $manifest['repositories'] = array_merge([[
+                        'type' => 'path',
+                        'url' => '../*',
+                        'only' => array_keys($versions),
+                        'options' => ['symlink' => false, 'versions' => $versions],
+                    ]], $manifest['repositories'] ?? []);
+                    file_put_contents("{$directory}/composer.linked.json", json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+                    $environment = 'COMPOSER=composer.linked.json ';
+                    out('linked: ' . implode(', ', array_keys($versions)));
+                }
+            }
+
+            passthru("cd {$directory} && {$environment}composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs", $code);
             if ($code === 0) {
-                passthru("cd {$directory} && composer bench", $code);
+                passthru("cd {$directory} && {$environment}composer bench", $code);
             }
             if ($code !== 0) {
                 $failed[] = $package;
