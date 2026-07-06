@@ -173,7 +173,7 @@ class ServerRequest extends Message implements ServerRequestInterface
     }
 
     /**
-     * @param mixed $data
+     * @phpstan-param mixed $data
      */
     public function withParsedBody(mixed $data): ServerRequestInterface
     {

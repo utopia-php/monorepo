@@ -12,6 +12,7 @@ use RuntimeException;
 final class UploadedFile implements UploadedFileInterface
 {
     private ?StreamInterface $stream = null;
+
     private bool $moved = false;
 
     public function __construct(
@@ -53,7 +54,7 @@ final class UploadedFile implements UploadedFileInterface
             throw new RuntimeException('Uploaded file is not available.');
         }
 
-        if ($this->stream === null) {
+        if (!$this->stream instanceof StreamInterface) {
             $resource = fopen($this->file, 'r');
 
             if (!\is_resource($resource)) {
