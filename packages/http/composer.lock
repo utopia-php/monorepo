@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e12ac81ac167bdc0c9d1683aa60e96f4",
+    "content-hash": "9c637b96e1be03b55ac3cc1c38c736d6",
     "packages": [
         {
             "name": "brick/math",
@@ -1975,10 +1975,16 @@
         {
             "name": "utopia-php/psr7",
             "version": "0.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/utopia-php/psr7.git",
+                "reference": "079dd7f9a51a769ab560d8b6057e276ecd5dae41"
+            },
             "dist": {
-                "type": "path",
-                "url": "../psr7",
-                "reference": "9347bbcb06bb950b6b7312c6a4651d5e8562a23a"
+                "type": "zip",
+                "url": "https://api.github.com/repos/utopia-php/psr7/zipball/079dd7f9a51a769ab560d8b6057e276ecd5dae41",
+                "reference": "079dd7f9a51a769ab560d8b6057e276ecd5dae41",
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.4",
@@ -1994,16 +2000,7 @@
                     "Utopia\\Psr7\\": "src/Psr7/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "Utopia\\Tests\\Psr7\\": "tests/Psr7/"
-                }
-            },
-            "scripts": {
-                "test": [
-                    "phpunit --configuration phpunit.xml"
-                ]
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -2015,10 +2012,11 @@
                 "psr-7",
                 "utopia"
             ],
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "support": {
+                "issues": "https://github.com/utopia-php/psr7/issues",
+                "source": "https://github.com/utopia-php/psr7/tree/0.1.0"
+            },
+            "time": "2026-07-06T11:47:31+00:00"
         },
         {
             "name": "utopia-php/servers",

@@ -21,18 +21,6 @@
             "Tests\\E2E\\": "tests/e2e"
         }
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../psr7",
-            "options": {
-                "symlink": true,
-                "versions": {
-                    "utopia-php/psr7": "0.1.0"
-                }
-            }
-        }
-    ],
     "scripts": {
         "test": "phpunit --configuration phpunit.xml --testsuite unit",
         "test:e2e": "phpunit --configuration phpunit.xml --testsuite e2e-fpm,e2e-swoole",
