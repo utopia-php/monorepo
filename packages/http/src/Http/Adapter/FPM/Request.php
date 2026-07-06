@@ -1,267 +1,116 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Http\Adapter\FPM;
 
-use Utopia\Http\Request as UtopiaRequest;
+use Utopia\Psr7\ServerRequest;
+use Utopia\Psr7\Stream;
+use Utopia\Psr7\UploadedFile;
+use Utopia\Psr7\Uri;
 
-class Request extends UtopiaRequest
+class Request extends ServerRequest
 {
-    /**
-     * Container for raw php://input parsed stream
-     *
-     * @var string
-     */
-    protected $rawPayload = '';
-
-    /**
-     * Get raw payload
-     *
-     * Method for getting the HTTP request payload as a raw string.
-     */
-    public function getRawPayload(): string
+    public function __construct()
     {
-        $this->generateInput();
+        $rawBody = file_get_contents('php://input') ?: '';
+        $headers = $this->headersFromGlobals();
+        $method = $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN';
 
-        return $this->rawPayload;
+        parent::__construct(
+            method: $method,
+            uri: $this->uriFromGlobals(),
+            serverParams: $_SERVER,
+            cookieParams: $_COOKIE,
+            queryParams: $_GET,
+            uploadedFiles: UploadedFile::normalizeFiles($_FILES),
+            parsedBody: $this->parsedBody($method, $headers, $rawBody),
+            body: new Stream($rawBody),
+            headers: $headers,
+        );
     }
 
     /**
-     * Get server
-     *
-     * Method for querying server parameters. If $key is not found $default value will be returned.
+     * @param array<string, string|array<int, string>> $headers
+     * @return array<string, mixed>|null
      */
-    public function getServer(string $key, ?string $default = null): ?string
+    private function parsedBody(string $method, array $headers, string $rawBody): ?array
     {
-        return $_SERVER[$key] ?? $default;
-    }
-
-    /**
-     * Set server
-     *
-     * Method for setting server parameters.
-     */
-    public function setServer(string $key, string $value): static
-    {
-        $_SERVER[$key] = $value;
-
-        return $this;
-    }
-
-    /**
-     * Get IP
-     *
-     * Returns users IP address.
-     * Support HTTP_X_FORWARDED_FOR header usually return
-     *  from different proxy servers or PHP default REMOTE_ADDR
-     */
-    public function getIP(): string
-    {
-        $remoteAddr = $this->getServer('REMOTE_ADDR') ?? '0.0.0.0';
-
-        foreach ($this->trustedIpHeaders as $header) {
-            $headerValue = $this->getHeaderLine($header);
-
-            if (empty($headerValue)) {
-                continue;
-            }
-
-            // Leftmost IP address is the address of the originating client
-            $ips = explode(',', $headerValue);
-            $ip = trim($ips[0]);
-
-            // Validate IP format (supports both IPv4 and IPv6)
-            if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return $ip;
-            }
+        if (!\in_array(strtoupper($method), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            return null;
         }
 
-        return $remoteAddr;
+        $contentType = $headers['Content-Type'] ?? $headers['content-type'] ?? '';
+        $contentType = \is_array($contentType) ? ($contentType[0] ?? '') : $contentType;
+        $contentType = trim(explode(';', (string) $contentType)[0]);
+
+        if ($contentType === 'application/json') {
+            $decoded = json_decode($rawBody, true);
+
+            return \is_array($decoded) ? $decoded : [];
+        }
+
+        return $_POST;
     }
 
-    /**
-     * Get Protocol
-     *
-     * Returns request protocol.
-     * Support HTTP_X_FORWARDED_PROTO header usually return
-     *  from different proxy servers or PHP default REQUEST_SCHEME
-     */
-    public function getProtocol(): string
+    private function uriFromGlobals(): Uri
     {
-        return $this->getServer('HTTP_X_FORWARDED_PROTO', $this->getServer('REQUEST_SCHEME')) ?? 'https';
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+
+        if ($host === '') {
+            return Uri::parse($requestUri);
+        }
+
+        return Uri::parse($this->schemeFromGlobals() . '://' . $host . $requestUri);
     }
 
-    /**
-     * Get Port
-     *
-     * Returns request port.
-     */
-    public function getPort(): string
+    private function schemeFromGlobals(): string
     {
-        return (string) parse_url($this->getProtocol() . '://' . $this->getServer('HTTP_HOST', ''), PHP_URL_PORT);
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            return (string) $_SERVER['HTTP_X_FORWARDED_PROTO'];
+        }
+
+        if (!empty($_SERVER['REQUEST_SCHEME'])) {
+            return (string) $_SERVER['REQUEST_SCHEME'];
+        }
+
+        if (($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off') {
+            return 'https';
+        }
+
+        return 'http';
     }
 
     /**
-     * Get Hostname
-     *
-     * Returns request hostname.
-     */
-    public function getHostname(): string
-    {
-        $hostname = parse_url($this->getProtocol() . '://' . $this->getServer('HTTP_HOST', ''), PHP_URL_HOST);
-        return strtolower((string) ($hostname));
-    }
-
-    /**
-     * Get Method
-     *
-     * Return HTTP request method
-     */
-    public function getMethod(): string
-    {
-        return $this->getServer('REQUEST_METHOD') ?? 'UNKNOWN';
-    }
-
-    /**
-     * Set Method
-     *
-     * Set HTTP request method
-     */
-    public function setMethod(string $method): static
-    {
-        $this->setServer('REQUEST_METHOD', $method);
-
-        return $this;
-    }
-
-    /**
-     * Get URI
-     *
-     * Return HTTP request URI
-     */
-    #[\Override]
-    public function getURI(): string
-    {
-        return $this->getServer('REQUEST_URI') ?? '';
-    }
-
-    /**
-     * Get Path
-     *
-     * Return HTTP request path
-     */
-    public function setURI(string $uri): static
-    {
-        $this->setServer('REQUEST_URI', $uri);
-
-        return $this;
-    }
-
-    /**
-     * Get files
-     *
-     * Method for querying upload files data. If $key is not found empty array will be returned.
-     *
-     * @return array<string, mixed>
-     */
-    public function getFiles(string $key): array
-    {
-        return $_FILES[$key] ?? [];
-    }
-
-    /**
-     * Get Referer
-     *
-     * Return HTTP referer header
-     */
-    public function getReferer(string $default = ''): string
-    {
-        return (string) $this->getServer('HTTP_REFERER', $default);
-    }
-
-    /**
-     * Get Origin
-     *
-     * Return HTTP origin header
-     */
-    public function getOrigin(string $default = ''): string
-    {
-        return (string) $this->getServer('HTTP_ORIGIN', $default);
-    }
-
-    /**
-     * Get User Agent
-     *
-     * Return HTTP user agent header
-     */
-    public function getUserAgent(string $default = ''): string
-    {
-        return (string) $this->getServer('HTTP_USER_AGENT', $default);
-    }
-
-    /**
-     * Get Accept
-     *
-     * Return HTTP accept header
-     */
-    public function getAccept(string $default = ''): string
-    {
-        return (string) $this->getServer('HTTP_ACCEPT', $default);
-    }
-
-    /**
-     * Generate cookies
-     *
-     * Parse request cookies into an associative array of cookie name to value.
-     *
      * @return array<string, string>
      */
-    protected function generateCookies(): array
+    private function headersFromGlobals(): array
     {
-        if (null === $this->cookies) {
-            $this->cookies = $_COOKIE;
+        if (\function_exists('getallheaders')) {
+            /** @var array<string, string> $headers */
+            $headers = getallheaders();
+
+            return $headers;
         }
 
-        return $this->cookies;
-    }
+        $headers = [];
 
-    /**
-     * Generate input
-     *
-     * Generate PHP input stream and parse it as an array in order to handle different content type of requests
-     *
-     * @return array<string, mixed>
-     */
-    protected function generateInput(): array
-    {
-        if (null === $this->queryString) {
-            $this->queryString = $_GET;
-        }
-        if (null === $this->payload) {
-            $contentType = $this->getHeaderLine('content-type');
-
-            // Get content-type without the charset
-            $length = strpos($contentType, ';');
-            $length = (empty($length)) ? \strlen($contentType) : $length;
-            $contentType = substr($contentType, 0, $length);
-
-            $this->rawPayload = file_get_contents('php://input') ?: '';
-
-            $this->payload = match ($contentType) {
-                'application/json' => json_decode($this->rawPayload, true),
-                default => $_POST,
-            };
-
-            if (empty($this->payload)) { // Make sure we return same data type even if json payload is empty or failed
-                $this->payload = [];
+        foreach ($_SERVER as $name => $value) {
+            if (str_starts_with($name, 'HTTP_')) {
+                $header = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))));
+                $headers[$header] = (string) $value;
             }
         }
 
-        return match ($this->getServer('REQUEST_METHOD', '')) {
-            self::METHOD_POST,
-            self::METHOD_PUT,
-            self::METHOD_PATCH,
-            self::METHOD_DELETE => $this->payload,
-            default => $this->queryString,
-        };
+        if (isset($_SERVER['CONTENT_TYPE'])) {
+            $headers['Content-Type'] = (string) $_SERVER['CONTENT_TYPE'];
+        }
+
+        if (isset($_SERVER['CONTENT_LENGTH'])) {
+            $headers['Content-Length'] = (string) $_SERVER['CONTENT_LENGTH'];
+        }
+
+        return $headers;
     }
 }

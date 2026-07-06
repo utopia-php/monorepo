@@ -10,7 +10,7 @@ use Utopia\DI\Container;
 use Utopia\Http\Adapter\FPM\Request;
 use Utopia\Http\Adapter\FPM\Response;
 use Utopia\Http\Adapter\FPM\Server;
-use Utopia\Http\Tests\UtopiaFPMRequestTest;
+use Utopia\Psr7\Uri;
 use Utopia\Validator\Text;
 
 final class HttpTest extends TestCase
@@ -137,8 +137,7 @@ final class HttpTest extends TestCase
             });
 
         ob_start();
-        $request = new UtopiaFPMRequestTest();
-        $request::_setParams(['x' => 'param-x', 'y' => 'param-y', 'z' => 'param-z']);
+        $request = (new Request())->withQueryParams(['x' => 'param-x', 'y' => 'param-y', 'z' => 'param-z']);
         $this->http->execute($request, new Response());
         $result = ob_get_contents();
         ob_end_clean();
@@ -157,8 +156,7 @@ final class HttpTest extends TestCase
             });
 
         ob_start();
-        $request = new UtopiaFPMRequestTest();
-        $request::_setParams(['x' => 'param-x', 'y' => 'param-y']);
+        $request = (new Request())->withQueryParams(['x' => 'param-x', 'y' => 'param-y']);
         $this->http->execute($request, new Response());
         $result = ob_get_contents();
         ob_end_clean();
@@ -229,9 +227,8 @@ final class HttpTest extends TestCase
             });
 
         ob_start();
-        $request = new UtopiaFPMRequestTest();
-        $request::_setParams(['x' => 'param-x', 'y' => 'param-y']);
         $_SERVER['REQUEST_URI'] = '/api';
+        $request = (new Request())->withQueryParams(['x' => 'param-x', 'y' => 'param-y']);
         $this->http->execute($request, new Response());
         $result = ob_get_contents();
         ob_end_clean();
@@ -240,9 +237,8 @@ final class HttpTest extends TestCase
 
         $resource = $this->resources->get('rand');
         ob_start();
-        $request = new UtopiaFPMRequestTest();
-        $request::_setParams(['x' => 'param-x', 'y' => 'param-y']);
         $_SERVER['REQUEST_URI'] = '/homepage';
+        $request = (new Request())->withQueryParams(['x' => 'param-x', 'y' => 'param-y']);
         $this->http->execute($request, new Response());
         $result = ob_get_contents();
         ob_end_clean();
@@ -750,9 +746,9 @@ final class HttpTest extends TestCase
         });
 
         Http::get('/outer')->action(function () {
-            $inner = new Request();
-            $inner->setMethod('GET');
-            $inner->setURI('/inner');
+            $inner = (new Request())
+                ->withMethod('GET')
+                ->withUri(Uri::parse('/inner'));
             $this->http->execute($inner, new Response());
         });
 
@@ -834,8 +830,7 @@ final class HttpTest extends TestCase
         $this->assertSame('HELLO', $result);
 
         ob_start();
-        $req = new Request();
-        $req = $req->setMethod('OPTIONS');
+        $req = (new Request())->withMethod('OPTIONS');
         @$this->http->run($req, new Response());
         $result = ob_get_contents();
         ob_end_clean();
@@ -905,8 +900,7 @@ final class HttpTest extends TestCase
             });
 
         ob_start();
-        $request = new UtopiaFPMRequestTest();
-        $request::_setParams(['func' => 'system']);
+        $request = (new Request())->withQueryParams(['func' => 'system']);
         $this->http->execute($request, new Response());
         $result = ob_get_contents();
         ob_end_clean();
@@ -953,8 +947,7 @@ final class HttpTest extends TestCase
             });
 
         ob_start();
-        $request = new UtopiaFPMRequestTest();
-        $request::_setParams(['locale' => 'es']);
+        $request = (new Request())->withQueryParams(['locale' => 'es']);
         $this->http->execute($request, new Response());
         $result = ob_get_contents();
         ob_end_clean();

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "74d830ba2ae1d2e880936ad9d9d86d87",
+    "content-hash": "e12ac81ac167bdc0c9d1683aa60e96f4",
     "packages": [
         {
             "name": "brick/math",
@@ -1973,6 +1973,54 @@
             "time": "2026-06-10T14:22:41+00:00"
         },
         {
+            "name": "utopia-php/psr7",
+            "version": "0.1.0",
+            "dist": {
+                "type": "path",
+                "url": "../psr7",
+                "reference": "9347bbcb06bb950b6b7312c6a4651d5e8562a23a"
+            },
+            "require": {
+                "php": ">=8.4",
+                "psr/http-factory": "^1.0",
+                "psr/http-message": "^1.1 || ^2.0"
+            },
+            "suggest": {
+                "ext-simplexml": "Required to decode XML responses with Response::xml()."
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Utopia\\Psr7\\": "src/Psr7/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "Utopia\\Tests\\Psr7\\": "tests/Psr7/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "phpunit --configuration phpunit.xml"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "PSR-7 HTTP message implementations and PSR-17 factories for Utopia",
+            "keywords": [
+                "http",
+                "php",
+                "psr-17",
+                "psr-7",
+                "utopia"
+            ],
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "utopia-php/servers",
             "version": "0.4.2",
             "source": {
@@ -2221,11 +2269,11 @@
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
-        "php": ">=8.3"
+        "php": ">=8.4"
     },
     "platform-dev": {},
     "platform-overrides": {
-        "php": "8.3",
+        "php": "8.4",
         "ext-opentelemetry": "1.0.0",
         "ext-protobuf": "4.26.1"
     },
