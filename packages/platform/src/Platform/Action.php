@@ -214,4 +214,12 @@ abstract class Action
     {
         return $this->options;
     }
+
+    /**
+     * Called once when the worker process hosting this action stops (rollout,
+     * scale-down, termination) — unlike the queue server's shutdown() hook,
+     * which runs after every processed job. Override to flush buffered work or
+     * release held resources. Default: no-op.
+     */
+    public function onWorkerStop(): void {}
 }
