@@ -11,11 +11,11 @@ final class ActionTest extends TestCase
 {
     public function testOnWorkerStopDefaultsToNoOp(): void
     {
+        $this->expectNotToPerformAssertions();
+
         $action = new class extends Action {};
 
         $action->onWorkerStop();
-
-        $this->expectNotToPerformAssertions();
     }
 
     public function testOnWorkerStopOverrideIsInvoked(): void
