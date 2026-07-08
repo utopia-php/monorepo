@@ -147,6 +147,7 @@ abstract class Asymmetric extends Issuer
      *
      * @throws \Exception When the public key cannot be parsed.
      */
+    #[\Override]
     protected function getHeaders(): array
     {
         return [Header::KeyId->value => $this->getKeyId()];

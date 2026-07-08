@@ -37,7 +37,7 @@ class Sha extends Hash
     /**
      * Valid SHA versions
      */
-    private const VALID_VERSIONS = [
+    private const array VALID_VERSIONS = [
         'sha1',
         'sha224',
         'sha256',

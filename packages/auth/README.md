@@ -30,7 +30,7 @@ $isValid = $password->verify('user-password', $hash);
 
 ## System Requirements
 
-Utopia Auth requires PHP 8.1 or later. We recommend using the latest PHP version whenever possible.
+Utopia Auth requires PHP 8.3 or later. We recommend using the latest PHP version whenever possible.
 
 ## Features
 
@@ -39,14 +39,15 @@ Utopia Auth requires PHP 8.1 or later. We recommend using the latest PHP version
 - **Data store** — a base64-encodable key/value envelope for serializing authentication state
 - **Token issuers** — mint signed [JWS](https://datatracker.ietf.org/doc/html/rfc7515): OAuth2 access tokens (RFC 9068), refresh tokens, and OpenID Connect id_tokens
 - **Token verifiers** — verify RS256/HS256 JWS with an `alg`-confusion guard and standard claim checks
-- **OAuth2 helpers** — RFC 8707 resource indicators
+- **OAuth2 helpers** — RFC 8707 resource indicators, OpenID Connect prompts, and RFC 9126 pushed authorization request URIs
 
 ## Documentation
 
 - [Password Hashing](docs/hashing.md) — algorithms and tuning
 - [Authentication Proofs](docs/proofs.md) — tokens, one-time codes, and phrases
 - [Data Store](docs/store.md) — encode/decode authentication state
-- [JSON Web Tokens](docs/jwt.md) — issuing and verifying OAuth2 / OpenID Connect tokens
+- [JSON Web Tokens](docs/jwt.md) — JWS mechanics, verification, and claim/header names
+- [OAuth2 and OpenID Connect](docs/oauth2.md) — token examples and protocol helpers
 
 ## Tests
 
