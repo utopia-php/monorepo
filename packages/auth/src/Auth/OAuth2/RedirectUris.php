@@ -19,9 +19,7 @@ class RedirectUris
     /**
      * @param list<non-empty-string> $uris
      */
-    private function __construct(private readonly array $uris)
-    {
-    }
+    private function __construct(private readonly array $uris) {}
 
     /**
      * Wrap a client's stored registered URIs. Non-string and empty entries
