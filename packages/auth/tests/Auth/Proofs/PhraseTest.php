@@ -22,7 +22,7 @@ final class PhraseTest extends TestCase
 
         $this->assertNotEmpty($proof);
         $this->assertStringContainsString(' ', $proof); // Should contain spaces between words
-        $this->assertMatchesRegularExpression('/^[a-zA-Z\s]+$/', $proof); // Letters (both cases) and spaces
+        $this->assertMatchesRegularExpression('/^[a-zA-Z\s-]+$/', $proof); // Letters, spaces, and hyphens (e.g. "Quick-witted")
     }
 
     public function testHash(): void

@@ -7,10 +7,14 @@ namespace Utopia\Auth\OAuth2;
 /**
  * Registered redirect URIs for an OAuth2 client (RFC 6749 Section 3.1.2).
  *
- * Matching is exact string comparison, with one carve-out: when both the
- * registered and the presented URI are http loopback URIs, the port is
+ * Matching is exact string comparison, with one opt-in carve-out: when both
+ * the registered and the presented URI are http loopback URIs, the port is
  * ignored per RFC 8252 Section 7.3. Native and CLI clients bind an ephemeral
  * port per run and cannot register it ahead of time.
+ *
+ * RFC 8252 scopes the carve-out to native apps, which are public clients
+ * (Section 8.4), so it is off by default: enable it only for public clients
+ * and keep confidential clients on exact matching.
  */
 class RedirectUris
 {
@@ -42,10 +46,12 @@ class RedirectUris
     }
 
     /**
-     * True when $presented exactly matches a registered URI, or matches a
-     * registered http loopback URI on everything except the port.
+     * True when $presented exactly matches a registered URI, or — with
+     * $allowLoopback enabled — matches a registered http loopback
+     * URI on everything except the port. Enable the variance for public
+     * clients only (RFC 8252 Sections 7.3 and 8.4).
      */
-    public function matches(string $presented): bool
+    public function matches(string $presented, bool $allowLoopback = false): bool
     {
         if ($presented === '') {
             return false;
@@ -53,6 +59,10 @@ class RedirectUris
 
         if (\in_array($presented, $this->uris, true)) {
             return true;
+        }
+
+        if (!$allowLoopback) {
+            return false;
         }
 
         $presentedParts = $this->loopbackParts($presented);
