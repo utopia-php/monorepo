@@ -38,6 +38,8 @@ composer require utopia-php/di:@dev
 
 Revert `composer.json` before committing — `bin/monorepo validate` and CI test against released versions.
 
+To use an unmerged branch from an *external* consumer (e.g. test a fix in Appwrite before it's released), dispatch the **Split Dev** workflow on the branch: it publishes the package's split to the mirror so the consumer can `composer require utopia-php/<name>:dev-<branch>` — see [docs/distribution.md](docs/distribution.md#dev-branches).
+
 ## Dependency graph
 
 Arrows point at dependencies (`platform --> http` means platform requires http). Regenerate with `bin/monorepo graph` after changing a package's requirements — `bin/monorepo validate` (which CI runs on every push) fails while it is stale.

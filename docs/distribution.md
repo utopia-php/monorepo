@@ -8,6 +8,20 @@ On every push to `main`, CI splits each `packages/<name>` directory into a stand
 
 The distribution repositories become read-only mirrors: archive their open PRs, enable branch protection, and point contributors to the monorepo.
 
+## Dev branches
+
+Before the monorepo split, an in-flight PR branch on a library's own repository was directly installable (`composer require utopia-php/http:dev-my-branch`) — handy for unblocking a consumer without waiting for a release. The `Split Dev` workflow restores that: dispatch it (**Actions → Split Dev → Run workflow**) on the feature branch, naming the package(s) to publish, and it pushes the branch's split to the mirror under the same branch name. Packagist tracks the mirror's branches, so the consumer can then require:
+
+```json
+{ "require": { "utopia-php/http": "dev-my-branch as 2.1.999" } }
+```
+
+The inline alias (aliasing into the latest released minor) keeps other packages' constraints on the library resolving; the workflow's run summary prints the exact line to copy. Notes:
+
+- The mirror branch is force-pushed on every dispatch (rebases change the synthesized history), so re-dispatch after pushing new commits and run `composer update` in the consumer.
+- Mirror rulesets only protect the default branch, so dev branches need no bypass — but they also never publish to `main` or tags; the workflow refuses to run on `main`.
+- When the branch merges (or is abandoned), re-dispatch with **action: delete** to remove the mirror branch. Stale branches are harmless but noisy.
+
 ## Release pipeline
 
 A monorepo tag shaped `<package>/<semver>` (e.g. `http/2.1.0`) triggers CI to push tag `2.1.0` to `utopia-php/http` (Packagist picks it up as usual) and publish a GitHub release on the mirror whose notes are every monorepo commit that touched `packages/http` since the previous release, with a compare link back to the monorepo.
