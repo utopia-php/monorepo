@@ -62,10 +62,17 @@ jobs:
           TOKEN: ${{ steps.app-token.outputs.token }}
           PACKAGES: ${{ inputs.package }}
         run: |
+          # keep going on failure so one missing branch doesn't strand the rest
+          failed=0
           for package in $PACKAGES; do
-            git push "https://x-access-token:${TOKEN}@github.com/utopia-php/${package}.git" ":refs/heads/${GITHUB_REF_NAME}"
-            echo "deleted ${package} -> ${GITHUB_REF_NAME}"
+            if git push "https://x-access-token:${TOKEN}@github.com/utopia-php/${package}.git" ":refs/heads/${GITHUB_REF_NAME}"; then
+              echo "deleted ${package} -> ${GITHUB_REF_NAME}"
+            else
+              echo "::warning::${package}: could not delete ${GITHUB_REF_NAME} on the mirror (never published, or already deleted?)"
+              failed=1
+            fi
           done
+          exit $failed
 
       - name: Consumer instructions
         if: inputs.action == 'publish'
@@ -78,7 +85,11 @@ jobs:
             echo "Packagist picks the branch up from the mirror within a minute or two. In the consumer:"
             echo
             for package in $PACKAGES; do
-              latest=$(git tag --list "${package}/*" --sort=-v:refname | head -n 1)
+              # anchor the alias to the newest stable release — a pre-release on a newer
+              # major (http/3.0.0-rc1) must not hoist the alias past the stable line;
+              # packages that only ever released pre-releases fall back to their newest tag
+              latest=$(git tag --list "${package}/*" --sort=-v:refname | grep -v -- - | head -n 1 || true)
+              [ -n "$latest" ] || latest=$(git tag --list "${package}/*" --sort=-v:refname | head -n 1)
               version=${latest#*/}
               echo '```sh'
               if [ -n "$latest" ]; then
