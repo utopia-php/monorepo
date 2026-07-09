@@ -117,6 +117,32 @@ $serialized = $resources->toArray();
 
 `InvalidResourceException::ERROR_CODE` is `invalid_target`, matching RFC 8707.
 
+## OAuth2 redirect URI matching (RFC 8252)
+
+`RedirectUris` wraps a client's registered redirect URIs and matches a
+presented `redirect_uri` against them. Matching is exact string comparison,
+except that http loopback URIs (`localhost`, `127.0.0.1`, `[::1]`) match with
+any port per RFC 8252 Section 7.3 — native and CLI clients bind an ephemeral
+port per run and cannot register it ahead of time. The loopback hosts are an
+exact allowlist (lookalikes such as `localhost.evil.com` never qualify), the
+host itself must still match, and scheme, path, and query compare exactly.
+
+```php
+<?php
+
+use Utopia\Auth\OAuth2\RedirectUris;
+
+$uris = RedirectUris::from([
+    'https://example.com/callback',
+    'http://localhost:3118/callback',
+]);
+
+$uris->matches('https://example.com/callback');       // true (exact)
+$uris->matches('http://localhost:54155/callback');    // true (loopback, port ignored)
+$uris->matches('http://127.0.0.1:54155/callback');    // false (host must match)
+$uris->matches('https://example.com/other');          // false
+```
+
 ## OpenID Connect prompts
 
 `Prompts` parses the OIDC `prompt` authorization request parameter into typed
