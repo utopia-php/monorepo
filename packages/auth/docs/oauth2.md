@@ -115,6 +115,15 @@ $audience = $resources->audience('https://cloud.example.com/v1/project');
 $serialized = $resources->toArray();
 ```
 
+For compatibility with clients that send a single resource identifier using
+`audience`, pass it as the optional second argument. When `resource` is absent,
+the audience becomes the resource indicator. When both are present, the
+audience must exactly match one of the supplied resources.
+
+```php
+$resources = ResourceIndicators::from(null, 'https://api.example.com/');
+```
+
 `InvalidResourceException::ERROR_CODE` is `invalid_target`, matching RFC 8707.
 
 ## OAuth2 redirect URI matching (RFC 8252)
