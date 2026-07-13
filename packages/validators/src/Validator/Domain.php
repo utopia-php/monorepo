@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -93,7 +95,7 @@ class Domain extends Validator
             $prefixDenyList = $restriction['prefixDenyList'];
 
             // Only apply restriction rules to relevant domains
-            if (!str_ends_with($value, $hostname)) {
+            if (!str_ends_with($value, (string) $hostname)) {
                 continue;
             }
 
@@ -109,7 +111,7 @@ class Domain extends Validator
             // Domain prefix (beginning) restriction
             if (!empty($prefixDenyList)) {
                 foreach ($prefixDenyList as $deniedPrefix) {
-                    if (str_starts_with($value, $deniedPrefix)) {
+                    if (str_starts_with($value, (string) $deniedPrefix)) {
                         return false;
                     }
                 }

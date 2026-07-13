@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -65,9 +67,9 @@ class Contains extends Validator
         }
 
         foreach ($this->patterns as $pattern) {
-            $pattern = $this->strict ? $pattern : mb_strtolower($pattern, 'UTF-8');
+            $pattern = $this->strict ? $pattern : mb_strtolower((string) $pattern, 'UTF-8');
 
-            if (str_contains($value, $pattern)) {
+            if (str_contains($value, (string) $pattern)) {
                 return true;
             }
         }

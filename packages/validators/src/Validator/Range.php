@@ -44,6 +44,7 @@ class Range extends Numeric
      *
      * Returns validator description
      */
+    #[\Override]
     public function getDescription(): string
     {
         return 'Value must be a valid range between ' . number_format($this->min) . ' and ' . number_format($this->max);
@@ -54,6 +55,7 @@ class Range extends Numeric
      *
      * Function will return true if object is array.
      */
+    #[\Override]
     public function isArray(): bool
     {
         return false;
@@ -64,6 +66,7 @@ class Range extends Numeric
      *
      * Returns validator type.
      */
+    #[\Override]
     public function getType(): string
     {
         return $this->format;
@@ -76,6 +79,7 @@ class Range extends Numeric
      * Not strict, considers any valid integer to be a valid float
      * Considers infinity to be a valid integer
      */
+    #[\Override]
     public function isValid(mixed $value): bool
     {
         if (!parent::isValid($value)) {
