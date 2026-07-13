@@ -87,4 +87,52 @@ final class URLTest extends TestCase
         $this->assertFalse($urlWithoutFragments->isValid('https://example.com/callback#fragment'));
         $this->assertFalse($urlWithoutFragments->isValid('gopher://www.example.com'));
     }
+
+    public function testAllowPrivateUseSchemes(): void
+    {
+        // Default: private-use schemes are rejected (backward compatibility).
+        $default = new URL();
+        $this->assertFalse($default->isValid('com.raycast-x:/oauth'));
+        $this->assertFalse($default->isValid('com.example.app:/oauth2redirect/example-provider'));
+
+        $url = new URL(allowPrivateUseSchemes: true);
+
+        // Happy path — RFC 8252 §7.1 private-use URI scheme redirect URIs.
+        $this->assertTrue($url->isValid('com.raycast-x:/oauth'));
+        $this->assertTrue($url->isValid('com.example.app:/oauth2redirect/example-provider'));
+        $this->assertTrue($url->isValid('com.raycast-x:/oauth?state=abc'));   // query allowed
+        $this->assertTrue($url->isValid('com.raycast-x:oauth'));              // path-rootless (opaque) form
+
+        // Standard hierarchical URLs still validate through the normal path.
+        $this->assertTrue($url->isValid('https://example.com/callback'));
+        $this->assertTrue($url->isValid('http://127.0.0.1:8080/callback'));   // loopback redirect
+
+        // Edge-case failures.
+        $this->assertFalse($url->isValid('http:/example.com'));   // dotless standard scheme, no authority — still invalid
+        $this->assertFalse($url->isValid('1com.raycast:/oauth')); // scheme must not start with a digit (RFC 3986)
+        $this->assertFalse($url->isValid('com raycast:/oauth'));  // space in scheme
+        $this->assertFalse($url->isValid(':/oauth'));             // missing scheme
+        $this->assertFalse($url->isValid('/oauth'));              // no scheme at all
+        $this->assertFalse($url->isValid('comraycast:/oauth'));   // no dot -> not treated as reverse-DNS private-use scheme
+        $this->assertFalse($url->isValid('not a url'));
+        $this->assertFalse($url->isValid(''));                    // allowEmpty not set
+    }
+
+    public function testAllowPrivateUseSchemesWithConstraints(): void
+    {
+        // Fragments forbidden must also apply to private-use schemes (RFC 6749 §3.1.2).
+        $noFragments = new URL(allowFragments: false, allowPrivateUseSchemes: true);
+        $this->assertTrue($noFragments->isValid('com.raycast-x:/oauth'));
+        $this->assertFalse($noFragments->isValid('com.raycast-x:/oauth#frag'));
+
+        // allowEmpty composes as before.
+        $allowEmpty = new URL(allowEmpty: true, allowPrivateUseSchemes: true);
+        $this->assertTrue($allowEmpty->isValid(''));
+        $this->assertTrue($allowEmpty->isValid('com.raycast-x:/oauth'));
+
+        // allowedSchemes still gates private-use schemes.
+        $scoped = new URL(['com.raycast-x'], allowPrivateUseSchemes: true);
+        $this->assertTrue($scoped->isValid('com.raycast-x:/oauth'));
+        $this->assertFalse($scoped->isValid('com.evil-app:/oauth'));
+    }
 }
