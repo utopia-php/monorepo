@@ -28,6 +28,6 @@
         "php": ">=8.4",
         "psr/http-client": "^1.0",
         "utopia-php/client": "^0.1.1",
-        "utopia-php/psr7": "^0.1"
+        "utopia-php/psr7": "^0.2"
     }
 }

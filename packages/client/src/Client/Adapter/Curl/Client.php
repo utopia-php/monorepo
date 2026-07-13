@@ -507,7 +507,7 @@ class Client implements Adapter
     {
         $blocks = preg_split("/\r\n\r\n|\n\n|\r\r/", trim($headerBlock));
         $headers = $blocks === false ? [] : array_values(array_filter($blocks));
-        $header = $headers === [] ? '' : $headers[array_key_last($headers)];
+        $header = $headers === [] ? '' : array_last($headers);
         $lines = preg_split("/\r\n|\n|\r/", $header);
         $lines = $lines === false ? [] : $lines;
 
