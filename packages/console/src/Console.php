@@ -18,8 +18,6 @@ class Console
      * Log
      *
      * Log messages to console
-     *
-     * @return int|false
      */
     public static function log(string $message): int|false
     {
@@ -30,8 +28,6 @@ class Console
      * Success
      *
      * Log success messages to console
-     *
-     * @return int|false
      */
     public static function success(string $message): int|false
     {
@@ -42,8 +38,6 @@ class Console
      * Error
      *
      * Log error messages to console
-     *
-     * @return int|false
      */
     public static function error(string $message): int|false
     {
@@ -54,8 +48,6 @@ class Console
      * Info
      *
      * Log informative messages to console
-     *
-     * @return int|false
      */
     public static function info(string $message): int|false
     {
@@ -66,8 +58,6 @@ class Console
      * Warning
      *
      * Log warning messages to console
-     *
-     * @return int|false
      */
     public static function warning(string $message): int|false
     {
