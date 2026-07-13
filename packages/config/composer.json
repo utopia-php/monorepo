@@ -19,7 +19,7 @@
         "test": "phpunit"
     },
     "require": {
-        "php": ">=8.1",
+        "php": ">=8.5",
         "utopia-php/validators": "0.3.*"
     },
     "suggest": {

@@ -19,7 +19,7 @@
         }
     },
     "require": {
-        "php": ">=8.0",
+        "php": ">=8.5",
         "utopia-php/validators": "0.3.*"
     },
     "minimum-stability": "dev"
