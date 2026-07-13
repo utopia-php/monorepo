@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -13,7 +15,7 @@ use Utopia\Validator;
  */
 class URL extends Validator
 {
-    public function __construct(protected array $allowedSchemes = [], protected bool $allowEmpty = false, protected bool $allowFragments = true) {}
+    public function __construct(protected array $allowedSchemes = [], protected bool $allowEmpty = false, protected bool $allowFragments = true, protected bool $allowPrivateUseSchemes = false) {}
 
     /**
      * Get Description
@@ -52,19 +54,45 @@ class URL extends Validator
             return true;
         }
 
-        if (filter_var($value, FILTER_VALIDATE_URL) === false) {
+        // FILTER_VALIDATE_URL rejects authority-less private-use URI schemes
+        // (e.g. "com.example.app:/oauth", RFC 8252 §7.1). Optionally accept those.
+        if (filter_var($value, FILTER_VALIDATE_URL) === false && (!$this->allowPrivateUseSchemes || !$this->isPrivateUseSchemeURI($value))) {
             return false;
         }
 
-        if ($this->allowedSchemes !== [] && !\in_array(parse_url($value, PHP_URL_SCHEME), $this->allowedSchemes)) {
+        if ($this->allowedSchemes !== [] && !\in_array(parse_url((string) $value, PHP_URL_SCHEME), $this->allowedSchemes)) {
             return false;
         }
 
-        if (!$this->allowFragments && parse_url($value, PHP_URL_FRAGMENT) !== null) {
+        if (!$this->allowFragments && parse_url((string) $value, PHP_URL_FRAGMENT) !== null) {
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * Is private-use URI scheme
+     * Returns true when $value is an authority-less private-use URI scheme
+     * redirect URI as defined by RFC 8252 §7.1, e.g. "com.example.app:/oauth"
+     * @param  mixed $value
+     */
+    private function isPrivateUseSchemeURI($value): bool
+    {
+        if (!\is_string($value)) {
+            return false;
+        }
+
+        $uri = \Uri\Rfc3986\Uri::parse($value);
+        if (!$uri instanceof \Uri\Rfc3986\Uri) {
+            return false;
+        }
+
+        $scheme = $uri->getScheme();
+
+        return $scheme !== null
+            && str_contains($scheme, '.')
+            && $uri->getHost() === null;
     }
 
     /**

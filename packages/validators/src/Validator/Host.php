@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -42,7 +44,7 @@ class Host extends Validator
 
         $hostnameValidator = new Hostname($this->whitelist);
 
-        return $hostnameValidator->isValid(parse_url($value, PHP_URL_HOST));
+        return $hostnameValidator->isValid(parse_url((string) $value, PHP_URL_HOST));
     }
 
     /**
