@@ -8,25 +8,25 @@ use Utopia\Validator\Text;
 
 class Command implements Stringable
 {
-    private const TYPE_PLAIN = 'plain';
+    private const string TYPE_PLAIN = 'plain';
 
-    private const TYPE_COMPOSITE = 'composite';
+    private const string TYPE_COMPOSITE = 'composite';
 
-    private const TYPE_GROUP = 'group';
+    private const string TYPE_GROUP = 'group';
 
-    private const TYPE_REDIRECT = 'redirect';
+    private const string TYPE_REDIRECT = 'redirect';
 
-    private const OPERATOR_PIPE = '|';
+    private const string OPERATOR_PIPE = '|';
 
-    private const OPERATOR_AND = '&&';
+    private const string OPERATOR_AND = '&&';
 
-    private const OPERATOR_OR = '||';
+    private const string OPERATOR_OR = '||';
 
-    private const REDIRECT_STDOUT = '>';
+    private const string REDIRECT_STDOUT = '>';
 
-    private const REDIRECT_APPEND_STDOUT = '>>';
+    private const string REDIRECT_APPEND_STDOUT = '>>';
 
-    private const REDIRECT_INPUT = '<';
+    private const string REDIRECT_INPUT = '<';
 
     private string $type = self::TYPE_PLAIN;
 
@@ -150,7 +150,7 @@ class Command implements Stringable
     public function toString(): string
     {
         return match ($this->type) {
-            self::TYPE_PLAIN => implode(' ', array_map(static fn(string $argument): string => escapeshellarg($argument), $this->arguments)),
+            self::TYPE_PLAIN => implode(' ', array_map(escapeshellarg(...), $this->arguments)),
             self::TYPE_COMPOSITE => implode(' ' . $this->operator . ' ', array_map(static fn(self $command): string => $command->toString(), $this->commands)),
             self::TYPE_GROUP => '( ' . $this->command?->toString() . ' )',
             self::TYPE_REDIRECT => $this->command?->toString() . ' ' . $this->redirect . ' ' . escapeshellarg($this->redirectTarget ?? ''),
