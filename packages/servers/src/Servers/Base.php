@@ -150,8 +150,6 @@ abstract class Base
 
     /**
      * Set Container
-     *
-     * @return $this
      */
     public function setContainer(Container $container): self
     {
