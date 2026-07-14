@@ -1,0 +1,20 @@
+<phpunit backupGlobals="false"
+         backupStaticAttributes="false"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         convertErrorsToExceptions="true"
+         convertNoticesToExceptions="true"
+         convertWarningsToExceptions="true"
+         processIsolation="false"
+         stopOnFailure="false">
+    <testsuites>
+        <testsuite name="unit">
+            <file>./tests/Storage/Device/LocalTest.php</file>
+            <directory>./tests/Storage/Validator</directory>
+            <file>./tests/Storage/StorageTest.php</file>
+        </testsuite>
+        <testsuite name="e2e">
+            <directory>./tests/Storage/Device</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
