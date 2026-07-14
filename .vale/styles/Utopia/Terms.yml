@@ -1,0 +1,16 @@
+extends: substitution
+message: "Use '%s' instead of '%s' in prose."
+level: error
+ignorecase: false
+swap:
+  github: GitHub
+  Github: GitHub
+  packagist: Packagist
+  javascript: JavaScript
+  composer: Composer
+  phpstan: PHPStan
+  phpunit: PHPUnit
+  Digitalocean: DigitalOcean
+  redis: Redis
+  mysql: MySQL
+  postgres: Postgres

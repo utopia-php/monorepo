@@ -1,0 +1,6 @@
+extends: existence
+message: "Avoid exclamation marks in documentation."
+level: warning
+nonword: true
+tokens:
+  - '\w!(?:\s|$)'

@@ -11,9 +11,9 @@ Utopia Circuit Breaker is a simple and lite library for protecting PHP applicati
 
 Although this library is part of the [Utopia Framework](https://github.com/utopia-php/framework) project it is dependency free and can be used as standalone with any other PHP project or framework.
 
-## Getting Started
+## Getting started
 
-Install using composer:
+Install using Composer:
 
 ```bash
 composer require utopia-php/circuit-breaker
@@ -39,7 +39,7 @@ $result = $breaker->call(
 );
 ```
 
-## How it Works
+## How it works
 
 The circuit breaker operates in three states:
 
@@ -219,7 +219,7 @@ $breaker->getFailureCount();
 $breaker->getSuccessCount();
 ```
 
-## System Requirements
+## System requirements
 
 - PHP 8.2 or later
 - Optional: `utopia-php/telemetry`, `ext-opentelemetry`, and `ext-protobuf` for OpenTelemetry metrics and the local telemetry demo
