@@ -47,6 +47,7 @@ Arrows point at dependencies (`platform --> http` means platform requires http).
 <!-- graph -->
 ```mermaid
 graph TD
+    audit --> validators
     cli --> servers
     client --> pools
     client --> psr7
