@@ -1,5 +1,8 @@
 # Utopia Audit
 
+> [!IMPORTANT]
+> This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Development happens in [`packages/audit`](https://github.com/utopia-php/monorepo/tree/main/packages/audit) — please open issues and pull requests there.
+
 [![Build Status](https://travis-ci.org/utopia-php/audit.svg?branch=master)](https://travis-ci.com/utopia-php/audit)
 ![Total Downloads](https://img.shields.io/packagist/dt/utopia-php/audit.svg)
 [![Discord](https://img.shields.io/discord/564160730845151244)](https://appwrite.io/discord)
