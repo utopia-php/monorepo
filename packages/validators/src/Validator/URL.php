@@ -15,7 +15,7 @@ use Utopia\Validator;
  */
 class URL extends Validator
 {
-    public function __construct(protected array $allowedSchemes = [], protected bool $allowEmpty = false, protected bool $allowFragments = true, protected bool $allowPrivateUseSchemes = false) {}
+    public function __construct(protected array $allowedSchemes = [], protected bool $allowEmpty = false, protected bool $allowFragments = true, protected bool $allowPrivateUseSchemes = false, protected bool $httpLoopbackOnly = false) {}
 
     /**
      * Get Description
@@ -24,6 +24,8 @@ class URL extends Validator
      */
     public function getDescription(): string
     {
+        $loopback = $this->httpLoopbackOnly ? ' where the http scheme is restricted to loopback URIs' : '';
+
         if ($this->allowedSchemes !== []) {
             $description = 'Value must be a valid URL with following schemes (' . implode(', ', $this->allowedSchemes) . ')';
 
@@ -31,14 +33,14 @@ class URL extends Validator
                 $description .= ' and without a fragment component';
             }
 
-            return $description;
+            return $description . $loopback;
         }
 
         if (!$this->allowFragments) {
-            return 'Value must be a valid URL without a fragment component';
+            return 'Value must be a valid URL without a fragment component' . $loopback;
         }
 
-        return 'Value must be a valid URL';
+        return 'Value must be a valid URL' . $loopback;
     }
 
     /**
@@ -54,18 +56,30 @@ class URL extends Validator
             return true;
         }
 
+        $isPrivateUseSchemeURI = $this->allowPrivateUseSchemes && $this->isPrivateUseSchemeURI($value);
+
         // FILTER_VALIDATE_URL rejects authority-less private-use URI schemes
         // (e.g. "com.example.app:/oauth", RFC 8252 §7.1). Optionally accept those.
-        if (filter_var($value, FILTER_VALIDATE_URL) === false && (!$this->allowPrivateUseSchemes || !$this->isPrivateUseSchemeURI($value))) {
+        if (filter_var($value, FILTER_VALIDATE_URL) === false && !$isPrivateUseSchemeURI) {
             return false;
         }
 
-        if ($this->allowedSchemes !== [] && !\in_array(parse_url((string) $value, PHP_URL_SCHEME), $this->allowedSchemes)) {
+        // allowedSchemes governs standard (authority-bearing) URLs only; accepted
+        // private-use scheme URIs bypass the allowlist (RFC 8252 §7.1).
+        if ($this->allowedSchemes !== [] && !$isPrivateUseSchemeURI && !\in_array(parse_url((string) $value, PHP_URL_SCHEME), $this->allowedSchemes)) {
             return false;
         }
 
         if (!$this->allowFragments && parse_url((string) $value, PHP_URL_FRAGMENT) !== null) {
             return false;
+        }
+
+        // When enabled, the http scheme is only valid for loopback hosts (RFC 8252 §7.3).
+        if ($this->httpLoopbackOnly && strtolower((string) parse_url((string) $value, PHP_URL_SCHEME)) === 'http') {
+            $host = strtolower((string) parse_url((string) $value, PHP_URL_HOST));
+            if (!\in_array($host, ['localhost', '127.0.0.1', '[::1]'], true)) {
+                return false;
+            }
         }
 
         return true;
