@@ -1,0 +1,646 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Utopia\Tests\Storage\Device;
+
+use PHPUnit\Framework\TestCase;
+use Utopia\Storage\Device\Local;
+use Utopia\Storage\Exception\NotFoundException;
+
+final class LocalTest extends TestCase
+{
+    /**
+     * @var Local
+     */
+    protected $object;
+
+    protected function setUp(): void
+    {
+        $this->object = new Local(realpath(__DIR__ . '/../../resources/disk-a'));
+    }
+
+    protected function tearDown(): void {}
+
+    public function testPaths(): void
+    {
+        $this->assertEquals('/storage/functions', $this->object->getAbsolutePath('////storage/functions'));
+        $this->assertEquals('/storage/functions', $this->object->getAbsolutePath('storage/functions'));
+        $this->assertEquals('/storage/functions', $this->object->getAbsolutePath('/storage/functions'));
+        $this->assertEquals('/storage/functions', $this->object->getAbsolutePath('//storage///functions//'));
+        $this->assertEquals('/storage/functions', $this->object->getAbsolutePath('\\\\\storage\functions'));
+        $this->assertEquals('/storage/functions', $this->object->getAbsolutePath('..\\\\\//storage\\//functions'));
+        $this->assertEquals('/storage/functions', $this->object->getAbsolutePath('./..\\\\\//storage\\//functions'));
+    }
+
+    public function testName(): void
+    {
+        $this->assertEquals('Local Storage', $this->object->getName());
+    }
+
+    public function testType(): void
+    {
+        $this->assertEquals('local', $this->object->getType());
+    }
+
+    public function testDescription(): void
+    {
+        $this->assertEquals('Adapter for Local storage that is in the physical or virtual machine or mounted to it.', $this->object->getDescription());
+    }
+
+    public function testRoot(): void
+    {
+        $this->assertEquals($this->object->getRoot(), $this->object->getAbsolutePath(__DIR__ . '/../../resources/disk-a'));
+    }
+
+    public function testPath(): void
+    {
+        $this->assertEquals($this->object->getPath('image.png'), $this->object->getAbsolutePath(__DIR__ . '/../../resources/disk-a') . '/image.png');
+    }
+
+    public function testWrite(): void
+    {
+        $this->assertEquals(true, $this->object->write($this->object->getPath('text.txt'), 'Hello World'));
+        $this->assertFileExists($this->object->getPath('text.txt'));
+        $this->assertIsReadable($this->object->getPath('text.txt'));
+
+        $this->object->delete($this->object->getPath('text.txt'));
+    }
+
+    public function testRead(): void
+    {
+        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-read.txt'), 'Hello World'));
+        $this->assertEquals('Hello World', $this->object->read($this->object->getPath('text-for-read.txt')));
+
+        $this->object->delete($this->object->getPath('text-for-read.txt'));
+    }
+
+    public function testReadNonExistentFile(): void
+    {
+        $this->expectException(NotFoundException::class);
+        $this->object->read($this->object->getPath('non-existent-file.txt'));
+    }
+
+    public function testFileExists(): void
+    {
+        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-test-exists.txt'), 'Hello World'));
+        $this->assertEquals(true, $this->object->exists($this->object->getPath('text-for-test-exists.txt')));
+        $this->assertEquals(false, $this->object->exists($this->object->getPath('text-for-test-doesnt-exist.txt')));
+
+        $this->object->delete($this->object->getPath('text-for-test-exists.txt'));
+    }
+
+    public function testMove(): void
+    {
+        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-move.txt'), 'Hello World'));
+        $this->assertEquals('Hello World', $this->object->read($this->object->getPath('text-for-move.txt')));
+        $this->assertEquals(true, $this->object->move($this->object->getPath('text-for-move.txt'), $this->object->getPath('text-for-move-new.txt')));
+        $this->assertEquals('Hello World', $this->object->read($this->object->getPath('text-for-move-new.txt')));
+        $this->assertFileDoesNotExist($this->object->getPath('text-for-move.txt'));
+        $this->assertIsNotReadable($this->object->getPath('text-for-move.txt'));
+        $this->assertFileExists($this->object->getPath('text-for-move-new.txt'));
+        $this->assertIsReadable($this->object->getPath('text-for-move-new.txt'));
+
+        $this->object->delete($this->object->getPath('text-for-move-new.txt'));
+    }
+
+    public function testDelete(): void
+    {
+        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-delete.txt'), 'Hello World'));
+        $this->assertEquals('Hello World', $this->object->read($this->object->getPath('text-for-delete.txt')));
+        $this->assertEquals(true, $this->object->delete($this->object->getPath('text-for-delete.txt')));
+        $this->assertFileDoesNotExist($this->object->getPath('text-for-delete.txt'));
+        $this->assertIsNotReadable($this->object->getPath('text-for-delete.txt'));
+    }
+
+    public function testRecursiveDeleteRemovesHiddenFiles(): void
+    {
+        $directory = $this->object->getPath('delete-hidden');
+
+        $this->assertTrue($this->object->createDirectory($directory));
+        $this->assertTrue($this->object->write($directory . DIRECTORY_SEPARATOR . '.hidden', 'secret'));
+        $this->assertTrue($this->object->write($directory . DIRECTORY_SEPARATOR . 'visible', 'visible'));
+
+        $this->assertTrue($this->object->delete($directory, true));
+        $this->assertFalse($this->object->exists($directory));
+    }
+
+    public function testFileSize(): void
+    {
+        $this->assertEquals(599639, $this->object->getFileSize(__DIR__ . '/../../resources/disk-a/kitten-1.jpg'));
+        $this->assertEquals(131958, $this->object->getFileSize(__DIR__ . '/../../resources/disk-a/kitten-2.jpg'));
+    }
+
+    public function testFileMimeType(): void
+    {
+        $this->assertEquals('image/jpeg', $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-a/kitten-1.jpg'));
+        $this->assertEquals('image/jpeg', $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-a/kitten-2.jpg'));
+        $this->assertEquals('image/png', $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-b/kitten-1.png'));
+        $this->assertEquals('image/png', $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-b/kitten-2.png'));
+    }
+
+    public function testFileHash(): void
+    {
+        $this->assertEquals('7551f343143d2e24ab4aaf4624996b6a', $this->object->getFileHash(__DIR__ . '/../../resources/disk-a/kitten-1.jpg'));
+        $this->assertEquals('81702fdeef2e55b1a22617bce4951cb5', $this->object->getFileHash(__DIR__ . '/../../resources/disk-a/kitten-2.jpg'));
+        $this->assertEquals('03010f4f02980521a8fd6213b52ec313', $this->object->getFileHash(__DIR__ . '/../../resources/disk-b/kitten-1.png'));
+        $this->assertEquals('8a9ed992b77e4b62b10e3a5c8ed72062', $this->object->getFileHash(__DIR__ . '/../../resources/disk-b/kitten-2.png'));
+    }
+
+    public function testDirectoryCreate(): void
+    {
+        $directory = uniqid();
+        $this->assertTrue($this->object->createDirectory(__DIR__ . "/$directory"));
+        $this->assertTrue($this->object->exists(__DIR__ . "/$directory"));
+    }
+
+    public function testDirectorySize(): void
+    {
+        $this->assertGreaterThan(0, $this->object->getDirectorySize(__DIR__ . '/../../resources/disk-a/'));
+        $this->assertGreaterThan(0, $this->object->getDirectorySize(__DIR__ . '/../../resources/disk-b/'));
+    }
+
+    public function testPartUpload()
+    {
+        $source = __DIR__ . '/../../resources/disk-a/large_file.mp4';
+        $dest = $this->object->getPath('uploaded.mp4');
+        $totalSize = $this->object->getFileSize($source);
+        $chunkSize = 2097152;
+
+        $chunks = (int) ceil($totalSize / $chunkSize);
+
+        $chunk = 1;
+        $start = 0;
+
+        $handle = @fopen($source, 'rb');
+        while ($start < $totalSize) {
+            $contents = fread($handle, $chunkSize);
+            $op = __DIR__ . '/chunk.part';
+            $cc = fopen($op, 'wb');
+            fwrite($cc, $contents);
+            fclose($cc);
+            $this->object->upload($op, $dest, $chunk, $chunks);
+            $start += \strlen($contents);
+            $chunk++;
+            fseek($handle, $start);
+        }
+        @fclose($handle);
+        $this->assertEquals(filesize($source), $this->object->getFileSize($dest));
+        $this->assertEquals(md5_file($source), $this->object->getFileHash($dest));
+
+        return $dest;
+    }
+
+    public function testUploadChunkDoesNotFinalizeUntilFinalizeUpload(): void
+    {
+        $dest = $this->object->getPath('chunked-phase-upload.txt');
+        $metadata = [];
+        $parts = [
+            2 => 'bbb',
+            1 => 'aaa',
+            3 => 'ccc',
+        ];
+
+        foreach ($parts as $chunk => $data) {
+            $source = __DIR__ . '/chunk-' . $chunk . '.part';
+            file_put_contents($source, $data);
+
+            $this->object->uploadChunk($source, $dest, $chunk, 3, $metadata);
+            $this->assertFalse($this->object->exists($dest));
+        }
+
+        $this->assertSame(3, $metadata['chunks']);
+        $this->assertTrue($this->object->finalizeUpload($dest, 3, $metadata));
+        $this->assertSame('aaabbbccc', $this->object->read($dest));
+        $this->assertTrue($this->object->finalizeUpload($dest, 3, $metadata));
+
+        $this->object->delete($dest);
+    }
+
+    public function testFinalizeUploadRequiresAllLocalChunks(): void
+    {
+        $dest = $this->object->getPath('chunked-phase-missing.txt');
+        $metadata = [];
+        $source = __DIR__ . '/chunk-missing.part';
+        file_put_contents($source, 'aaa');
+
+        $this->object->uploadChunk($source, $dest, 1, 2, $metadata);
+
+        try {
+            $this->object->finalizeUpload($dest, 2, $metadata);
+            $this->fail('Expected missing chunk exception');
+        } catch (\Exception $e) {
+            $this->assertSame('Missing chunk 2', $e->getMessage());
+        } finally {
+            $this->object->abort($dest);
+        }
+    }
+
+    public function testPartUploadRetry()
+    {
+        $source = __DIR__ . '/../../resources/disk-a/large_file.mp4';
+        $dest = $this->object->getPath('uploaded2.mp4');
+        $totalSize = filesize($source);
+        // AWS S3 requires each part to be at least 5MB except for last part
+        $chunkSize = 5 * 1024 * 1024;
+
+        $chunks = (int) ceil($totalSize / $chunkSize);
+
+        $chunk = 1;
+        $start = 0;
+        $handle = @fopen($source, 'rb');
+        $op = __DIR__ . '/chunkx.part';
+        while ($start < $totalSize) {
+            $contents = fread($handle, $chunkSize);
+            $op = __DIR__ . '/chunkx.part';
+            $cc = fopen($op, 'wb');
+            fwrite($cc, $contents);
+            fclose($cc);
+            $this->object->upload($op, $dest, $chunk, $chunks);
+            $start += \strlen($contents);
+            $chunk++;
+            break;
+        }
+        @fclose($handle);
+
+        $chunk = 1;
+        $start = 0;
+        // retry from first to make sure duplicate chunk re-upload works without issue
+        $handle = @fopen($source, 'rb');
+        $op = __DIR__ . '/chunkx.part';
+        while ($start < $totalSize) {
+            $contents = fread($handle, $chunkSize);
+            $op = __DIR__ . '/chunkx.part';
+            $cc = fopen($op, 'wb');
+            fwrite($cc, $contents);
+            fclose($cc);
+            $this->object->upload($op, $dest, $chunk, $chunks);
+            $start += \strlen($contents);
+            $chunk++;
+            fseek($handle, $start);
+        }
+        @fclose($handle);
+
+        $this->assertEquals(filesize($source), $this->object->getFileSize($dest));
+        $this->assertEquals(md5_file($source), $this->object->getFileHash($dest));
+
+        return $dest;
+    }
+
+    public function testAbort(): void
+    {
+        $source = __DIR__ . '/../../resources/disk-a/large_file.mp4';
+        $dest = $this->object->getPath('abcduploaded.mp4');
+        $totalSize = $this->object->getFileSize($source);
+        $chunkSize = 2097152;
+        $chunks = (int) ceil($totalSize / $chunkSize);
+
+        $chunk = 1;
+        $start = 0;
+
+        $handle = @fopen($source, 'rb');
+        while ($chunk < 3) { // only upload two chunks
+            $contents = fread($handle, $chunkSize);
+            $op = __DIR__ . '/chunk.part';
+            $cc = fopen($op, 'wb');
+            fwrite($cc, $contents);
+            fclose($cc);
+            $this->object->upload($op, $dest, $chunk, $chunks);
+            $start += \strlen($contents);
+            $chunk++;
+            fseek($handle, $start);
+        }
+        @fclose($handle);
+
+        // using file name with same first four chars
+        $source = __DIR__ . '/../../resources/disk-a/large_file.mp4';
+        $dest1 = $this->object->getPath('abcduploaded2.mp4');
+        $totalSize = $this->object->getFileSize($source);
+        $chunkSize = 2097152;
+        $chunks = (int) ceil($totalSize / $chunkSize);
+
+        $chunk = 1;
+        $start = 0;
+
+        $handle = @fopen($source, 'rb');
+        while ($chunk < 3) { // only upload two chunks
+            $contents = fread($handle, $chunkSize);
+            $op = __DIR__ . '/chunk.part';
+            $cc = fopen($op, 'wb');
+            fwrite($cc, $contents);
+            fclose($cc);
+            $this->object->upload($op, $dest1, $chunk, $chunks);
+            $start += \strlen($contents);
+            $chunk++;
+            fseek($handle, $start);
+        }
+        @fclose($handle);
+
+        $this->assertTrue($this->object->abort($dest));
+        $this->assertTrue($this->object->abort($dest1));
+    }
+
+    #[\PHPUnit\Framework\Attributes\Depends('testPartUpload')]
+    public function testPartRead(string $path): void
+    {
+        $source = __DIR__ . '/../../resources/disk-a/large_file.mp4';
+        $chunk = file_get_contents($source, false, null, 0, 500);
+        $readChunk = $this->object->read($path, 0, 500);
+        $this->assertEquals($chunk, $readChunk);
+    }
+
+    public function testPartitionFreeSpace(): void
+    {
+        $this->assertGreaterThan(0, $this->object->getPartitionFreeSpace());
+    }
+
+    public function testPartitionTotalSpace(): void
+    {
+        $this->assertGreaterThan(0, $this->object->getPartitionTotalSpace());
+    }
+
+    #[\PHPUnit\Framework\Attributes\Depends('testPartUpload')]
+    public function testTransferLarge(string $path): void
+    {
+        // chunked file
+        $this->object->setTransferChunkSize(10000000); // 10 mb
+
+        $device = new Local(realpath(__DIR__ . '/../../resources/disk-b'));
+        $destination = $device->getPath('largefile.mp4');
+
+        $this->assertTrue($this->object->transfer($path, $destination, $device));
+        $this->assertTrue($device->exists($destination));
+        $this->assertSame('video/mp4', $device->getFileMimeType($destination));
+
+        $device->delete($destination);
+        $this->object->delete($path);
+    }
+
+    public function testTransferSmall(): void
+    {
+        $this->object->setTransferChunkSize(10000000); // 10 mb
+
+        $device = new Local(realpath(__DIR__ . '/../../resources/disk-b'));
+
+        $path = $this->object->getPath('text-for-read.txt');
+        $this->object->write($path, 'Hello World');
+
+        $destination = $device->getPath('hello.txt');
+        $this->assertTrue($this->object->transfer($path, $destination, $device));
+        $this->assertTrue($device->exists($destination));
+        $this->assertSame('Hello World', $device->read($destination));
+
+        $this->object->delete($path);
+        $device->delete($destination);
+    }
+
+    public function testDeletePath(): void
+    {
+        // Test Single Object
+        $path = $this->object->getPath('text-for-delete-path.txt');
+        $path = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path);
+        $this->assertEquals(true, $this->object->write($path, 'Hello World', 'text/plain'));
+        $this->assertEquals(true, $this->object->exists($path));
+        $this->assertEquals(true, $this->object->deletePath('bucket'));
+        $this->assertEquals(false, $this->object->exists($path));
+
+        // Test Multiple Objects
+        $path = $this->object->getPath('text-for-delete-path1.txt');
+        $path = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path);
+        $this->assertEquals(true, $this->object->write($path, 'Hello World', 'text/plain'));
+        $this->assertEquals(true, $this->object->exists($path));
+
+        $path2 = $this->object->getPath('text-for-delete-path2.txt');
+        $path2 = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path2);
+        $this->assertEquals(true, $this->object->write($path2, 'Hello World', 'text/plain'));
+        $this->assertEquals(true, $this->object->exists($path2));
+
+        $path3 = $this->object->getPath('.hidden.txt');
+        $path3 = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path3);
+        $this->assertEquals(true, $this->object->write($path3, 'Hello World', 'text/plain'));
+        $this->assertEquals(true, $this->object->exists($path3));
+
+        $this->assertEquals(true, $this->object->deletePath('bucket/'));
+        $this->assertEquals(false, $this->object->exists($path));
+        $this->assertEquals(false, $this->object->exists($path2));
+        $this->assertEquals(false, $this->object->exists($path3));
+    }
+
+    public function testGetFiles(): void
+    {
+        $dir = $this->object->getPath('get-files-test');
+
+        $this->assertTrue($this->object->createDirectory($dir));
+
+        $files = $this->object->getFiles($dir);
+        $this->assertCount(0, $files);
+
+        $this->object->write($dir . DIRECTORY_SEPARATOR . 'new-file.txt', 'Hello World');
+        $this->object->write($dir . DIRECTORY_SEPARATOR . 'new-file-two.txt', 'Hello World');
+
+        $files = $this->object->getFiles($dir);
+        $this->assertCount(2, $files);
+
+        $this->assertTrue($this->object->deletePath('get-files-test'));
+    }
+
+    public function testNestedDeletePath(): void
+    {
+        $dir = $this->object->getPath('nested-delete-path-test');
+        $dir2 = $dir . DIRECTORY_SEPARATOR . 'dir2';
+        $dir3 = $dir2 . DIRECTORY_SEPARATOR . 'dir3';
+
+        $this->assertTrue($this->object->createDirectory($dir));
+        $this->object->write($dir . DIRECTORY_SEPARATOR . 'new-file.txt', 'Hello World');
+        $this->assertTrue($this->object->createDirectory($dir2));
+        $this->object->write($dir2 . DIRECTORY_SEPARATOR . 'new-file-2.txt', 'Hello World');
+        $this->assertTrue($this->object->createDirectory($dir3));
+        $this->object->write($dir3 . DIRECTORY_SEPARATOR . 'new-file-3.txt', 'Hello World');
+
+        $this->assertTrue($this->object->deletePath('nested-delete-path-test'));
+        $this->assertFalse($this->object->exists($dir));
+    }
+
+    // -------------------------------------------------------------------------
+    // joinChunks tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * Create a self-contained Local storage instance in a fresh temp directory.
+     * The caller is responsible for deleting the root after the test.
+     */
+    private function makeJoinTestStorage(): Local
+    {
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'utopia-join-test-' . uniqid();
+        mkdir($dir, 0755, true);
+
+        return new Local($dir);
+    }
+
+    public function testJoinChunksAssemblesContentCorrectly(): void
+    {
+        $storage = $this->makeJoinTestStorage();
+        $dest = $storage->getRoot() . DIRECTORY_SEPARATOR . 'test.dat';
+
+        $storage->uploadData('AAAA', $dest, 'application/octet-stream', 1, 3);
+        $storage->uploadData('BBBB', $dest, 'application/octet-stream', 2, 3);
+        $storage->uploadData('CCCC', $dest, 'application/octet-stream', 3, 3);
+
+        $this->assertFileExists($dest);
+        $this->assertSame('AAAABBBBCCCC', file_get_contents($dest));
+
+        $storage->delete($storage->getRoot(), true);
+    }
+
+    public function testJoinChunksCleansUpTempFilesOnSuccess(): void
+    {
+        $storage = $this->makeJoinTestStorage();
+        $dest = $storage->getRoot() . DIRECTORY_SEPARATOR . 'test.dat';
+        $tmpDir = $storage->getRoot() . DIRECTORY_SEPARATOR . 'tmp_test.dat';
+        $tmpAssemble = $storage->getRoot() . DIRECTORY_SEPARATOR . 'tmp_assemble_test.dat';
+
+        $storage->uploadData('AAAA', $dest, 'application/octet-stream', 1, 3);
+        $storage->uploadData('BBBB', $dest, 'application/octet-stream', 2, 3);
+        $storage->uploadData('CCCC', $dest, 'application/octet-stream', 3, 3);
+
+        $this->assertDirectoryDoesNotExist($tmpDir, 'Temp chunk directory should be removed after assembly');
+        $this->assertFileDoesNotExist($tmpAssemble, 'Temp assembly file should be removed after rename');
+        for ($i = 1; $i <= 3; $i++) {
+            $this->assertFileDoesNotExist(
+                $tmpDir . DIRECTORY_SEPARATOR . 'test.part.' . $i,
+                "Part file $i should be removed after assembly",
+            );
+        }
+
+        $storage->delete($storage->getRoot(), true);
+    }
+
+    public function testJoinChunksMissingPartDoesNotFinalize(): void
+    {
+        $storage = $this->makeJoinTestStorage();
+        $dest = $storage->getRoot() . DIRECTORY_SEPARATOR . 'test.dat';
+        $tmpDir = $storage->getRoot() . DIRECTORY_SEPARATOR . 'tmp_test.dat';
+        $tmpAssemble = $storage->getRoot() . DIRECTORY_SEPARATOR . 'tmp_assemble_test.dat';
+
+        $storage->uploadData('AAAA', $dest, 'application/octet-stream', 1, 3);
+        $storage->uploadData('BBBB', $dest, 'application/octet-stream', 2, 3);
+
+        // Simulate a missing/corrupted chunk by deleting part 1 before the
+        // final upload triggers assembly.
+        unlink($tmpDir . DIRECTORY_SEPARATOR . 'test.part.1');
+
+        // Uploading the final chunk should NOT throw or finalize,
+        // because part 1 is missing and the part-file count is only 2.
+        $storage->uploadData('CCCC', $dest, 'application/octet-stream', 3, 3);
+
+        $this->assertFileDoesNotExist($dest, 'Final file must not be created when a chunk is missing');
+        $this->assertFileDoesNotExist($tmpAssemble, 'Temp assembly file must not be created');
+        // Surviving parts must remain so the upload can be retried.
+        $this->assertFileExists(
+            $tmpDir . DIRECTORY_SEPARATOR . 'test.part.2',
+            'Part 2 must be preserved for retry',
+        );
+        $this->assertFileExists(
+            $tmpDir . DIRECTORY_SEPARATOR . 'test.part.3',
+            'Part 3 must be preserved for retry',
+        );
+
+        // Re-upload the missing chunk — assembly should now succeed.
+        $storage->uploadData('AAAA', $dest, 'application/octet-stream', 1, 3);
+        $this->assertFileExists($dest, 'Final file should be created after missing chunk is re-uploaded');
+        $this->assertSame('AAAABBBBCCCC', file_get_contents($dest), 'Re-uploaded chunk must allow correct assembly');
+
+        $storage->delete($storage->getRoot(), true);
+    }
+
+    public function testJoinChunksStaleAssemblyFileIsOverwritten(): void
+    {
+        $storage = $this->makeJoinTestStorage();
+        $dest = $storage->getRoot() . DIRECTORY_SEPARATOR . 'test.dat';
+
+        $storage->uploadData('AAAA', $dest, 'application/octet-stream', 1, 3);
+        $storage->uploadData('BBBB', $dest, 'application/octet-stream', 2, 3);
+
+        // Simulate a stale assembly file left by a previously crashed attempt.
+        // With unique temp paths (tempnam), stale files at old hardcoded paths
+        // are naturally bypassed rather than overwritten.
+        $staleFile = $storage->getRoot() . DIRECTORY_SEPARATOR . 'tmp_assemble_test.dat';
+        file_put_contents($staleFile, 'STALE_GARBAGE_DATA');
+
+        $storage->uploadData('CCCC', $dest, 'application/octet-stream', 3, 3);
+
+        $this->assertFileExists($dest);
+        $this->assertSame('AAAABBBBCCCC', file_get_contents($dest), 'Stale assembly file must not corrupt output');
+
+        $storage->delete($storage->getRoot(), true);
+    }
+
+    public function testOutOfOrderUpload(): void
+    {
+        $storage = $this->makeJoinTestStorage();
+        $dest = $storage->getRoot() . DIRECTORY_SEPARATOR . 'out-of-order.dat';
+
+        $storage->uploadData('CCCC', $dest, 'application/octet-stream', 3, 3);
+        $this->assertFileDoesNotExist($dest, 'File should not be assembled after chunk 3');
+
+        $storage->uploadData('AAAA', $dest, 'application/octet-stream', 1, 3);
+        $this->assertFileDoesNotExist($dest, 'File should not be assembled after chunk 1');
+
+        $storage->uploadData('BBBB', $dest, 'application/octet-stream', 2, 3);
+        $this->assertFileExists($dest, 'File should be assembled after final chunk');
+        $this->assertSame('AAAABBBBCCCC', file_get_contents($dest), 'Chunks must be assembled in correct order');
+
+        $storage->delete($storage->getRoot(), true);
+    }
+
+    public function testOutOfOrderUploadWithRetry(): void
+    {
+        $storage = $this->makeJoinTestStorage();
+        $dest = $storage->getRoot() . DIRECTORY_SEPARATOR . 'out-of-order-retry.dat';
+
+        $storage->uploadData('BBBB', $dest, 'application/octet-stream', 2, 3);
+        $storage->uploadData('AAAA', $dest, 'application/octet-stream', 1, 3);
+
+        // Re-upload chunk 2 (duplicate) — should be silently ignored
+        $storage->uploadData('BBBB', $dest, 'application/octet-stream', 2, 3);
+        $this->assertFileDoesNotExist($dest, 'File should not be assembled after duplicate retry');
+
+        $storage->uploadData('CCCC', $dest, 'application/octet-stream', 3, 3);
+        $this->assertFileExists($dest, 'File should be assembled after final chunk');
+        $this->assertSame('AAAABBBBCCCC', file_get_contents($dest), 'Duplicate retry must not corrupt final file');
+
+        $storage->delete($storage->getRoot(), true);
+    }
+
+    public function testParallelChunkUpload(): void
+    {
+        $storage = $this->makeJoinTestStorage();
+        $dest = $storage->getRoot() . DIRECTORY_SEPARATOR . 'parallel.dat';
+
+        // Upload chunk 1 (creates temp directory)
+        $storage->uploadData('AAAA', $dest, 'application/octet-stream', 1, 2);
+
+        // Upload chunk 2 (assembles the file)
+        $storage->uploadData('BBBB', $dest, 'application/octet-stream', 2, 2);
+
+        // Verify file exists and is correct
+        $this->assertFileExists($dest);
+        $this->assertSame('AAAABBBB', file_get_contents($dest));
+
+        // Simulate the race where another request already assembled the file
+        // by calling joinChunks directly when the file already exists
+        $reflection = new \ReflectionClass($storage);
+        $method = $reflection->getMethod('joinChunks');
+
+        try {
+            $method->invoke($storage, $dest, 2);
+        } catch (\Exception $e) {
+            $this->fail('Duplicate assembly should not throw: ' . $e->getMessage());
+        }
+
+        $this->assertFileExists($dest, 'File should still exist after duplicate assembly attempt');
+        $this->assertSame('AAAABBBB', file_get_contents($dest), 'File content must not be corrupted');
+
+        $storage->delete($storage->getRoot(), true);
+    }
+}
