@@ -1,0 +1,11 @@
+services:
+  maildev:
+    image: appwrite/mailcatcher:1.0.0
+    ports:
+      - '11025:1025'
+      - '11080:1080'
+
+  request-catcher:
+    image: appwrite/requestcatcher:1.0.0
+    ports:
+      - '15000:5000'

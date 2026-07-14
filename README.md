@@ -66,6 +66,9 @@ graph TD
     http --> telemetry
     http --> validators
     http --> system
+    messaging --> client
+    messaging --> pools
+    messaging --> telemetry
     platform --> cli
     platform --> http
     platform --> queue
