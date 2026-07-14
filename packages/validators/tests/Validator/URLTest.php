@@ -130,25 +130,18 @@ final class URLTest extends TestCase
         $this->assertTrue($allowEmpty->isValid(''));
         $this->assertTrue($allowEmpty->isValid('com.raycast-x:/oauth'));
 
-        // allowedSchemes governs standard URLs only; private-use scheme URIs bypass it.
-        $scoped = new URL(['http', 'https'], allowPrivateUseSchemes: true);
+        // allowedSchemes still gates private-use schemes.
+        $scoped = new URL(['com.raycast-x'], allowPrivateUseSchemes: true);
         $this->assertTrue($scoped->isValid('com.raycast-x:/oauth'));
-        $this->assertTrue($scoped->isValid('com.evil-app:/oauth'));
-        $this->assertTrue($scoped->isValid('https://example.com/callback'));
-        $this->assertFalse($scoped->isValid('gopher://example.com')); // standard scheme still gated
+        $this->assertFalse($scoped->isValid('com.evil-app:/oauth'));
     }
 
-    public function testHttpLoopbackOnly(): void
+    public function testHttpsOrLoopback(): void
     {
-        $url = new URL(
-            allowedSchemes: ['http', 'https'],
-            allowFragments: false,
-            allowPrivateUseSchemes: true,
-            httpLoopbackOnly: true,
-        );
+        $url = new URL(allowFragments: false, allowPrivateUseSchemes: true, httpsOrLoopback: true);
 
         $this->assertSame(
-            'Value must be a valid URL with following schemes (http, https) and without a fragment component where the http scheme is restricted to loopback URIs',
+            'Value must be a valid URL without a fragment component restricted to https or http on a loopback host',
             $url->getDescription(),
         );
 
@@ -164,22 +157,24 @@ final class URLTest extends TestCase
         // Rejected.
         $this->assertFalse($url->isValid('http://app.example.com/callback'));       // routable http
         $this->assertFalse($url->isValid('http://localhost.evil.com/callback'));    // loopback lookalike
-        $this->assertFalse($url->isValid('ftp://app.example.com/callback'));        // scheme not allowed
+        $this->assertFalse($url->isValid('ftp://app.example.com/callback'));        // non-http(s) standard scheme
         $this->assertFalse($url->isValid('https://app.example.com/callback#frag')); // fragment
         $this->assertFalse($url->isValid('com.example.app:/oauth#frag'));           // private-use with fragment
         $this->assertFalse($url->isValid('not a valid uri'));
         $this->assertFalse($url->isValid(''));
     }
 
-    public function testHttpLoopbackOnlyDefaultsToFalse(): void
+    public function testHttpsOrLoopbackDefaultsToFalse(): void
     {
-        // Flag off (default): routable http is still valid.
-        $default = new URL(['http', 'https']);
+        // Flag off (default): routable http is still valid, and the transport clause
+        // is absent from the description.
+        $default = new URL();
+        $this->assertSame('Value must be a valid URL', $default->getDescription());
         $this->assertTrue($default->isValid('http://app.example.com/callback'));
 
-        // Change 2 alone: allowedSchemes lets a private-use URI through.
-        $privateUse = new URL(['http', 'https'], allowPrivateUseSchemes: true);
-        $this->assertTrue($privateUse->isValid('com.example.app:/oauth'));
-        $this->assertTrue($privateUse->isValid('http://app.example.com/callback')); // loopback not enforced
+        // The flag is independent of and additive to allowedSchemes: both must hold.
+        $both = new URL(['https'], httpsOrLoopback: true);
+        $this->assertTrue($both->isValid('https://app.example.com/callback'));
+        $this->assertFalse($both->isValid('http://localhost/callback')); // http not in allowedSchemes
     }
 }

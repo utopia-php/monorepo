@@ -15,7 +15,7 @@ use Utopia\Validator;
  */
 class URL extends Validator
 {
-    public function __construct(protected array $allowedSchemes = [], protected bool $allowEmpty = false, protected bool $allowFragments = true, protected bool $allowPrivateUseSchemes = false, protected bool $httpLoopbackOnly = false) {}
+    public function __construct(protected array $allowedSchemes = [], protected bool $allowEmpty = false, protected bool $allowFragments = true, protected bool $allowPrivateUseSchemes = false, protected bool $httpsOrLoopback = false) {}
 
     /**
      * Get Description
@@ -24,7 +24,7 @@ class URL extends Validator
      */
     public function getDescription(): string
     {
-        $loopback = $this->httpLoopbackOnly ? ' where the http scheme is restricted to loopback URIs' : '';
+        $transport = $this->httpsOrLoopback ? ' restricted to https or http on a loopback host' : '';
 
         if ($this->allowedSchemes !== []) {
             $description = 'Value must be a valid URL with following schemes (' . implode(', ', $this->allowedSchemes) . ')';
@@ -33,14 +33,14 @@ class URL extends Validator
                 $description .= ' and without a fragment component';
             }
 
-            return $description . $loopback;
+            return $description . $transport;
         }
 
         if (!$this->allowFragments) {
-            return 'Value must be a valid URL without a fragment component' . $loopback;
+            return 'Value must be a valid URL without a fragment component' . $transport;
         }
 
-        return 'Value must be a valid URL' . $loopback;
+        return 'Value must be a valid URL' . $transport;
     }
 
     /**
@@ -64,9 +64,7 @@ class URL extends Validator
             return false;
         }
 
-        // allowedSchemes governs standard (authority-bearing) URLs only; accepted
-        // private-use scheme URIs bypass the allowlist (RFC 8252 §7.1).
-        if ($this->allowedSchemes !== [] && !$isPrivateUseSchemeURI && !\in_array(parse_url((string) $value, PHP_URL_SCHEME), $this->allowedSchemes)) {
+        if ($this->allowedSchemes !== [] && !\in_array(parse_url((string) $value, PHP_URL_SCHEME), $this->allowedSchemes)) {
             return false;
         }
 
@@ -74,10 +72,17 @@ class URL extends Validator
             return false;
         }
 
-        // When enabled, the http scheme is only valid for loopback hosts (RFC 8252 §7.3).
-        if ($this->httpLoopbackOnly && strtolower((string) parse_url((string) $value, PHP_URL_SCHEME)) === 'http') {
-            $host = strtolower((string) parse_url((string) $value, PHP_URL_HOST));
-            if (!\in_array($host, ['localhost', '127.0.0.1', '[::1]'], true)) {
+        // Secure-redirect transport policy: a standard (authority-bearing) URL must be
+        // https on any host, or http on a loopback host (RFC 8252 §7.3). Private-use
+        // scheme URIs are governed solely by $allowPrivateUseSchemes and are exempt.
+        if ($this->httpsOrLoopback && !$isPrivateUseSchemeURI) {
+            $scheme = strtolower((string) parse_url((string) $value, PHP_URL_SCHEME));
+            if ($scheme === 'http') {
+                $host = strtolower((string) parse_url((string) $value, PHP_URL_HOST));
+                if (!\in_array($host, ['localhost', '127.0.0.1', '[::1]'], true)) {
+                    return false;
+                }
+            } elseif ($scheme !== 'https') {
                 return false;
             }
         }
