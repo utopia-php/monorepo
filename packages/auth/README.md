@@ -10,9 +10,9 @@ Utopia Auth is a simple, dependency-free PHP library for building authentication
 
 Although it is part of the [Utopia Framework](https://github.com/utopia-php/framework) project, it is dependency free and can be used standalone with any PHP project or framework.
 
-## Getting Started
+## Getting started
 
-Install using composer:
+Install using Composer:
 
 ```bash
 composer require utopia-php/auth
@@ -28,7 +28,7 @@ $hash = $password->hash('user-password');
 $isValid = $password->verify('user-password', $hash);
 ```
 
-## System Requirements
+## System requirements
 
 Utopia Auth requires PHP 8.3 or later. We recommend using the latest PHP version whenever possible.
 
@@ -37,7 +37,7 @@ Utopia Auth requires PHP 8.3 or later. We recommend using the latest PHP version
 - **Password hashing** — Argon2, Bcrypt, Scrypt (and a modified Scrypt), SHA, PHPass, and MD5 (legacy only)
 - **Authentication proofs** — cryptographically random tokens, one-time codes (e.g. 2FA), and human-readable phrases
 - **Data store** — a base64-encodable key/value envelope for serializing authentication state
-- **Token issuers** — mint signed [JWS](https://datatracker.ietf.org/doc/html/rfc7515): OAuth2 access tokens (RFC 9068), refresh tokens, and OpenID Connect id_tokens
+- **Token issuers** — mint signed [JWS](https://datatracker.ietf.org/doc/html/rfc7515): OAuth2 access tokens (RFC 9068), refresh tokens, and OpenID Connect ID tokens
 - **Token verifiers** — verify RS256/HS256 JWS with an `alg`-confusion guard and standard claim checks
 - **OAuth2 helpers** — RFC 8707 resource indicators, OpenID Connect prompts, and RFC 9126 pushed authorization request URIs
 

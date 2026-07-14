@@ -11,14 +11,14 @@ Utopia Lock library is a simple and lite library for coordinating access to shar
 
 Although this library is part of the [Utopia Framework](https://github.com/utopia-php/framework) project it is dependency free and can be used as standalone with any other PHP project or framework.
 
-## Getting Started
+## Getting started
 
-Install using composer:
+Install using Composer:
 ```bash
 composer require utopia-php/lock
 ```
 
-## System Requirements
+## System requirements
 
 Utopia Lock requires PHP 8.3 or later. We recommend using the latest PHP version whenever possible.
 
@@ -26,7 +26,7 @@ The `Mutex` and `Semaphore` primitives require the [Swoole](https://github.com/s
 
 ## Features
 
-### Supported Primitives
+### Supported primitives
 
 | Primitive     | Scope                           | Backing                              | Use when                                                |
 | ------------- | ------------------------------- | ------------------------------------ | ------------------------------------------------------- |
@@ -37,7 +37,7 @@ The `Mutex` and `Semaphore` primitives require the [Swoole](https://github.com/s
 
 ## Usage
 
-### The Interface
+### The interface
 
 All primitives implement the same `Utopia\Lock\Lock` interface:
 
@@ -147,7 +147,7 @@ $lock->withLock(function () {
 
 Release is atomic: a Lua script verifies the lock value still matches this instance's token before deleting, so a lock that expires and is re-acquired elsewhere is never released by accident.
 
-### Exception Handling
+### Exception handling
 
 ```php
 <?php

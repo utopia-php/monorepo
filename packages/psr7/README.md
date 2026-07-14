@@ -11,7 +11,7 @@ PSR-7 HTTP message implementations and PSR-17 factories for PHP 8.4+.
 composer require utopia-php/psr7
 ```
 
-## Quick Start
+## Quick start
 
 ```php
 <?php

@@ -11,7 +11,7 @@ bin/monorepo check http --fix      # apply code style, fix what phpstan/rector s
 bin/monorepo validate              # check package conventions (CI enforces this)
 ```
 
-Edit code under `packages/<name>` and open a pull request here — the mirrors are read-only and redirect PRs back. Cross-package changes are fine in a single commit. Code style is monorepo-wide (`pint.json`), as is the phpstan level-5 floor (the root `phpstan.neon`, enforced for every package). A package adds its own `phpstan.neon` only to raise the level or add settings; rector rules stay per-package (`rector.php`) since they encode per-library decisions.
+Edit code under `packages/<name>` and open a pull request here — the mirrors are read-only and redirect PRs back. Cross-package changes are fine in a single commit. Code style is monorepo-wide (`pint.json`), as is the PHPStan level-5 floor (the root `phpstan.neon`, enforced for every package). A package adds its own `phpstan.neon` only to raise the level or add settings; rector rules stay per-package (`rector.php`) since they encode per-library decisions. Markdown documentation is linted with [Vale](https://vale.sh) (`.vale.ini` and the vendored `Utopia` style in `.vale/styles`) — errors fail CI, warnings are advisory.
 
 Run `bin/monorepo` with no arguments for the full command list — `absorb` and `split` are maintainer operations, covered in [docs/absorbing.md](docs/absorbing.md) and [docs/distribution.md](docs/distribution.md). To start a brand-new library, see [docs/creating.md](docs/creating.md).
 

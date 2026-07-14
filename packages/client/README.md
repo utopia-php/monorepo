@@ -13,7 +13,7 @@ composer require utopia-php/client
 
 Use `ext-curl` for the cURL adapter and `ext-swoole` for the Swoole coroutine adapter.
 
-## Quick Start
+## Quick start
 
 ```php
 <?php

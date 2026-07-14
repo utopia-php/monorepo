@@ -181,7 +181,7 @@ $parameter = $prompts->toString();  // 'login consent select_account'
 Invalid prompt values throw `InvalidPromptException`.
 `InvalidPromptException::ERROR_CODE` is `invalid_request`.
 
-## Pushed Authorization Requests (RFC 9126)
+## Pushed authorization requests (RFC 9126)
 
 `PAR` represents a pushed authorization request `request_uri`. Build one from a
 stored request id when returning a PAR response, or parse one from a

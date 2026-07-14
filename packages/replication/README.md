@@ -11,14 +11,14 @@ Utopia Replication is a Swoole-native MySQL binlog reader. It streams row-level 
 
 Although this library is part of the [Utopia Framework](https://github.com/utopia-php/framework) project it is dependency free and can be used as standalone with any other PHP project or framework.
 
-## Getting Started
+## Getting started
 
-Install using composer:
+Install using Composer:
 ```bash
 composer require utopia-php/replication
 ```
 
-## System Requirements
+## System requirements
 
 Utopia Replication requires PHP 8.3 or later, and the [Swoole](https://github.com/swoole/swoole-src) extension (>=6.0) for coroutine socket I/O. The [OpenSSL](https://www.php.net/manual/en/book.openssl.php) extension is required for `caching_sha2_password` full authentication and TLS.
 

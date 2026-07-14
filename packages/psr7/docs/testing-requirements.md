@@ -9,7 +9,7 @@ Source specs:
 - `docs/rfc/RFC-2046-media-types.md`
 - `docs/rfc/RFC-7578-multipart-form-data.md`
 
-## PSR-7 Message Coverage
+## PSR-7 message coverage
 
 - Messages are immutable: every `with*()` method returns a changed copy and leaves the original unchanged.
 - Header lookup is case-insensitive, but `getHeaders()` preserves the original header case.
@@ -25,14 +25,14 @@ Source specs:
 - URI default ports are omitted from `getPort()` and string output.
 - Stream state changes after `detach()`/`close()` match PSR-7 expectations.
 
-## PSR-17 Factory Coverage
+## PSR-17 factory coverage
 
 - Dedicated factories implement their respective PSR-17 interfaces.
 - Request factory accepts string and `UriInterface` values.
 - Response factory rejects invalid status codes through the response object.
 - Stream factory creates streams from strings, files, and resources.
 
-## Multipart Coverage
+## Multipart coverage
 
 - Multipart request factory creates stable per-part headers and terminal boundaries.
 - Multipart request factory supports scalar fields, file/body parts, filenames, content types, and custom per-part headers.
