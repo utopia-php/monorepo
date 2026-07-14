@@ -308,7 +308,7 @@ All code contributions - including those of people having commit access - must g
 
 Fork the project, create a feature branch, and send us a pull request.
 
-You can refer to the [Contributing Guide](https://github.com/utopia-php/http/blob/main/CONTRIBUTING.md) for more info.
+You can refer to the [Contributing Guide](https://github.com/utopia-php/monorepo/blob/main/CONTRIBUTING.md) for more info.
 
 For security issues, please email security@appwrite.io instead of posting a public issue in GitHub.
 

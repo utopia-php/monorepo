@@ -1,6 +1,6 @@
 # Adding New Storage Adapter
 
-This document is a part of Utopia PHP contributors' guide. Before you continue reading this document make sure you have read the [Code of Conduct](../CODE_OF_CONDUCT.md) and the [Contributing Guide](../CONTRIBUTING.md).
+This document is a part of Utopia PHP contributors' guide. Before you continue reading this document make sure you have read the [Code of Conduct](https://github.com/utopia-php/monorepo/blob/main/CODE_OF_CONDUCT.md) and the [Contributing Guide](https://github.com/utopia-php/monorepo/blob/main/CONTRIBUTING.md).
 
 ## Getting started
 
