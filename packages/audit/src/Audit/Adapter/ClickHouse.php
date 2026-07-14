@@ -2357,7 +2357,7 @@ class ClickHouse extends SQL
 
         $sql = "
             DELETE FROM {$escapedTable}
-            WHERE time < {datetime:String}{$tenantFilter}{$settings}
+            WHERE time < {datetime:DateTime64(3)}{$tenantFilter}{$settings}
         ";
 
         $this->query($sql, ['datetime' => $datetimeString]);
