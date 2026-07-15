@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\E2E\Adapter;
 
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
@@ -111,6 +112,65 @@ final class ReliableSwooleTest extends TestCase
         $this->assertSame(0, $this->stat('processing'));
     }
 
+    #[Group('redis-restart')]
+    public function testSharedCommandConnectionRecoversAfterRealRedisRestart(): void
+    {
+        $this->prepare(visibility: 2, heartbeat: 1, scan: 1, batch: 10);
+        $broker = $this->broker();
+        $broker->enqueue($this->queue, ['restart' => true]);
+        $message = $broker->receive($this->queue, 1);
+        $this->assertInstanceOf(Message::class, $message);
+        $this->assertTrue($broker->extend($this->queue, $message));
+        $this->redis->zAdd($this->key('processing'), 0, $message->getPid());
+        $redisStopped = false;
+
+        try {
+            $this->redis->close();
+            $this->composeRedis('stop');
+            $redisStopped = true;
+
+            $started = microtime(true);
+            try {
+                $broker->extend($this->queue, $message);
+                $this->fail('Heartbeat must report that Redis stayed unavailable past its bounded retries.');
+            } catch (\RedisException) {
+            }
+            $this->assertLessThan(10.0, microtime(true) - $started);
+
+            try {
+                $broker->commit($this->queue, $message);
+                $this->fail('An acknowledgement attempted during the outage must remain uncertain.');
+            } catch (\RedisException) {
+            }
+
+            $this->composeRedis('start');
+            $redisStopped = false;
+            $this->reconnectRedis();
+
+            $claims = $broker->expired($this->queue, 10);
+            $this->assertCount(1, $claims);
+            $replacement = $broker->reclaim($this->queue, $claims[0]);
+            $this->assertInstanceOf(Message::class, $replacement);
+
+            $recovered = $broker->receive($this->queue, 2);
+            $this->assertInstanceOf(Message::class, $recovered);
+            $this->assertNotSame($message->getPid(), $recovered->getPid());
+            $broker->commit($this->queue, $recovered);
+        } finally {
+            if ($redisStopped) {
+                $this->composeRedis('start');
+            }
+            if (!isset($this->redis) || !$this->redis->isConnected()) {
+                $this->reconnectRedis();
+            }
+        }
+
+        $this->assertSame(1, $this->stat('reclaimed'));
+        $this->assertSame(1, $this->stat('success'));
+        $this->assertSame(0, $this->stat('failed'));
+        $this->assertSame(0, $this->stat('processing'));
+    }
+
     public function testConcurrentRecoveryLoopsProduceOneReplacement(): void
     {
         $this->prepare();
@@ -148,17 +208,23 @@ final class ReliableSwooleTest extends TestCase
     {
         $this->prepare(scan: 1, batch: 2);
         $broker = $this->broker();
-        for ($index = 0; $index < 5; $index++) {
-            $broker->enqueue($this->queue, ['index' => $index]);
+        $expired = [];
+        foreach (['A', 'B', 'C'] as $score => $order) {
+            $broker->enqueue($this->queue, ['order' => $order]);
             $message = $broker->receive($this->queue, 1);
             $this->assertInstanceOf(Message::class, $message);
-            $this->redis->zAdd($this->key('processing'), 0, $message->getPid());
+            $expired[$order] = $message->getPid();
+            $this->redis->zAdd($this->key('processing'), $score + 1, $message->getPid());
         }
-        $processed = 0;
+        foreach (['D', 'E'] as $order) {
+            $broker->enqueue($this->queue, ['order' => $order]);
+        }
+        $consumer = new RecordingRecoverableConsumer($this->broker());
+        $processed = [];
 
-        Coroutine\run(function () use (&$processed): void {
+        Coroutine\run(function () use ($consumer, &$processed): void {
             $adapter = new Swoole(
-                $this->broker(),
+                $consumer,
                 1,
                 $this->queue->name,
                 self::NAMESPACE,
@@ -166,8 +232,9 @@ final class ReliableSwooleTest extends TestCase
                 reliable: $this->queue->reliable,
             );
             $adapter->consume(
-                function () use ($adapter, &$processed): void {
-                    if (++$processed === 5) {
+                function (Message $message) use ($adapter, &$processed): void {
+                    $processed[] = $message->getPayload()['order'];
+                    if (\count($processed) === 5) {
                         $adapter->stop();
                     }
                 },
@@ -176,8 +243,9 @@ final class ReliableSwooleTest extends TestCase
             );
         });
 
-        $this->assertSame(5, $processed);
-        $this->assertSame(5, $this->stat('reclaimed'));
+        $this->assertSame([$expired['C'], $expired['B'], $expired['A']], $consumer->reclaimOrder);
+        $this->assertSame(['A', 'B', 'C', 'D', 'E'], $processed);
+        $this->assertSame(3, $this->stat('reclaimed'));
         $this->assertSame(5, $this->stat('success'));
         $this->assertSame(0, $this->stat('processing'));
         $this->assertSame(0, $this->redis->lLen($this->key('queue')));
@@ -414,6 +482,55 @@ final class ReliableSwooleTest extends TestCase
         return ['code' => $code, 'output' => $output, 'error' => $error];
     }
 
+    private function composeRedis(string $action): void
+    {
+        $process = proc_open(
+            ['docker', 'compose', '-f', \dirname(__DIR__, 4) . '/docker-compose.yml', $action, 'redis'],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+            \dirname(__DIR__, 4),
+        );
+        if (!\is_resource($process)) {
+            throw new \RuntimeException("Failed to run docker compose {$action} redis.");
+        }
+        fclose($pipes[0]);
+        $output = stream_get_contents($pipes[1]);
+        $error = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $code = proc_close($process);
+        if ($code !== 0) {
+            throw new \RuntimeException("docker compose {$action} redis failed: {$output}{$error}");
+        }
+    }
+
+    private function reconnectRedis(): void
+    {
+        $deadline = microtime(true) + 10.0;
+        do {
+            $redis = new \Redis();
+            try {
+                $redis->connect('127.0.0.1', self::PORT, 0.2);
+                $redis->ping();
+                $this->redis = $redis;
+
+                return;
+            } catch (\RedisException) {
+                try {
+                    $redis->close();
+                } catch (\Throwable) {
+                }
+                usleep(100_000);
+            }
+        } while (microtime(true) < $deadline);
+
+        throw new \RuntimeException('Redis did not become ready after restart.');
+    }
+
     private function cleanup(): void
     {
         $this->redis->del([
@@ -516,5 +633,64 @@ final class CoordinatedRecoverableConsumer implements Consumer, Recoverable
     public function releaseSecondClaim(): void
     {
         $this->release->push(true);
+    }
+}
+
+final class RecordingRecoverableConsumer implements Consumer, Recoverable
+{
+    private int $reclaims = 0;
+
+    /** @var list<string> */
+    public array $reclaimOrder = [];
+
+    public function __construct(private readonly RedisBroker $consumer) {}
+
+    public function receive(Queue $queue, int $timeout): ?Message
+    {
+        $deadline = microtime(true) + 3.0;
+        while ($this->reclaims < 3 && microtime(true) < $deadline) {
+            Coroutine::sleep(0.01);
+        }
+        if ($this->reclaims < 3) {
+            throw new \RuntimeException('Recovery did not reclaim all expired messages before the bounded wait elapsed.');
+        }
+
+        return $this->consumer->receive($queue, $timeout);
+    }
+
+    public function commit(Queue $queue, Message $message): void
+    {
+        $this->consumer->commit($queue, $message);
+    }
+
+    public function reject(Queue $queue, Message $message): void
+    {
+        $this->consumer->reject($queue, $message);
+    }
+
+    public function close(): void
+    {
+        $this->consumer->close();
+    }
+
+    public function extend(Queue $queue, Message $message): bool
+    {
+        return $this->consumer->extend($queue, $message);
+    }
+
+    public function expired(Queue $queue, int $limit): array
+    {
+        return $this->consumer->expired($queue, $limit);
+    }
+
+    public function reclaim(Queue $queue, Claim $claim): ?Message
+    {
+        $message = $this->consumer->reclaim($queue, $claim);
+        if ($message instanceof Message) {
+            $this->reclaimOrder[] = $claim->pid;
+            $this->reclaims++;
+        }
+
+        return $message;
     }
 }

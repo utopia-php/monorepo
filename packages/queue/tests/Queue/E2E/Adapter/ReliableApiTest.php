@@ -229,6 +229,130 @@ final class ReliableApiTest extends TestCase
         $this->assertTrue($connection->claimed);
         $this->assertNotInstanceOf(\Utopia\Queue\Message::class, $message);
     }
+
+    public function testReliableCommitResetsAfterTransportFailureAndLaterAckIsIdempotent(): void
+    {
+        $connection = new RecoveringCommandConnection(1, new \RedisException('Redis is unavailable.'));
+        $locking = new Locking($connection);
+        $broker = new RedisBroker($locking, $locking);
+        $queue = new Queue('command-commit', reliable: new Reliable());
+        $message = $this->claimedMessage($queue);
+
+        try {
+            $broker->commit($queue, $message);
+            $this->fail('An acknowledgement with an unknown transport outcome must not report success.');
+        } catch (\RedisException) {
+        }
+
+        $this->assertSame(1, $connection->evaluations);
+        $this->assertSame(1, $connection->closes);
+
+        $broker->commit($queue, $message);
+        $broker->commit($queue, $message);
+
+        $this->assertSame(2, $connection->evaluations);
+        $this->assertSame(1, $connection->closes);
+    }
+
+    public function testReliableRejectResetsAfterTransportFailureWithoutRetry(): void
+    {
+        $connection = new RecoveringCommandConnection(1, new \RedisException('Redis is unavailable.'));
+        $locking = new Locking($connection);
+        $broker = new RedisBroker($locking, $locking);
+        $queue = new Queue('command-reject', reliable: new Reliable());
+        $message = $this->claimedMessage($queue);
+
+        try {
+            $broker->reject($queue, $message);
+            $this->fail('A rejection with an unknown transport outcome must not be retried.');
+        } catch (\RedisException) {
+        }
+
+        $this->assertSame(1, $connection->evaluations);
+        $this->assertSame(1, $connection->closes);
+
+        $broker->reject($queue, $message);
+        $broker->reject($queue, $message);
+        $broker->commit($queue, $message);
+
+        $this->assertSame(2, $connection->evaluations);
+        $this->assertSame(1, $connection->closes);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('retryableCommandProvider')]
+    public function testHeartbeatAndRecoveryCommandsResetAndRetryTransportFailures(
+        string $operation,
+        mixed $result,
+        \Throwable $failure,
+    ): void {
+        $connection = new RecoveringCommandConnection($result, $failure);
+        $locking = new Locking($connection);
+        $broker = new RedisBroker($locking, $locking);
+        $queue = new Queue("command-{$operation}", reliable: new Reliable());
+        $message = $this->claimedMessage($queue);
+
+        $actual = match ($operation) {
+            'extend' => $broker->extend($queue, $message),
+            'expired' => $broker->expired($queue, 1),
+            default => throw new \LogicException("Unknown operation: {$operation}"),
+        };
+
+        $expected = match ($operation) {
+            'extend' => true,
+            'expired' => [],
+        };
+        $this->assertSame($expected, $actual);
+        $this->assertSame(2, $connection->evaluations);
+        $this->assertSame(1, $connection->closes);
+    }
+
+    /** @return iterable<string, array{string, mixed, \Throwable}> */
+    public static function retryableCommandProvider(): iterable
+    {
+        yield 'heartbeat Redis failure' => ['extend', 1, new \RedisException('Redis is unavailable.')];
+        yield 'expired scan cluster failure' => ['expired', [], new \RedisClusterException('Redis Cluster is unavailable.')];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unsafeCommandProvider')]
+    public function testNonIdempotentReliableCommandsResetWithoutRetry(string $operation): void
+    {
+        $connection = new RecoveringCommandConnection(1, new \RedisException('Redis is unavailable.'));
+        $locking = new Locking($connection);
+        $broker = new RedisBroker($locking, $locking);
+        $queue = new Queue("command-{$operation}", reliable: new Reliable());
+
+        try {
+            match ($operation) {
+                'enqueue' => $broker->enqueue($queue, ['value' => true]),
+                'retry' => $broker->retry($queue),
+                'reclaim' => $broker->reclaim($queue, new Claim('pid', '1:1')),
+                default => throw new \LogicException("Unknown operation: {$operation}"),
+            };
+            $this->fail('A command with an unknown transport outcome must not be retried.');
+        } catch (\RedisException) {
+        }
+
+        $this->assertSame(1, $connection->evaluations);
+        $this->assertSame(1, $connection->closes);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function unsafeCommandProvider(): iterable
+    {
+        yield 'enqueue' => ['enqueue'];
+        yield 'retry' => ['retry'];
+        yield 'reclaim' => ['reclaim'];
+    }
+
+    private function claimedMessage(Queue $queue): Message
+    {
+        return new Message([
+            'pid' => 'pid',
+            'queue' => $queue->name,
+            'timestamp' => 1,
+            'payload' => [],
+        ], '1:1');
+    }
 }
 
 final class ClosingClaimConnection extends InMemoryConnection implements Atomic
@@ -384,6 +508,37 @@ final class PollingAtomicConnection extends InMemoryConnection implements Atomic
         }
 
         return [0];
+    }
+
+    #[\Override]
+    public function close(): void
+    {
+        $this->closes++;
+    }
+}
+
+final class RecoveringCommandConnection extends InMemoryConnection implements Atomic
+{
+    public int $closes = 0;
+    public int $evaluations = 0;
+
+    public function __construct(
+        private readonly mixed $result,
+        private readonly \Throwable $failure,
+    ) {}
+
+    public function supportsAtomic(): bool
+    {
+        return true;
+    }
+
+    public function evaluate(string $script, array $arguments = [], int $keyCount = 0): mixed
+    {
+        if (++$this->evaluations === 1) {
+            throw $this->failure;
+        }
+
+        return $this->result;
     }
 
     #[\Override]

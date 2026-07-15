@@ -4,6 +4,10 @@
 set -e
 cd "$(dirname "$0")/.."
 
+# This test intentionally restarts Redis. Run it before long-lived workers so
+# their sockets cannot be invalidated for the rest of the suite.
+phpunit --testsuite e2e --group redis-restart
+
 php tests/Queue/servers/Swoole/worker.php & SWOOLE=$!
 php tests/Queue/servers/SwooleRedisCluster/worker.php & CLUSTER=$!
 php tests/Queue/servers/Workerman/worker.php start & WORKERMAN=$!
@@ -16,4 +20,4 @@ trap cleanup EXIT INT TERM
 
 sleep 3
 
-phpunit --testsuite e2e
+phpunit --testsuite e2e --exclude-group redis-restart

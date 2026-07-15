@@ -184,7 +184,7 @@ LUA;
     public const string EXPIRED = <<<'LUA'
 local now = redis.call('TIME')
 local micros = (tonumber(now[1]) * 1000000) + tonumber(now[2])
-local pids = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', micros, 'LIMIT', 0, tonumber(ARGV[1]))
+local pids = redis.call('ZREVRANGEBYSCORE', KEYS[1], micros, '-inf', 'LIMIT', 0, tonumber(ARGV[1]))
 local result = {}
 
 for _, pid in ipairs(pids) do

@@ -6,9 +6,11 @@ namespace Tests\E2E\Adapter;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Utopia\Queue\Adapter;
 use Utopia\Queue\Broker\Redis as RedisBroker;
 use Utopia\Queue\Connection\Locking;
 use Utopia\Queue\Connection\Redis as RedisConnection;
+use Utopia\Queue\Exception\ClaimLost;
 use Utopia\Queue\Message;
 use Utopia\Queue\Option\Reliable;
 use Utopia\Queue\Queue;
@@ -138,8 +140,20 @@ final class ReliableRedisTest extends TestCase
         $this->assertSame(0, $this->redis->zCard($this->key('processing')));
         $this->assertSame(1, $this->stat('reclaimed'));
 
-        $broker->commit($this->queue, $message);
-        $broker->reject($this->queue, $message);
+        try {
+            $broker->commit($this->queue, $message);
+            $this->fail('Committing a reclaimed claim must report that ownership was lost.');
+        } catch (ClaimLost $error) {
+            $this->assertSame($message->getPid(), $error->pid);
+            $this->assertSame($message->getClaimedAt(), $error->claimedAt);
+        }
+        try {
+            $broker->reject($this->queue, $message);
+            $this->fail('Rejecting a reclaimed claim must report that ownership was lost.');
+        } catch (ClaimLost $error) {
+            $this->assertSame($message->getPid(), $error->pid);
+            $this->assertSame($message->getClaimedAt(), $error->claimedAt);
+        }
         $this->assertSame(0, $this->stat('success'));
         $this->assertSame(0, $this->stat('failed'));
         $this->assertSame(0, $this->stat('processing'));
@@ -152,6 +166,56 @@ final class ReliableRedisTest extends TestCase
         $this->assertInstanceOf(Message::class, $claimedAgain);
         $this->assertNotNull($claimedAgain->getClaimedAt());
         $broker->commit($this->queue, $claimedAgain);
+    }
+
+    #[DataProvider('serverProvider')]
+    public function testForcedReclaimReportsLostClaimWithoutCallingSuccess(int $port): void
+    {
+        $this->prepare($port, visibility: 3);
+        $broker = $this->broker($port);
+        $broker->enqueue($this->queue, ['slow' => true]);
+        $message = $broker->receive($this->queue, 1);
+        $this->assertInstanceOf(Message::class, $message);
+        $adapter = new ProcessingAdapter(
+            $broker,
+            1,
+            $this->queue->name,
+            self::NAMESPACE,
+            reliable: $this->queue->reliable,
+        );
+        $replacement = null;
+        $successes = [];
+        $errors = [];
+
+        $adapter->processMessage(
+            $message,
+            function (Message $message) use ($broker, &$replacement): void {
+                usleep(50_000);
+                $this->redis->zAdd($this->key('processing'), 0, $message->getPid());
+                $claim = $broker->expired($this->queue, 1)[0];
+                $replacement = $broker->reclaim($this->queue, $claim);
+            },
+            static function (Message $message) use (&$successes): void {
+                $successes[] = $message;
+            },
+            static function (Message $message, \Throwable $error) use (&$errors): void {
+                $errors[] = [$message, $error];
+            },
+        );
+
+        $this->assertInstanceOf(Message::class, $replacement);
+        $this->assertSame([], $successes);
+        $this->assertCount(1, $errors);
+        $this->assertInstanceOf(ClaimLost::class, $errors[0][1]);
+        $this->assertSame(0, $this->stat('success'));
+        $this->assertSame(1, $this->stat('reclaimed'));
+        $this->assertSame(1, $this->redis->lLen($this->key('queue')));
+
+        $recovered = $broker->receive($this->queue, 1);
+        $this->assertInstanceOf(Message::class, $recovered);
+        $broker->commit($this->queue, $recovered);
+        $this->assertSame(1, $this->stat('success'));
+        $this->assertSame(0, $this->stat('processing'));
     }
 
     #[DataProvider('serverProvider')]
@@ -194,7 +258,11 @@ final class ReliableRedisTest extends TestCase
         $claim = $broker->expired($this->queue, 1)[0];
 
         $this->assertInstanceOf(Message::class, $broker->reclaim($this->queue, $claim));
-        $broker->reject($this->queue, $message);
+        try {
+            $broker->reject($this->queue, $message);
+            $this->fail('The reclaim winner must invalidate the original rejection token.');
+        } catch (ClaimLost) {
+        }
         $broker->retry($this->queue);
         $this->assertSame(1, $broker->getQueueSize($this->queue));
         $this->assertSame(0, $broker->getQueueSize($this->queue, failedJobs: true));
@@ -525,5 +593,37 @@ final class ReliableRedisTest extends TestCase
         $this->assertIsArray($time);
 
         return (int) ltrim((string) $time[0], ':');
+    }
+}
+
+final class ProcessingAdapter extends Adapter
+{
+    public function processMessage(
+        Message $message,
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+    ): void {
+        $this->process($message, $messageCallback, $successCallback, $errorCallback);
+    }
+
+    public function start(): self
+    {
+        return $this;
+    }
+
+    public function stop(): self
+    {
+        return $this;
+    }
+
+    public function workerStart(callable $callback): self
+    {
+        return $this;
+    }
+
+    public function workerStop(callable $callback): self
+    {
+        return $this;
     }
 }

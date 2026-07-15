@@ -8,6 +8,7 @@ use Utopia\Queue\Connection;
 use Utopia\Queue\Connection\Atomic;
 use Utopia\Queue\Consumer;
 use Utopia\Queue\Consumer\Recoverable;
+use Utopia\Queue\Exception\ClaimLost;
 use Utopia\Queue\Message;
 use Utopia\Queue\Option\Reliable;
 use Utopia\Queue\Publisher;
@@ -16,12 +17,19 @@ use Utopia\Queue\Queue;
 class Redis implements Publisher, Consumer, Recoverable
 {
     private const int POP_TIMEOUT = 2;
+    private const int COMMAND_MAX_ATTEMPTS = 3;
+    private const int COMMAND_BACKOFF_MS = 100;
+    private const int COMMAND_MAX_BACKOFF_MS = 500;
     private const int RECONNECT_BACKOFF_MS = 100;
     private const int RECONNECT_MAX_BACKOFF_MS = 5_000;
 
     private bool $closed = false;
     private int $reconnectAttempt = 0;
     private int $reconnectBackoffMs = self::RECONNECT_BACKOFF_MS;
+
+    /** @var \WeakMap<Message, true> */
+    private \WeakMap $settled;
+
     /**
      * @var (callable(Queue, \Throwable, int, int): void)|null
      */
@@ -36,7 +44,9 @@ class Redis implements Publisher, Consumer, Recoverable
         private readonly Connection $receive,
         // Acks and publishing; wrap in Locking when shared by coroutines.
         private readonly Connection $commands,
-    ) {}
+    ) {
+        $this->settled = new \WeakMap();
+    }
 
     public function setReconnectCallback(?callable $callback): self
     {
@@ -184,17 +194,19 @@ class Redis implements Publisher, Consumer, Recoverable
     public function enqueue(Queue $queue, array $payload, bool $priority = false): bool
     {
         if ($queue->reliable instanceof Reliable) {
-            $atomic = $this->atomic($this->commands);
-            $result = $atomic->evaluate(
-                Script::ENQUEUE,
-                [
-                    $this->pendingKey($queue),
-                    $this->pid(),
-                    $queue->name,
-                    json_encode($payload, JSON_THROW_ON_ERROR),
-                    $priority ? '1' : '0',
-                ],
-                1,
+            $result = $this->command(
+                fn(): mixed => $this->atomic($this->commands)->evaluate(
+                    Script::ENQUEUE,
+                    [
+                        $this->pendingKey($queue),
+                        $this->pid(),
+                        $queue->name,
+                        json_encode($payload, JSON_THROW_ON_ERROR),
+                        $priority ? '1' : '0',
+                    ],
+                    1,
+                ),
+                retry: false,
             );
 
             return (int) $result === 1;
@@ -285,6 +297,13 @@ class Redis implements Publisher, Consumer, Recoverable
                 $queueName = "{$queue->namespace}.failed.{$queue->name}";
             }
         }
+        if ($queue->reliable instanceof Reliable) {
+            return $this->command(
+                fn(): int => $this->commands->listSize($queueName),
+                retry: true,
+            );
+        }
+
         return $this->commands->listSize($queueName);
     }
 
@@ -292,16 +311,19 @@ class Redis implements Publisher, Consumer, Recoverable
     {
         $reliable = $this->reliable($queue);
         $claimedAt = $this->claimedAt($message);
-        $result = $this->atomic($this->commands)->evaluate(
-            Script::EXTEND,
-            [
-                $this->atomicKey($queue, 'jobs'),
-                $this->atomicKey($queue, 'processing'),
-                $message->getPid(),
-                $claimedAt,
-                (string) $reliable->visibility,
-            ],
-            2,
+        $result = $this->command(
+            fn(): mixed => $this->atomic($this->commands)->evaluate(
+                Script::EXTEND,
+                [
+                    $this->atomicKey($queue, 'jobs'),
+                    $this->atomicKey($queue, 'processing'),
+                    $message->getPid(),
+                    $claimedAt,
+                    (string) $reliable->visibility,
+                ],
+                2,
+            ),
+            retry: true,
         );
 
         return (int) $result === 1;
@@ -314,14 +336,17 @@ class Redis implements Publisher, Consumer, Recoverable
             return [];
         }
 
-        $result = $this->atomic($this->commands)->evaluate(
-            Script::EXPIRED,
-            [
-                $this->atomicKey($queue, 'processing'),
-                $this->atomicKey($queue, 'jobs'),
-                (string) $limit,
-            ],
-            2,
+        $result = $this->command(
+            fn(): mixed => $this->atomic($this->commands)->evaluate(
+                Script::EXPIRED,
+                [
+                    $this->atomicKey($queue, 'processing'),
+                    $this->atomicKey($queue, 'jobs'),
+                    (string) $limit,
+                ],
+                2,
+            ),
+            retry: true,
         );
         if (!\is_array($result)) {
             throw new \UnexpectedValueException('Reliable expired scan returned an invalid response.');
@@ -344,21 +369,24 @@ class Redis implements Publisher, Consumer, Recoverable
     public function reclaim(Queue $queue, Claim $claim): ?Message
     {
         $this->reliable($queue);
-        $result = $this->atomic($this->commands)->evaluate(
-            Script::RECLAIM,
-            [
-                $this->atomicKey($queue, 'processing'),
-                $this->atomicKey($queue, 'jobs'),
-                $this->pendingKey($queue),
-                $this->atomicKey($queue, 'quarantine'),
-                $this->statKey($queue, 'processing'),
-                $this->statKey($queue, 'reclaimed'),
-                $this->statKey($queue, 'quarantined'),
-                $claim->pid,
-                $claim->claimedAt ?? '',
-                $this->pid(),
-            ],
-            7,
+        $result = $this->command(
+            fn(): mixed => $this->atomic($this->commands)->evaluate(
+                Script::RECLAIM,
+                [
+                    $this->atomicKey($queue, 'processing'),
+                    $this->atomicKey($queue, 'jobs'),
+                    $this->pendingKey($queue),
+                    $this->atomicKey($queue, 'quarantine'),
+                    $this->statKey($queue, 'processing'),
+                    $this->statKey($queue, 'reclaimed'),
+                    $this->statKey($queue, 'quarantined'),
+                    $claim->pid,
+                    $claim->claimedAt ?? '',
+                    $this->pid(),
+                ],
+                7,
+            ),
+            retry: false,
         );
 
         if (!\is_array($result) || !isset($result[0])) {
@@ -448,36 +476,62 @@ class Redis implements Publisher, Consumer, Recoverable
     private function commitReliable(Queue $queue, Message $message): void
     {
         $this->reliable($queue);
-        $this->atomic($this->commands)->evaluate(
-            Script::COMMIT,
-            [
-                $this->atomicKey($queue, 'jobs'),
-                $this->atomicKey($queue, 'processing'),
-                $this->statKey($queue, 'success'),
-                $this->statKey($queue, 'processing'),
-                $message->getPid(),
-                $this->claimedAt($message),
-            ],
-            4,
+        if (isset($this->settled[$message])) {
+            return;
+        }
+
+        $claimedAt = $this->claimedAt($message);
+        $result = $this->command(
+            fn(): mixed => $this->atomic($this->commands)->evaluate(
+                Script::COMMIT,
+                [
+                    $this->atomicKey($queue, 'jobs'),
+                    $this->atomicKey($queue, 'processing'),
+                    $this->statKey($queue, 'success'),
+                    $this->statKey($queue, 'processing'),
+                    $message->getPid(),
+                    $claimedAt,
+                ],
+                4,
+            ),
+            retry: false,
         );
+        if ((int) $result !== 1) {
+            throw new ClaimLost($message->getPid(), $claimedAt);
+        }
+
+        $this->settled[$message] = true;
     }
 
     private function rejectReliable(Queue $queue, Message $message): void
     {
         $this->reliable($queue);
-        $this->atomic($this->commands)->evaluate(
-            Script::REJECT,
-            [
-                $this->atomicKey($queue, 'jobs'),
-                $this->atomicKey($queue, 'processing'),
-                $this->atomicKey($queue, 'failed'),
-                $this->statKey($queue, 'failed'),
-                $this->statKey($queue, 'processing'),
-                $message->getPid(),
-                $this->claimedAt($message),
-            ],
-            5,
+        if (isset($this->settled[$message])) {
+            return;
+        }
+
+        $claimedAt = $this->claimedAt($message);
+        $result = $this->command(
+            fn(): mixed => $this->atomic($this->commands)->evaluate(
+                Script::REJECT,
+                [
+                    $this->atomicKey($queue, 'jobs'),
+                    $this->atomicKey($queue, 'processing'),
+                    $this->atomicKey($queue, 'failed'),
+                    $this->statKey($queue, 'failed'),
+                    $this->statKey($queue, 'processing'),
+                    $message->getPid(),
+                    $claimedAt,
+                ],
+                5,
+            ),
+            retry: false,
         );
+        if ((int) $result !== 1) {
+            throw new ClaimLost($message->getPid(), $claimedAt);
+        }
+
+        $this->settled[$message] = true;
     }
 
     private function retryReliable(Queue $queue, ?int $limit): void
@@ -487,18 +541,21 @@ class Redis implements Publisher, Consumer, Recoverable
         $processed = 0;
 
         while ($limit === null || $processed < $limit) {
-            $result = $atomic->evaluate(
-                Script::RETRY,
-                [
-                    $this->atomicKey($queue, 'failed'),
-                    $this->atomicKey($queue, 'jobs'),
-                    $this->pendingKey($queue),
-                    $this->atomicKey($queue, 'quarantine'),
-                    $this->statKey($queue, 'retried'),
-                    $this->statKey($queue, 'quarantined'),
-                    $this->pid(),
-                ],
-                6,
+            $result = $this->command(
+                fn(): mixed => $atomic->evaluate(
+                    Script::RETRY,
+                    [
+                        $this->atomicKey($queue, 'failed'),
+                        $this->atomicKey($queue, 'jobs'),
+                        $this->pendingKey($queue),
+                        $this->atomicKey($queue, 'quarantine'),
+                        $this->statKey($queue, 'retried'),
+                        $this->statKey($queue, 'quarantined'),
+                        $this->pid(),
+                    ],
+                    6,
+                ),
+                retry: false,
             );
             if (!\is_array($result) || !isset($result[0])) {
                 throw new \UnexpectedValueException('Reliable retry returned an invalid response.');
@@ -567,6 +624,39 @@ class Redis implements Publisher, Consumer, Recoverable
     private function pid(): string
     {
         return uniqid(more_entropy: true);
+    }
+
+    /**
+     * Reset a failed shared command connection before either propagating an
+     * ambiguous mutation or replaying an idempotent/read-only operation.
+     *
+     * @template T
+     * @param callable(): T $command
+     * @return T
+     */
+    private function command(callable $command, bool $retry): mixed
+    {
+        $attempt = 0;
+        $backoffMs = self::COMMAND_BACKOFF_MS;
+
+        while (true) {
+            try {
+                return $command();
+            } catch (\RedisException|\RedisClusterException $error) {
+                $attempt++;
+                try {
+                    $this->commands->close();
+                } catch (\Throwable) {
+                }
+
+                if (!$retry || $attempt >= self::COMMAND_MAX_ATTEMPTS) {
+                    throw $error;
+                }
+
+                usleep(mt_rand(0, $backoffMs) * 1000);
+                $backoffMs = min(self::COMMAND_MAX_BACKOFF_MS, $backoffMs * 2);
+            }
+        }
     }
 
     private function reconnectSucceeded(Queue $queue): void
