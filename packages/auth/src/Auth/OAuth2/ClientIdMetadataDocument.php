@@ -115,12 +115,18 @@ class ClientIdMetadataDocument
         }
 
         foreach (['client_name', 'client_uri', 'logo_uri', 'policy_uri', 'tos_uri', 'jwks_uri', 'scope', 'software_id', 'software_version'] as $property) {
-            if (isset($metadata[$property]) && !\is_string($metadata[$property])) {
+            if (\array_key_exists($property, $metadata) && !\is_string($metadata[$property])) {
                 throw new InvalidClientMetadataException("{$property} must be a string.");
             }
         }
 
-        self::validateJwks($metadata['jwks'] ?? null);
+        if (\array_key_exists('jwks', $metadata) && \array_key_exists('jwks_uri', $metadata)) {
+            throw new InvalidClientMetadataException('jwks and jwks_uri must not both be present.');
+        }
+
+        if (\array_key_exists('jwks', $metadata)) {
+            self::validateJwks($metadata['jwks']);
+        }
 
         return new self(
             $clientId,
@@ -165,7 +171,9 @@ class ClientIdMetadataDocument
 
     public function get(string $property, mixed $default = null): mixed
     {
-        return $this->metadata[$property] ?? $default;
+        return \array_key_exists($property, $this->metadata)
+            ? $this->metadata[$property]
+            : $default;
     }
 
     /**
@@ -213,10 +221,6 @@ class ClientIdMetadataDocument
 
     private static function validateJwks(mixed $jwks): void
     {
-        if ($jwks === null) {
-            return;
-        }
-
         if (!\is_array($jwks) || !isset($jwks['keys']) || !\is_array($jwks['keys']) || !array_is_list($jwks['keys'])) {
             throw new InvalidClientMetadataException('jwks must be a JSON Web Key Set object.');
         }

@@ -48,7 +48,7 @@ class ClientIdentifierUrl
         }
 
         $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        if ($scheme !== 'https' && !($allowHttp && $scheme === 'http')) {
+        if ($scheme !== 'https' && (!$allowHttp || $scheme !== 'http')) {
             throw new InvalidClientMetadataException('Client Identifier URL must use the https scheme.');
         }
 

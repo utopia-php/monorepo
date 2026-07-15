@@ -24,6 +24,7 @@ final class ClientIdMetadataDocumentTest extends TestCase
             'response_types' => ['code'],
             'token_endpoint_auth_method' => 'none',
             'extension_property' => ['enabled' => true],
+            'nullable_extension' => null,
         ];
 
         $document = ClientIdMetadataDocument::fromJson(
@@ -37,6 +38,7 @@ final class ClientIdMetadataDocumentTest extends TestCase
         $this->assertSame(['code'], $document->responseTypes());
         $this->assertSame($metadata['redirect_uris'], $document->redirectUris()->toArray());
         $this->assertSame(['enabled' => true], $document->get('extension_property'));
+        $this->assertNull($document->get('nullable_extension', 'fallback'));
         $this->assertSame($metadata, $document->toArray());
     }
 
@@ -124,7 +126,13 @@ final class ClientIdMetadataDocumentTest extends TestCase
         yield 'relative redirect URI' => ['metadata' => $valid + ['redirect_uris' => ['/callback']]];
         yield 'contacts not a list' => ['metadata' => $valid + ['contacts' => 'owner@example.com']];
         yield 'client name not a string' => ['metadata' => $valid + ['client_name' => ['Example']]];
+        yield 'client name null' => ['metadata' => $valid + ['client_name' => null]];
+        yield 'jwks null' => ['metadata' => $valid + ['jwks' => null]];
         yield 'malformed jwks' => ['metadata' => $valid + ['jwks' => ['keys' => 'not-a-list']]];
+        yield 'jwks and jwks uri' => ['metadata' => $valid + [
+            'jwks' => ['keys' => []],
+            'jwks_uri' => 'https://client.example/jwks.json',
+        ]];
         yield 'symmetric JWK' => ['metadata' => $valid + ['jwks' => ['keys' => [['kty' => 'oct', 'k' => 'secret']]]]];
         yield 'private RSA JWK' => ['metadata' => $valid + ['jwks' => ['keys' => [['kty' => 'RSA', 'n' => 'n', 'e' => 'AQAB', 'd' => 'private']]]]];
     }
