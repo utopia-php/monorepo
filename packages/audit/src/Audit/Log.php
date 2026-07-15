@@ -111,6 +111,82 @@ class Log extends ArrayObject
     }
 
     /**
+     * Parsed user-agent OS / client / device fields (ClickHouse-only).
+     * Optional columns: each returns null when it was never recorded.
+     */
+    public function getOsCode(): ?string
+    {
+        $value = $this->getAttribute('osCode');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getOsName(): ?string
+    {
+        $value = $this->getAttribute('osName');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getOsVersion(): ?string
+    {
+        $value = $this->getAttribute('osVersion');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getClientType(): ?string
+    {
+        $value = $this->getAttribute('clientType');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getClientCode(): ?string
+    {
+        $value = $this->getAttribute('clientCode');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getClientName(): ?string
+    {
+        $value = $this->getAttribute('clientName');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getClientVersion(): ?string
+    {
+        $value = $this->getAttribute('clientVersion');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getClientEngine(): ?string
+    {
+        $value = $this->getAttribute('clientEngine');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getClientEngineVersion(): ?string
+    {
+        $value = $this->getAttribute('clientEngineVersion');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getDeviceName(): ?string
+    {
+        $value = $this->getAttribute('deviceName');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getDeviceBrand(): ?string
+    {
+        $value = $this->getAttribute('deviceBrand');
+        return \is_string($value) ? $value : null;
+    }
+
+    public function getDeviceModel(): ?string
+    {
+        $value = $this->getAttribute('deviceModel');
+        return \is_string($value) ? $value : null;
+    }
+
+    /**
      * Get the user agent string.
      */
     public function getUserAgent(): string

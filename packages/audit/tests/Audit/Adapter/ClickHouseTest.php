@@ -551,10 +551,65 @@ final class ClickHouseTest extends TestCase
             // sdk
             'sdk',
             'sdkVersion',
+            // user-agent — parsed OS / client / device
+            'osCode',
+            'osName',
+            'osVersion',
+            'clientType',
+            'clientCode',
+            'clientName',
+            'clientVersion',
+            'clientEngine',
+            'clientEngineVersion',
+            'deviceName',
+            'deviceBrand',
+            'deviceModel',
         ];
 
         foreach ($expectedAttributes as $expected) {
             $this->assertContains($expected, $attributeIds, "Attribute '{$expected}' not found in ClickHouse adapter");
+        }
+    }
+
+    /**
+     * Test that user-agent columns get the correct ClickHouse type: bounded
+     * name/code/type dimensions use LowCardinality(Nullable(String)), while
+     * high-cardinality version/model strings stay plain Nullable(String).
+     */
+    public function testUserAgentColumnTypes(): void
+    {
+        $adapter = new ClickHouse(
+            host: 'clickhouse',
+            username: 'default',
+            password: 'clickhouse',
+        );
+
+        $method = new \ReflectionMethod($adapter, 'getColumnDefinition');
+
+        $lowCardinality = [
+            'osCode',
+            'osName',
+            'clientType',
+            'clientCode',
+            'clientName',
+            'clientEngine',
+            'deviceName',
+            'deviceBrand',
+        ];
+        foreach ($lowCardinality as $column) {
+            $definition = $method->invoke($adapter, $column);
+            $this->assertEquals("{$column} LowCardinality(Nullable(String))", $definition);
+        }
+
+        $highCardinality = [
+            'osVersion',
+            'clientVersion',
+            'clientEngineVersion',
+            'deviceModel',
+        ];
+        foreach ($highCardinality as $column) {
+            $definition = $method->invoke($adapter, $column);
+            $this->assertEquals("{$column} Nullable(String)", $definition);
         }
     }
 
@@ -676,6 +731,50 @@ final class ClickHouseTest extends TestCase
         $log = $logs[0];
         foreach ($geo as $key => $expected) {
             $this->assertSame($expected, $log->getAttribute($key), "premium geo '{$key}' did not round-trip");
+        }
+    }
+
+    /**
+     * User-agent OS / client / device values must round-trip through a real
+     * write/read cycle, proving the columns are created, written and selected.
+     */
+    public function testUserAgentRoundTrip(): void
+    {
+        $actorId = 'ua-actor-' . uniqid('', true);
+        $ua = [
+            'osCode' => 'IOS',
+            'osName' => 'iOS',
+            'osVersion' => '17.4',
+            'clientType' => 'browser',
+            'clientCode' => 'MF',
+            'clientName' => 'Mobile Safari',
+            'clientVersion' => '17.4',
+            'clientEngine' => 'WebKit',
+            'clientEngineVersion' => '605.1.15',
+            'deviceName' => 'smartphone',
+            'deviceBrand' => 'Apple',
+            'deviceModel' => 'iPhone',
+        ];
+
+        $batchEvents = [array_merge([
+            'actorId' => $actorId,
+            'event' => 'ua.roundtrip',
+            'resource' => 'document/ua-1',
+            'userAgent' => 'RoundTrip/1.0',
+            'ip' => '8.8.8.8',
+            'data' => [],
+            'time' => \Utopia\Database\DateTime::formatTz(\Utopia\Database\DateTime::now()) ?? '',
+        ], $ua)];
+
+        $batchEvents = $this->applyRequiredAttributesToBatch($batchEvents);
+        $this->assertTrue($this->audit->logBatch($batchEvents));
+
+        $logs = $this->audit->getLogsByUser($actorId);
+        $this->assertGreaterThan(0, \count($logs), 'user-agent round-trip log was not persisted');
+
+        $log = $logs[0];
+        foreach ($ua as $key => $expected) {
+            $this->assertSame($expected, $log->getAttribute($key), "user-agent '{$key}' did not round-trip");
         }
     }
 
