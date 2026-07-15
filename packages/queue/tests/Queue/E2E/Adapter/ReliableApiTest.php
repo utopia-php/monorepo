@@ -216,6 +216,48 @@ final class ReliableApiTest extends TestCase
         $this->assertLessThanOrEqual(100, $failures[0][3]);
         $this->assertSame([[$queue, 1]], $successes);
     }
+
+    public function testReliableReceiveDropsClaimCompletedWhileBrokerCloses(): void
+    {
+        $connection = new ClosingClaimConnection();
+        $broker = new RedisBroker($connection, $connection);
+        $queue = new Queue('closed-claim', reliable: new Reliable());
+        $connection->closeWith($broker->close(...));
+
+        $message = $broker->receive($queue, 0);
+
+        $this->assertTrue($connection->claimed);
+        $this->assertNotInstanceOf(\Utopia\Queue\Message::class, $message);
+    }
+}
+
+final class ClosingClaimConnection extends InMemoryConnection implements Atomic
+{
+    public bool $claimed = false;
+
+    private ?\Closure $close = null;
+
+    public function closeWith(\Closure $close): void
+    {
+        $this->close = $close;
+    }
+
+    public function supportsAtomic(): bool
+    {
+        return true;
+    }
+
+    public function evaluate(string $script, array $arguments = [], int $keyCount = 0): mixed
+    {
+        $this->claimed = true;
+        ($this->close ?? throw new \LogicException('Close callback is missing.'))();
+
+        return [
+            1,
+            '{"pid":"claimed","queue":"closed-claim","timestamp":1,"payload":{"value":true}}',
+            '1:1',
+        ];
+    }
 }
 
 final class UnsupportedAtomicConnection extends InMemoryConnection implements Atomic

@@ -413,6 +413,10 @@ class Redis implements Publisher, Consumer, Recoverable
                 continue;
             }
 
+            if ($this->isClosed()) {
+                return null;
+            }
+
             if (!\is_array($result) || !isset($result[0])) {
                 throw new \UnexpectedValueException('Reliable claim returned an invalid response.');
             }

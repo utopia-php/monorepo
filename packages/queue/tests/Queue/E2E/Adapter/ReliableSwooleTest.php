@@ -7,11 +7,15 @@ namespace Tests\E2E\Adapter;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
+use Swoole\Coroutine\Channel;
 use Swoole\Coroutine\WaitGroup;
 use Utopia\Queue\Adapter\Swoole;
 use Utopia\Queue\Broker\Redis as RedisBroker;
+use Utopia\Queue\Claim;
 use Utopia\Queue\Connection\Locking;
 use Utopia\Queue\Connection\Redis as RedisConnection;
+use Utopia\Queue\Consumer;
+use Utopia\Queue\Consumer\Recoverable;
 use Utopia\Queue\Message;
 use Utopia\Queue\Option\Reliable;
 use Utopia\Queue\Queue;
@@ -176,6 +180,80 @@ final class ReliableSwooleTest extends TestCase
         $this->assertSame(5, $this->stat('reclaimed'));
         $this->assertSame(5, $this->stat('success'));
         $this->assertSame(0, $this->stat('processing'));
+        $this->assertSame(0, $this->redis->lLen($this->key('queue')));
+    }
+
+    public function testStopAfterConcurrentClaimLeavesMessageForRecovery(): void
+    {
+        $this->prepare();
+        $publisher = $this->broker();
+        $publisher->enqueue($this->queue, ['id' => 'A']);
+        $publisher->enqueue($this->queue, ['id' => 'B']);
+        $callbacks = [];
+        $acks = [];
+        $errors = [];
+
+        Coroutine\run(function () use (&$callbacks, &$acks, &$errors): void {
+            $consumer = new CoordinatedRecoverableConsumer($this->broker());
+            $adapter = new Swoole(
+                $consumer,
+                1,
+                $this->queue->name,
+                self::NAMESPACE,
+                maxCoroutines: 2,
+                reliable: $this->queue->reliable,
+            );
+
+            $adapter->consume(
+                function (Message $message) use ($adapter, $consumer, &$callbacks): void {
+                    $id = $message->getPayload()['id'];
+                    $callbacks[] = $id;
+                    if ($id !== 'A') {
+                        return;
+                    }
+
+                    try {
+                        $consumer->waitForSecondClaim();
+                    } finally {
+                        $adapter->stop();
+                        $consumer->releaseSecondClaim();
+                    }
+                },
+                static function (Message $message) use (&$acks): void {
+                    $acks[] = $message->getPayload()['id'];
+                },
+                static function (Message $message, \Throwable $error) use (&$errors): void {
+                    $errors[] = [$message->getPayload()['id'], $error->getMessage()];
+                },
+            );
+        });
+
+        $this->assertSame(['A'], $callbacks);
+        $this->assertSame(['A'], $acks);
+        $this->assertSame([], $errors);
+        $this->assertSame(1, $this->stat('success'));
+        $this->assertSame(1, $this->stat('processing'));
+        $this->assertSame(1, $this->redis->hLen($this->key('jobs')));
+        $this->assertSame(1, $this->redis->zCard($this->key('processing')));
+        $this->assertSame(0, $this->redis->lLen($this->key('queue')));
+
+        $pid = $this->redis->zRange($this->key('processing'), 0, 0)[0] ?? null;
+        $this->assertIsString($pid);
+        $this->redis->zAdd($this->key('processing'), 0, $pid);
+        $broker = $this->broker();
+        $claims = $broker->expired($this->queue, 1);
+        $this->assertCount(1, $claims);
+        $this->assertInstanceOf(Message::class, $broker->reclaim($this->queue, $claims[0]));
+        $recovered = $broker->receive($this->queue, 1);
+        $this->assertInstanceOf(Message::class, $recovered);
+        $this->assertSame(['id' => 'B'], $recovered->getPayload());
+        $broker->commit($this->queue, $recovered);
+
+        $this->assertSame(2, $this->stat('success'));
+        $this->assertSame(1, $this->stat('reclaimed'));
+        $this->assertSame(0, $this->stat('processing'));
+        $this->assertSame(0, $this->redis->hLen($this->key('jobs')));
+        $this->assertSame(0, $this->redis->zCard($this->key('processing')));
         $this->assertSame(0, $this->redis->lLen($this->key('queue')));
     }
 
@@ -371,5 +449,72 @@ final class ReliableSwooleTest extends TestCase
     private function stat(string $stat): int
     {
         return (int) ($this->redis->get($this->statKey($stat)) ?: 0);
+    }
+}
+
+final class CoordinatedRecoverableConsumer implements Consumer, Recoverable
+{
+    private readonly Channel $claimed;
+    private readonly Channel $release;
+    private int $receives = 0;
+
+    public function __construct(private readonly RedisBroker $consumer)
+    {
+        $this->claimed = new Channel(1);
+        $this->release = new Channel(1);
+    }
+
+    public function receive(Queue $queue, int $timeout): ?Message
+    {
+        $message = $this->consumer->receive($queue, $timeout);
+        $this->receives++;
+        if ($this->receives === 2 && $message instanceof Message) {
+            $this->claimed->push($message);
+            $this->release->pop();
+        }
+
+        return $message;
+    }
+
+    public function commit(Queue $queue, Message $message): void
+    {
+        $this->consumer->commit($queue, $message);
+    }
+
+    public function reject(Queue $queue, Message $message): void
+    {
+        $this->consumer->reject($queue, $message);
+    }
+
+    public function close(): void
+    {
+        $this->consumer->close();
+    }
+
+    public function extend(Queue $queue, Message $message): bool
+    {
+        return $this->consumer->extend($queue, $message);
+    }
+
+    public function expired(Queue $queue, int $limit): array
+    {
+        return $this->consumer->expired($queue, $limit);
+    }
+
+    public function reclaim(Queue $queue, Claim $claim): ?Message
+    {
+        return $this->consumer->reclaim($queue, $claim);
+    }
+
+    public function waitForSecondClaim(): void
+    {
+        if (!$this->claimed->pop(2.0) instanceof Message) {
+            throw new \RuntimeException('Second claim was not completed.');
+        }
+    }
+
+    public function releaseSecondClaim(): void
+    {
+        $this->release->push(true);
     }
 }

@@ -202,6 +202,10 @@ class Swoole extends Adapter
                     $slots->pop();
                     throw $error;
                 }
+                if ($this->isStopped()) {
+                    $slots->pop();
+                    break;
+                }
                 if (!$message instanceof Message) {
                     $slots->pop();
                     continue;
