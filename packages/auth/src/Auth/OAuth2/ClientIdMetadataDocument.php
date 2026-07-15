@@ -12,12 +12,30 @@ namespace Utopia\Auth\OAuth2;
  */
 class ClientIdMetadataDocument
 {
+    /**
+     * Standard token endpoint authentication methods that require the client
+     * and authorization server to share the same secret. A Client ID Metadata
+     * Document cannot securely establish such a secret, so the CIDM
+     * specification forbids these methods. The prefix check in fromArray()
+     * also rejects future `client_secret_*` methods not listed here yet.
+     */
     private const array SHARED_SECRET_AUTH_METHODS = [
         'client_secret_basic',
         'client_secret_jwt',
         'client_secret_post',
     ];
 
+    /**
+     * JWK members that reveal secret key material:
+     *
+     * - `d` is an RSA private exponent or an EC/OKP private key.
+     * - `p`, `q`, `dp`, `dq`, `qi`, and `oth` are private RSA factors and
+     *   Chinese Remainder Theorem optimization parameters.
+     * - `k` is the value of a symmetric key.
+     *
+     * CIDM documents may publish public keys, but must never publish these
+     * private or symmetric components.
+     */
     private const array PRIVATE_JWK_PARAMETERS = [
         'd',
         'dp',
