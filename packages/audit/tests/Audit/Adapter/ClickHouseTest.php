@@ -776,6 +776,21 @@ final class ClickHouseTest extends TestCase
         foreach ($ua as $key => $expected) {
             $this->assertSame($expected, $log->getAttribute($key), "user-agent '{$key}' did not round-trip");
         }
+
+        // Exercise the typed getters so a wrong attribute key in any of them is
+        // caught (getAttribute() above can't detect that).
+        $this->assertSame($ua['osCode'], $log->getOsCode());
+        $this->assertSame($ua['osName'], $log->getOsName());
+        $this->assertSame($ua['osVersion'], $log->getOsVersion());
+        $this->assertSame($ua['clientType'], $log->getClientType());
+        $this->assertSame($ua['clientCode'], $log->getClientCode());
+        $this->assertSame($ua['clientName'], $log->getClientName());
+        $this->assertSame($ua['clientVersion'], $log->getClientVersion());
+        $this->assertSame($ua['clientEngine'], $log->getClientEngine());
+        $this->assertSame($ua['clientEngineVersion'], $log->getClientEngineVersion());
+        $this->assertSame($ua['deviceName'], $log->getDeviceName());
+        $this->assertSame($ua['deviceBrand'], $log->getDeviceBrand());
+        $this->assertSame($ua['deviceModel'], $log->getDeviceModel());
     }
 
     /**
