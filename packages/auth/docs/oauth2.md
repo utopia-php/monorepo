@@ -204,7 +204,7 @@ $storedRequestId = $parsed->id();
 Malformed request URIs throw `InvalidRequestUriException`.
 `InvalidRequestUriException::ERROR_CODE` is `invalid_request`.
 
-## OAuth Client ID Metadata Documents
+## OAuth client ID metadata documents
 
 OAuth Client ID Metadata Documents let a client use an HTTPS URL as its
 `client_id`. An authorization server fetches the JSON metadata published at
