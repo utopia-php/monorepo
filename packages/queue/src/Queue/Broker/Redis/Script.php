@@ -8,17 +8,14 @@ final class Script
 {
     public const string ENQUEUE = <<<'LUA'
 local now = redis.call('TIME')
-local payload = cjson.decode(ARGV[3])
-local message = {
-    pid = ARGV[1],
-    queue = ARGV[2],
-    timestamp = tonumber(now[1]),
-    payload = payload
-}
-local encoded = '{"pid":' .. cjson.encode(message.pid)
-    .. ',"queue":' .. cjson.encode(message.queue)
-    .. ',"timestamp":' .. tostring(message.timestamp)
-    .. ',"payload":' .. cjson.encode(message.payload) .. '}'
+local valid, payload = pcall(cjson.decode, ARGV[3])
+if not valid or type(payload) ~= 'table' then
+    return 0
+end
+local encoded = '{"pid":' .. cjson.encode(ARGV[1])
+    .. ',"queue":' .. cjson.encode(ARGV[2])
+    .. ',"timestamp":' .. tostring(tonumber(now[1]))
+    .. ',"payload":' .. ARGV[3] .. '}'
 if ARGV[4] == '1' then
     redis.call('RPUSH', KEYS[1], encoded)
 else
@@ -34,13 +31,24 @@ if not raw then
 end
 
 local valid, message = pcall(cjson.decode, raw)
+local marker = ',"payload":'
+local payloadStart = string.find(raw, marker, 1, true)
+local encodedPayload = nil
+if payloadStart and string.sub(raw, -1) == '}' then
+    encodedPayload = string.sub(raw, payloadStart + string.len(marker), -2)
+end
+local payloadValid, payload = pcall(cjson.decode, encodedPayload or '')
 if not valid
     or type(message) ~= 'table'
     or type(message.pid) ~= 'string'
     or message.pid == ''
     or type(message.queue) ~= 'string'
     or type(message.timestamp) ~= 'number'
-    or type(message.payload) ~= 'table' then
+    or type(message.payload) ~= 'table'
+    or not encodedPayload
+    or encodedPayload == ''
+    or not payloadValid
+    or type(payload) ~= 'table' then
     redis.call('LPUSH', KEYS[4], cjson.encode({reason = 'malformed_pending', raw = raw}))
     redis.call('INCR', KEYS[7])
     return {2}
@@ -57,7 +65,9 @@ local claimedAt = now[1] .. ':' .. now[2]
 local micros = (tonumber(now[1]) * 1000000) + tonumber(now[2])
 local leaseUntil = micros + (tonumber(ARGV[1]) * 1000000)
 local record = {
-    message = message,
+    queue = message.queue,
+    timestamp = message.timestamp,
+    payload = encodedPayload,
     state = 'processing',
     claimedAt = claimedAt,
     leaseUntil = leaseUntil
@@ -128,13 +138,22 @@ end
 
 local raw = redis.call('HGET', KEYS[2], pid)
 local valid, record = pcall(cjson.decode, raw or '')
+local payloadValid = false
+local payload = nil
+if valid and type(record) == 'table' then
+    payloadValid, payload = pcall(cjson.decode, record.payload or '')
+end
 if not raw
     or not valid
     or type(record) ~= 'table'
     or record.state ~= 'failed'
-    or type(record.message) ~= 'table'
-    or type(record.message.queue) ~= 'string'
-    or type(record.message.payload) ~= 'table' then
+    or type(record.queue) ~= 'string'
+    or record.queue == ''
+    or type(record.timestamp) ~= 'number'
+    or type(record.payload) ~= 'string'
+    or record.payload == ''
+    or not payloadValid
+    or type(payload) ~= 'table' then
     redis.call('HDEL', KEYS[2], pid)
     redis.call('LPUSH', KEYS[4], cjson.encode({reason = 'malformed_failed', pid = pid, raw = raw or false}))
     redis.call('INCR', KEYS[6])
@@ -147,16 +166,15 @@ if redis.call('HEXISTS', KEYS[2], ARGV[1]) == 1 then
 end
 
 local now = redis.call('TIME')
-local message = {
+local replacement = {
     pid = ARGV[1],
-    queue = record.message.queue,
+    queue = record.queue,
     timestamp = tonumber(now[1]),
-    payload = record.message.payload
 }
-local encoded = '{"pid":' .. cjson.encode(message.pid)
-    .. ',"queue":' .. cjson.encode(message.queue)
-    .. ',"timestamp":' .. tostring(message.timestamp)
-    .. ',"payload":' .. cjson.encode(message.payload) .. '}'
+local encoded = '{"pid":' .. cjson.encode(replacement.pid)
+    .. ',"queue":' .. cjson.encode(replacement.queue)
+    .. ',"timestamp":' .. tostring(replacement.timestamp)
+    .. ',"payload":' .. record.payload .. '}'
 redis.call('LPUSH', KEYS[3], encoded)
 redis.call('HDEL', KEYS[2], pid)
 redis.call('INCR', KEYS[5])
@@ -201,14 +219,24 @@ end
 
 local raw = redis.call('HGET', KEYS[2], ARGV[1])
 local valid, record = pcall(cjson.decode, raw or '')
+local payloadValid = false
+local payload = nil
+if valid and type(record) == 'table' then
+    payloadValid, payload = pcall(cjson.decode, record.payload or '')
+end
 if not raw
     or not valid
     or type(record) ~= 'table'
     or record.state ~= 'processing'
-    or type(record.message) ~= 'table'
-    or type(record.message.queue) ~= 'string'
-    or type(record.message.timestamp) ~= 'number'
-    or type(record.message.payload) ~= 'table' then
+    or type(record.claimedAt) ~= 'string'
+    or record.claimedAt == ''
+    or type(record.queue) ~= 'string'
+    or record.queue == ''
+    or type(record.timestamp) ~= 'number'
+    or type(record.payload) ~= 'string'
+    or record.payload == ''
+    or not payloadValid
+    or type(payload) ~= 'table' then
     redis.call('ZREM', KEYS[1], ARGV[1])
     redis.call('HDEL', KEYS[2], ARGV[1])
     redis.call('LPUSH', KEYS[4], cjson.encode({reason = 'missing_or_malformed_processing', pid = ARGV[1], raw = raw or false}))
@@ -228,16 +256,15 @@ if redis.call('HEXISTS', KEYS[2], ARGV[3]) == 1 then
     return {3}
 end
 
-local message = {
+local replacement = {
     pid = ARGV[3],
-    queue = record.message.queue,
-    timestamp = record.message.timestamp,
-    payload = record.message.payload
+    queue = record.queue,
+    timestamp = record.timestamp,
 }
-local encoded = '{"pid":' .. cjson.encode(message.pid)
-    .. ',"queue":' .. cjson.encode(message.queue)
-    .. ',"timestamp":' .. tostring(message.timestamp)
-    .. ',"payload":' .. cjson.encode(message.payload) .. '}'
+local encoded = '{"pid":' .. cjson.encode(replacement.pid)
+    .. ',"queue":' .. cjson.encode(replacement.queue)
+    .. ',"timestamp":' .. tostring(replacement.timestamp)
+    .. ',"payload":' .. record.payload .. '}'
 redis.call('RPUSH', KEYS[3], encoded)
 redis.call('HDEL', KEYS[2], ARGV[1])
 redis.call('ZREM', KEYS[1], ARGV[1])

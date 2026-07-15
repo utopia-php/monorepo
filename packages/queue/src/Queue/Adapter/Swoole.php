@@ -124,7 +124,7 @@ class Swoole extends Adapter
             $slots->push(true);
             $waitGroup->add();
 
-            Coroutine::create(function () use ($message, $messageCallback, $successCallback, $errorCallback, $slots, $waitGroup): void {
+            $coroutine = Coroutine::create(function () use ($message, $messageCallback, $successCallback, $errorCallback, $slots, $waitGroup): void {
                 try {
                     $this->process($message, $messageCallback, $successCallback, $errorCallback);
                 } catch (\Throwable $error) {
@@ -135,6 +135,11 @@ class Swoole extends Adapter
                     $slots->pop();
                 }
             });
+            if ($coroutine === false) {
+                $waitGroup->done();
+                $slots->pop();
+                $this->process($message, $messageCallback, $successCallback, $errorCallback);
+            }
         }
 
         $waitGroup->wait();
@@ -154,7 +159,7 @@ class Swoole extends Adapter
         $recoveryDone = new Channel(1);
         $recovery = new WaitGroup(1);
 
-        Coroutine::create(function () use ($recoverable, $reliable, $recoveryDone, $recovery): void {
+        $recoveryCoroutine = Coroutine::create(function () use ($recoverable, $reliable, $recoveryDone, $recovery): void {
             try {
                 while ($recoveryDone->pop($reliable->scan) === false) {
                     try {
@@ -175,6 +180,13 @@ class Swoole extends Adapter
                 $recovery->done();
             }
         });
+        if ($recoveryCoroutine === false) {
+            $recovery->done();
+            $recoveryDone->close();
+            $this->stopConsumption();
+
+            throw new \RuntimeException('Failed to create queue recovery coroutine.');
+        }
 
         try {
             while (!$this->isStopped()) {
@@ -196,7 +208,7 @@ class Swoole extends Adapter
                 }
 
                 $handlers->add();
-                Coroutine::create(function () use (
+                $handlerCoroutine = Coroutine::create(function () use (
                     $message,
                     $messageCallback,
                     $successCallback,
@@ -208,7 +220,7 @@ class Swoole extends Adapter
                 ): void {
                     $heartbeatDone = new Channel(1);
                     $heartbeat = new WaitGroup(1);
-                    Coroutine::create(function () use ($message, $recoverable, $reliable, $heartbeatDone, $heartbeat): void {
+                    $heartbeatCoroutine = Coroutine::create(function () use ($message, $recoverable, $reliable, $heartbeatDone, $heartbeat): void {
                         try {
                             while ($heartbeatDone->pop($reliable->heartbeat) === false) {
                                 if (!$recoverable->extend($this->queue, $message)) {
@@ -222,6 +234,15 @@ class Swoole extends Adapter
                             $heartbeat->done();
                         }
                     });
+                    if ($heartbeatCoroutine === false) {
+                        $heartbeat->done();
+                        $heartbeatDone->close();
+                        $this->stopConsumption();
+                        $handlers->done();
+                        $slots->pop();
+
+                        return;
+                    }
 
                     try {
                         $this->process($message, $messageCallback, $successCallback, $errorCallback);
@@ -234,6 +255,13 @@ class Swoole extends Adapter
                         $slots->pop();
                     }
                 });
+                if ($handlerCoroutine === false) {
+                    $handlers->done();
+                    $slots->pop();
+                    $this->stopConsumption();
+
+                    throw new \RuntimeException('Failed to create queue handler coroutine.');
+                }
             }
         } finally {
             $handlers->wait();
@@ -270,6 +298,16 @@ class Swoole extends Adapter
         }
 
         return $this;
+    }
+
+    private function stopConsumption(): void
+    {
+        $this->stopped = true;
+
+        try {
+            $this->consumer->close();
+        } catch (\Throwable) {
+        }
     }
 
     public function workerStart(callable $callback): self

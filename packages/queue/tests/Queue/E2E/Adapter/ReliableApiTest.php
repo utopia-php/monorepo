@@ -66,6 +66,7 @@ final class ReliableApiTest extends TestCase
             'commit' => $broker->commit($queue, $message),
             'reject' => $broker->reject($queue, $message),
             'retry' => $broker->retry($queue),
+            'pending size' => $broker->getQueueSize($queue),
             'failed size' => $broker->getQueueSize($queue, failedJobs: true),
             'extend' => $broker->extend($queue, $message),
             'expired' => $broker->expired($queue, 1),
@@ -77,9 +78,36 @@ final class ReliableApiTest extends TestCase
     /** @return iterable<string, array{string}> */
     public static function unsupportedOperationProvider(): iterable
     {
-        foreach (['enqueue', 'receive', 'commit', 'reject', 'retry', 'failed size', 'extend', 'expired', 'reclaim'] as $operation) {
+        foreach (['enqueue', 'receive', 'commit', 'reject', 'retry', 'pending size', 'failed size', 'extend', 'expired', 'reclaim'] as $operation) {
             yield $operation => [$operation];
         }
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('queueSizeProvider')]
+    public function testReliableQueueSizeFailsBeforeReadingUnsupportedConnection(bool $failedJobs): void
+    {
+        $connection = new UnsupportedAtomicConnection();
+        $broker = new RedisBroker($connection, $connection);
+        $queue = new Queue('unsupported-size', reliable: new Reliable());
+
+        try {
+            $broker->getQueueSize($queue, $failedJobs);
+            $this->fail('Reliable queue size should reject unsupported atomic connections.');
+        } catch (\LogicException $error) {
+            $this->assertSame(
+                'Reliable queues require a single Redis connection with atomic scripting support.',
+                $error->getMessage(),
+            );
+        }
+
+        $this->assertSame(0, $connection->reads);
+    }
+
+    /** @return iterable<string, array{bool}> */
+    public static function queueSizeProvider(): iterable
+    {
+        yield 'pending' => [false];
+        yield 'failed' => [true];
     }
 
     public function testLockingRedisExposesAtomicCapability(): void
@@ -187,6 +215,29 @@ final class ReliableApiTest extends TestCase
         $this->assertGreaterThanOrEqual(0, $failures[0][3]);
         $this->assertLessThanOrEqual(100, $failures[0][3]);
         $this->assertSame([[$queue, 1]], $successes);
+    }
+}
+
+final class UnsupportedAtomicConnection extends InMemoryConnection implements Atomic
+{
+    public int $reads = 0;
+
+    public function supportsAtomic(): bool
+    {
+        return false;
+    }
+
+    public function evaluate(string $script, array $arguments = [], int $keyCount = 0): mixed
+    {
+        throw new \LogicException('Atomic evaluation should not be attempted.');
+    }
+
+    #[\Override]
+    public function listSize(string $key): int
+    {
+        $this->reads++;
+
+        return parent::listSize($key);
     }
 }
 

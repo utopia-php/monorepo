@@ -263,6 +263,169 @@ final class ReliableRedisTest extends TestCase
         $this->assertSame(1, $this->stat('retried'));
     }
 
+    #[DataProvider('serverProvider')]
+    public function testMalformedClaimsFillingBatchAreQuarantinedWithoutStarvingValidRecovery(int $port): void
+    {
+        $batch = 3;
+        $this->prepare($port, batch: $batch);
+        $broker = $this->broker($port);
+        $broker->enqueue($this->queue, ['valid' => true]);
+        $valid = $broker->receive($this->queue, 1);
+        $this->assertInstanceOf(Message::class, $valid);
+        $this->redis->zAdd($this->key('processing'), 1, $valid->getPid());
+
+        $records = [
+            'missing-claimed-at' => null,
+            'non-string-claimed-at' => 123,
+            'empty-claimed-at' => '',
+        ];
+        foreach ($records as $pid => $claimedAt) {
+            $payload = json_encode(['poison' => $pid], JSON_THROW_ON_ERROR);
+            $record = [
+                'queue' => $this->queue->name,
+                'timestamp' => 1,
+                'payload' => $payload,
+                'state' => 'processing',
+                'leaseUntil' => 0,
+            ];
+            if ($pid !== 'missing-claimed-at') {
+                $record['claimedAt'] = $claimedAt;
+            }
+            $this->redis->hSet($this->key('jobs'), $pid, json_encode($record, JSON_THROW_ON_ERROR));
+            $this->redis->zAdd($this->key('processing'), 0, $pid);
+        }
+        $this->redis->set($this->statKey('processing'), (string) (\count($records) + 1));
+
+        $replacements = [];
+        $seen = [];
+        for ($scan = 0; $scan < 2; $scan++) {
+            $claims = $broker->expired($this->queue, $batch);
+            array_push($seen, ...$claims);
+            foreach ($claims as $claim) {
+                $replacement = $broker->reclaim($this->queue, $claim);
+                if ($replacement instanceof Message) {
+                    $replacements[] = $replacement;
+                }
+            }
+            if (\count($claims) < $batch) {
+                break;
+            }
+        }
+
+        $this->assertCount(1, $replacements);
+        $this->assertSame(['valid' => true], $replacements[0]->getPayload());
+        $this->assertSame(1, $broker->getQueueSize($this->queue));
+        $this->assertSame(0, $this->redis->zCard($this->key('processing')));
+        $this->assertSame(0, $this->redis->hLen($this->key('jobs')));
+        $this->assertSame(3, $this->redis->lLen($this->key('quarantine')));
+        $this->assertSame(0, $this->stat('processing'));
+        $this->assertSame(1, $this->stat('reclaimed'));
+        $this->assertSame(3, $this->stat('quarantined'));
+
+        foreach ($seen as $claim) {
+            $this->assertNotInstanceOf(Message::class, $broker->reclaim($this->queue, $claim));
+        }
+        $this->assertSame(1, $this->stat('reclaimed'));
+        $this->assertSame(3, $this->stat('quarantined'));
+    }
+
+    #[DataProvider('serverProvider')]
+    public function testRetryPreservesFailedFifoOrderingAcrossMultipleJobs(int $port): void
+    {
+        $this->prepare($port);
+        $broker = $this->broker($port);
+        $order = ['first', 'second', 'third'];
+
+        foreach ($order as $value) {
+            $broker->enqueue($this->queue, ['order' => $value]);
+        }
+        foreach ($order as $value) {
+            $message = $broker->receive($this->queue, 1);
+            $this->assertInstanceOf(Message::class, $message);
+            $this->assertSame($value, $message->getPayload()['order']);
+            $broker->reject($this->queue, $message);
+        }
+
+        $this->assertSame(3, $broker->getQueueSize($this->queue, failedJobs: true));
+        $broker->retry($this->queue);
+        $this->assertSame(0, $broker->getQueueSize($this->queue, failedJobs: true));
+
+        foreach ($order as $value) {
+            $message = $broker->receive($this->queue, 1);
+            $this->assertInstanceOf(Message::class, $message);
+            $this->assertSame($value, $message->getPayload()['order']);
+            $broker->commit($this->queue, $message);
+        }
+
+        $this->assertSame(3, $this->stat('retried'));
+        $this->assertSame(3, $this->stat('success'));
+        $this->assertSame(0, $this->stat('processing'));
+    }
+
+    #[DataProvider('serverProvider')]
+    public function testPayloadEnvelopeRemainsOpaqueAcrossClaimRetryAndReclaim(int $port): void
+    {
+        $this->prepare($port);
+        $broker = $this->broker($port);
+        $payload = [
+            'large' => 9_007_199_254_740_993,
+            'ordered' => [
+                'zebra' => 1,
+                'alpha' => 2,
+                'middle' => 3,
+            ],
+        ];
+        $encodedPayload = json_encode($payload, JSON_THROW_ON_ERROR);
+
+        $broker->enqueue($this->queue, $payload);
+        $envelope = $this->redis->lIndex($this->key('queue'), 0);
+        $this->assertIsString($envelope);
+        $this->assertSame($encodedPayload, $this->encodedPayload($envelope));
+        $decoded = json_decode($envelope, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame($payload, $decoded['payload']);
+
+        $claimed = $broker->receive($this->queue, 1);
+        $this->assertInstanceOf(Message::class, $claimed);
+        $this->assertSame($payload, $claimed->getPayload());
+        $record = json_decode(
+            (string) $this->redis->hGet($this->key('jobs'), $claimed->getPid()),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        $this->assertArrayNotHasKey('message', $record);
+        $this->assertSame($this->queue->name, $record['queue']);
+        $this->assertSame($claimed->getTimestamp(), $record['timestamp']);
+        $this->assertSame($encodedPayload, $record['payload']);
+
+        $broker->reject($this->queue, $claimed);
+        $before = $this->serverSeconds();
+        $broker->retry($this->queue);
+        $after = $this->serverSeconds();
+        $retried = $this->redis->lIndex($this->key('queue'), 0);
+        $this->assertIsString($retried);
+        $this->assertSame($encodedPayload, $this->encodedPayload($retried));
+        $retriedEnvelope = json_decode($retried, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertNotSame($claimed->getPid(), $retriedEnvelope['pid']);
+        $this->assertGreaterThanOrEqual($before, $retriedEnvelope['timestamp']);
+        $this->assertLessThanOrEqual($after, $retriedEnvelope['timestamp']);
+        $this->assertSame($payload, $retriedEnvelope['payload']);
+        $claimedAgain = $broker->receive($this->queue, 1);
+        $this->assertInstanceOf(Message::class, $claimedAgain);
+        $this->assertSame($retriedEnvelope['pid'], $claimedAgain->getPid());
+        $this->assertSame($payload, $claimedAgain->getPayload());
+
+        $this->redis->zAdd($this->key('processing'), 0, $claimedAgain->getPid());
+        $claim = $broker->expired($this->queue, 1)[0];
+        $reclaimed = $broker->reclaim($this->queue, $claim);
+        $this->assertInstanceOf(Message::class, $reclaimed);
+        $this->assertNotSame($claimedAgain->getPid(), $reclaimed->getPid());
+        $this->assertSame($claimedAgain->getTimestamp(), $reclaimed->getTimestamp());
+        $this->assertSame($payload, $reclaimed->getPayload());
+        $reclaimedEnvelope = $this->redis->lIndex($this->key('queue'), 0);
+        $this->assertIsString($reclaimedEnvelope);
+        $this->assertSame($encodedPayload, $this->encodedPayload($reclaimedEnvelope));
+    }
+
     /** @return iterable<string, array{int}> */
     public static function serverProvider(): iterable
     {
@@ -278,7 +441,7 @@ final class ReliableRedisTest extends TestCase
         }
     }
 
-    private function prepare(int $port, int $visibility = 2): void
+    private function prepare(int $port, int $visibility = 2, int $batch = 100): void
     {
         $this->redis = new \Redis();
         $this->redis->connect('127.0.0.1', $port, 1.0);
@@ -286,7 +449,7 @@ final class ReliableRedisTest extends TestCase
         $this->queue = new Queue(
             $name,
             self::NAMESPACE,
-            reliable: new Reliable(visibility: $visibility, heartbeat: 1, scan: 1, batch: 100),
+            reliable: new Reliable(visibility: $visibility, heartbeat: 1, scan: 1, batch: $batch),
         );
         $this->cleanup();
     }
@@ -334,6 +497,15 @@ final class ReliableRedisTest extends TestCase
     private function stat(string $stat): int
     {
         return (int) ($this->redis->get($this->statKey($stat)) ?: 0);
+    }
+
+    private function encodedPayload(string $envelope): string
+    {
+        $marker = '"payload":';
+        $offset = strpos($envelope, $marker);
+        $this->assertNotFalse($offset);
+
+        return substr($envelope, $offset + \strlen($marker), -1);
     }
 
     /** @return array{pid: string, queue: string, timestamp: int, payload: array<mixed>} */

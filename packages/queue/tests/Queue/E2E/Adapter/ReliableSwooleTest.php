@@ -179,11 +179,83 @@ final class ReliableSwooleTest extends TestCase
         $this->assertSame(0, $this->redis->lLen($this->key('queue')));
     }
 
+    #[DataProvider('createFailureProvider')]
+    public function testCoroutineCreationFailureUnwindsWithoutProcessingClaimedJob(string $stage): void
+    {
+        $this->prepare();
+        if ($stage !== 'recovery') {
+            $this->broker()->enqueue($this->queue, ['stage' => $stage]);
+        }
+
+        $result = $this->runCreateFailure($stage);
+
+        $this->assertSame(0, $result['code'], $result['error']);
+        $this->assertStringContainsString('handled', $result['output']);
+        $this->assertStringNotContainsString('processed', $result['output']);
+        if ($stage === 'recovery') {
+            $this->assertSame(0, $this->stat('processing'));
+            $this->assertSame(0, $this->redis->lLen($this->key('failed')));
+
+            return;
+        }
+
+        $this->assertSame(1, $this->stat('processing'));
+        $this->assertSame(1, $this->redis->zCard($this->key('processing')));
+        $this->assertSame(1, $this->redis->hLen($this->key('jobs')));
+        $this->assertSame(0, $this->redis->lLen($this->key('failed')));
+        $this->assertSame(0, $this->stat('failed'));
+        $this->assertSame(0, $this->stat('success'));
+        $this->assertSame(0, $this->redis->lLen($this->key('queue')));
+
+        $pid = $this->redis->zRange($this->key('processing'), 0, 0)[0] ?? null;
+        $this->assertIsString($pid);
+        $this->redis->zAdd($this->key('processing'), 0, $pid);
+        $broker = $this->broker();
+        $claims = $broker->expired($this->queue, 1);
+        $this->assertCount(1, $claims);
+        $this->assertInstanceOf(Message::class, $broker->reclaim($this->queue, $claims[0]));
+        $recovered = $broker->receive($this->queue, 1);
+        $this->assertInstanceOf(Message::class, $recovered);
+        $broker->commit($this->queue, $recovered);
+
+        $this->assertSame(0, $this->stat('processing'));
+        $this->assertSame(1, $this->stat('reclaimed'));
+        $this->assertSame(1, $this->stat('success'));
+        $this->assertSame(0, $this->redis->zCard($this->key('processing')));
+        $this->assertSame(0, $this->redis->hLen($this->key('jobs')));
+    }
+
+    public function testLegacyHandlerCreationFailureFallsBackSynchronously(): void
+    {
+        $this->prepare();
+        $legacy = new Queue($this->queue->name, self::NAMESPACE);
+        $this->broker()->enqueue($legacy, ['stage' => 'legacy']);
+
+        $result = $this->runCreateFailure('legacy');
+
+        $this->assertSame(0, $result['code'], $result['error']);
+        $this->assertStringContainsString('handled', $result['output']);
+        $this->assertStringContainsString('processed', $result['output']);
+        $this->assertSame(0, $this->stat('processing'));
+        $this->assertSame(1, $this->stat('success'));
+        $this->assertSame(0, $this->stat('failed'));
+        $this->assertSame(0, $this->redis->lLen(self::NAMESPACE . '.processing.' . $this->queue->name));
+        $this->assertSame(0, $this->redis->lLen(self::NAMESPACE . '.failed.' . $this->queue->name));
+    }
+
     /** @return iterable<string, array{int}> */
     public static function capacityProvider(): iterable
     {
         yield 'one coroutine' => [1];
         yield 'three coroutines' => [3];
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function createFailureProvider(): iterable
+    {
+        yield 'recovery' => ['recovery'];
+        yield 'handler' => ['handler'];
+        yield 'heartbeat' => ['heartbeat'];
     }
 
     protected function tearDown(): void
@@ -212,6 +284,56 @@ final class ReliableSwooleTest extends TestCase
             new RedisConnection('127.0.0.1', self::PORT, connectTimeout: 1.0, readTimeout: 2.0),
             new Locking(new RedisConnection('127.0.0.1', self::PORT, connectTimeout: 1.0, readTimeout: 2.0)),
         );
+    }
+
+    /** @return array{code: int, output: string, error: string} */
+    private function runCreateFailure(string $stage): array
+    {
+        $process = proc_open(
+            [PHP_BINARY, __DIR__ . '/reliable-create-failure.php', $stage, $this->queue->name],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+            \dirname(__DIR__, 4),
+        );
+        $this->assertIsResource($process);
+        fclose($pipes[0]);
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
+        $code = null;
+        $deadline = microtime(true) + 2.0;
+        while (microtime(true) < $deadline) {
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                $code = $status['exitcode'];
+                break;
+            }
+            usleep(10_000);
+        }
+        if ($code === null) {
+            proc_terminate($process);
+            usleep(50_000);
+            $status = proc_get_status($process);
+            if ($status['running']) {
+                proc_terminate($process, 9);
+            }
+            $code = 124;
+        }
+
+        $output = stream_get_contents($pipes[1]);
+        $error = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $closed = proc_close($process);
+        if ($code === -1) {
+            $code = $closed;
+        }
+
+        return ['code' => $code, 'output' => $output, 'error' => $error];
     }
 
     private function cleanup(): void

@@ -273,10 +273,13 @@ class Redis implements Publisher, Consumer, Recoverable
 
     public function getQueueSize(Queue $queue, bool $failedJobs = false): int
     {
+        if ($queue->reliable instanceof Reliable) {
+            $this->atomic($this->commands);
+        }
+
         $queueName = $this->pendingKey($queue);
         if ($failedJobs) {
             if ($queue->reliable instanceof Reliable) {
-                $this->atomic($this->commands);
                 $queueName = $this->atomicKey($queue, 'failed');
             } else {
                 $queueName = "{$queue->namespace}.failed.{$queue->name}";
