@@ -4,7 +4,7 @@ namespace Utopia\Queue\Connection;
 
 use Utopia\Queue\Connection;
 
-class Redis implements Connection
+class Redis implements Connection, Atomic
 {
     protected const int CONNECT_MAX_ATTEMPTS = 5;
     protected const int CONNECT_BACKOFF_MS = 100;
@@ -158,6 +158,16 @@ class Redis implements Connection
         } catch (\Exception) {
             return false;
         }
+    }
+
+    public function supportsAtomic(): bool
+    {
+        return true;
+    }
+
+    public function evaluate(string $script, array $arguments = [], int $keyCount = 0): mixed
+    {
+        return $this->getRedis()->eval($script, $arguments, $keyCount);
     }
 
     public function close(): void

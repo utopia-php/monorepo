@@ -9,13 +9,49 @@ services:
       timeout: 3s
       retries: 15
 
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.39.0
+    ports:
+      - "16380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   redis-cluster:
-    image: grokzen/redis-cluster:7.0.10
-    environment:
-      IP: "0.0.0.0"
-      INITIAL_PORT: 17000
-      MASTERS: 3
-      SLAVES_PER_MASTER: 0
+    image: redis:alpine
+    command:
+      - /bin/sh
+      - -c
+      - |
+        for port in 17000 17001 17002; do
+          mkdir -p "/tmp/redis-$$port"
+          redis-server \
+            --port "$$port" \
+            --bind 0.0.0.0 \
+            --protected-mode no \
+            --cluster-enabled yes \
+            --cluster-config-file "nodes-$$port.conf" \
+            --cluster-node-timeout 5000 \
+            --cluster-announce-ip 127.0.0.1 \
+            --cluster-announce-port "$$port" \
+            --dir "/tmp/redis-$$port" \
+            --appendonly no \
+            --daemonize yes
+        done
+        for port in 17000 17001 17002; do
+          until redis-cli -p "$$port" ping >/dev/null 2>&1; do
+            sleep 0.1
+          done
+        done
+        redis-cli --cluster create \
+          127.0.0.1:17000 \
+          127.0.0.1:17001 \
+          127.0.0.1:17002 \
+          --cluster-replicas 0 \
+          --cluster-yes
+        tail -f /dev/null
     ports:
       - "17000-17002:17000-17002"
     healthcheck:

@@ -9,7 +9,7 @@ class Message
     protected int $timestamp;
     protected array $payload;
 
-    public function __construct(array $array = [])
+    public function __construct(array $array = [], private readonly ?string $claimedAt = null)
     {
         if ($array === []) {
             return;
@@ -67,6 +67,11 @@ class Message
     public function getPayload(): array
     {
         return $this->payload;
+    }
+
+    public function getClaimedAt(): ?string
+    {
+        return $this->claimedAt;
     }
 
     public function asArray(): array

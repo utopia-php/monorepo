@@ -3,6 +3,7 @@
 namespace Utopia\Queue;
 
 use Utopia\DI\Container;
+use Utopia\Queue\Option\Reliable;
 
 abstract class Adapter
 {
@@ -18,8 +19,9 @@ abstract class Adapter
         string $queue,
         public string $namespace = 'utopia-queue',
         protected Container $resources = new Container(),
+        ?Reliable $reliable = null,
     ) {
-        $this->queue = new Queue($queue, $namespace);
+        $this->queue = new Queue($queue, $namespace, reliable: $reliable);
     }
 
     /**

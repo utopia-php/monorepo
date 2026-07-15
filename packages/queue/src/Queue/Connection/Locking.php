@@ -14,7 +14,7 @@ use Utopia\Queue\Connection;
  * Outside of a coroutine there is no preemption, so the lock degrades to a
  * plain in-process flag (see {@see Mutex}).
  */
-class Locking implements Connection
+class Locking implements Connection, Atomic
 {
     /**
      * Wait forever when acquiring the lock; a command should never be dropped
@@ -137,6 +137,22 @@ class Locking implements Connection
     public function ping(): bool
     {
         return $this->synchronize(fn(): bool => $this->connection->ping());
+    }
+
+    public function supportsAtomic(): bool
+    {
+        return $this->connection instanceof Atomic && $this->connection->supportsAtomic();
+    }
+
+    public function evaluate(string $script, array $arguments = [], int $keyCount = 0): mixed
+    {
+        if (!$this->connection instanceof Atomic || !$this->connection->supportsAtomic()) {
+            throw new \LogicException('The wrapped connection does not support atomic scripting.');
+        }
+
+        return $this->synchronize(
+            fn(): mixed => $this->connection->evaluate($script, $arguments, $keyCount),
+        );
     }
 
     public function close(): void
