@@ -13,16 +13,19 @@ namespace Utopia\Auth\OAuth2;
 class ClientIdMetadataDocument
 {
     /**
-     * Standard token endpoint authentication methods that require the client
-     * and authorization server to share the same secret. A Client ID Metadata
-     * Document cannot securely establish such a secret, so the CIDM
-     * specification forbids these methods. The prefix check in fromArray()
-     * also rejects future `client_secret_*` methods not listed here yet.
+     * Standard metadata properties whose values must be JSON strings.
+     * Unknown extension properties remain allowed and are preserved as-is.
      */
-    private const array SHARED_SECRET_AUTH_METHODS = [
-        'client_secret_basic',
-        'client_secret_jwt',
-        'client_secret_post',
+    private const array STRING_METADATA_PROPERTIES = [
+        'client_name',
+        'client_uri',
+        'logo_uri',
+        'policy_uri',
+        'tos_uri',
+        'jwks_uri',
+        'scope',
+        'software_id',
+        'software_version',
     ];
 
     /**
@@ -113,8 +116,9 @@ class ClientIdMetadataDocument
             throw new InvalidClientMetadataException('token_endpoint_auth_method must be explicitly declared.');
         }
 
-        if (\in_array($tokenEndpointAuthMethod, self::SHARED_SECRET_AUTH_METHODS, true)
-            || str_starts_with($tokenEndpointAuthMethod, 'client_secret_')) {
+        // All client_secret_* methods require a pre-established shared secret,
+        // which a publicly fetched metadata document cannot securely provide.
+        if (str_starts_with($tokenEndpointAuthMethod, 'client_secret_')) {
             throw new InvalidClientMetadataException('token_endpoint_auth_method must not use a shared symmetric secret.');
         }
 
@@ -132,7 +136,7 @@ class ClientIdMetadataDocument
             self::validateRedirectUri($redirectUri);
         }
 
-        foreach (['client_name', 'client_uri', 'logo_uri', 'policy_uri', 'tos_uri', 'jwks_uri', 'scope', 'software_id', 'software_version'] as $property) {
+        foreach (self::STRING_METADATA_PROPERTIES as $property) {
             if (\array_key_exists($property, $metadata) && !\is_string($metadata[$property])) {
                 throw new InvalidClientMetadataException("{$property} must be a string.");
             }
