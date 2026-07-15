@@ -204,6 +204,48 @@ $storedRequestId = $parsed->id();
 Malformed request URIs throw `InvalidRequestUriException`.
 `InvalidRequestUriException::ERROR_CODE` is `invalid_request`.
 
+## OAuth Client ID Metadata Documents
+
+OAuth Client ID Metadata Documents let a client use an HTTPS URL as its
+`client_id`. An authorization server fetches the JSON metadata published at
+that URL, allowing clients to identify themselves without prior registration.
+
+Utopia Auth validates the protocol values after the authorization server has
+retrieved the document. HTTP requests, response-size limits, redirect handling,
+caching, and SSRF protection remain the responsibility of the authorization
+server.
+
+```php
+<?php
+
+use Utopia\Auth\OAuth2\ClientIdentifierUrl;
+use Utopia\Auth\OAuth2\ClientIdMetadataDocument;
+
+$clientId = ClientIdentifierUrl::fromString(
+    'https://client.example/oauth/client-metadata.json'
+);
+
+$document = ClientIdMetadataDocument::fromJson($clientId, $responseBody);
+
+$authMethod = $document->tokenEndpointAuthMethod();
+$grantTypes = $document->grantTypes();
+$redirectUris = $document->redirectUris();
+$metadata = $document->toArray();
+```
+
+The identifier keeps its original serialization because Client Identifier URLs
+use exact string comparison. `ClientIdMetadataDocument` verifies the echoed
+`client_id`, rejects shared secrets and private key material, and validates the
+standard metadata fields it exposes. Authorization-server-specific support for
+authentication methods, grants, and response types should be checked after
+parsing.
+
+For isolated development environments, `ClientIdentifierUrl::fromString()`
+accepts an `allowHttp` argument. Production authorization servers should leave
+it disabled and must independently prevent requests to special-use addresses.
+
+Invalid identifiers and documents throw `InvalidClientMetadataException`.
+
 ## Verifying OAuth2 and OIDC tokens
 
 OAuth2 and OIDC tokens are verified with the JWT verifiers. Pin the token type
