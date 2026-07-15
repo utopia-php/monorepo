@@ -39,7 +39,7 @@ Utopia Auth requires PHP 8.3 or later. We recommend using the latest PHP version
 - **Data store** — a base64-encodable key/value envelope for serializing authentication state
 - **Token issuers** — mint signed [JWS](https://datatracker.ietf.org/doc/html/rfc7515): OAuth2 access tokens (RFC 9068), refresh tokens, and OpenID Connect ID tokens
 - **Token verifiers** — verify RS256/HS256 JWS with an `alg`-confusion guard and standard claim checks
-- **OAuth2 helpers** — RFC 8707 resource indicators, OpenID Connect prompts, and RFC 9126 pushed authorization request URIs
+- **OAuth2 helpers** — RFC 8707 resource indicators, OpenID Connect prompts, RFC 9126 pushed authorization request URIs, and OAuth Client ID Metadata Documents
 
 ## Documentation
 
