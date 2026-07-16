@@ -39,7 +39,7 @@ final readonly class Pool implements ClientInterface, StreamingClientInterface
     public function sendRequest(RequestInterface $request, ?Options $options = null): ResponseInterface
     {
         return $this->connections->use(
-            fn(ClientInterface $client): ResponseInterface => $options instanceof \Utopia\Client\Options
+            fn(ClientInterface $client): ResponseInterface => $options instanceof Options
                 ? $this->configurable($client)->sendRequest($request, $options)
                 : $client->sendRequest($request),
         );
@@ -53,7 +53,7 @@ final readonly class Pool implements ClientInterface, StreamingClientInterface
     public function stream(RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
         return $this->connections->use(
-            fn(StreamingClientInterface $client): ResponseInterface => $options instanceof \Utopia\Client\Options
+            fn(StreamingClientInterface $client): ResponseInterface => $options instanceof Options
                 ? $this->configurable($client)->stream($request, $sink, $options)
                 : $client->stream($request, $sink),
         );

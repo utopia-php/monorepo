@@ -69,13 +69,26 @@ final class PoolTest extends TestCase
         $this->assertSame([$options, $options, null], $adapter->options);
     }
 
-    public function testItRejectsPerRequestOptionsForPlainClients(): void
+    public function testItRejectsPerRequestOptionsForPlainClientsAndReclaimsTheConnection(): void
     {
-        $pool = new Pool($this->connections(fn(): \Utopia\Tests\Client\FakeClient => new FakeClient(200)));
+        $created = 0;
+        $pool = new Pool($this->connections(function () use (&$created): FakeClient {
+            $created++;
 
-        $this->expectException(InvalidArgumentException::class);
+            return new FakeClient(200);
+        }, size: 1));
 
-        $pool->sendRequest($this->request(), new Options(timeout: 1));
+        try {
+            $pool->sendRequest($this->request(), new Options(timeout: 1));
+            $this->fail('Expected per-request options to be rejected for plain clients.');
+        } catch (InvalidArgumentException) {
+        }
+
+        // The rejection happened while the only connection was borrowed;
+        // Connections::use() reclaims in a finally block, so the pool must
+        // still serve requests on that same connection afterwards.
+        $this->assertSame(200, $pool->sendRequest($this->request())->getStatusCode());
+        $this->assertSame(1, $created);
     }
 
     /**

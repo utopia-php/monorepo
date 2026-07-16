@@ -112,13 +112,13 @@ final class SwappableAdapter implements Adapter
 
     public function sendRequest(RequestInterface $request, ?Options $options = null): ResponseInterface
     {
-        return new Response($options instanceof \Utopia\Client\Options ? 288 : $this->status);
+        return new Response($options instanceof Options ? 288 : $this->status);
     }
 
     public function stream(RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
         $sink('chunk');
 
-        return new Response($options instanceof \Utopia\Client\Options ? 288 : $this->status);
+        return new Response($options instanceof Options ? 288 : $this->status);
     }
 }
