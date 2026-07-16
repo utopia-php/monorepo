@@ -18,6 +18,7 @@ use Utopia\Client\Exception\ProtocolException;
 use Utopia\Client\Exception\ProxyException;
 use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
+use Utopia\Client\Options;
 use Utopia\Client\Tls;
 use Utopia\Psr7\ContentType;
 use Utopia\Psr7\Header;
@@ -603,6 +604,79 @@ abstract class AdapterContract extends TestCase
         });
     }
 
+    public function testPerRequestTimeoutOverridesTheConfiguredTimeoutForOneTransferOnly(): void
+    {
+        Http::serve(function (int $port): void {
+            $requestFactory = new Request\Factory();
+            $client = $this->createAdapter();
+            $request = $requestFactory->createRequest(Method::GET, \sprintf('http://127.0.0.1:%d/slow', $port));
+
+            try {
+                $this->send($client, $request, new Options(timeout: 0.1));
+                self::fail('Expected the per-request timeout to expire.');
+            } catch (TimeoutException) {
+            }
+
+            // The override applied to that transfer only: the same client's
+            // configured timeout governs the next request again.
+            $response = $this->send($client, $request);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('slow', (string) $response->getBody());
+        });
+    }
+
+    public function testPerRequestTimeoutExtendsAConfiguredTimeout(): void
+    {
+        Http::serve(function (int $port): void {
+            $requestFactory = new Request\Factory();
+            $client = $this->createAdapter($this->timeoutOptions(0.1));
+            $request = $requestFactory->createRequest(Method::GET, \sprintf('http://127.0.0.1:%d/slow', $port));
+
+            $response = $this->send($client, $request, new Options(timeout: 5));
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('slow', (string) $response->getBody());
+        });
+    }
+
+    public function testPerRequestTimeoutAppliesToStreamedRequests(): void
+    {
+        Http::serve(function (int $port): void {
+            $requestFactory = new Request\Factory();
+            $client = $this->createAdapter();
+            $request = $requestFactory->createRequest(Method::GET, \sprintf('http://127.0.0.1:%d/slow', $port));
+
+            $this->expectException(TimeoutException::class);
+
+            $this->sendStream($client, $request, static function (string $chunk): void {}, new Options(timeout: 0.1));
+        });
+    }
+
+    public function testPerRequestOptionsPreserveConnectionReuse(): void
+    {
+        $statuses = [];
+
+        $connections = Http::dropsFirstKeepAliveConnection(function (int $port) use (&$statuses): void {
+            $client = $this->createAdapter()->withConnectionReuse();
+            $requestFactory = new Request\Factory();
+            $uri = \sprintf('http://127.0.0.1:%d/', $port);
+            $options = new Options(timeout: 5, connectTimeout: 5);
+
+            $this->runAdapter(function () use ($client, $requestFactory, $uri, $options, &$statuses): void {
+                for ($i = 0; $i < 4; $i++) {
+                    $statuses[] = $client->sendRequest($requestFactory->createRequest(Method::GET, $uri), $options)->getStatusCode();
+                }
+            });
+        });
+
+        // Per-request overrides must not tear down the kept-alive socket the
+        // way a withTimeout() clone does: after the server drops the first
+        // keep-alive connection, every remaining request shares the second.
+        $this->assertSame([200, 200, 200, 200], $statuses);
+        $this->assertSame(2, $connections);
+    }
+
     public function testItThrowsTimeoutExceptionsForTimedOutRequests(): void
     {
         Http::serve(function (int $port): void {
@@ -873,14 +947,14 @@ abstract class AdapterContract extends TestCase
         return $path;
     }
 
-    private function send(Adapter $client, RequestInterface $request): ResponseInterface
+    private function send(Adapter $client, RequestInterface $request, ?Options $options = null): ResponseInterface
     {
         $response = null;
         $thrown = null;
 
-        $this->runAdapter(function () use ($client, $request, &$response, &$thrown): void {
+        $this->runAdapter(function () use ($client, $request, $options, &$response, &$thrown): void {
             try {
-                $response = $client->sendRequest($request);
+                $response = $client->sendRequest($request, $options);
             } catch (Throwable $throwable) {
                 $thrown = $throwable;
             }
@@ -900,14 +974,14 @@ abstract class AdapterContract extends TestCase
     /**
      * @param callable(string): void $sink
      */
-    private function sendStream(Adapter $client, RequestInterface $request, callable $sink): ResponseInterface
+    private function sendStream(Adapter $client, RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
         $response = null;
         $thrown = null;
 
-        $this->runAdapter(function () use ($client, $request, $sink, &$response, &$thrown): void {
+        $this->runAdapter(function () use ($client, $request, $sink, $options, &$response, &$thrown): void {
             try {
-                $response = $client->stream($request, $sink);
+                $response = $client->stream($request, $sink, $options);
             } catch (Throwable $throwable) {
                 $thrown = $throwable;
             }

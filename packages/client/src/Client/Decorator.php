@@ -58,9 +58,9 @@ abstract class Decorator implements Adapter
     /**
      * @throws ClientExceptionInterface
      */
-    public function sendRequest(RequestInterface $request): ResponseInterface
+    public function sendRequest(RequestInterface $request, ?Options $options = null): ResponseInterface
     {
-        return $this->adapter->sendRequest($request);
+        return $this->adapter->sendRequest($request, $options);
     }
 
     /**
@@ -68,9 +68,9 @@ abstract class Decorator implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    public function stream(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
-        return $this->adapter->stream($request, $sink);
+        return $this->adapter->stream($request, $sink, $options);
     }
 
     protected function wrap(Adapter $adapter): static

@@ -10,6 +10,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\UriInterface;
 use Utopia\Client\Adapter;
+use Utopia\Client\Options;
 use Utopia\Client\Tls;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Uri;
@@ -146,9 +147,9 @@ final class Client implements Adapter
     /**
      * @throws ClientExceptionInterface
      */
-    public function sendRequest(RequestInterface $request): ResponseInterface
+    public function sendRequest(RequestInterface $request, ?Options $options = null): ResponseInterface
     {
-        return $this->adapter->sendRequest($this->prepare($request));
+        return $this->adapter->sendRequest($this->prepare($request), $options);
     }
 
     /**
@@ -159,9 +160,9 @@ final class Client implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    public function stream(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
-        return $this->adapter->stream($this->prepare($request), $sink);
+        return $this->adapter->stream($this->prepare($request), $sink, $options);
     }
 
     private function prepare(RequestInterface $request): RequestInterface

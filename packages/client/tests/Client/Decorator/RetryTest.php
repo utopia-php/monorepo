@@ -13,6 +13,7 @@ use Utopia\Client\Decorator\Retry;
 use Utopia\Client\Decorator\Retry\Backoff;
 use Utopia\Client\Exception\InvalidUriException;
 use Utopia\Client\Exception\NetworkException;
+use Utopia\Client\Options;
 use Utopia\Client\Tls;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
@@ -148,6 +149,22 @@ final class RetryTest extends TestCase
         }
     }
 
+    public function testItForwardsPerRequestOptionsOnEveryAttempt(): void
+    {
+        $request = $this->request(Method::GET);
+        $inner = new QueueAdapter([
+            fn() => throw new NetworkException($request, 'reset'),
+            fn(): \Utopia\Psr7\Response => new Response(200),
+        ]);
+        $delays = [];
+        $options = new Options(timeout: 1);
+
+        $response = $this->retry($inner, $delays)->sendRequest($request, $options);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame([$options, $options], $inner->options);
+    }
+
     public function testItForwardsConfigurationToTheInnerAdapter(): void
     {
         $inner = new QueueAdapter([]);
@@ -190,6 +207,11 @@ final class QueueAdapter implements Adapter
     public int $calls = 0;
 
     /**
+     * @var array<int, Options|null>
+     */
+    public array $options = [];
+
+    /**
      * @param array<int, callable(callable(string): void): ResponseInterface> $outcomes
      */
     public function __construct(private array $outcomes) {}
@@ -229,13 +251,17 @@ final class QueueAdapter implements Adapter
         return $this;
     }
 
-    public function sendRequest(RequestInterface $request): ResponseInterface
+    public function sendRequest(RequestInterface $request, ?Options $options = null): ResponseInterface
     {
+        $this->options[] = $options;
+
         return $this->next(static function (string $chunk): void {});
     }
 
-    public function stream(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
+        $this->options[] = $options;
+
         return $this->next($sink);
     }
 

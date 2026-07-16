@@ -25,6 +25,7 @@ use Utopia\Client\Exception\ProtocolException;
 use Utopia\Client\Exception\ProxyException;
 use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
+use Utopia\Client\Options;
 use Utopia\Client\Response\Builder as ResponseBuilder;
 use Utopia\Client\Tls;
 use Utopia\Psr7\Header;
@@ -159,9 +160,9 @@ class Client implements Adapter
     /**
      * @throws ClientExceptionInterface
      */
-    public function sendRequest(RequestInterface $request): ResponseInterface
+    public function sendRequest(RequestInterface $request, ?Options $options = null): ResponseInterface
     {
-        return $this->perform($request, null);
+        return $this->perform($request, null, $options);
     }
 
     /**
@@ -169,9 +170,9 @@ class Client implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    public function stream(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
-        return $this->perform($request, $sink);
+        return $this->perform($request, $sink, $options);
     }
 
     /**
@@ -184,7 +185,7 @@ class Client implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    private function perform(RequestInterface $request, ?callable $sink): ResponseInterface
+    private function perform(RequestInterface $request, ?callable $sink, ?Options $options): ResponseInterface
     {
         if (!\extension_loaded('swoole')) {
             throw new AdapterPreconditionException($request, 'The swoole extension is required.');
@@ -212,6 +213,16 @@ class Client implements Adapter
 
         // Authoritative over any keep_alive passed in $settings.
         $settings[self::SETTING_KEEP_ALIVE] = $this->reuseConnections;
+
+        // Per-request overrides win over the configured defaults for this
+        // transfer only; the kept-alive connection is unaffected.
+        if ($options?->timeout !== null) {
+            $settings[self::SETTING_TIMEOUT] = $this->seconds($options->timeout);
+        }
+
+        if ($options?->connectTimeout !== null) {
+            $settings[self::SETTING_CONNECT_TIMEOUT] = $this->seconds($options->connectTimeout);
+        }
 
         if ($sink !== null) {
             $settings['write_func'] = static function (SwooleClient $cli, string $chunk) use ($sink): void {

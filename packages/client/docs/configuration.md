@@ -19,6 +19,32 @@ $client = $client
 
 The cURL adapter maps these to `CURLOPT_TIMEOUT_MS` and `CURLOPT_CONNECTTIMEOUT_MS`. The Swoole adapter maps them to `timeout` and `connect_timeout`.
 
+## Per-request options
+
+`withTimeout()` reconfigures a clone, which starts with a fresh connection
+cache. To change a timeout for a single request instead — one slow endpoint on
+an otherwise fast API, a shared client you must not reconfigure — pass an
+`Options` value alongside the request:
+
+```php
+<?php
+
+use Utopia\Client\Options;
+
+$response = $client->sendRequest($request, new Options(timeout: 10));
+
+$response = $client->stream($request, $sink, new Options(
+    timeout: 60,
+    connectTimeout: 1,
+));
+```
+
+The overrides apply to that transfer only: the client's configured defaults are
+back in effect for the next request, and a reused connection stays open, unlike
+the `with*()` helpers. A `null` field leaves the configured value in effect.
+Decorators such as `Retry` forward the options to every attempt, and a
+[pool](pooling.md) forwards them to the borrowed client.
+
 ## TLS
 
 ```php

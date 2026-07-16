@@ -11,6 +11,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Utopia\Client;
 use Utopia\Client\Adapter;
+use Utopia\Client\Options;
 use Utopia\Client\Tls;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Response;
@@ -208,6 +209,22 @@ final class ClientTest extends TestCase
         $this->assertSame('', $response->getHeaderLine('X-Request-Traceparent'));
     }
 
+    public function testItForwardsPerRequestOptionsToTheAdapter(): void
+    {
+        $requestFactory = new Request\Factory();
+        $client = new Client(new RecordingAdapter());
+        $request = $requestFactory->createRequest('GET', 'https://example.com');
+
+        $sent = $client->sendRequest($request, new Options(timeout: 2.5, connectTimeout: 0.5));
+        $streamed = $client->stream($request, static function (string $chunk): void {}, new Options(timeout: 1.5));
+        $plain = $client->sendRequest($request);
+
+        $this->assertSame('2.5', $sent->getHeaderLine('X-Options-Timeout'));
+        $this->assertSame('0.5', $sent->getHeaderLine('X-Options-Connect-Timeout'));
+        $this->assertSame('1.5', $streamed->getHeaderLine('X-Options-Timeout'));
+        $this->assertSame('', $plain->getHeaderLine('X-Options-Timeout'));
+    }
+
     public function testItStreamsThroughTheAdapterApplyingBaseUriAndHeaders(): void
     {
         $requestFactory = new Request\Factory();
@@ -308,7 +325,7 @@ final class RecordingAdapter implements Adapter
     /**
      * @throws ClientExceptionInterface
      */
-    public function sendRequest(RequestInterface $request): ResponseInterface
+    public function sendRequest(RequestInterface $request, ?Options $options = null): ResponseInterface
     {
         $response = new Response\Factory()
             ->createResponse()
@@ -343,6 +360,14 @@ final class RecordingAdapter implements Adapter
             $response = $response->withHeader('X-Connection-Reuse', $this->connectionReuse ? 'on' : 'off');
         }
 
+        if ($options?->timeout !== null) {
+            $response = $response->withHeader('X-Options-Timeout', (string) $options->timeout);
+        }
+
+        if ($options?->connectTimeout !== null) {
+            $response = $response->withHeader('X-Options-Connect-Timeout', (string) $options->connectTimeout);
+        }
+
         if ($this->connectTimeout !== null) {
             return $response->withHeader('X-Connect-Timeout', (string) $this->connectTimeout);
         }
@@ -355,10 +380,10 @@ final class RecordingAdapter implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    public function stream(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
         $sink('chunk');
 
-        return $this->sendRequest($request);
+        return $this->sendRequest($request, $options);
     }
 }

@@ -12,6 +12,7 @@ use Utopia\Client\Adapter;
 use Utopia\Client\Decorator;
 use Utopia\Client\Decorator\Retry\Backoff;
 use Utopia\Client\Decorator\Retry\Strategy;
+use Utopia\Client\Options;
 
 /**
  * An adapter that decorates another adapter and retries it according to a
@@ -39,11 +40,11 @@ final class Retry extends Decorator
     }
 
     #[\Override]
-    public function sendRequest(RequestInterface $request): ResponseInterface
+    public function sendRequest(RequestInterface $request, ?Options $options = null): ResponseInterface
     {
         for ($attempt = 1; ; $attempt++) {
             try {
-                $response = $this->adapter->sendRequest($request);
+                $response = $this->adapter->sendRequest($request, $options);
                 $delay = $this->strategy->delay($request, $attempt, $response, null);
 
                 if ($delay === null) {
@@ -62,7 +63,7 @@ final class Retry extends Decorator
     }
 
     #[\Override]
-    public function stream(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
         for ($attempt = 1; ; $attempt++) {
             $delivered = 0;
@@ -72,7 +73,7 @@ final class Retry extends Decorator
             };
 
             try {
-                $response = $this->adapter->stream($request, $countingSink);
+                $response = $this->adapter->stream($request, $countingSink, $options);
 
                 // Once bytes have reached the sink, replaying would duplicate them.
                 if ($delivered > 0) {

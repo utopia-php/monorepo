@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\Client;
 
+use InvalidArgumentException;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
@@ -16,6 +17,10 @@ use Utopia\Psr18\StreamingClientInterface;
  * reclaims it once the request completes, so concurrent callers share a bounded
  * set of underlying connections. The pool's resources must themselves be both a
  * PSR-18 and a streaming client.
+ *
+ * Per-request Options are forwarded to the borrowed client for that transfer
+ * only — its configured defaults and reused connection stay untouched — and
+ * require the pooled clients to implement Adapter.
  *
  * @template T of ClientInterface&StreamingClientInterface
  */
@@ -31,10 +36,12 @@ final readonly class Pool implements ClientInterface, StreamingClientInterface
     /**
      * @throws ClientExceptionInterface
      */
-    public function sendRequest(RequestInterface $request): ResponseInterface
+    public function sendRequest(RequestInterface $request, ?Options $options = null): ResponseInterface
     {
         return $this->connections->use(
-            fn(ClientInterface $client): ResponseInterface => $client->sendRequest($request),
+            fn(ClientInterface $client): ResponseInterface => $options instanceof \Utopia\Client\Options
+                ? $this->configurable($client)->sendRequest($request, $options)
+                : $client->sendRequest($request),
         );
     }
 
@@ -43,10 +50,25 @@ final readonly class Pool implements ClientInterface, StreamingClientInterface
      *
      * @throws ClientExceptionInterface
      */
-    public function stream(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
         return $this->connections->use(
-            fn(StreamingClientInterface $client): ResponseInterface => $client->stream($request, $sink),
+            fn(StreamingClientInterface $client): ResponseInterface => $options instanceof \Utopia\Client\Options
+                ? $this->configurable($client)->stream($request, $sink, $options)
+                : $client->stream($request, $sink),
         );
+    }
+
+    /**
+     * A plain PSR-18 client would silently ignore the extra argument, so demand
+     * the Adapter contract before forwarding per-request options.
+     */
+    private function configurable(ClientInterface|StreamingClientInterface $client): Adapter
+    {
+        if (!$client instanceof Adapter) {
+            throw new InvalidArgumentException(\sprintf('Per-request options require the pooled clients to implement %s.', Adapter::class));
+        }
+
+        return $client;
     }
 }

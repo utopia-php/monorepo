@@ -29,6 +29,18 @@ $response = $pool->sendRequest($request);
 $pool->stream($request, $sink);
 ```
 
+A pool forwards [per-request options](configuration.md#per-request-options) to
+the borrowed client, so one call can use a different timeout without
+reconfiguring the pooled clients or dropping their reused connections:
+
+```php
+<?php
+
+use Utopia\Client\Options;
+
+$response = $pool->sendRequest($request, new Options(timeout: 10));
+```
+
 Pair the pooled adapters with [`withConnectionReuse()`](configuration.md#connection-reuse):
 without it the pool still bounds concurrency, but each borrow dials a fresh
 connection, so the handshake savings are lost.
@@ -73,7 +85,10 @@ $pool = new Pool(new Connections(
 
 - `Pool` implements `ClientInterface` and `StreamingClientInterface`, not `Adapter`
   — it has no `with*()` helpers, since pooling load-balances across many
-  connections. Configure the connections in `init` instead.
+  connections. Configure the connections in `init` instead, and use per-request
+  `Options` for one-off deviations. Forwarding options requires the pooled
+  clients to implement `Adapter` (a plain PSR-18 client would silently ignore
+  them, so the pool throws instead).
 - Connections are created lazily and on demand: a `size: 10` pool under sequential
   load reuses a single connection; it only opens more when concurrent callers hold
   connections at the same time.

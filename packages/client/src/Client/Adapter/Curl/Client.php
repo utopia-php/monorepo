@@ -23,6 +23,7 @@ use Utopia\Client\Exception\ProtocolException;
 use Utopia\Client\Exception\ProxyException;
 use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
+use Utopia\Client\Options;
 use Utopia\Client\Response\Builder as ResponseBuilder;
 use Utopia\Client\Tls;
 use Utopia\Psr7\Header;
@@ -137,13 +138,13 @@ class Client implements Adapter
     /**
      * @throws ClientExceptionInterface
      */
-    public function sendRequest(RequestInterface $request): ResponseInterface
+    public function sendRequest(RequestInterface $request, ?Options $options = null): ResponseInterface
     {
         $body = '';
 
         $parsed = $this->transfer($request, static function (string $chunk) use (&$body): void {
             $body .= $chunk;
-        });
+        }, $options);
 
         return $this->responseBuilder->build(
             $parsed['status'],
@@ -159,9 +160,9 @@ class Client implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    public function stream(RequestInterface $request, callable $sink): ResponseInterface
+    public function stream(RequestInterface $request, callable $sink, ?Options $options = null): ResponseInterface
     {
-        $parsed = $this->transfer($request, $sink);
+        $parsed = $this->transfer($request, $sink, $options);
 
         return $this->responseBuilder->build(
             $parsed['status'],
@@ -184,7 +185,7 @@ class Client implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    private function transfer(RequestInterface $request, callable $sink): array
+    private function transfer(RequestInterface $request, callable $sink, ?Options $overrides): array
     {
         if (!\extension_loaded('curl')) {
             throw new AdapterPreconditionException($request, 'The curl extension is required.');
@@ -201,7 +202,7 @@ class Client implements Adapter
 
         $headers = '';
         $handle = $this->handle($request);
-        $options = $this->options($request, $headers, $sink, $decompress);
+        $options = $this->options($request, $headers, $sink, $decompress, $overrides);
 
         try {
             if (curl_setopt_array($handle, $options) === false) {
@@ -270,7 +271,7 @@ class Client implements Adapter
      *
      * @return array<int, mixed>
      */
-    private function options(RequestInterface $request, string &$headers, callable $sink, bool $decompress): array
+    private function options(RequestInterface $request, string &$headers, callable $sink, bool $decompress, ?Options $overrides): array
     {
         $options = [
             \CURLOPT_URL => (string) $request->getUri(),
@@ -327,6 +328,16 @@ class Client implements Adapter
 
         // Authoritative over any caller-supplied CURLOPT_FORBID_REUSE.
         $merged[\CURLOPT_FORBID_REUSE] = !$this->reuseConnections;
+
+        // Per-request overrides win over the configured defaults for this
+        // transfer only; the handle's connection cache is unaffected.
+        if ($overrides?->timeout !== null) {
+            $merged[\CURLOPT_TIMEOUT_MS] = $this->milliseconds($overrides->timeout);
+        }
+
+        if ($overrides?->connectTimeout !== null) {
+            $merged[\CURLOPT_CONNECTTIMEOUT_MS] = $this->milliseconds($overrides->connectTimeout);
+        }
 
         return $merged;
     }
