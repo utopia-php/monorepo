@@ -18,12 +18,12 @@ final class BrowserDetectionTest extends TestCase
         return [
             'Edge' => [
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0',
+                . '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/126.0.0.0',
                 'PS',
                 'Microsoft Edge',
                 'Blink',
                 '126.0',
-                '126.0.0.0',
+                '124.0.0.0',
             ],
             'Opera' => [
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '

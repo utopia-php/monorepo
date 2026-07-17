@@ -35,7 +35,7 @@ final class ClientDetector
             return null;
         }
 
-        $engineVersion = self::version($matches[1]);
+        $engineVersion = self::tokenVersion($userAgent, 'Chrome') ?? self::version($matches[1]);
 
         return new Client('browser', 'PS', 'Microsoft Edge', self::displayVersion($matches[1]), 'Blink', $engineVersion);
     }

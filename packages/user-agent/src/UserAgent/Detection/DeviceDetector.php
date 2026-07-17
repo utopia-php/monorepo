@@ -101,10 +101,24 @@ final class DeviceDetector
             return null;
         }
 
-        $type = stripos($userAgent, 'Mobile') !== false ? 'smartphone' : 'tablet';
         $model = self::model($userAgent);
+        $type = stripos($userAgent, 'Mobile') === false || self::hasTabletModel($model)
+            ? 'tablet'
+            : 'smartphone';
 
         return new Device($type, self::brand($userAgent, $model), $model);
+    }
+
+    private static function hasTabletModel(?string $model): bool
+    {
+        if ($model === null) {
+            return false;
+        }
+
+        return preg_match(
+            '/^(?:SM-[TX]|GT-P|Nexus (?:7|9|10)\b|Pixel (?:C|Tablet)\b|(?:Lenovo )?(?:TB-|YT-|Tab\b)|(?:Huawei )?MediaPad\b|(?:Xiaomi |Redmi |OnePlus )?Pad\b)/i',
+            $model,
+        ) === 1;
     }
 
     private static function blackBerry(string $userAgent): ?Device

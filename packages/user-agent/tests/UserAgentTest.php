@@ -83,6 +83,18 @@ final class UserAgentTest extends TestCase
         $this->assertSame('SM-T970', $agent->device()->model);
     }
 
+    public function testTabletModelOverridesMobileToken(): void
+    {
+        $agent = UserAgent::parse(
+            'Mozilla/5.0 (Linux; Android 14; SM-X910) '
+            . 'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        );
+
+        $this->assertSame('tablet', $agent->device()->type);
+        $this->assertSame('Samsung', $agent->device()->brand);
+        $this->assertSame('SM-X910', $agent->device()->model);
+    }
+
     public function testBotDetectionDoesNotSuppressClientAndDevice(): void
     {
         $agent = UserAgent::parse(
