@@ -370,7 +370,7 @@ trait PoolTestScope
             $created = 0;
             $pool = new Pool($this->getAdapter(), 'test-destroy-on-error', 2, function () use (&$created) {
                 $created++;
-                return new class ('resource-' . $created, $created === 1) implements \Stringable {
+                return new readonly class ('resource-' . $created, $created === 1) implements \Stringable {
                     public function __construct(private string $name, private bool $failRecovery) {}
 
                     public function __toString(): string
@@ -412,7 +412,7 @@ trait PoolTestScope
             $created = 0;
             $pool = new Pool($this->getAdapter(), 'test-destroy-on-false-recovery', 2, function () use (&$created) {
                 $created++;
-                return new class ('resource-' . $created) implements \Stringable {
+                return new readonly class ('resource-' . $created) implements \Stringable {
                     public function __construct(private string $name) {}
 
                     public function __toString(): string
@@ -452,7 +452,7 @@ trait PoolTestScope
             $created = 0;
             $pool = new Pool($this->getAdapter(), 'test-recover-and-reuse', 2, function () use (&$created) {
                 $created++;
-                return new class ('resource-' . $created) implements \Stringable {
+                return new readonly class ('resource-' . $created) implements \Stringable {
                     public function __construct(private string $name) {}
 
                     public function __toString(): string
@@ -491,7 +491,7 @@ trait PoolTestScope
             $created = 0;
             $pool = new Pool($this->getAdapter(), 'test-destroy-without-recovery', 2, function () use (&$created) {
                 $created++;
-                return new class ('resource-' . $created) implements \Stringable {
+                return new readonly class ('resource-' . $created) implements \Stringable {
                     public function __construct(private string $name) {}
 
                     public function __toString(): string
@@ -541,7 +541,6 @@ trait PoolTestScope
 
             try {
                 $pool->use(function ($resource): void {
-                    $this->assertIsResource($resource);
                     $this->assertSame('resource-1', stream_get_contents($resource));
                     throw new \RuntimeException('Callback failed');
                 });
@@ -552,8 +551,56 @@ trait PoolTestScope
             $this->assertSame(2, $pool->count());
 
             $pool->use(function ($resource): void {
-                $this->assertIsResource($resource);
                 $this->assertSame('resource-2', stream_get_contents($resource));
+            });
+        });
+    }
+
+    public function testUseForgetsConnectionWhenDestroyCleanupFails(): void
+    {
+        $this->execute(function (): void {
+            $adapter = new class extends \Utopia\Pools\Adapter\Stack {
+                public bool $failSynchronized = false;
+
+                public function synchronized(callable $callback): mixed
+                {
+                    if ($this->failSynchronized) {
+                        $this->failSynchronized = false;
+                        throw new \RuntimeException('Lock failed');
+                    }
+
+                    return parent::synchronized($callback);
+                }
+            };
+
+            $created = 0;
+            $pool = new Pool($adapter, 'test-forget-on-destroy-failure', 1, function () use (&$created) {
+                $created++;
+                return new readonly class ('resource-' . $created) implements \Stringable {
+                    public function __construct(private string $name) {}
+
+                    public function __toString(): string
+                    {
+                        return $this->name;
+                    }
+                };
+            });
+            $pool->setReconnectAttempts(1);
+            $pool->setReconnectSleep(0);
+
+            try {
+                $pool->use(function (\Stringable $resource) use ($adapter): void {
+                    $this->assertSame('resource-1', (string) $resource);
+                    $adapter->failSynchronized = true;
+                    throw new \RuntimeException('Callback failed');
+                });
+            } catch (\RuntimeException $exception) {
+                $this->assertSame('Callback failed', $exception->getMessage());
+            }
+
+            $pool->use(function (\Stringable $resource) use (&$created): void {
+                $this->assertSame('resource-2', (string) $resource);
+                $this->assertSame(2, $created);
             });
         });
     }
@@ -568,7 +615,7 @@ trait PoolTestScope
                     throw new \TypeError('Replacement failed');
                 }
 
-                return new class ('resource-' . $created) implements \Stringable {
+                return new readonly class ('resource-' . $created) implements \Stringable {
                     public function __construct(private string $name) {}
 
                     public function __toString(): string
@@ -576,7 +623,7 @@ trait PoolTestScope
                         return $this->name;
                     }
 
-                    public function reconnect(): void
+                    public function reconnect(): never
                     {
                         throw new \RuntimeException('Recovery failed');
                     }

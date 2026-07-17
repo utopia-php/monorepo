@@ -271,7 +271,7 @@ class Pool
                 try {
                     return $this->destroy($connection);
                 } catch (\Throwable) {
-                    return $this;
+                    return $this->forget($connection);
                 }
             }
         }
@@ -279,8 +279,33 @@ class Pool
         try {
             return $this->destroy($connection);
         } catch (\Throwable) {
-            return $this;
+            return $this->forget($connection);
         }
+    }
+
+    /**
+     * Last-resort cleanup when destroy() itself fails: the connection must never
+     * stay tracked as active, or its slot is lost to the pool forever.
+     *
+     * @param Connection<TResource> $connection
+     * @return $this
+     */
+    private function forget(Connection $connection): static
+    {
+        $untrack = function () use ($connection): void {
+            if (isset($this->active[$connection->getID()])) {
+                unset($this->active[$connection->getID()]);
+                $this->connectionsCreated--;
+            }
+        };
+
+        try {
+            $this->pool->synchronized($untrack);
+        } catch (\Throwable) {
+            $untrack();
+        }
+
+        return $this;
     }
 
     /**
