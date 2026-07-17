@@ -14,7 +14,7 @@ final class MatomoCompatibilityTest extends TestCase
     /**
      * @return array<string, array{string}>
      */
-    public static function appwriteProfiles(): array
+    public static function referenceProfiles(): array
     {
         return [
             'Firefox on Windows' => [
@@ -37,8 +37,8 @@ final class MatomoCompatibilityTest extends TestCase
         ];
     }
 
-    #[DataProvider('appwriteProfiles')]
-    public function testAppwriteFieldsMatchMatomo64(string $userAgent): void
+    #[DataProvider('referenceProfiles')]
+    public function testCoreFieldsMatchMatomo64(string $userAgent): void
     {
         $matomo = new MatomoDeviceDetector($userAgent);
         $matomo->skipBotDetection();

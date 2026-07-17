@@ -79,8 +79,7 @@ $device->model;     // ?string
 $device->isKnown(); // bool
 ```
 
-`Device::$type` is the value historically exposed by Appwrite as
-`deviceName`.
+`Device::$type` represents the device class rather than its model name.
 
 ### Bot
 
@@ -112,20 +111,20 @@ $data = $agent->toArray();
 
 ## Detection coverage
 
-The initial rule set focuses on the user agents consumed by Appwrite:
+The initial rule set covers common user agents:
 
 - Windows, Windows Phone, macOS, iOS, Android, Chrome OS, Linux, Ubuntu,
   Tizen, and KaiOS
 - Chrome, Safari, Firefox, Edge, Opera, Samsung Internet, Android WebView,
   Internet Explorer, and their common mobile variants
-- Common HTTP libraries and Appwrite CLI / SDK clients
+- Common HTTP libraries
 - Desktop, smartphone, tablet, TV, console, wearable, and portable-media
   device classes with common mobile brands and models
 - Search, social-preview, monitoring, automation, SEO, and AI crawlers
 
-Codes and the twelve fields used by Appwrite are regression-tested against
-Matomo DeviceDetector 6.4 for representative Appwrite profiles. The runtime
-does not contain or load Matomo's LGPL rule data.
+Core result fields are regression-tested against Matomo DeviceDetector 6.4 for
+representative profiles. The runtime does not contain or load Matomo's LGPL
+rule data.
 
 ## Performance
 
@@ -141,33 +140,6 @@ composer bench
 
 `BENCH_ITERATIONS` controls its duration. Matomo DeviceDetector is installed
 only as a development dependency for differential tests and benchmarks.
-
-## Migrating Appwrite's detector
-
-Appwrite's existing flat response can be adapted without changing storage or
-API field names:
-
-```php
-$agent = UserAgent::parse($userAgent);
-$os = $agent->operatingSystem();
-$client = $agent->client();
-$device = $agent->device();
-
-$attributes = [
-    'osCode' => $os->code ?? '',
-    'osName' => $os->name ?? '',
-    'osVersion' => $os->version ?? '',
-    'clientType' => $client->type ?? '',
-    'clientCode' => $client->code ?? '',
-    'clientName' => $client->name ?? '',
-    'clientVersion' => $client->version ?? '',
-    'clientEngine' => $client->engine ?? '',
-    'clientEngineVersion' => $client->engineVersion ?? '',
-    'deviceName' => $device->type,
-    'deviceBrand' => $device->brand,
-    'deviceModel' => $device->model,
-];
-```
 
 There is no `skipBotDetection()` setting. Bot matching runs only when `bot()`
 or `isBot()` is requested and never prevents the other categories from being

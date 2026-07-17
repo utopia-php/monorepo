@@ -9,7 +9,7 @@ use Utopia\UserAgent\UserAgent;
 
 final class UserAgentTest extends TestCase
 {
-    public function testFirefoxOnWindowsMatchesAppwriteContract(): void
+    public function testFirefoxOnWindowsMatchesReferenceContract(): void
     {
         $agent = UserAgent::parse(
             'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0',
@@ -81,20 +81,6 @@ final class UserAgentTest extends TestCase
         $this->assertSame('tablet', $agent->device()->type);
         $this->assertSame('Samsung', $agent->device()->brand);
         $this->assertSame('SM-T970', $agent->device()->model);
-    }
-
-    public function testAppwriteCliCompatibility(): void
-    {
-        $agent = UserAgent::parse('AppwriteCLI/6.1.0 Darwin/24.5.0 arm64');
-
-        $this->assertSame([
-            'type' => 'desktop',
-            'code' => 'cli',
-            'name' => 'Appwrite CLI',
-            'version' => '6.1.0',
-            'engine' => null,
-            'engineVersion' => null,
-        ], $agent->client()->toArray());
     }
 
     public function testBotDetectionDoesNotSuppressClientAndDevice(): void

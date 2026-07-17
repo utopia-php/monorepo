@@ -14,8 +14,7 @@ final class ClientDetector
             return new Client();
         }
 
-        $client = self::appwriteCli($userAgent)
-            ?? self::edge($userAgent)
+        $client = self::edge($userAgent)
             ?? self::opera($userAgent)
             ?? self::samsung($userAgent)
             ?? self::chromeIos($userAgent)
@@ -28,15 +27,6 @@ final class ClientDetector
             ?? self::library($userAgent);
 
         return $client ?? new Client();
-    }
-
-    private static function appwriteCli(string $userAgent): ?Client
-    {
-        if (preg_match('/(?:^|\s)AppwriteCLI\/([^\s]+)/i', $userAgent, $matches) !== 1) {
-            return null;
-        }
-
-        return new Client('desktop', 'cli', 'Appwrite CLI', self::version($matches[1]));
     }
 
     private static function edge(string $userAgent): ?Client
@@ -221,10 +211,6 @@ final class ClientDetector
             if (preg_match($pattern, $userAgent, $matches) === 1) {
                 return new Client('library', null, $name, self::displayVersion($matches[1]));
             }
-        }
-
-        if (preg_match('/Appwrite(?:\s+SDK)?\/([0-9.]+)/i', $userAgent, $matches) === 1) {
-            return new Client('library', 'AW', 'Appwrite SDK', self::version($matches[1]));
         }
 
         return null;

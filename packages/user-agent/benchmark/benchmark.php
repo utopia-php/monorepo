@@ -15,7 +15,7 @@ $userAgents = [
     'Mozilla/5.0 (Linux; Android 12; SM-T970 Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0',
     'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-    'AppwriteCLI/6.1.0 Darwin/24.5.0 arm64',
+    'PostmanRuntime/7.43.0',
     'curl/8.7.1',
     'UNKNOWN',
 ];
