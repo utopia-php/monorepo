@@ -148,7 +148,7 @@ trait GroupTestScope
             $resources = [];
             $pool = new Pool($this->getAdapter(), 'pool1', 1, function () use (&$created, &$resources) {
                 $created++;
-                $resources[] = new class ('resource-' . $created) implements \Stringable {
+                $resources[] = new readonly class ('resource-' . $created) implements \Stringable {
                     public function __construct(private string $name) {}
 
                     public function __toString(): string
