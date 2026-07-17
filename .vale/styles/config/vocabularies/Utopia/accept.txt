@@ -145,3 +145,6 @@ OpenID Connect
 Swoole Table
 DigitalOcean Spaces
 Linode Object Storage
+Matomo(?:'s)?
+memoized
+Tizen

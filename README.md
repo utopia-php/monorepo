@@ -89,6 +89,7 @@ graph TD
     circuit-breaker
     nats
     replication
+    user-agent
 ```
 <!-- /graph -->
 
