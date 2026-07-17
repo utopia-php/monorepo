@@ -8,12 +8,6 @@
         "device-detection"
     ],
     "license": "MIT",
-    "authors": [
-        {
-            "name": "Appwrite Team",
-            "email": "team@appwrite.io"
-        }
-    ],
     "autoload": {
         "psr-4": {
             "Utopia\\UserAgent\\": "src/UserAgent/"
