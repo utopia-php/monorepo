@@ -364,23 +364,239 @@ trait PoolTestScope
         });
     }
 
-    public function testUseReclainsConnectionOnCallbackException(): void
+    public function testUseDestroysConnectionWhenRecoveryFails(): void
     {
         $this->execute(function (): void {
-            $this->setUpPool(); // size 5
+            $created = 0;
+            $pool = new Pool($this->getAdapter(), 'test-destroy-on-error', 2, function () use (&$created) {
+                $created++;
+                return new class ('resource-' . $created, $created === 1) implements \Stringable {
+                    public function __construct(private string $name, private bool $failRecovery) {}
 
-            // use() should reclaim the connection even when callback throws
+                    public function __toString(): string
+                    {
+                        return $this->name;
+                    }
+
+                    public function reconnect(): void
+                    {
+                        if ($this->failRecovery) {
+                            throw new \RuntimeException('Recovery failed');
+                        }
+                    }
+                };
+            });
+            $pool->setReconnectAttempts(1);
+            $pool->setReconnectSleep(0);
+
             try {
-                $this->poolObject->use(function ($resource): void {
-                    $this->assertSame(4, $this->poolObject->count());
+                $pool->use(function (\Stringable $resource): void {
+                    $this->assertSame('resource-1', (string) $resource);
                     throw new \RuntimeException('Callback failed');
                 });
             } catch (\RuntimeException) {
                 // expected
             }
 
-            // Connection should be reclaimed, pool back to full
-            $this->assertSame(5, $this->poolObject->count());
+            $this->assertSame(2, $pool->count());
+
+            $pool->use(function (\Stringable $resource): void {
+                $this->assertSame('resource-2', (string) $resource);
+            });
+        });
+    }
+
+    public function testUseDestroysConnectionWhenRecoveryReturnsFalse(): void
+    {
+        $this->execute(function (): void {
+            $created = 0;
+            $pool = new Pool($this->getAdapter(), 'test-destroy-on-false-recovery', 2, function () use (&$created) {
+                $created++;
+                return new class ('resource-' . $created) implements \Stringable {
+                    public function __construct(private string $name) {}
+
+                    public function __toString(): string
+                    {
+                        return $this->name;
+                    }
+
+                    public function reconnect(): bool
+                    {
+                        return false;
+                    }
+                };
+            });
+            $pool->setReconnectAttempts(1);
+            $pool->setReconnectSleep(0);
+
+            try {
+                $pool->use(function (\Stringable $resource): void {
+                    $this->assertSame('resource-1', (string) $resource);
+                    throw new \RuntimeException('Callback failed');
+                });
+            } catch (\RuntimeException) {
+                // expected
+            }
+
+            $this->assertSame(2, $pool->count());
+
+            $pool->use(function (\Stringable $resource): void {
+                $this->assertSame('resource-2', (string) $resource);
+            });
+        });
+    }
+
+    public function testUseRecoversAndReusesConnectionWhenRecoverySucceeds(): void
+    {
+        $this->execute(function (): void {
+            $created = 0;
+            $pool = new Pool($this->getAdapter(), 'test-recover-and-reuse', 2, function () use (&$created) {
+                $created++;
+                return new class ('resource-' . $created) implements \Stringable {
+                    public function __construct(private string $name) {}
+
+                    public function __toString(): string
+                    {
+                        return $this->name;
+                    }
+
+                    public function reconnect(): bool
+                    {
+                        return true;
+                    }
+                };
+            });
+            $pool->setReconnectAttempts(1);
+            $pool->setReconnectSleep(0);
+
+            try {
+                $pool->use(function (\Stringable $resource): void {
+                    $this->assertSame('resource-1', (string) $resource);
+                    throw new \RuntimeException('Callback failed');
+                });
+            } catch (\RuntimeException) {
+                // expected
+            }
+
+            $pool->use(function (\Stringable $resource) use (&$created): void {
+                $this->assertSame('resource-1', (string) $resource);
+                $this->assertSame(1, $created);
+            });
+        });
+    }
+
+    public function testUseDestroysObjectConnectionWithoutRecoveryHooks(): void
+    {
+        $this->execute(function (): void {
+            $created = 0;
+            $pool = new Pool($this->getAdapter(), 'test-destroy-without-recovery', 2, function () use (&$created) {
+                $created++;
+                return new class ('resource-' . $created) implements \Stringable {
+                    public function __construct(private string $name) {}
+
+                    public function __toString(): string
+                    {
+                        return $this->name;
+                    }
+                };
+            });
+            $pool->setReconnectAttempts(1);
+            $pool->setReconnectSleep(0);
+
+            try {
+                $pool->use(function (\Stringable $resource): void {
+                    $this->assertSame('resource-1', (string) $resource);
+                    throw new \RuntimeException('Callback failed');
+                });
+            } catch (\RuntimeException) {
+                // expected
+            }
+
+            $this->assertSame(2, $pool->count());
+
+            $pool->use(function (\Stringable $resource): void {
+                $this->assertSame('resource-2', (string) $resource);
+            });
+        });
+    }
+
+    public function testUseDestroysNativeResourceConnectionAfterCallbackFailure(): void
+    {
+        $this->execute(function (): void {
+            $created = 0;
+            $pool = new Pool($this->getAdapter(), 'test-destroy-native-resource', 2, function () use (&$created) {
+                $created++;
+                $resource = fopen('php://temp', 'r+');
+                if ($resource === false) {
+                    throw new \RuntimeException('Failed to open stream');
+                }
+
+                fwrite($resource, 'resource-' . $created);
+                rewind($resource);
+
+                return $resource;
+            });
+            $pool->setReconnectAttempts(1);
+            $pool->setReconnectSleep(0);
+
+            try {
+                $pool->use(function ($resource): void {
+                    $this->assertIsResource($resource);
+                    $this->assertSame('resource-1', stream_get_contents($resource));
+                    throw new \RuntimeException('Callback failed');
+                });
+            } catch (\RuntimeException) {
+                // expected
+            }
+
+            $this->assertSame(2, $pool->count());
+
+            $pool->use(function ($resource): void {
+                $this->assertIsResource($resource);
+                $this->assertSame('resource-2', stream_get_contents($resource));
+            });
+        });
+    }
+
+    public function testUsePreservesCallbackExceptionWhenReplacementFails(): void
+    {
+        $this->execute(function (): void {
+            $created = 0;
+            $pool = new Pool($this->getAdapter(), 'test-preserve-callback-error', 1, function () use (&$created) {
+                $created++;
+                if ($created > 1) {
+                    throw new \TypeError('Replacement failed');
+                }
+
+                return new class ('resource-' . $created) implements \Stringable {
+                    public function __construct(private string $name) {}
+
+                    public function __toString(): string
+                    {
+                        return $this->name;
+                    }
+
+                    public function reconnect(): void
+                    {
+                        throw new \RuntimeException('Recovery failed');
+                    }
+                };
+            });
+            $pool->setReconnectAttempts(1);
+            $pool->setReconnectSleep(0);
+
+            $error = null;
+            try {
+                $pool->use(function (\Stringable $resource): void {
+                    $this->assertSame('resource-1', (string) $resource);
+                    throw new \LogicException('Callback failed');
+                });
+            } catch (\LogicException $error) {
+            }
+
+            $this->assertInstanceOf(\LogicException::class, $error);
+            $this->assertSame('Callback failed', $error->getMessage());
+            $this->assertSame(1, $pool->count());
         });
     }
 

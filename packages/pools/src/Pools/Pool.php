@@ -233,15 +233,88 @@ class Pool
     {
         $start = microtime(true);
         $connection = null;
+        $failed = false;
+
         try {
             $connection = $this->pop();
             return $callback($connection->getResource());
+        } catch (\Throwable $error) {
+            $failed = true;
+            throw $error;
         } finally {
             $this->telemetryUseDuration->record(microtime(true) - $start, $this->telemetryAttributes);
             if ($connection !== null) {
-                $this->reclaim($connection);
+                $this->release($connection, $failed);
             }
         }
+    }
+
+    /**
+     * @param Connection<TResource> $connection
+     * @return $this
+     * @internal
+     */
+    public function release(Connection $connection, bool $failed = false, ?float $start = null): static
+    {
+        if ($start !== null) {
+            $this->telemetryUseDuration->record(microtime(true) - $start, $this->telemetryAttributes);
+        }
+
+        if (!$failed) {
+            return $this->reclaim($connection);
+        }
+
+        if ($this->recover($connection)) {
+            try {
+                return $this->reclaim($connection);
+            } catch (\Throwable) {
+                try {
+                    return $this->destroy($connection);
+                } catch (\Throwable) {
+                    return $this;
+                }
+            }
+        }
+
+        try {
+            return $this->destroy($connection);
+        } catch (\Throwable) {
+            return $this;
+        }
+    }
+
+    /**
+     * @param Connection<TResource> $connection
+     */
+    private function recover(Connection $connection): bool
+    {
+        $resource = $connection->getResource();
+
+        if (!\is_object($resource)) {
+            return !\is_resource($resource);
+        }
+
+        try {
+            $recovered = false;
+
+            if (method_exists($resource, 'reset')) {
+                $recovered = true;
+                if ($resource->reset() === false) {
+                    return false;
+                }
+            }
+
+            if (method_exists($resource, 'reconnect')) {
+                $recovered = true;
+                if ($resource->reconnect() === false) {
+                    return false;
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $recovered;
     }
 
     /**
@@ -422,7 +495,7 @@ class Pool
             if ($shouldCreate) {
                 try {
                     $this->pool->push($this->createConnection());
-                } catch (Exception $e) {
+                } catch (\Throwable $e) {
                     $this->pool->synchronized(function (): void {
                         $this->connectionsCreated--;
                     });
