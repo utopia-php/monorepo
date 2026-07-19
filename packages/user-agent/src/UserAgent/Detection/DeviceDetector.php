@@ -184,7 +184,9 @@ final class DeviceDetector
             'Samsung' => '/(?:\bSM-[A-Z0-9]+|Samsung)/i',
             'Google' => '/(?:\bPixel\b|Nexus)/i',
             'Huawei' => '/(?:Huawei|\bHUAWEI\b|\bANE-|\bELE-|\bVOG-)/i',
-            'Honor' => '/(?:Honor|\bHLK-|\bBKL-)/i',
+            // Match the "HONOR" brand token (uppercase) or "Honor <model>" so the
+            // common word "honor" in app or build tokens is not treated as a brand.
+            'Honor' => '/(?:(?-i:\bHONOR\b)|\bHonor[ _-](?:[0-9]|[XV][0-9]|Play|Magic|View|Note|Pad|Tablet)|\bHLK-|\bBKL-)/i',
             'Xiaomi' => '/(?:Xiaomi|Redmi|POCO|\bMi [A-Z0-9])/i',
             'OnePlus' => '/(?:OnePlus|\bONEPLUS\b)/i',
             'Oppo' => '/(?:\bOPPO\b|\bCPH[0-9]+)/i',

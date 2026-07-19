@@ -145,6 +145,24 @@ final class PlatformDetectionTest extends TestCase
                 'tv',
                 'LG',
             ],
+            'Honor named model' => [
+                'Mozilla/5.0 (Linux; Android 13; Honor 90 Build/HONORREA-N31) AppleWebKit/537.36 '
+                . '(KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36',
+                'smartphone',
+                'Honor',
+            ],
+            'Honor uppercase brand' => [
+                'Mozilla/5.0 (Linux; Android 12; HONOR WKG-LX9) AppleWebKit/537.36 '
+                . '(KHTML, like Gecko) Chrome/104.0.0.0 Mobile Safari/537.36',
+                'smartphone',
+                'Honor',
+            ],
+            'honor word is not a brand' => [
+                'Mozilla/5.0 (Linux; Android 13; SM-G991B Build/InHonorOfRelease) AppleWebKit/537.36 '
+                . '(KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36',
+                'smartphone',
+                'Samsung',
+            ],
         ];
     }
 
