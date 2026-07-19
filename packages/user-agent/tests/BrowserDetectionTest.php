@@ -191,6 +191,15 @@ final class BrowserDetectionTest extends TestCase
                 '104.5',
                 '104.0.5112.105',
             ],
+            'Amazon Silk (legacy WebKit)' => [
+                'Mozilla/5.0 (Linux; U; en-US) AppleWebKit/533.16 (KHTML, like Gecko) '
+                . 'Version/5.0 Safari/533.16 Silk/3.13',
+                'MS',
+                'Mobile Silk',
+                'WebKit',
+                '3.13',
+                '533.16',
+            ],
             'Firefox Focus' => [
                 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) '
                 . 'Version/4.0 Chrome/113.0.0.0 Mobile Safari/537.36 Focus/125.0',

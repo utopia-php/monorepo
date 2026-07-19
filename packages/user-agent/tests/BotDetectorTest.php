@@ -54,6 +54,7 @@ final class BotDetectorTest extends TestCase
             'bot substring' => ['BottomNavigationClient/1.0'],
             'Sogou browser' => ['Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 SogouMobileBrowser/5.28.0'],
             'Pinterest app' => ['Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) Pinterest/11.20 (iPhone; iOS 16.0)'],
+            'WhatsApp in-app browser' => ['Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36 WhatsApp/2.24.6'],
             'empty' => [''],
         ];
     }

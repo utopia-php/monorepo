@@ -43,6 +43,11 @@ Fux
 Dittmann
 Torsten
 United States
+Wget
+aiohttp
+Axios
+HTTPie
+GPTBot
 
 # Protocols, formats, acronyms
 OAuth

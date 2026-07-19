@@ -54,21 +54,21 @@ final class ClientDetector
 
         foreach ($blink as $pattern => [$code, $name]) {
             if (preg_match($pattern, $userAgent, $matches) === 1) {
-                return self::blink($userAgent, $code, $name, $matches[1]);
+                return self::derivativeClient($userAgent, $code, $name, $matches[1]);
             }
         }
 
         // Firefox Focus reports as Blink only when it embeds a Chrome token.
         if (preg_match('/Focus\/([0-9.]+)/i', $userAgent, $matches) === 1
             && self::tokenVersion($userAgent, 'Chrome') !== null) {
-            return self::blink($userAgent, 'FK', 'Firefox Focus', $matches[1]);
+            return self::derivativeClient($userAgent, 'FK', 'Firefox Focus', $matches[1]);
         }
 
         // Huawei Browser distinguishes its mobile build by name.
         if (preg_match('/HuaweiBrowser\/([0-9.]+)/i', $userAgent, $matches) === 1) {
             $mobile = stripos($userAgent, 'Mobile') !== false;
 
-            return self::blink(
+            return self::derivativeClient(
                 $userAgent,
                 $mobile ? 'HU' : 'HP',
                 $mobile ? 'Huawei Browser Mobile' : 'Huawei Browser',
@@ -79,11 +79,25 @@ final class ClientDetector
         return null;
     }
 
-    private static function blink(string $userAgent, string $code, string $name, string $version): Client
+    /**
+     * Build a client for a Chromium-based derivative. When the user-agent
+     * carries a `Chrome/` token the engine is Blink at that version; the older
+     * Amazon Silk builds carry no Chrome token, so their engine is the embedded
+     * WebKit instead. The engine is left unknown when neither token is present.
+     */
+    private static function derivativeClient(string $userAgent, string $code, string $name, string $version): Client
     {
-        $engineVersion = self::tokenVersion($userAgent, 'Chrome') ?? self::version($version);
+        $chrome = self::tokenVersion($userAgent, 'Chrome');
+        if ($chrome !== null) {
+            return new Client('browser', $code, $name, self::displayVersion($version), 'Blink', $chrome);
+        }
 
-        return new Client('browser', $code, $name, self::displayVersion($version), 'Blink', $engineVersion);
+        $webKit = self::tokenVersion($userAgent, 'AppleWebKit');
+        if ($webKit !== null) {
+            return new Client('browser', $code, $name, self::displayVersion($version), 'WebKit', $webKit);
+        }
+
+        return new Client('browser', $code, $name, self::displayVersion($version));
     }
 
     private static function edge(string $userAgent): ?Client

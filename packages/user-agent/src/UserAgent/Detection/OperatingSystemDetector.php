@@ -74,7 +74,7 @@ final class OperatingSystemDetector
         }
 
         $apple = self::apple($userAgent);
-        if ($apple !== null) {
+        if ($apple instanceof OperatingSystem) {
             return $apple;
         }
 
@@ -103,8 +103,13 @@ final class OperatingSystemDetector
             return new OperatingSystem('COS', 'Chrome OS', self::version($matches[1]));
         }
 
-        if (preg_match('/(?:web0S|webOS)[ \/]?([0-9.]+)?/i', $userAgent, $matches) === 1) {
-            return new OperatingSystem('WOS', 'webOS', isset($matches[1]) && $matches[1] !== '' ? self::version($matches[1]) : null);
+        if (stripos($userAgent, 'web0S') !== false || stripos($userAgent, 'webOS') !== false) {
+            $version = null;
+            if (preg_match('/(?:web0S|webOS)[ \/]([0-9.]+)/i', $userAgent, $matches) === 1) {
+                $version = self::version($matches[1]);
+            }
+
+            return new OperatingSystem('WOS', 'webOS', $version);
         }
 
         if (stripos($userAgent, 'Sailfish') !== false) {
@@ -124,7 +129,7 @@ final class OperatingSystemDetector
         }
 
         $distro = self::linuxDistro($userAgent);
-        if ($distro !== null) {
+        if ($distro instanceof OperatingSystem) {
             return $distro;
         }
 

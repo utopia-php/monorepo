@@ -201,7 +201,6 @@ final class DeviceDetector
             'ZTE' => '/(?:\bZTE\b)/i',
             'TCL' => '/(?:\bTCL\b)/i',
             'Meizu' => '/(?:Meizu)/i',
-            'Nothing' => '/(?:Nothing)/i',
             'Fairphone' => '/(?:Fairphone|\bFP[0-9]\b)/i',
             'Alcatel' => '/(?:Alcatel)/i',
             'LG' => '/(?:\bLG[- ]|\bLM-[A-Z0-9]+)/i',

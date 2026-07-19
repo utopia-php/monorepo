@@ -42,7 +42,6 @@ final class BotDetector
         'linkedinbot' => ['LinkedInBot', 'social preview'],
         'slackbot' => ['Slackbot', 'social preview'],
         'discordbot' => ['Discordbot', 'social preview'],
-        'whatsapp' => ['WhatsApp', 'social preview'],
         'telegrambot' => ['TelegramBot', 'social preview'],
         'pinterestbot' => ['Pinterestbot', 'social preview'],
         'pinterest/0.' => ['Pinterest', 'social preview'],
