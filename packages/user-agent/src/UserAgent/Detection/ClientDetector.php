@@ -19,6 +19,7 @@ final class ClientDetector
             ?? self::samsung($userAgent)
             ?? self::chromeIos($userAgent)
             ?? self::firefoxIos($userAgent)
+            ?? self::derivative($userAgent)
             ?? self::androidWebView($userAgent)
             ?? self::chrome($userAgent)
             ?? self::firefox($userAgent)
@@ -27,6 +28,62 @@ final class ClientDetector
             ?? self::library($userAgent);
 
         return $client ?? new Client();
+    }
+
+    /**
+     * Chromium-based browsers that ship their own token. These must resolve
+     * before the generic Chrome and Android WebView rules, because their
+     * user-agent strings also carry a `Chrome/` token (and sometimes the
+     * `Version/4.0` WebView marker). The rendering engine is Blink and its
+     * version follows the embedded Chrome token.
+     */
+    private static function derivative(string $userAgent): ?Client
+    {
+        /** @var array<string, array{string, string}> $blink */
+        $blink = [
+            '/coc_coc_browser\/([0-9.]+)/i' => ['CC', 'Coc Coc'],
+            '/Vivaldi\/([0-9.]+)/i' => ['VI', 'Vivaldi'],
+            '/YaBrowser\/([0-9.]+)/i' => ['YA', 'Yandex Browser'],
+            '/Brave\/([0-9.]+)/i' => ['BR', 'Brave'],
+            '/Whale\/([0-9.]+)/i' => ['WH', 'Whale Browser'],
+            '/UCBrowser\/([0-9.]+)/i' => ['UC', 'UC Browser'],
+            '/(?:MQQBrowser|QQBrowser)\/([0-9.]+)/i' => ['QQ', 'QQ Browser'],
+            '/DuckDuckGo\/([0-9.]+)/i' => ['DD', 'DuckDuckGo Privacy Browser'],
+            '/Silk\/([0-9.]+)/i' => ['MS', 'Mobile Silk'],
+        ];
+
+        foreach ($blink as $pattern => [$code, $name]) {
+            if (preg_match($pattern, $userAgent, $matches) === 1) {
+                return self::blink($userAgent, $code, $name, $matches[1]);
+            }
+        }
+
+        // Firefox Focus reports as Blink only when it embeds a Chrome token.
+        if (preg_match('/Focus\/([0-9.]+)/i', $userAgent, $matches) === 1
+            && self::tokenVersion($userAgent, 'Chrome') !== null) {
+            return self::blink($userAgent, 'FK', 'Firefox Focus', $matches[1]);
+        }
+
+        // Huawei Browser distinguishes its mobile build by name.
+        if (preg_match('/HuaweiBrowser\/([0-9.]+)/i', $userAgent, $matches) === 1) {
+            $mobile = stripos($userAgent, 'Mobile') !== false;
+
+            return self::blink(
+                $userAgent,
+                $mobile ? 'HU' : 'HP',
+                $mobile ? 'Huawei Browser Mobile' : 'Huawei Browser',
+                $matches[1],
+            );
+        }
+
+        return null;
+    }
+
+    private static function blink(string $userAgent, string $code, string $name, string $version): Client
+    {
+        $engineVersion = self::tokenVersion($userAgent, 'Chrome') ?? self::version($version);
+
+        return new Client('browser', $code, $name, self::displayVersion($version), 'Blink', $engineVersion);
     }
 
     private static function edge(string $userAgent): ?Client
@@ -58,8 +115,16 @@ final class ClientDetector
         }
 
         $engineVersion = self::tokenVersion($userAgent, 'Chrome') ?? self::version($matches[1]);
+        $mobile = stripos($userAgent, 'Mobile') !== false || stripos($userAgent, 'Opera Mobi') !== false;
 
-        return new Client('browser', 'OP', 'Opera', self::displayVersion($matches[1]), 'Blink', $engineVersion);
+        return new Client(
+            'browser',
+            $mobile ? 'OM' : 'OP',
+            $mobile ? 'Opera Mobile' : 'Opera',
+            self::displayVersion($matches[1]),
+            'Blink',
+            $engineVersion,
+        );
     }
 
     private static function samsung(string $userAgent): ?Client
@@ -205,6 +270,16 @@ final class ClientDetector
             '/Dart\/([0-9.]+)/i' => 'Dart',
             '/GuzzleHttp\/([0-9.]+)/i' => 'Guzzle',
             '/python-requests\/([0-9.]+)/i' => 'Python Requests',
+            '/Python-urllib\/?([0-9.]*)/i' => 'Python urllib',
+            '/aiohttp\/([0-9.]+)/i' => 'aiohttp',
+            '/Go-http-client\/([0-9.]+)/i' => 'Go-http-client',
+            '/node-fetch\/([0-9.]+)/i' => 'Node Fetch',
+            '/axios\/([0-9.]+)/i' => 'Axios',
+            '/HTTPie\/([0-9.]+)/i' => 'HTTPie',
+            '/Apache-HttpClient\/([0-9.]+)/i' => 'Apache HTTP Client',
+            '/Java-http-client\/([0-9.]+)/i' => 'Java HTTP Client',
+            '/Java\/([0-9._]+)/i' => 'Java',
+            '/got\/([0-9.]+)/i' => 'got',
         ];
 
         foreach ($libraries as $pattern => $name) {

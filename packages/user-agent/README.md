@@ -111,16 +111,23 @@ $data = $agent->toArray();
 
 ## Detection coverage
 
-The initial rule set covers common user agents:
+The rule set covers common user agents:
 
-- Windows, Windows Phone, macOS, iOS, Android, Chrome OS, Linux, Ubuntu,
-  Tizen, and KaiOS
-- Chrome, Safari, Firefox, Edge, Opera, Samsung Internet, Android WebView,
-  Internet Explorer, and their common mobile variants
-- Common HTTP libraries
+- Windows, Windows Phone, macOS, iOS, iPadOS, tvOS, watchOS, Android,
+  Fire OS, Chrome OS, HarmonyOS, webOS, Sailfish, Tizen, KaiOS, BlackBerry,
+  PlayStation, Nintendo, and popular Linux distributions (Ubuntu, Debian,
+  Fedora, Arch Linux, Mint, and more)
+- Chrome, Safari, Firefox, Edge, Opera, Opera Mobile, Samsung Internet,
+  Brave, Vivaldi, Yandex Browser, UC Browser, DuckDuckGo, QQ Browser,
+  Coc Coc, Whale, Huawei Browser, Amazon Silk, Firefox Focus, Android
+  WebView, Internet Explorer, and their common mobile variants
+- Common HTTP libraries (curl, Wget, OkHttp, Guzzle, Python Requests,
+  aiohttp, Go-http-client, Node Fetch, Axios, Java, HTTPie, and more)
 - Desktop, smartphone, tablet, TV, console, wearable, and portable-media
-  device classes with common mobile brands and models
+  device classes with common device brands and models
 - Search, social-preview, monitoring, automation, SEO, and AI crawlers
+  (including GPTBot, ClaudeBot, PerplexityBot, Google Extended, and other
+  large-language-model agents)
 
 Core result fields are regression-tested against Matomo DeviceDetector 6.4 for
 representative profiles. The runtime does not contain or load Matomo's LGPL

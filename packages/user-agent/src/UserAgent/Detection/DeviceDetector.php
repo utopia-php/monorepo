@@ -49,11 +49,25 @@ final class DeviceDetector
             return new Device('tv', 'Apple', 'Apple TV');
         }
 
-        if (preg_match('/(?:Smart-?TV|SMARTTV|HbbTV|GoogleTV|Android TV|BRAVIA|NetCast|Tizen TV|webOS)/i', $userAgent) === 1) {
-            return new Device('tv', self::brand($userAgent));
+        if (preg_match('/(?:Smart-?TV|SMARTTV|HbbTV|GoogleTV|Android TV|BRAVIA|NetCast|Tizen TV|web0S|webOS)/i', $userAgent) === 1) {
+            return new Device('tv', self::televisionBrand($userAgent));
         }
 
         return null;
+    }
+
+    private static function televisionBrand(string $userAgent): ?string
+    {
+        // LG smart TVs run webOS/NetCast; Samsung TVs report Tizen.
+        if (preg_match('/(?:web0S|webOS|NetCast|\bLG\b)/i', $userAgent) === 1) {
+            return 'LG';
+        }
+
+        if (preg_match('/(?:Tizen|BRAVIA)/i', $userAgent) === 1) {
+            return preg_match('/BRAVIA/i', $userAgent) === 1 ? 'Sony' : 'Samsung';
+        }
+
+        return self::brand($userAgent);
     }
 
     private static function apple(string $userAgent): ?Device
@@ -171,13 +185,25 @@ final class DeviceDetector
             'Google' => '/(?:\bPixel\b|Nexus)/i',
             'Huawei' => '/(?:Huawei|\bHUAWEI\b|\bANE-|\bELE-|\bVOG-)/i',
             'Honor' => '/(?:Honor|\bHLK-|\bBKL-)/i',
-            'Xiaomi' => '/(?:Xiaomi|Redmi|\bMi [A-Z0-9])/i',
+            'Xiaomi' => '/(?:Xiaomi|Redmi|POCO|\bMi [A-Z0-9])/i',
             'OnePlus' => '/(?:OnePlus|\bONEPLUS\b)/i',
             'Oppo' => '/(?:\bOPPO\b|\bCPH[0-9]+)/i',
+            'Realme' => '/(?:realme|\bRMX[0-9]{4}\b)/i',
             'Vivo' => '/(?:\bvivo\b|\bV[0-9]{4})/i',
             'Motorola' => '/(?:Motorola|\bmoto\b|\bXT[0-9]{4})/i',
+            'Asus' => '/(?:\bASUS)/i',
+            'Tecno' => '/(?:\bTECNO\b)/i',
+            'Infinix' => '/(?:Infinix)/i',
             'Nokia' => '/Nokia/i',
             'Sony' => '/(?:Sony|Xperia)/i',
+            'HTC' => '/(?:\bHTC\b)/i',
+            'Lenovo' => '/(?:Lenovo|\bLenovo )/i',
+            'ZTE' => '/(?:\bZTE\b)/i',
+            'TCL' => '/(?:\bTCL\b)/i',
+            'Meizu' => '/(?:Meizu)/i',
+            'Nothing' => '/(?:Nothing)/i',
+            'Fairphone' => '/(?:Fairphone|\bFP[0-9]\b)/i',
+            'Alcatel' => '/(?:Alcatel)/i',
             'LG' => '/(?:\bLG[- ]|\bLM-[A-Z0-9]+)/i',
             'Amazon' => '/(?:Kindle|Silk\/|\bKF[A-Z0-9]+)/i',
         ];
