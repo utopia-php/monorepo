@@ -49,7 +49,7 @@ class FileType extends Validator
     {
         foreach ($allowed as $key) {
             if (! isset($this->types[$key])) {
-                throw new Exception('Unknown file mime type');
+                throw new \InvalidArgumentException('Unknown file mime type');
             }
         }
 

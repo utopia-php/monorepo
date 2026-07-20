@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Utopia\Storage;
 
-use Exception;
+use Utopia\Storage\Exception\StorageException;
+use Utopia\Storage\Exception\UploadException;
 
 /**
  * @phpstan-type UploadMetadata array{parts?: array<int, bool|string>, chunks?: int, content_type?: string, uploadId?: string}
@@ -44,7 +45,7 @@ abstract class Device
      *
      * @param  UploadMetadata  $metadata
      *
-     * @throws Exception
+     * @throws StorageException
      */
     abstract public function prepareUpload(string $path, string $contentType, int $chunks = 1, array &$metadata = []): void;
 
@@ -56,7 +57,7 @@ abstract class Device
      *
      * @param  UploadMetadata  $metadata
      *
-     * @throws Exception
+     * @throws StorageException
      */
     abstract public function uploadChunk(string $data, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int;
 
@@ -67,7 +68,7 @@ abstract class Device
      *
      * @param  UploadMetadata  $metadata
      *
-     * @throws Exception
+     * @throws StorageException
      */
     abstract public function finalizeUpload(string $path, int $chunks = 1, array &$metadata = []): bool;
 
@@ -79,7 +80,7 @@ abstract class Device
      *
      * @param  UploadMetadata  $metadata
      *
-     * @throws Exception
+     * @throws StorageException
      */
     public function uploadData(string $data, string $path, string $contentType, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
     {
@@ -87,7 +88,7 @@ abstract class Device
         $chunksReceived = $this->uploadChunk($data, $path, $chunk, $chunks, $metadata);
 
         if ($chunks > 1 && $chunks === $chunksReceived && ! $this->finalizeUpload($path, $chunks, $metadata)) {
-            throw new Exception('Failed to finalize upload ' . $path);
+            throw new UploadException('Failed to finalize upload ' . $path);
         }
 
         return $chunksReceived;

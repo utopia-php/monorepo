@@ -7,6 +7,7 @@ namespace Utopia\Tests\Storage\Device;
 use PHPUnit\Framework\TestCase;
 use Utopia\Storage\Device\Local;
 use Utopia\Storage\Exception\NotFoundException;
+use Utopia\Storage\Exception\UploadException;
 
 final class LocalTest extends TestCase
 {
@@ -150,6 +151,12 @@ final class LocalTest extends TestCase
         $this->object->delete($directory, true);
     }
 
+    public function testStatOnMissingFileThrowsNotFound(): void
+    {
+        $this->expectException(NotFoundException::class);
+        $this->object->getFileSize($this->object->getPath('does-not-exist.txt'));
+    }
+
     public function testMoveIdenticalName(): void
     {
         $file = '/kitten-1.jpg';
@@ -272,7 +279,7 @@ final class LocalTest extends TestCase
         try {
             $this->object->finalizeUpload($dest, 2, $metadata);
             $this->fail('Expected missing chunk exception');
-        } catch (\Exception $e) {
+        } catch (UploadException $e) {
             $this->assertSame('Missing chunk 2', $e->getMessage());
         } finally {
             $this->object->abort($dest);

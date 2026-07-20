@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Utopia\Storage\Device;
 
-use Exception;
 use Utopia\Storage\Device;
 use Utopia\Storage\DeviceType;
 use Utopia\Storage\Exception\NotFoundException;
+use Utopia\Storage\Exception\StorageException;
+use Utopia\Storage\Exception\UploadException;
 use Utopia\Storage\FileInfo;
 use Utopia\Storage\FileList;
 
@@ -56,7 +57,7 @@ class Local extends Device
 
         if ($chunks === 1) {
             if (file_put_contents($path, $data) === false) {
-                throw new Exception('Can\'t write file ' . $path);
+                throw new StorageException('Can\'t write file ' . $path);
             }
 
             $metadata['parts'][$chunk] = true;
@@ -72,7 +73,7 @@ class Local extends Device
 
         // skip writing chunk if the chunk was re-uploaded
         if (!file_exists($chunkFilePath) && file_put_contents($chunkFilePath, $data) === false) {
-            throw new Exception('Failed to write chunk ' . $chunk);
+            throw new StorageException('Failed to write chunk ' . $chunk);
         }
 
         $chunksReceived = $this->countChunks($tmp, $path);
@@ -96,7 +97,7 @@ class Local extends Device
         for ($i = 1; $i <= $chunks; ++$i) {
             $part = $tmp . DIRECTORY_SEPARATOR . pathinfo($path, PATHINFO_FILENAME) . '.part.' . $i;
             if (! file_exists($part)) {
-                throw new Exception('Missing chunk ' . $i);
+                throw new UploadException('Missing chunk ' . $i);
             }
         }
 
@@ -135,7 +136,7 @@ class Local extends Device
 
         $dest = fopen($tmpAssemble, 'wb');
         if ($dest === false) {
-            throw new Exception('Failed to open temporary assembly file ' . $tmpAssemble);
+            throw new StorageException('Failed to open temporary assembly file ' . $tmpAssemble);
         }
 
         $partsToUnlink = [];
@@ -145,14 +146,14 @@ class Local extends Device
             if ($src === false) {
                 fclose($dest);
                 unlink($tmpAssemble);
-                throw new Exception('Failed to open chunk ' . $part);
+                throw new StorageException('Failed to open chunk ' . $part);
             }
 
             if (stream_copy_to_stream($src, $dest) === false) {
                 fclose($src);
                 fclose($dest);
                 unlink($tmpAssemble);
-                throw new Exception('Failed to copy chunk ' . $part);
+                throw new StorageException('Failed to copy chunk ' . $part);
             }
             fclose($src);
             $partsToUnlink[] = $part;
@@ -167,7 +168,7 @@ class Local extends Device
                 return;
             }
             unlink($tmpAssemble);
-            throw new Exception('Failed to finalize assembled file ' . $path);
+            throw new StorageException('Failed to finalize assembled file ' . $path);
         }
 
         foreach ($partsToUnlink as $part) {
@@ -187,11 +188,11 @@ class Local extends Device
     public function transfer(string $path, string $destination, Device $device, int $chunkSize = self::TRANSFER_CHUNK_SIZE): bool
     {
         if ($chunkSize <= 0) {
-            throw new Exception('Chunk size must be greater than zero');
+            throw new \InvalidArgumentException('Chunk size must be greater than zero');
         }
 
         if (! $this->exists($path)) {
-            throw new Exception('File Not Found');
+            throw new NotFoundException('File not found');
         }
         $size = $this->getFileSize($path);
         $contentType = $this->getFileMimeType($path);
@@ -225,7 +226,7 @@ class Local extends Device
         $tmp = \dirname($path) . DIRECTORY_SEPARATOR . 'tmp_' . basename($path) . DIRECTORY_SEPARATOR;
 
         if (! file_exists(\dirname($tmp))) { // Checks if directory path to file exists
-            throw new Exception('File doesn\'t exist: ' . \dirname($path));
+            throw new NotFoundException('File doesn\'t exist: ' . \dirname($path));
         }
         $files = $this->scanDirectory($tmp);
 
@@ -240,7 +241,7 @@ class Local extends Device
      * Read file by given path.
      *
      *
-     * @throws Exception
+     * @throws StorageException
      */
     public function read(string $path, int $offset = 0, ?int $length = null): string
     {
@@ -250,7 +251,7 @@ class Local extends Device
 
         $contents = file_get_contents($path, use_include_path: false, offset: $offset, length: $length);
         if ($contents === false) {
-            throw new Exception('Failed to read file ' . $path);
+            throw new StorageException('Failed to read file ' . $path);
         }
 
         return $contents;
@@ -263,7 +264,7 @@ class Local extends Device
     {
         // Checks if directory path to file exists
         if (!file_exists(\dirname($path)) && ! @mkdir(\dirname($path), 0755, true)) {
-            throw new Exception('Can\'t create directory ' . \dirname($path));
+            throw new StorageException('Can\'t create directory ' . \dirname($path));
         }
 
         return (bool) file_put_contents($path, $data);
@@ -274,7 +275,7 @@ class Local extends Device
      *
      * @see http://php.net/manual/en/function.filesize.php
      *
-     * @throws Exception
+     * @throws StorageException
      */
     #[\Override]
     public function move(string $source, string $target): bool
@@ -285,7 +286,7 @@ class Local extends Device
 
         // Checks if directory path to file exists
         if (!file_exists(\dirname($target)) && ! @mkdir(\dirname($target), 0755, true)) {
-            throw new Exception('Can\'t create directory ' . \dirname($target));
+            throw new StorageException('Can\'t create directory ' . \dirname($target));
         }
         return rename($source, $target);
     }
@@ -365,9 +366,9 @@ class Local extends Device
      */
     public function getFileSize(string $path): int
     {
-        $size = filesize($path);
+        $size = $this->exists($path) ? filesize($path) : false;
         if ($size === false) {
-            throw new Exception('Failed to get size of file ' . $path);
+            throw $this->exists($path) ? new StorageException('Failed to get size of file ' . $path) : new NotFoundException('File not found: ' . $path);
         }
 
         return $size;
@@ -380,9 +381,9 @@ class Local extends Device
      */
     public function getFileMimeType(string $path): string
     {
-        $mimeType = mime_content_type($path);
+        $mimeType = $this->exists($path) ? mime_content_type($path) : false;
         if ($mimeType === false) {
-            throw new Exception('Failed to get mime type of file ' . $path);
+            throw $this->exists($path) ? new StorageException('Failed to get mime type of file ' . $path) : new NotFoundException('File not found: ' . $path);
         }
 
         return $mimeType;
@@ -395,9 +396,9 @@ class Local extends Device
      */
     public function getFileHash(string $path): string
     {
-        $hash = md5_file($path);
+        $hash = $this->exists($path) ? md5_file($path) : false;
         if ($hash === false) {
-            throw new Exception('Failed to hash file ' . $path);
+            throw $this->exists($path) ? new StorageException('Failed to hash file ' . $path) : new NotFoundException('File not found: ' . $path);
         }
 
         return $hash;

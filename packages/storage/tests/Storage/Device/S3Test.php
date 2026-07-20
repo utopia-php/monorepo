@@ -9,13 +9,20 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Utopia\Client\Adapter;
 use Utopia\Client\Decorator\Retry;
+use Utopia\Client\Exception\NetworkException;
 use Utopia\Client\Tls;
+use Utopia\Psr7\Request;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
+use Utopia\Psr7\Uri;
 use Utopia\Storage\Device\S3;
 use Utopia\Storage\Device\S3\Response as S3Response;
 use Utopia\Storage\Device\S3\RetryStrategy;
 use Utopia\Storage\Exception\NotFoundException;
+use Utopia\Storage\Exception\RemoteException;
+use Utopia\Storage\Exception\StorageException;
+use Utopia\Storage\Exception\TransportException;
+use Utopia\Storage\Exception\UploadException;
 
 /**
  * Testable S3 subclass that exposes protected helpers.
@@ -89,7 +96,7 @@ final class ScriptedClient implements Adapter
     public array $requests = [];
 
     /**
-     * @param  array<ResponseInterface>  $responses
+     * @param  array<ResponseInterface|\Psr\Http\Client\ClientExceptionInterface>  $responses
      */
     public function __construct(private array $responses) {}
 
@@ -97,6 +104,9 @@ final class ScriptedClient implements Adapter
     {
         $this->requests[] = $request;
         $response = array_shift($this->responses);
+        if ($response instanceof \Psr\Http\Client\ClientExceptionInterface) {
+            throw $response;
+        }
         if (! $response instanceof ResponseInterface) {
             throw new \RuntimeException('No scripted response left for ' . $request->getMethod() . ' ' . $request->getUri());
         }
@@ -205,7 +215,7 @@ final class S3Test extends TestCase
             'chunks' => 1,
         ];
 
-        $this->expectException(\Exception::class);
+        $this->expectException(UploadException::class);
         $this->expectExceptionMessage('Missing chunk 2');
         $this->s3->finalizeUpload('/root/file.txt', 2, $metadata);
     }
@@ -308,8 +318,9 @@ final class S3Test extends TestCase
         try {
             $this->device($client)->write('/root/file.txt', 'Hello World', 'text/plain');
             self::fail('Expected exception after exhausting retries');
-        } catch (\Exception $e) {
+        } catch (RemoteException $e) {
             $this->assertSame(503, $e->getCode());
+            $this->assertSame('SlowDown', $e->errorCode);
         }
 
         // Initial attempt plus the default three retries.
@@ -323,6 +334,43 @@ final class S3Test extends TestCase
 
         $this->expectException(NotFoundException::class);
         $this->device($client)->read('/root/missing.txt');
+    }
+
+    public function testHeadNotFoundHasNoBodyButThrowsNotFound(): void
+    {
+        // HEAD error responses carry no body, so the 404 status is the only signal.
+        $client = new ScriptedClient([new Response(404)]);
+
+        $this->expectException(NotFoundException::class);
+        $this->device($client)->getFileSize('/root/missing.txt');
+    }
+
+    public function testTransportFailureIsWrapped(): void
+    {
+        $psrError = new NetworkException(new Request('PUT', Uri::parse('https://s3.example.com/root')), 'Connection reset');
+        $client = new ScriptedClient([$psrError]);
+
+        try {
+            $this->device($client)->write('/root/file.txt', 'Hello World', 'text/plain');
+            self::fail('Expected transport exception');
+        } catch (TransportException $e) {
+            $this->assertSame($psrError, $e->getPrevious());
+        }
+    }
+
+    public function testEveryFailureIsCatchableAsStorageException(): void
+    {
+        $body = '<?xml version="1.0" encoding="UTF-8"?><Error><Code>AccessDenied</Code><Message>Access denied.</Message></Error>';
+        $client = new ScriptedClient([new Response(403, body: new Stream($body))]);
+
+        try {
+            $this->device($client)->read('/root/file.txt');
+            self::fail('Expected storage exception');
+        } catch (StorageException $e) {
+            $this->assertInstanceOf(RemoteException::class, $e);
+            $this->assertSame('Access denied.', $e->getMessage());
+            $this->assertSame(403, $e->getCode());
+        }
     }
 
     public function testXmlListingIsDecodedIntoTypedFiles(): void

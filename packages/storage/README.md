@@ -260,6 +260,35 @@ $device = new S3('root', 'ACCESS_KEY', 'SECRET_KEY', 'HOST', 'us-east-1', client
 
 Omit the `Retry` decorator to disable retries entirely, or pass any `Utopia\Client\Decorator\Retry\Strategy` of your own.
 
+## Error handling
+
+Every runtime failure throws a subclass of `Utopia\Storage\Exception\StorageException`, so one catch covers any storage problem. Match more precisely when you need to branch:
+
+```php
+use Utopia\Storage\Exception\NotFoundException;
+use Utopia\Storage\Exception\RemoteException;
+use Utopia\Storage\Exception\StorageException;
+use Utopia\Storage\Exception\TransportException;
+use Utopia\Storage\Exception\UploadException;
+
+try {
+    $contents = $device->read('remote/path/file.jpg');
+} catch (NotFoundException) {
+    // The file does not exist
+} catch (TransportException $e) {
+    // The request never reached the service; $e->getPrevious() is the PSR-18 exception
+} catch (RemoteException $e) {
+    // The service answered with an error: $e->getCode() is the HTTP status,
+    // $e->errorCode the service's own error identifier (for example `SlowDown`)
+} catch (UploadException) {
+    // A chunked upload is in an invalid state (missing chunk, never prepared)
+} catch (StorageException $e) {
+    // Anything else, such as a local filesystem failure
+}
+```
+
+Invalid arguments (a non-positive chunk size, a page size above the adapter limit) throw SPL `\InvalidArgumentException` — these are programmer errors, not storage failures.
+
 ## Telemetry
 
 Wrap any device with the `Telemetry` decorator to record a `storage.operation` histogram for every call through a [utopia-php/telemetry](https://github.com/utopia-php/telemetry) adapter:
@@ -284,6 +313,7 @@ Version 3.0 makes every device immutable and safe to share across coroutines, an
 - Uploads are data-based: `upload($sourcePath, ...)` was removed — read the file yourself and call `uploadData($data, ...)` — and `uploadChunk()` now takes the chunk contents instead of a source file path.
 - Filesystem-only methods (`createDirectory()`, `getDirectorySize()`, `getPartitionFreeSpace()`, `getPartitionTotalSpace()`) left the base `Device` contract and remain on `Local`; wrap devices in the `Telemetry` decorator and use its `getDevice()` accessor when you need them. `getFiles()` — which returned path strings on `Local` but a raw `ListObjectsV2` array on `S3` — is replaced by `listFiles(prefix, max, cursor)` returning typed `FileList`/`FileInfo` value objects consistently on every adapter.
 - `getName()` and `getDescription()` were removed; use `getType()` to identify an adapter.
+- Exceptions are typed: every runtime failure extends `Utopia\Storage\Exception\StorageException` (`NotFoundException`, `TransportException`, `RemoteException`, `UploadException`) instead of bare `\Exception`, and missing files throw `NotFoundException` consistently on every adapter and method — including S3 HEAD responses, which previously surfaced as a generic error with an empty message. Existing `catch (\Exception)` blocks keep working.
 
 ## Adding new adapters
 

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Utopia\Storage\Device;
 
-use Exception;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
@@ -18,6 +17,10 @@ use Utopia\Storage\Acl;
 use Utopia\Storage\Device;
 use Utopia\Storage\DeviceType;
 use Utopia\Storage\Exception\NotFoundException;
+use Utopia\Storage\Exception\RemoteException;
+use Utopia\Storage\Exception\StorageException;
+use Utopia\Storage\Exception\TransportException;
+use Utopia\Storage\Exception\UploadException;
 use Utopia\Storage\FileInfo;
 use Utopia\Storage\FileList;
 
@@ -107,13 +110,13 @@ class S3 extends Device
         }
 
         if (empty($metadata['uploadId'])) {
-            throw new Exception('Missing multipart upload ID');
+            throw new UploadException('Missing multipart upload ID');
         }
 
         $metadata['parts'] ??= [];
         for ($i = 1; $i <= $chunks; ++$i) {
             if (! \array_key_exists($i, $metadata['parts'])) {
-                throw new Exception('Missing chunk ' . $i);
+                throw new UploadException('Missing chunk ' . $i);
             }
         }
 
@@ -138,7 +141,7 @@ class S3 extends Device
         }
 
         if (empty($metadata['uploadId'])) {
-            throw new Exception('Missing multipart upload ID');
+            throw new UploadException('Missing multipart upload ID');
         }
 
         $metadata['parts'] ??= [];
@@ -160,7 +163,7 @@ class S3 extends Device
     public function transfer(string $path, string $destination, Device $device, int $chunkSize = self::TRANSFER_CHUNK_SIZE): bool
     {
         if ($chunkSize <= 0) {
-            throw new Exception('Chunk size must be greater than zero');
+            throw new \InvalidArgumentException('Chunk size must be greater than zero');
         }
 
         $response = [];
@@ -195,7 +198,7 @@ class S3 extends Device
      * Initiate a multipart upload and return an upload ID.
      *
      *
-     * @throws Exception
+     * @throws StorageException
      */
     protected function createMultipartUpload(string $path, string $contentType): string
     {
@@ -212,7 +215,7 @@ class S3 extends Device
 
         $uploadId = \is_array($response->body) ? ($response->body['UploadId'] ?? null) : null;
         if (! \is_string($uploadId)) {
-            throw new Exception('Missing upload ID in S3 response');
+            throw new RemoteException('Missing upload ID in S3 response');
         }
 
         return $uploadId;
@@ -222,7 +225,7 @@ class S3 extends Device
      * Upload Part
      *
      *
-     * @throws Exception
+     * @throws StorageException
      */
     protected function uploadPart(string $data, string $path, string $contentType, int $chunk, string $uploadId): string
     {
@@ -240,7 +243,7 @@ class S3 extends Device
             headers: ['content-type' => $contentType],
         );
 
-        return $response->headers['etag'] ?? throw new Exception('Missing ETag in S3 response');
+        return $response->headers['etag'] ?? throw new RemoteException('Missing ETag in S3 response');
     }
 
     /**
@@ -248,7 +251,7 @@ class S3 extends Device
      *
      * @param  array<int, bool|string>  $parts
      *
-     * @throws Exception
+     * @throws StorageException
      */
     protected function completeMultipartUpload(string $path, string $uploadId, array $parts): bool
     {
@@ -259,7 +262,7 @@ class S3 extends Device
         $body = '<CompleteMultipartUpload>';
         foreach ($parts as $key => $etag) {
             if (! \is_string($etag)) {
-                throw new Exception('Missing ETag for part ' . $key);
+                throw new UploadException('Missing ETag for part ' . $key);
             }
             $body .= "<Part><ETag>{$etag}</ETag><PartNumber>{$key}</PartNumber></Part>";
         }
@@ -280,7 +283,7 @@ class S3 extends Device
      * Abort Chunked Upload
      *
      *
-     * @throws Exception
+     * @throws StorageException
      */
     public function abort(string $path, string $uploadId = ''): bool
     {
@@ -294,7 +297,7 @@ class S3 extends Device
      * Read file or part of file by given path, offset and length.
      *
      *
-     * @throws Exception
+     * @throws StorageException
      */
     public function read(string $path, int $offset = 0, ?int $length = null): string
     {
@@ -308,7 +311,7 @@ class S3 extends Device
         $response = $this->call(Method::GET, $uri, headers: $headers, decode: false);
 
         if (! \is_string($response->body)) {
-            throw new Exception('Unexpected S3 read response');
+            throw new RemoteException('Unexpected S3 read response');
         }
 
         return $response->body;
@@ -318,7 +321,7 @@ class S3 extends Device
      * Write file by given path.
      *
      *
-     * @throws Exception
+     * @throws StorageException
      */
     public function write(string $path, string $data, string $contentType = ''): bool
     {
@@ -340,7 +343,7 @@ class S3 extends Device
      *
      * @see http://php.net/manual/en/function.filesize.php
      *
-     * @throws Exception
+     * @throws StorageException
      */
     public function delete(string $path, bool $recursive = false): bool
     {
@@ -356,12 +359,12 @@ class S3 extends Device
      *
      * @return array<mixed>
      *
-     * @throws Exception
+     * @throws StorageException
      */
     protected function listObjects(string $prefix = '', int $maxKeys = self::MAX_PAGE_SIZE, string $continuationToken = ''): array
     {
         if ($maxKeys > self::MAX_PAGE_SIZE) {
-            throw new Exception('Cannot list more than ' . self::MAX_PAGE_SIZE . ' objects');
+            throw new \InvalidArgumentException('Cannot list more than ' . self::MAX_PAGE_SIZE . ' objects');
         }
 
         $uri = '/';
@@ -380,7 +383,7 @@ class S3 extends Device
         $response = $this->call(Method::GET, $uri, '', $parameters, headers: ['content-type' => 'text/plain']);
 
         if (! \is_array($response->body)) {
-            throw new Exception('Unexpected S3 list response');
+            throw new RemoteException('Unexpected S3 list response');
         }
 
         return $response->body;
@@ -390,7 +393,7 @@ class S3 extends Device
      * Delete files in given path, path must be a directory. Return true on success and false on failure.
      *
      *
-     * @throws Exception
+     * @throws StorageException
      */
     public function deletePath(string $path): bool
     {
@@ -486,7 +489,7 @@ class S3 extends Device
      *
      * The cursor is the S3 continuation token.
      *
-     * @throws Exception
+     * @throws StorageException
      */
     public function listFiles(string $prefix = '', int $max = self::MAX_PAGE_SIZE, ?string $cursor = null): FileList
     {
@@ -528,7 +531,7 @@ class S3 extends Device
      *
      * @return array<string, string>
      *
-     * @throws Exception
+     * @throws StorageException
      */
     private function getInfo(string $path): array
     {
@@ -627,7 +630,7 @@ class S3 extends Device
      * @param  array<string, string>  $headers
      * @param  array<string, string>  $amzHeaders
      *
-     * @throws Exception
+     * @throws StorageException
      */
     protected function call(string $method, string $uri, string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true): S3\Response
     {
@@ -654,7 +657,7 @@ class S3 extends Device
         try {
             $response = $this->client->sendRequest($request);
         } catch (ClientExceptionInterface $e) {
-            throw new Exception($e->getMessage(), $e->getCode(), previous: $e);
+            throw new TransportException($e->getMessage(), $e->getCode(), $e);
         }
 
         $code = $response->getStatusCode();
@@ -684,7 +687,7 @@ class S3 extends Device
      *
      * @return array<mixed>
      *
-     * @throws Exception
+     * @throws StorageException
      */
     private function decodeXml(string $body): array
     {
@@ -692,40 +695,39 @@ class S3 extends Device
         $encoded = $xml === false ? false : json_encode($xml);
         $decoded = $encoded === false ? null : json_decode($encoded, true);
         if (! \is_array($decoded)) {
-            throw new Exception('Failed to decode S3 XML response');
+            throw new RemoteException('Failed to decode S3 XML response');
         }
 
         return $decoded;
     }
 
     /**
-     * Parse S3 XML error response and throw appropriate exception
+     * Parse an S3 error response and throw the matching exception.
      *
      * @param  string  $errorBody  The error response body
      * @param  int  $statusCode  The HTTP status code
      *
-     * @throws NotFoundException When the error is NoSuchKey
-     * @throws Exception For other S3 errors
+     * @throws NotFoundException When the object does not exist (404, or a NoSuchKey error code)
+     * @throws RemoteException For every other error response
      */
-    private function parseAndThrowS3Error(string $errorBody, int $statusCode): void
+    private function parseAndThrowS3Error(string $errorBody, int $statusCode): never
     {
-        if (str_starts_with($errorBody, '<?xml')) {
-            try {
-                $xml = simplexml_load_string($errorBody);
-                $errorCode = (string) ($xml->Code ?? '');
-                $errorMessage = (string) ($xml->Message ?? '');
-
-                if ($errorCode === 'NoSuchKey') {
-                    throw new NotFoundException($errorMessage ?: 'File not found', $statusCode);
-                }
-            } catch (NotFoundException $e) {
-                throw $e;
-            } catch (\Throwable) {
-                // If XML parsing fails, fall through to original error
+        $errorCode = null;
+        $errorMessage = null;
+        if (str_starts_with(ltrim($errorBody), '<?xml') || str_starts_with(ltrim($errorBody), '<Error')) {
+            $xml = @simplexml_load_string($errorBody);
+            if ($xml !== false) {
+                $errorCode = (string) ($xml->Code ?? '') ?: null;
+                $errorMessage = (string) ($xml->Message ?? '') ?: null;
             }
         }
 
-        throw new Exception($errorBody, $statusCode);
+        // HEAD error responses carry no body, so the status code is the only signal.
+        if ($statusCode === 404 || $errorCode === 'NoSuchKey') {
+            throw new NotFoundException($errorMessage ?? 'File not found', $statusCode);
+        }
+
+        throw new RemoteException($errorMessage ?? ($errorBody !== '' ? $errorBody : 'S3 request failed'), $statusCode, $errorCode);
     }
 
     /**
