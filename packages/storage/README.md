@@ -215,6 +215,15 @@ $device->prepareUpload('remote/video.mp4', 'video/mp4', 3, $metadata);
 $device->uploadChunk($secondChunk, 'remote/video.mp4', 2, 3, $metadata);
 $device->finalizeUpload('remote/video.mp4', 3, $metadata);
 
+// List files under a prefix, one page at a time
+$list = $device->listFiles('remote/directory', 100);
+foreach ($list->files as $file) {
+    echo $file->path . ' (' . $file->size . " bytes)\n";
+}
+if ($list->cursor !== null) {
+    $list = $device->listFiles('remote/directory', 100, $list->cursor); // Next page
+}
+
 // Delete file
 $device->delete('remote/path/file.jpg');
 
@@ -273,7 +282,7 @@ Version 3.0 makes every device immutable and safe to share across coroutines, an
 - The S3 adapter no longer stores request headers on the instance, so one device can serve concurrent requests (for example Swoole coroutines) without data races.
 - Requests go through a PSR-18 client instead of raw cURL calls. The default is [utopia-php/client](https://github.com/utopia-php/client) with the cURL adapter; pass the `client` constructor argument to swap the transport.
 - Uploads are data-based: `upload($sourcePath, ...)` was removed — read the file yourself and call `uploadData($data, ...)` — and `uploadChunk()` now takes the chunk contents instead of a source file path.
-- Filesystem-only methods (`createDirectory()`, `getDirectorySize()`, `getPartitionFreeSpace()`, `getPartitionTotalSpace()`, `getFiles()`) left the base `Device` contract; they remain on `Local` (and `getFiles()` on `S3` with its listing shape).
+- Filesystem-only methods (`createDirectory()`, `getDirectorySize()`, `getPartitionFreeSpace()`, `getPartitionTotalSpace()`) left the base `Device` contract and remain on `Local`; wrap devices in the `Telemetry` decorator and use its `getDevice()` accessor when you need them. `getFiles()` — which returned path strings on `Local` but a raw `ListObjectsV2` array on `S3` — is replaced by `listFiles(prefix, max, cursor)` returning typed `FileList`/`FileInfo` value objects consistently on every adapter.
 - `getName()` and `getDescription()` were removed; use `getType()` to identify an adapter.
 
 ## Adding new adapters
