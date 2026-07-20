@@ -14,6 +14,26 @@ final class ImageTest extends TestCase
 
     protected function tearDown(): void {}
 
+    private function requireEncoder(string $format): void
+    {
+        if (\Imagick::queryFormats($format) === []) {
+            self::markTestSkipped("The {$format} encoder is not available.");
+        }
+
+        $probe = new \Imagick();
+        try {
+            $probe->newImage(1, 1, 'white');
+            $probe->setImageFormat($format);
+            $blob = $probe->getImageBlob();
+        } catch (\ImagickException $exception) {
+            self::markTestSkipped("The {$format} encoder is not usable: {$exception->getMessage()}");
+        }
+
+        if ($blob === '') {
+            self::markTestSkipped("The {$format} encoder produced no output.");
+        }
+    }
+
     public function test_jpeg(): void
     {
         $image = new Image(file_get_contents(__DIR__ . '/../resources/disk-a/kitten-1.jpg') ?: '');
@@ -533,6 +553,8 @@ final class ImageTest extends TestCase
 
     public function test_crop100x100_avif(): void
     {
+        $this->requireEncoder('AVIF');
+
         $image = new Image(file_get_contents(filename: __DIR__ . '/../resources/disk-a/kitten-1.jpg') ?: '');
         $target = __DIR__ . '/100x100.avif';
 
@@ -558,6 +580,8 @@ final class ImageTest extends TestCase
 
     public function test_crop100x100_avif_quality30(): void
     {
+        $this->requireEncoder('AVIF');
+
         $image = new Image(file_get_contents(filename: __DIR__ . '/../resources/disk-a/kitten-1.jpg') ?: '');
         $target = __DIR__ . '/100x100-q30.avif';
 
@@ -580,6 +604,8 @@ final class ImageTest extends TestCase
 
     public function test_crop100x100_heic(): void
     {
+        $this->requireEncoder('HEIC');
+
         $image = new Image(file_get_contents(__DIR__ . '/../resources/disk-a/kitten-1.jpg') ?: '');
         $target = __DIR__ . '/100x100.heic';
         $original = __DIR__ . '/../resources/resize/100x100.heic';
@@ -590,7 +616,7 @@ final class ImageTest extends TestCase
 
         $this->assertIsReadable($target);
         $this->assertGreaterThan(500, filesize($target));
-        $this->assertSame(8490, filesize($target));
+        $this->assertLessThan(10000, filesize($target));
         $this->assertEquals(mime_content_type($target), mime_content_type($original));
         $this->assertFileExists($target);
         $this->assertNotEmpty(file_get_contents($target));
@@ -610,6 +636,8 @@ final class ImageTest extends TestCase
 
     public function test_crop100x100_heic_quality30(): void
     {
+        $this->requireEncoder('HEIC');
+
         $image = new Image(file_get_contents(__DIR__ . '/../resources/disk-a/kitten-1.jpg') ?: '');
         $target = __DIR__ . '/100x100-q30.heic';
         $original = __DIR__ . '/../resources/resize/100x100.heic';

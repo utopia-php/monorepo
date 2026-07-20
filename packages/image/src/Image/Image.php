@@ -277,7 +277,12 @@ class Image
         if ($opacity == 1) {
             return $this;
         }
-        $this->image->setImageAlpha($opacity);
+        $this->image->setImageAlphaChannel(Imagick::ALPHACHANNEL_OPAQUE);
+        if ($opacity === 0.0) {
+            $this->image->evaluateImage(Imagick::EVALUATE_SET, 0, Imagick::CHANNEL_ALPHA);
+        } else {
+            $this->image->evaluateImage(Imagick::EVALUATE_DIVIDE, 1 / $opacity, Imagick::CHANNEL_ALPHA);
+        }
 
         return $this;
     }
