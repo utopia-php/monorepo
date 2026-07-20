@@ -118,6 +118,14 @@ final class LocalTest extends TestCase
         $this->object->delete($this->object->getPath('text-for-move-new.txt'));
     }
 
+    public function testTransferRejectsInvalidChunkSize(): void
+    {
+        $device = new Local(realpath(__DIR__ . '/../../resources/disk-b') ?: '');
+
+        $this->expectExceptionMessage('Chunk size must be greater than zero');
+        $this->object->transfer($this->object->getPath('kitten-1.jpg'), $device->getPath('kitten-1.jpg'), $device, 0);
+    }
+
     public function testMoveIdenticalName(): void
     {
         $file = '/kitten-1.jpg';

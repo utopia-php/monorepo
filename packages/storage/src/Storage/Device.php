@@ -110,7 +110,6 @@ abstract class Device
      * Transfer
      * Transfer a file from current device to destination device.
      *
-     * @param  positive-int  $chunkSize
      */
     abstract public function transfer(string $path, string $destination, Device $device, int $chunkSize = self::TRANSFER_CHUNK_SIZE): bool;
 

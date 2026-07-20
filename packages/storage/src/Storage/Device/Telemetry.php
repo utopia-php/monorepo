@@ -110,9 +110,6 @@ class Telemetry extends Device
         return $this->measure(__FUNCTION__, fn(): string => $this->underlying->read($path, $offset, $length));
     }
 
-    /**
-     * @param  positive-int  $chunkSize
-     */
     public function transfer(string $path, string $destination, Device $device, int $chunkSize = self::TRANSFER_CHUNK_SIZE): bool
     {
         return $this->measure(__FUNCTION__, fn(): bool => $this->underlying->transfer($path, $destination, $device, $chunkSize));

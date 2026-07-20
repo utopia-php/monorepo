@@ -184,6 +184,10 @@ class Local extends Device
      */
     public function transfer(string $path, string $destination, Device $device, int $chunkSize = self::TRANSFER_CHUNK_SIZE): bool
     {
+        if ($chunkSize <= 0) {
+            throw new Exception('Chunk size must be greater than zero');
+        }
+
         if (! $this->exists($path)) {
             throw new Exception('File Not Found');
         }

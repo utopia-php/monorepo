@@ -157,6 +157,10 @@ class S3 extends Device
      */
     public function transfer(string $path, string $destination, Device $device, int $chunkSize = self::TRANSFER_CHUNK_SIZE): bool
     {
+        if ($chunkSize <= 0) {
+            throw new Exception('Chunk size must be greater than zero');
+        }
+
         $response = [];
         try {
             $response = $this->getInfo($path);
