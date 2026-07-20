@@ -1,5 +1,8 @@
 # Utopia Image
 
+> [!IMPORTANT]
+> This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Development happens in [`packages/image`](https://github.com/utopia-php/monorepo/tree/main/packages/image) — please open issues and pull requests there.
+
 [![Build Status](https://travis-ci.org/utopia-php/ab.svg?branch=master)](https://travis-ci.com/utopia-php/image)
 ![Total Downloads](https://img.shields.io/packagist/dt/utopia-php/image.svg)
 [![Discord](https://img.shields.io/discord/564160730845151244?label=discord)](https://appwrite.io/discord)
