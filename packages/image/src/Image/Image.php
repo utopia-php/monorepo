@@ -344,6 +344,7 @@ class Image
         // Apply original metadata rotation
         if ($this->rotation !== 0) {
             $this->image->rotateImage('transparent', $this->rotation);
+            $this->rotation = 0;
         }
 
         switch ($type) {
@@ -402,13 +403,11 @@ class Image
                 throw new Exception('Invalid output type given');
         }
 
-        if (\in_array($path, [null, '', '0'], true)) {
+        if ($path === null || $path === '') {
             return $this->image->getImagesBlob();
         }
         $this->image->writeImages($path, true);
 
-        $this->image->clear();
-        $this->image->destroy();
         return null;
     }
 

@@ -34,6 +34,20 @@ final class ImageTest extends TestCase
         }
     }
 
+    private function jpegWithExifOrientation(int $orientation): string
+    {
+        $source = new \Imagick();
+        $source->newImage(20, 10, 'red', 'jpg');
+        $jpeg = $source->getImageBlob();
+
+        $exif = "Exif\0\0II*\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0"
+            . pack('v', $orientation)
+            . "\0\0\0\0\0\0";
+        $segment = "\xff\xe1" . pack('n', \strlen($exif) + 2) . $exif;
+
+        return substr($jpeg, 0, 2) . $segment . substr($jpeg, 2);
+    }
+
     public function test_jpeg(): void
     {
         $image = new Image(file_get_contents(__DIR__ . '/../resources/disk-a/kitten-1.jpg') ?: '');
@@ -529,6 +543,71 @@ final class ImageTest extends TestCase
         $this->assertSame(100, $probe->getImageWidth());
         $this->assertSame(100, $probe->getImageHeight());
         $this->assertContains($probe->getImageFormat(), ['PAM', 'WEBP']);
+    }
+
+    public function test_repeated_output_applies_exif_rotation_once(): void
+    {
+        $image = new Image($this->jpegWithExifOrientation(6));
+
+        $firstBlob = $image->output('png', 100);
+        $secondBlob = $image->output('png', 100);
+        $this->assertIsString($firstBlob);
+        $this->assertIsString($secondBlob);
+
+        $first = new \Imagick();
+        $first->readImageBlob($firstBlob);
+        $second = new \Imagick();
+        $second->readImageBlob($secondBlob);
+
+        $this->assertSame(10, $first->getImageWidth());
+        $this->assertSame(20, $first->getImageHeight());
+        $this->assertSame($first->getImageWidth(), $second->getImageWidth());
+        $this->assertSame($first->getImageHeight(), $second->getImageHeight());
+    }
+
+    public function test_save_preserves_image_for_subsequent_exports(): void
+    {
+        $image = new Image(file_get_contents(__DIR__ . '/../resources/disk-a/kitten-1.jpg') ?: '');
+        $target = __DIR__ . '/reusable.jpg';
+
+        try {
+            $image->save($target, 'jpg', 75);
+            $blob = $image->output('png', 75);
+
+            $this->assertIsString($blob);
+            $this->assertNotEmpty($blob);
+
+            $probe = new \Imagick();
+            $probe->readImageBlob($blob);
+            $this->assertSame('PNG', $probe->getImageFormat());
+        } finally {
+            if (is_file($target)) {
+                unlink($target);
+            }
+        }
+    }
+
+    public function test_save_writes_filename_zero(): void
+    {
+        $cwd = getcwd();
+        $this->assertIsString($cwd);
+        $directory = sys_get_temp_dir() . '/utopia-image-' . bin2hex(random_bytes(8));
+        $this->assertTrue(mkdir($directory));
+        $target = $directory . '/0';
+
+        try {
+            $this->assertTrue(chdir($directory));
+            $image = new Image(file_get_contents(__DIR__ . '/../resources/disk-a/kitten-1.jpg') ?: '');
+            $this->assertNull($image->save('0', 'jpg', 75));
+            $this->assertFileExists($target);
+            $this->assertNotEmpty(file_get_contents($target));
+        } finally {
+            chdir($cwd);
+            if (is_file($target)) {
+                unlink($target);
+            }
+            rmdir($directory);
+        }
     }
 
     public function test_webp_from_webp_input(): void
