@@ -85,6 +85,8 @@ graph TD
     storage --> system
     storage --> telemetry
     storage --> validators
+    storage --> client
+    storage --> psr7
     auth
     circuit-breaker
     nats

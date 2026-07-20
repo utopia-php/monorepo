@@ -5,6 +5,13 @@ declare(strict_types=1);
 namespace Utopia\Storage\Device;
 
 use Exception;
+use Psr\Http\Client\ClientExceptionInterface;
+use Psr\Http\Client\ClientInterface;
+use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
+use Utopia\Client as HttpClient;
+use Utopia\Psr7\Request;
+use Utopia\Psr7\Stream;
+use Utopia\Psr7\Uri;
 use Utopia\Storage\Acl;
 use Utopia\Storage\Device;
 use Utopia\Storage\DeviceType;
@@ -38,14 +45,6 @@ class S3 extends Device
 
     public const METHOD_TRACE = 'TRACE';
 
-    public const HTTP_VERSION_1_1 = CURL_HTTP_VERSION_1_1;
-
-    public const HTTP_VERSION_2_0 = CURL_HTTP_VERSION_2_0;
-
-    public const HTTP_VERSION_2 = CURL_HTTP_VERSION_2;
-
-    public const HTTP_VERSION_1_0 = CURL_HTTP_VERSION_1_0;
-
     protected const MAX_PAGE_SIZE = 1000;
 
     private readonly string $fqdn;
@@ -54,10 +53,13 @@ class S3 extends Device
 
     private readonly Histogram $telemetry;
 
+    private readonly ClientInterface $client;
+
     /**
      * S3 Constructor
      *
      * @param  int  $retryDelay  Delay between retries in milliseconds
+     * @param  ClientInterface|null  $client  PSR-18 client used for every request; defaults to `utopia-php/client` with the cURL adapter and no request timeout
      */
     public function __construct(
         protected readonly string $root,
@@ -67,10 +69,10 @@ class S3 extends Device
         string $host,
         protected readonly string $region,
         protected readonly Acl $acl = Acl::Private,
-        protected readonly ?int $httpVersion = null,
         protected readonly int $retryAttempts = 3,
         protected readonly int $retryDelay = 500,
         Telemetry $telemetry = new NoTelemetry(),
+        ?ClientInterface $client = null,
     ) {
         if (str_starts_with($host, 'http://') || str_starts_with($host, 'https://')) {
             $this->fqdn = $host;
@@ -79,6 +81,8 @@ class S3 extends Device
             $this->fqdn = 'https://' . $host;
             $this->host = $host;
         }
+
+        $this->client = $client ?? new HttpClient(new CurlAdapter())->withTimeout(0.0);
 
         $this->telemetry = Histogram::lazy(
             telemetry: $telemetry,
@@ -756,83 +760,43 @@ class S3 extends Device
         $amzHeaders['x-amz-date'] = gmdate('Ymd\THis\Z');
         $amzHeaders['x-amz-content-sha256'] = hash('sha256', $data);
 
-        $httpHeaders = [];
+        $request = new Request($method, Uri::parse($url), new Stream($data));
         foreach ([...$amzHeaders, ...$headers] as $header => $value) {
-            $httpHeaders[] = $header . ': ' . $value;
+            $request = $request->withHeader($header, $value);
         }
-        $httpHeaders[] = 'Authorization: ' . $this->getSignatureV4($method, $uri, $parameters, $headers, $amzHeaders);
-
-        $responseBody = '';
-        /** @var array<string, string> $responseHeaders */
-        $responseHeaders = [];
-
-        // Basic setup
-        $curl = curl_init();
-        curl_setopt($curl, CURLOPT_USERAGENT, 'utopia-php/storage');
-        curl_setopt($curl, CURLOPT_URL, $url);
-        curl_setopt($curl, CURLOPT_HTTPHEADER, $httpHeaders);
-        curl_setopt($curl, CURLOPT_HEADER, false);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, false);
-
-        if ($this->httpVersion !== null) {
-            curl_setopt($curl, CURLOPT_HTTP_VERSION, $this->httpVersion);
-        }
-
-        curl_setopt($curl, CURLOPT_WRITEFUNCTION, function ($curl, string $data) use (&$responseBody): int {
-            $responseBody .= $data;
-
-            return \strlen($data);
-        });
-        curl_setopt($curl, CURLOPT_HEADERFUNCTION, function ($curl, string $header) use (&$responseHeaders): int {
-            $len = \strlen($header);
-            $header = explode(':', $header, 2);
-
-            if (\count($header) < 2) { // ignore invalid headers
-                return $len;
-            }
-
-            $responseHeaders[strtolower(trim($header[0]))] = trim($header[1]);
-
-            return $len;
-        });
-        curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
-
-        // Request types
-        switch ($method) {
-            case self::METHOD_PUT:
-            case self::METHOD_POST: // POST only used for CloudFront
-                curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
-                break;
-            case self::METHOD_HEAD:
-            case self::METHOD_DELETE:
-                curl_setopt($curl, CURLOPT_NOBODY, true);
-                break;
-        }
-
-        $result = curl_exec($curl);
-        $code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        $request = $request
+            ->withHeader('authorization', $this->getSignatureV4($method, $uri, $parameters, $headers, $amzHeaders))
+            ->withHeader('user-agent', 'utopia-php/storage');
 
         $attempt = 0;
-        while (
-            $attempt < $this->retryAttempts
-            && $this->isTransientError($code, $responseBody)
-        ) {
-            usleep($this->retryDelay * 1000);
-            ++$attempt;
-            $responseBody = '';
-            $responseHeaders = [];
-            $result = curl_exec($curl);
-            $code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        }
-
         try {
-            if (! $result) {
-                throw new Exception(curl_error($curl));
+            while (true) {
+                $request->getBody()->rewind();
+
+                try {
+                    $response = $this->client->sendRequest($request);
+                } catch (ClientExceptionInterface $e) {
+                    throw new Exception($e->getMessage(), $e->getCode(), previous: $e);
+                }
+
+                $code = $response->getStatusCode();
+                $responseBody = (string) $response->getBody();
+
+                if ($attempt >= $this->retryAttempts || ! $this->isTransientError($code, $responseBody)) {
+                    break;
+                }
+
+                usleep($this->retryDelay * 1000);
+                ++$attempt;
             }
 
             if ($code >= 400) {
                 $this->parseAndThrowS3Error($responseBody, $code);
+            }
+
+            $responseHeaders = [];
+            foreach ($response->getHeaders() as $name => $values) {
+                $responseHeaders[strtolower((string) $name)] = implode(', ', $values);
             }
 
             $contentType = $responseHeaders['content-type'] ?? '';

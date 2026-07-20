@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\Storage\Device;
 
+use Psr\Http\Client\ClientInterface;
 use Utopia\Storage\Acl;
 use Utopia\Storage\DeviceType;
 use Utopia\Telemetry\Adapter as Telemetry;
@@ -79,16 +80,16 @@ class AWS extends S3
         string $bucket,
         string $region = self::US_EAST_1,
         Acl $acl = Acl::Private,
-        ?int $httpVersion = null,
         int $retryAttempts = 3,
         int $retryDelay = 500,
         Telemetry $telemetry = new NoTelemetry(),
+        ?ClientInterface $client = null,
     ) {
         $host = match ($region) {
             self::CN_NORTH_1, self::CN_NORTH_4, self::CN_NORTHWEST_1 => $bucket . '.s3.' . $region . '.amazonaws.cn',
             default => $bucket . '.s3.' . $region . '.amazonaws.com'
         };
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $httpVersion, $retryAttempts, $retryDelay, $telemetry);
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $retryAttempts, $retryDelay, $telemetry, $client);
     }
 
     #[\Override]

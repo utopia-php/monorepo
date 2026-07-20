@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\Storage\Device;
 
+use Psr\Http\Client\ClientInterface;
 use Utopia\Storage\Acl;
 use Utopia\Storage\DeviceType;
 use Utopia\Telemetry\Adapter as Telemetry;
@@ -40,13 +41,13 @@ class Backblaze extends S3
         string $bucket,
         string $region = self::US_WEST_004,
         Acl $acl = Acl::Private,
-        ?int $httpVersion = null,
         int $retryAttempts = 3,
         int $retryDelay = 500,
         Telemetry $telemetry = new NoTelemetry(),
+        ?ClientInterface $client = null,
     ) {
         $host = $bucket . '.' . 's3' . '.' . $region . '.backblazeb2.com';
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $httpVersion, $retryAttempts, $retryDelay, $telemetry);
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $retryAttempts, $retryDelay, $telemetry, $client);
     }
 
     #[\Override]
