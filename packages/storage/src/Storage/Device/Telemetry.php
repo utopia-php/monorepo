@@ -10,7 +10,7 @@ use Utopia\Telemetry\Adapter;
 use Utopia\Telemetry\Histogram;
 
 /**
- * Decorator that records a `storage.operation` histogram around every call to the underlying device.
+ * Decorator that records a `storage.operation` histogram around every call to the decorated device.
  *
  * @phpstan-import-type UploadMetadata from Device
  * @see \Utopia\Tests\Storage\Device\TelemetryTest
@@ -19,7 +19,7 @@ class Telemetry extends Device
 {
     private readonly Histogram $telemetry;
 
-    public function __construct(Adapter $telemetry, private readonly Device $underlying)
+    public function __construct(Adapter $telemetry, private readonly Device $device)
     {
         $this->telemetry = Histogram::lazy(
             telemetry: $telemetry,
@@ -34,9 +34,9 @@ class Telemetry extends Device
      * not part of the base contract (for example `Local` partition metrics or
      * the `S3` object listing).
      */
-    public function getUnderlying(): Device
+    public function getDevice(): Device
     {
-        return $this->underlying;
+        return $this->device;
     }
 
     /**
@@ -54,7 +54,7 @@ class Telemetry extends Device
             $this->telemetry->record(
                 microtime(true) - $start,
                 [
-                    'storage' => $this->underlying->getType()->value,
+                    'storage' => $this->device->getType()->value,
                     'operation' => "device:$method",
                 ],
             );
@@ -63,17 +63,17 @@ class Telemetry extends Device
 
     public function getType(): DeviceType
     {
-        return $this->underlying->getType();
+        return $this->device->getType();
     }
 
     public function getRoot(): string
     {
-        return $this->underlying->getRoot();
+        return $this->device->getRoot();
     }
 
     public function getPath(string $filename): string
     {
-        return $this->measure(__FUNCTION__, fn(): string => $this->underlying->getPath($filename));
+        return $this->measure(__FUNCTION__, fn(): string => $this->device->getPath($filename));
     }
 
     /**
@@ -82,7 +82,7 @@ class Telemetry extends Device
     public function prepareUpload(string $path, string $contentType, int $chunks = 1, array &$metadata = []): void
     {
         $this->measure(__FUNCTION__, function () use ($path, $contentType, $chunks, &$metadata): void {
-            $this->underlying->prepareUpload($path, $contentType, $chunks, $metadata);
+            $this->device->prepareUpload($path, $contentType, $chunks, $metadata);
         });
     }
 
@@ -92,7 +92,7 @@ class Telemetry extends Device
     public function uploadChunk(string $data, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
     {
         return $this->measure(__FUNCTION__, function () use ($data, $path, $chunk, $chunks, &$metadata): int {
-            return $this->underlying->uploadChunk($data, $path, $chunk, $chunks, $metadata);
+            return $this->device->uploadChunk($data, $path, $chunk, $chunks, $metadata);
         });
     }
 
@@ -102,13 +102,13 @@ class Telemetry extends Device
     public function finalizeUpload(string $path, int $chunks = 1, array &$metadata = []): bool
     {
         return $this->measure(__FUNCTION__, function () use ($path, $chunks, &$metadata): bool {
-            return $this->underlying->finalizeUpload($path, $chunks, $metadata);
+            return $this->device->finalizeUpload($path, $chunks, $metadata);
         });
     }
 
     public function abort(string $path, string $uploadId = ''): bool
     {
-        return $this->measure(__FUNCTION__, fn(): bool => $this->underlying->abort($path, $uploadId));
+        return $this->measure(__FUNCTION__, fn(): bool => $this->device->abort($path, $uploadId));
     }
 
     /**
@@ -117,46 +117,46 @@ class Telemetry extends Device
      */
     public function read(string $path, int $offset = 0, ?int $length = null): string
     {
-        return $this->measure(__FUNCTION__, fn(): string => $this->underlying->read($path, $offset, $length));
+        return $this->measure(__FUNCTION__, fn(): string => $this->device->read($path, $offset, $length));
     }
 
     public function transfer(string $path, string $destination, Device $device, int $chunkSize = self::TRANSFER_CHUNK_SIZE): bool
     {
-        return $this->measure(__FUNCTION__, fn(): bool => $this->underlying->transfer($path, $destination, $device, $chunkSize));
+        return $this->measure(__FUNCTION__, fn(): bool => $this->device->transfer($path, $destination, $device, $chunkSize));
     }
 
     public function write(string $path, string $data, string $contentType): bool
     {
-        return $this->measure(__FUNCTION__, fn(): bool => $this->underlying->write($path, $data, $contentType));
+        return $this->measure(__FUNCTION__, fn(): bool => $this->device->write($path, $data, $contentType));
     }
 
     public function delete(string $path, bool $recursive = false): bool
     {
-        return $this->measure(__FUNCTION__, fn(): bool => $this->underlying->delete($path, $recursive));
+        return $this->measure(__FUNCTION__, fn(): bool => $this->device->delete($path, $recursive));
     }
 
     public function deletePath(string $path): bool
     {
-        return $this->measure(__FUNCTION__, fn(): bool => $this->underlying->deletePath($path));
+        return $this->measure(__FUNCTION__, fn(): bool => $this->device->deletePath($path));
     }
 
     public function exists(string $path): bool
     {
-        return $this->measure(__FUNCTION__, fn(): bool => $this->underlying->exists($path));
+        return $this->measure(__FUNCTION__, fn(): bool => $this->device->exists($path));
     }
 
     public function getFileSize(string $path): int
     {
-        return $this->measure(__FUNCTION__, fn(): int => $this->underlying->getFileSize($path));
+        return $this->measure(__FUNCTION__, fn(): int => $this->device->getFileSize($path));
     }
 
     public function getFileMimeType(string $path): string
     {
-        return $this->measure(__FUNCTION__, fn(): string => $this->underlying->getFileMimeType($path));
+        return $this->measure(__FUNCTION__, fn(): string => $this->device->getFileMimeType($path));
     }
 
     public function getFileHash(string $path): string
     {
-        return $this->measure(__FUNCTION__, fn(): string => $this->underlying->getFileHash($path));
+        return $this->measure(__FUNCTION__, fn(): string => $this->device->getFileHash($path));
     }
 }
