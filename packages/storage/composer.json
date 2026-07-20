@@ -22,7 +22,8 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Utopia\\Tests\\Storage\\": "tests/Storage"
+            "Utopia\\Tests\\Storage\\": "tests/Storage",
+            "Utopia\\Tests\\Storage\\E2E\\": "tests/E2E"
         }
     },
     "require": {

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Utopia\Tests\Storage;
+namespace Utopia\Tests\Storage\E2E;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Storage\Device\Local;
