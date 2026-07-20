@@ -8,6 +8,8 @@ use Exception;
 use Utopia\Storage\Device;
 use Utopia\Storage\DeviceType;
 use Utopia\Storage\Exception\NotFoundException;
+use Utopia\Storage\FileInfo;
+use Utopia\Storage\FileList;
 
 /**
  * @see \Utopia\Tests\Storage\Device\LocalTest
@@ -225,7 +227,7 @@ class Local extends Device
         if (! file_exists(\dirname($tmp))) { // Checks if directory path to file exists
             throw new Exception('File doesn\'t exist: ' . \dirname($path));
         }
-        $files = $this->getFiles($tmp);
+        $files = $this->scanDirectory($tmp);
 
         foreach ($files as $file) {
             $this->delete($file, true);
@@ -335,7 +337,7 @@ class Local extends Device
             return false;
         }
 
-        $files = $this->getFiles($path);
+        $files = $this->scanDirectory($path);
 
         foreach ($files as $file) {
             if (is_dir($file)) {
@@ -472,11 +474,51 @@ class Local extends Device
     }
 
     /**
-     * Get all files and directories inside a directory.
+     * List all files under the given directory, recursively, sorted by path.
+     *
+     * The cursor is a numeric offset into the sorted listing.
+     */
+    public function listFiles(string $prefix = '', int $max = 1000, ?string $cursor = null): FileList
+    {
+        $paths = [];
+        $pending = [rtrim($prefix, DIRECTORY_SEPARATOR)];
+        while ($pending !== []) {
+            $directory = array_pop($pending);
+            foreach ($this->scanDirectory($directory) as $entry) {
+                if (is_dir($entry)) {
+                    $pending[] = $entry;
+                } else {
+                    $paths[] = $entry;
+                }
+            }
+        }
+        sort($paths);
+
+        $offset = is_numeric($cursor) ? (int) $cursor : 0;
+        $page = \array_slice($paths, $offset, $max);
+
+        $files = [];
+        foreach ($page as $path) {
+            $modified = filemtime($path);
+            $files[] = new FileInfo(
+                path: $path,
+                size: filesize($path) ?: 0,
+                modifiedAt: $modified === false ? null : new \DateTimeImmutable('@' . $modified),
+            );
+        }
+
+        return new FileList(
+            files: $files,
+            cursor: $offset + \count($page) < \count($paths) ? (string) ($offset + \count($page)) : null,
+        );
+    }
+
+    /**
+     * Get all files and directories directly inside a directory, hidden entries included.
      *
      * @return string[]
      */
-    public function getFiles(string $dir): array
+    private function scanDirectory(string $dir): array
     {
         $dir = rtrim($dir, DIRECTORY_SEPARATOR);
         $files = glob($dir . DIRECTORY_SEPARATOR . '*') ?: [];

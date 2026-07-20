@@ -126,6 +126,30 @@ final class LocalTest extends TestCase
         $this->object->transfer($this->object->getPath('kitten-1.jpg'), $device->getPath('kitten-1.jpg'), $device, 0);
     }
 
+    public function testListFiles(): void
+    {
+        $directory = $this->object->getPath('list-files');
+        $this->object->write($directory . '/a.txt', 'aa');
+        $this->object->write($directory . '/nested/b.txt', 'bb');
+        $this->object->write($directory . '/.hidden', 'hh');
+
+        $list = $this->object->listFiles($directory, 2);
+        $this->assertCount(2, $list->files);
+        $this->assertNotNull($list->cursor);
+
+        $rest = $this->object->listFiles($directory, 10, $list->cursor);
+        $this->assertCount(1, $rest->files);
+        $this->assertNull($rest->cursor);
+
+        $paths = array_map(fn(\Utopia\Storage\FileInfo $file): string => $file->path, array_merge($list->files, $rest->files));
+        $this->assertContains($directory . '/a.txt', $paths);
+        $this->assertContains($directory . '/nested/b.txt', $paths);
+        $this->assertContains($directory . '/.hidden', $paths);
+        $this->assertSame(2, $list->files[1]->size);
+
+        $this->object->delete($directory, true);
+    }
+
     public function testMoveIdenticalName(): void
     {
         $file = '/kitten-1.jpg';
@@ -423,20 +447,18 @@ final class LocalTest extends TestCase
         $this->assertEquals(false, $this->object->exists($path3));
     }
 
-    public function testGetFiles(): void
+    public function testListFilesEmptyAndGrowingDirectory(): void
     {
         $dir = $this->object->getPath('get-files-test');
 
         $this->assertTrue($this->object->createDirectory($dir));
 
-        $files = $this->object->getFiles($dir);
-        $this->assertCount(0, $files);
+        $this->assertCount(0, $this->object->listFiles($dir)->files);
 
         $this->object->write($dir . DIRECTORY_SEPARATOR . 'new-file.txt', 'Hello World');
         $this->object->write($dir . DIRECTORY_SEPARATOR . 'new-file-two.txt', 'Hello World');
 
-        $files = $this->object->getFiles($dir);
-        $this->assertCount(2, $files);
+        $this->assertCount(2, $this->object->listFiles($dir)->files);
 
         $this->assertTrue($this->object->deletePath('get-files-test'));
     }

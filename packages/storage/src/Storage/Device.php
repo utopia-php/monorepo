@@ -150,6 +150,13 @@ abstract class Device
     abstract public function exists(string $path): bool;
 
     /**
+     * List files under the given prefix, one page at a time.
+     *
+     * @param  int<1, max>  $max
+     */
+    abstract public function listFiles(string $prefix = '', int $max = 1000, ?string $cursor = null): FileList;
+
+    /**
      * Returns given file path its size.
      */
     abstract public function getFileSize(string $path): int;

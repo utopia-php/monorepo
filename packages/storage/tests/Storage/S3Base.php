@@ -88,48 +88,45 @@ abstract class S3Base extends TestCase
         $this->removeTestFiles();
     }
 
-    public function testGetFiles(): void
+    public function testListFiles(): void
     {
         $path = $this->object->getPath('testing/');
-        $files = $this->object->getFiles($path);
-        $this->assertEquals(4, $files['KeyCount']);
-        $this->assertEquals(false, $files['IsTruncated']);
-        $this->assertIsArray($files['Contents']);
+        $list = $this->object->listFiles($path);
 
-        $file = $files['Contents'][0] ?? null;
-        if (! \is_array($file)) {
-            self::fail('Missing first object in S3 list response');
-        }
+        $this->assertCount(4, $list->files);
+        $this->assertNull($list->cursor);
 
-        $this->assertArrayHasKey('Key', $file);
-        $this->assertArrayHasKey('LastModified', $file);
-        $this->assertArrayHasKey('ETag', $file);
-        $this->assertArrayHasKey('StorageClass', $file);
-        $this->assertArrayHasKey('Size', $file);
+        $file = $list->files[0];
+        $this->assertStringContainsString('testing/kitten', $file->path);
+        $this->assertGreaterThan(0, $file->size);
+        $this->assertInstanceOf(\DateTimeImmutable::class, $file->modifiedAt);
+        $this->assertNotNull($file->etag);
     }
 
-    public function testGetFilesPagination(): void
+    public function testListFilesPagination(): void
     {
         $path = $this->object->getPath('testing/');
 
-        $files = $this->object->getFiles($path, 3);
-        $this->assertEquals(3, $files['KeyCount']);
-        $this->assertEquals(3, $files['MaxKeys']);
-        $this->assertEquals(true, $files['IsTruncated']);
-        $this->assertIsArray($files['Contents']);
-        $this->assertArrayHasKey('NextContinuationToken', $files);
+        $list = $this->object->listFiles($path, 3);
+        $this->assertCount(3, $list->files);
+        $this->assertNotNull($list->cursor);
 
-        $token = $files['NextContinuationToken'] ?? null;
-        if (! \is_string($token)) {
-            self::fail('Missing continuation token in S3 list response');
-        }
+        $list = $this->object->listFiles($path, 1000, $list->cursor);
+        $this->assertCount(1, $list->files);
+        $this->assertNull($list->cursor);
+    }
 
-        $files = $this->object->getFiles($path, 1000, $token);
-        $this->assertEquals(1, $files['KeyCount']);
-        $this->assertEquals(1000, $files['MaxKeys']);
-        $this->assertEquals(false, $files['IsTruncated']);
-        $this->assertIsArray($files['Contents']);
-        $this->assertArrayNotHasKey('NextContinuationToken', $files);
+    public function testListFilesSingleObject(): void
+    {
+        $path = $this->object->getPath('single/');
+        $this->object->write($path . 'only.txt', 'one', 'text/plain');
+
+        $list = $this->object->listFiles($path);
+        $this->assertCount(1, $list->files);
+        $this->assertSame(ltrim($path . 'only.txt', '/'), $list->files[0]->path);
+        $this->assertNull($list->cursor);
+
+        $this->object->delete($path . 'only.txt');
     }
 
     public function testType(): void

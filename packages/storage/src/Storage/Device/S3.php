@@ -18,6 +18,8 @@ use Utopia\Storage\Acl;
 use Utopia\Storage\Device;
 use Utopia\Storage\DeviceType;
 use Utopia\Storage\Exception\NotFoundException;
+use Utopia\Storage\FileInfo;
+use Utopia\Storage\FileList;
 
 /**
  * @see \Utopia\Tests\Storage\Device\S3Test
@@ -480,29 +482,45 @@ class S3 extends Device
     }
 
     /**
-     * Get all files and directories inside a directory.
+     * List objects under the given prefix, one page at a time.
      *
-     * @param  string  $dir  Directory to scan
-     * @return array<mixed>
+     * The cursor is the S3 continuation token.
      *
      * @throws Exception
      */
-    public function getFiles(string $dir, int $max = self::MAX_PAGE_SIZE, string $continuationToken = ''): array
+    public function listFiles(string $prefix = '', int $max = self::MAX_PAGE_SIZE, ?string $cursor = null): FileList
     {
-        $data = $this->listObjects($dir, $max, $continuationToken);
+        $data = $this->listObjects($prefix, $max, $cursor ?? '');
 
-        // Set to false if all the results were returned. Set to true if more keys are available to return.
-        $data['IsTruncated'] = ($data['IsTruncated'] ?? null) === 'true';
+        // A single object is returned as one associative entry, multiple objects as a list of them.
+        $contents = $data['Contents'] ?? [];
+        $entries = \is_array($contents) ? (isset($contents['Key']) ? [$contents] : $contents) : [];
 
-        // KeyCount is the number of keys returned with this request.
-        $keyCount = $data['KeyCount'] ?? null;
-        $data['KeyCount'] = is_numeric($keyCount) ? (int) $keyCount : 0;
+        $files = [];
+        foreach ($entries as $object) {
+            if (! \is_array($object)) {
+                continue;
+            }
+            if (! \is_string($object['Key'] ?? null)) {
+                continue;
+            }
+            $size = $object['Size'] ?? null;
+            $modified = $object['LastModified'] ?? null;
+            $etag = $object['ETag'] ?? null;
+            $files[] = new FileInfo(
+                path: $object['Key'],
+                size: is_numeric($size) ? (int) $size : 0,
+                modifiedAt: \is_string($modified) ? new \DateTimeImmutable($modified) : null,
+                etag: \is_string($etag) ? trim($etag, '"') : null,
+            );
+        }
 
-        // Sets the maximum number of keys returned to the response. By default, the action returns up to 1,000 key names.
-        $maxKeys = $data['MaxKeys'] ?? null;
-        $data['MaxKeys'] = is_numeric($maxKeys) ? (int) $maxKeys : 0;
+        $token = $data['NextContinuationToken'] ?? null;
 
-        return $data;
+        return new FileList(
+            files: $files,
+            cursor: ($data['IsTruncated'] ?? null) === 'true' && \is_string($token) ? $token : null,
+        );
     }
 
     /**

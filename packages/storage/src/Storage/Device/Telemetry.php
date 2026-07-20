@@ -6,6 +6,7 @@ namespace Utopia\Storage\Device;
 
 use Utopia\Storage\Device;
 use Utopia\Storage\DeviceType;
+use Utopia\Storage\FileList;
 use Utopia\Telemetry\Adapter;
 use Utopia\Telemetry\Histogram;
 
@@ -143,6 +144,14 @@ class Telemetry extends Device
     public function exists(string $path): bool
     {
         return $this->measure(__FUNCTION__, fn(): bool => $this->device->exists($path));
+    }
+
+    /**
+     * @param  int<1, max>  $max
+     */
+    public function listFiles(string $prefix = '', int $max = 1000, ?string $cursor = null): FileList
+    {
+        return $this->measure(__FUNCTION__, fn(): FileList => $this->device->listFiles($prefix, $max, $cursor));
     }
 
     public function getFileSize(string $path): int

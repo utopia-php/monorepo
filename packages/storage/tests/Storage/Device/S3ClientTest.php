@@ -160,15 +160,21 @@ final class S3ClientTest extends TestCase
         $this->device($client)->read('/root/missing.txt');
     }
 
-    public function testXmlResponseIsDecoded(): void
+    public function testXmlListingIsDecodedIntoTypedFiles(): void
     {
-        $body = '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><KeyCount>2</KeyCount><IsTruncated>false</IsTruncated><MaxKeys>1000</MaxKeys></ListBucketResult>';
+        $body = '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><KeyCount>2</KeyCount><IsTruncated>true</IsTruncated><MaxKeys>1000</MaxKeys><NextContinuationToken>next-token</NextContinuationToken>'
+            . '<Contents><Key>root/a.txt</Key><Size>11</Size><LastModified>2026-01-02T03:04:05.000Z</LastModified><ETag>&quot;abc123&quot;</ETag></Contents>'
+            . '<Contents><Key>root/b.txt</Key><Size>22</Size><LastModified>2026-01-02T03:04:06.000Z</LastModified><ETag>&quot;def456&quot;</ETag></Contents>'
+            . '</ListBucketResult>';
         $client = new ScriptedClient([new Response(200, body: new Stream($body))->withHeader('content-type', 'application/xml')]);
 
-        $files = $this->device($client)->getFiles('/root/testing');
+        $list = $this->device($client)->listFiles('/root/testing');
 
-        $this->assertSame(2, $files['KeyCount']);
-        $this->assertFalse($files['IsTruncated']);
-        $this->assertSame(1000, $files['MaxKeys']);
+        $this->assertCount(2, $list->files);
+        $this->assertSame('root/a.txt', $list->files[0]->path);
+        $this->assertSame(11, $list->files[0]->size);
+        $this->assertSame('abc123', $list->files[0]->etag);
+        $this->assertSame('2026-01-02', $list->files[0]->modifiedAt?->format('Y-m-d'));
+        $this->assertSame('next-token', $list->cursor);
     }
 }
