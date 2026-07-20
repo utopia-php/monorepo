@@ -30,6 +30,16 @@ class Telemetry extends Device
     }
 
     /**
+     * The decorated device, for access to adapter-specific methods that are
+     * not part of the base contract (for example `Local` partition metrics or
+     * the `S3` object listing).
+     */
+    public function getUnderlying(): Device
+    {
+        return $this->underlying;
+    }
+
+    /**
      * @template T
      *
      * @param  callable(): T  $operation

@@ -24,4 +24,12 @@ final class TelemetryTest extends TestCase
 
         $this->assertArrayHasKey('storage.operation', $telemetry->histograms);
     }
+
+    public function testUnderlyingDeviceIsAccessible(): void
+    {
+        $underlying = new Local(__DIR__ . '/../../resources/disk-a');
+        $device = new Telemetry(new TestTelemetry(), $underlying);
+
+        $this->assertSame($underlying, $device->getUnderlying());
+    }
 }
