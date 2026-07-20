@@ -7,8 +7,6 @@ namespace Utopia\Storage\Device;
 use Psr\Http\Client\ClientInterface;
 use Utopia\Storage\Acl;
 use Utopia\Storage\DeviceType;
-use Utopia\Telemetry\Adapter as Telemetry;
-use Utopia\Telemetry\Adapter\None as NoTelemetry;
 
 class Wasabi extends S3
 {
@@ -46,23 +44,10 @@ class Wasabi extends S3
         string $bucket,
         string $region = self::EU_CENTRAL_1,
         Acl $acl = Acl::Private,
-        Telemetry $telemetry = new NoTelemetry(),
         ?ClientInterface $client = null,
     ) {
         $host = $bucket . '.' . 's3' . '.' . $region . '.' . 'wasabisys' . '.' . 'com';
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $telemetry, $client);
-    }
-
-    #[\Override]
-    public function getName(): string
-    {
-        return 'Wasabi Storage';
-    }
-
-    #[\Override]
-    public function getDescription(): string
-    {
-        return 'Wasabi Storage';
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $client);
     }
 
     #[\Override]

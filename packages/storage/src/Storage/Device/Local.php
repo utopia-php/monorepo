@@ -21,19 +21,9 @@ class Local extends Device
      */
     public function __construct(protected readonly string $root = '') {}
 
-    public function getName(): string
-    {
-        return 'Local Storage';
-    }
-
     public function getType(): DeviceType
     {
         return DeviceType::Local;
-    }
-
-    public function getDescription(): string
-    {
-        return 'Adapter for Local storage that is in the physical or virtual machine or mounted to it.';
     }
 
     public function getRoot(): string
@@ -41,30 +31,9 @@ class Local extends Device
         return $this->root;
     }
 
-    public function getPath(string $filename, ?string $prefix = null): string
+    public function getPath(string $filename): string
     {
         return $this->getAbsolutePath($this->getRoot() . DIRECTORY_SEPARATOR . $filename);
-    }
-
-    /**
-     * Upload.
-     *
-     * Upload a file to desired destination in the selected disk.
-     * return number of chunks uploaded or 0 if it fails.
-     *
-     *
-     * @throws Exception
-     */
-    public function upload(string $source, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
-    {
-        $this->prepareUpload($path, '', $chunks, $metadata);
-        $chunksReceived = $this->uploadChunk($source, $path, $chunk, $chunks, $metadata);
-
-        if ($chunks > 1 && $chunks === $chunksReceived && ! $this->finalizeUpload($path, $chunks, $metadata)) {
-            throw new Exception('Failed to finalize upload ' . $path);
-        }
-
-        return $chunksReceived;
     }
 
     /**
@@ -77,15 +46,15 @@ class Local extends Device
         $metadata['chunks'] ??= 0;
     }
 
-    public function uploadChunk(string $source, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
+    public function uploadChunk(string $data, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
     {
         $this->createDirectory(\dirname($path));
         $metadata['parts'] ??= [];
         $metadata['chunks'] ??= 0;
 
         if ($chunks === 1) {
-            if (! move_uploaded_file($source, $path) && ! rename($source, $path)) {
-                throw new Exception('Can\'t upload file ' . $path);
+            if (file_put_contents($path, $data) === false) {
+                throw new Exception('Can\'t write file ' . $path);
             }
 
             $metadata['parts'][$chunk] = true;
@@ -100,12 +69,8 @@ class Local extends Device
         $chunkFilePath = $tmp . DIRECTORY_SEPARATOR . pathinfo($path, PATHINFO_FILENAME) . '.part.' . $chunk;
 
         // skip writing chunk if the chunk was re-uploaded
-        if (! file_exists($chunkFilePath)) {
-            if (! rename($source, $chunkFilePath)) {
-                throw new Exception('Failed to write chunk ' . $chunk);
-            }
-        } elseif (file_exists($source)) {
-            unlink($source);
+        if (!file_exists($chunkFilePath) && file_put_contents($chunkFilePath, $data) === false) {
+            throw new Exception('Failed to write chunk ' . $chunk);
         }
 
         $chunksReceived = $this->countChunks($tmp, $path);
@@ -136,49 +101,6 @@ class Local extends Device
         $this->joinChunks($path, $chunks);
 
         return true;
-    }
-
-    /**
-     * Upload Data.
-     *
-     * Upload file contents to desired destination in the selected disk.
-     * return number of chunks uploaded or 0 if it fails.
-     *
-     *
-     * @throws Exception
-     * @param  UploadMetadata  $metadata
-     */
-    public function uploadData(string $data, string $path, string $contentType, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
-    {
-        $this->prepareUpload($path, $contentType, $chunks, $metadata);
-
-        if ($chunks === 1) {
-            if (! file_put_contents($path, $data)) {
-                throw new Exception('Can\'t write file ' . $path);
-            }
-
-            return $chunks;
-        }
-
-        $tmp = \dirname($path) . DIRECTORY_SEPARATOR . 'tmp_' . basename($path);
-        $this->createDirectory($tmp);
-
-        $chunkFilePath = $tmp . DIRECTORY_SEPARATOR . pathinfo($path, PATHINFO_FILENAME) . '.part.' . $chunk;
-
-        // skip writing chunk if the chunk was re-uploaded
-        if (!file_exists($chunkFilePath) && ! file_put_contents($chunkFilePath, $data)) {
-            throw new Exception('Failed to write chunk ' . $chunk);
-        }
-
-        $chunksReceived = $this->countChunks($tmp, $path);
-        $metadata['parts'][$chunk] = true;
-        $metadata['chunks'] = $chunksReceived;
-
-        if ($chunks > 1 && $chunks === $chunksReceived && ! $this->finalizeUpload($path, $chunks, $metadata)) {
-            throw new Exception('Failed to finalize upload ' . $path);
-        }
-
-        return $chunksReceived;
     }
 
     private function countChunks(string $tmp, string $path): int
@@ -288,7 +210,7 @@ class Local extends Device
     /**
      * Abort Chunked Upload
      */
-    public function abort(string $path, string $extra = ''): bool
+    public function abort(string $path, string $uploadId = ''): bool
     {
         if (file_exists($path)) {
             unlink($path);
@@ -550,7 +472,7 @@ class Local extends Device
      *
      * @return string[]
      */
-    public function getFiles(string $dir, int $max = self::MAX_PAGE_SIZE, string $continuationToken = ''): array
+    public function getFiles(string $dir): array
     {
         $dir = rtrim($dir, DIRECTORY_SEPARATOR);
         $files = glob($dir . DIRECTORY_SEPARATOR . '*') ?: [];

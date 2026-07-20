@@ -57,19 +57,9 @@ final class LocalTest extends TestCase
         $this->assertSame('/storage/functions', $this->object->getAbsolutePath('./..\\\\\//storage\\//functions'));
     }
 
-    public function testName(): void
-    {
-        $this->assertSame('Local Storage', $this->object->getName());
-    }
-
     public function testType(): void
     {
         $this->assertSame(\Utopia\Storage\DeviceType::Local, $this->object->getType());
-    }
-
-    public function testDescription(): void
-    {
-        $this->assertSame('Adapter for Local storage that is in the physical or virtual machine or mounted to it.', $this->object->getDescription());
     }
 
     public function testRoot(): void
@@ -126,6 +116,12 @@ final class LocalTest extends TestCase
         $this->assertIsReadable($this->object->getPath('text-for-move-new.txt'));
 
         $this->object->delete($this->object->getPath('text-for-move-new.txt'));
+    }
+
+    public function testMoveIdenticalName(): void
+    {
+        $file = '/kitten-1.jpg';
+        $this->assertFalse($this->object->move($file, $file));
     }
 
     public function testDelete(): void
@@ -199,9 +195,7 @@ final class LocalTest extends TestCase
         $handle = $this->openStream($source);
         while ($start < $totalSize) {
             $contents = $this->readBytes($handle, $chunkSize);
-            $op = __DIR__ . '/chunk.part';
-            file_put_contents($op, $contents);
-            $this->object->upload($op, $dest, $chunk, $chunks);
+            $this->object->uploadData($contents, $dest, '', $chunk, $chunks);
             $start += \strlen($contents);
             ++$chunk;
             fseek($handle, $start);
@@ -224,10 +218,7 @@ final class LocalTest extends TestCase
         ];
 
         foreach ($parts as $chunk => $data) {
-            $source = __DIR__ . '/chunk-' . $chunk . '.part';
-            file_put_contents($source, $data);
-
-            $this->object->uploadChunk($source, $dest, $chunk, 3, $metadata);
+            $this->object->uploadChunk($data, $dest, $chunk, 3, $metadata);
             $this->assertFalse($this->object->exists($dest));
         }
 
@@ -243,10 +234,8 @@ final class LocalTest extends TestCase
     {
         $dest = $this->object->getPath('chunked-phase-missing.txt');
         $metadata = [];
-        $source = __DIR__ . '/chunk-missing.part';
-        file_put_contents($source, 'aaa');
 
-        $this->object->uploadChunk($source, $dest, 1, 2, $metadata);
+        $this->object->uploadChunk('aaa', $dest, 1, 2, $metadata);
 
         try {
             $this->object->finalizeUpload($dest, 2, $metadata);
@@ -271,11 +260,9 @@ final class LocalTest extends TestCase
         $chunk = 1;
         $start = 0;
         $handle = $this->openStream($source);
-        $op = __DIR__ . '/chunkx.part';
         while ($start < $totalSize) {
             $contents = $this->readBytes($handle, $chunkSize);
-            file_put_contents($op, $contents);
-            $this->object->upload($op, $dest, $chunk, $chunks);
+            $this->object->uploadData($contents, $dest, '', $chunk, $chunks);
             $start += \strlen($contents);
             ++$chunk;
             break;
@@ -286,11 +273,9 @@ final class LocalTest extends TestCase
         $start = 0;
         // retry from first to make sure duplicate chunk re-upload works without issue
         $handle = $this->openStream($source);
-        $op = __DIR__ . '/chunkx.part';
         while ($start < $totalSize) {
             $contents = $this->readBytes($handle, $chunkSize);
-            file_put_contents($op, $contents);
-            $this->object->upload($op, $dest, $chunk, $chunks);
+            $this->object->uploadData($contents, $dest, '', $chunk, $chunks);
             $start += \strlen($contents);
             ++$chunk;
             fseek($handle, $start);
@@ -317,9 +302,7 @@ final class LocalTest extends TestCase
         $handle = $this->openStream($source);
         while ($chunk < 3) { // only upload two chunks
             $contents = $this->readBytes($handle, $chunkSize);
-            $op = __DIR__ . '/chunk.part';
-            file_put_contents($op, $contents);
-            $this->object->upload($op, $dest, $chunk, $chunks);
+            $this->object->uploadData($contents, $dest, '', $chunk, $chunks);
             $start += \strlen($contents);
             ++$chunk;
             fseek($handle, $start);
@@ -339,9 +322,7 @@ final class LocalTest extends TestCase
         $handle = $this->openStream($source);
         while ($chunk < 3) { // only upload two chunks
             $contents = $this->readBytes($handle, $chunkSize);
-            $op = __DIR__ . '/chunk.part';
-            file_put_contents($op, $contents);
-            $this->object->upload($op, $dest1, $chunk, $chunks);
+            $this->object->uploadData($contents, $dest1, '', $chunk, $chunks);
             $start += \strlen($contents);
             ++$chunk;
             fseek($handle, $start);

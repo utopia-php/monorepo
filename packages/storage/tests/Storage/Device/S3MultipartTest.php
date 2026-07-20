@@ -28,8 +28,16 @@ class TestableS3 extends S3
     private bool $objectExists = false;
 
     #[\Override]
-    protected function call(string $operation, string $method, string $uri, string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true): S3Response
+    protected function call(string $method, string $uri, string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true): S3Response
     {
+        $operation = match (true) {
+            $method === 'HEAD' => 's3:info',
+            $method === 'POST' && \array_key_exists('uploads', $parameters) => 's3:createMultipartUpload',
+            $method === 'PUT' && isset($parameters['partNumber']) => 's3:uploadPart',
+            $method === 'POST' && isset($parameters['uploadId']) => 's3:completeMultipartUpload',
+            $method === 'PUT' => 's3:write',
+            default => 's3:' . strtolower($method),
+        };
         $this->calls[] = $operation;
         $this->headersByOperation[$operation] = $headers;
 
@@ -90,17 +98,13 @@ final class S3MultipartTest extends TestCase
     public function testUploadChunkRecordsPartWithoutCompleting(): void
     {
         $metadata = [];
-        $source = __DIR__ . '/s3-chunk.part';
-        file_put_contents($source, 'aaa');
 
         $this->s3->prepareUpload('/root/file.txt', 'text/plain', 2, $metadata);
-        $chunks = $this->s3->uploadChunk($source, '/root/file.txt', 1, 2, $metadata);
+        $chunks = $this->s3->uploadChunk('aaa', '/root/file.txt', 1, 2, $metadata);
 
         $this->assertSame(1, $chunks);
         $this->assertSame('etag-1', ($metadata['parts'] ?? [])[1] ?? null);
         $this->assertNotContains('s3:completeMultipartUpload', $this->s3->calls);
-
-        unlink($source);
     }
 
     public function testSingleChunkUploadDataDoesNotFinalizeOrCheckExists(): void

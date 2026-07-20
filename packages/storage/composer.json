@@ -28,10 +28,8 @@
     "require": {
         "php": ">=8.5",
         "ext-fileinfo": "*",
-        "ext-zlib": "*",
         "ext-curl": "*",
         "ext-simplexml": "*",
-        "utopia-php/system": "0.*.*",
         "utopia-php/telemetry": "^0.4",
         "utopia-php/validators": "0.3.*",
         "psr/http-client": "^1.0",

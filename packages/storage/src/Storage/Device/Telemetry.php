@@ -13,6 +13,7 @@ use Utopia\Telemetry\Histogram;
  * Decorator that records a `storage.operation` histogram around every call to the underlying device.
  *
  * @phpstan-import-type UploadMetadata from Device
+ * @see \Utopia\Tests\Storage\Device\TelemetryTest
  */
 class Telemetry extends Device
 {
@@ -50,19 +51,9 @@ class Telemetry extends Device
         }
     }
 
-    public function getName(): string
-    {
-        return $this->underlying->getName();
-    }
-
     public function getType(): DeviceType
     {
         return $this->underlying->getType();
-    }
-
-    public function getDescription(): string
-    {
-        return $this->underlying->getDescription();
     }
 
     public function getRoot(): string
@@ -70,19 +61,9 @@ class Telemetry extends Device
         return $this->underlying->getRoot();
     }
 
-    public function getPath(string $filename, ?string $prefix = null): string
+    public function getPath(string $filename): string
     {
-        return $this->measure(__FUNCTION__, fn(): string => $this->underlying->getPath($filename, $prefix));
-    }
-
-    /**
-     * @param  UploadMetadata  $metadata
-     */
-    public function upload(string $source, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
-    {
-        return $this->measure(__FUNCTION__, function () use ($source, $path, $chunk, $chunks, &$metadata): int {
-            return $this->underlying->upload($source, $path, $chunk, $chunks, $metadata);
-        });
+        return $this->measure(__FUNCTION__, fn(): string => $this->underlying->getPath($filename));
     }
 
     /**
@@ -98,10 +79,10 @@ class Telemetry extends Device
     /**
      * @param  UploadMetadata  $metadata
      */
-    public function uploadChunk(string $source, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
+    public function uploadChunk(string $data, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
     {
-        return $this->measure(__FUNCTION__, function () use ($source, $path, $chunk, $chunks, &$metadata): int {
-            return $this->underlying->uploadChunk($source, $path, $chunk, $chunks, $metadata);
+        return $this->measure(__FUNCTION__, function () use ($data, $path, $chunk, $chunks, &$metadata): int {
+            return $this->underlying->uploadChunk($data, $path, $chunk, $chunks, $metadata);
         });
     }
 
@@ -115,19 +96,9 @@ class Telemetry extends Device
         });
     }
 
-    /**
-     * @param  UploadMetadata  $metadata
-     */
-    public function uploadData(string $data, string $path, string $contentType, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
+    public function abort(string $path, string $uploadId = ''): bool
     {
-        return $this->measure(__FUNCTION__, function () use ($data, $path, $contentType, $chunk, $chunks, &$metadata): int {
-            return $this->underlying->uploadData($data, $path, $contentType, $chunk, $chunks, $metadata);
-        });
-    }
-
-    public function abort(string $path, string $extra = ''): bool
-    {
-        return $this->measure(__FUNCTION__, fn(): bool => $this->underlying->abort($path, $extra));
+        return $this->measure(__FUNCTION__, fn(): bool => $this->underlying->abort($path, $uploadId));
     }
 
     /**
@@ -180,33 +151,5 @@ class Telemetry extends Device
     public function getFileHash(string $path): string
     {
         return $this->measure(__FUNCTION__, fn(): string => $this->underlying->getFileHash($path));
-    }
-
-    public function createDirectory(string $path): bool
-    {
-        return $this->measure(__FUNCTION__, fn(): bool => $this->underlying->createDirectory($path));
-    }
-
-    public function getDirectorySize(string $path): int
-    {
-        return $this->measure(__FUNCTION__, fn(): int => $this->underlying->getDirectorySize($path));
-    }
-
-    public function getPartitionFreeSpace(): float
-    {
-        return $this->measure(__FUNCTION__, fn(): float => $this->underlying->getPartitionFreeSpace());
-    }
-
-    public function getPartitionTotalSpace(): float
-    {
-        return $this->measure(__FUNCTION__, fn(): float => $this->underlying->getPartitionTotalSpace());
-    }
-
-    /**
-     * @return array<mixed>
-     */
-    public function getFiles(string $dir, int $max = self::MAX_PAGE_SIZE, string $continuationToken = ''): array
-    {
-        return $this->measure(__FUNCTION__, fn(): array => $this->underlying->getFiles($dir, $max, $continuationToken));
     }
 }

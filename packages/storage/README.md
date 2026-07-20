@@ -31,7 +31,7 @@ use Utopia\Storage\Device\Local;
 $device = new Local('/path/to/storage');
 
 // Upload a file
-$device->upload('/local/path/to/file.png', 'destination/path/file.png');
+$device->uploadData(file_get_contents('/local/path/to/file.png'), 'destination/path/file.png', 'image/png');
 
 // Check if file exists
 $exists = $device->exists('destination/path/file.png');
@@ -86,7 +86,6 @@ $device = new AWS(
     'YOUR_BUCKET_NAME',
     AWS::US_EAST_1,
     Acl::Private,
-    telemetry: $telemetryAdapter, // utopia-php/telemetry adapter (default: none)
     client: $psrClient, // any PSR-18 client (default: utopia-php/client with retries, see below)
 );
 
@@ -186,8 +185,8 @@ $device = new Wasabi(
 All storage adapters provide a consistent API for working with files:
 
 ```php
-// Upload a file
-$device->upload('/path/to/local/file.jpg', 'remote/path/file.jpg');
+// Upload file contents
+$device->uploadData(file_get_contents('/path/to/local/file.jpg'), 'remote/path/file.jpg', 'image/jpeg');
 
 // Check if file exists
 $exists = $device->exists('remote/path/file.jpg');
@@ -208,13 +207,13 @@ $contents = $device->read('remote/path/file.jpg');
 $chunk = $device->read('remote/path/file.jpg', 0, 1024); // Read first 1KB
 
 // Multipart/chunked uploads
-$device->upload('/local/file.mp4', 'remote/video.mp4', 1, 3); // Part 1 of 3
+$metadata = [];
+$device->uploadData($firstChunk, 'remote/video.mp4', 'video/mp4', 1, 3, $metadata); // Part 1 of 3
 
-// Create directory
-$device->createDirectory('remote/new-directory');
-
-// List files in directory
-$files = $device->getFiles('remote/directory');
+// Resumable uploads: prepare, upload chunks in any order, finalize
+$device->prepareUpload('remote/video.mp4', 'video/mp4', 3, $metadata);
+$device->uploadChunk($secondChunk, 'remote/video.mp4', 2, 3, $metadata);
+$device->finalizeUpload('remote/video.mp4', 3, $metadata);
 
 // Delete file
 $device->delete('remote/path/file.jpg');
@@ -267,12 +266,15 @@ $device = new Telemetry($telemetryAdapter, new Local('/path/to/storage'));
 
 Version 3.0 makes every device immutable and safe to share across coroutines, and removes all global state:
 
-- The static device registry is gone: replace `Storage::setDevice('files', $device)` and `Storage::getDevice('files')` with your own wiring (a container, or passing the device instance directly). `Storage` now only holds the `Storage::human()` helper.
-- Setters are gone in favour of constructor arguments: `setTelemetry()` became the `telemetry` named constructor argument on `S3` and its subclasses. `setHttpVersion()` is gone: transport options now belong to the injected PSR-18 client. The static `S3::setRetryAttempts()`/`S3::setRetryDelay()` moved into the `S3\RetryStrategy` used by the default client's `Retry` decorator — inject your own client to tune or disable retries.
+- The `Storage` class is gone entirely: replace `Storage::setDevice('files', $device)` and `Storage::getDevice('files')` with your own wiring (a container, or passing the device instance directly), and inline `Storage::human()` if you used it.
+- `setTelemetry()` is gone: wrap the device in the `Utopia\Storage\Device\Telemetry` decorator instead. `setHttpVersion()` is gone: transport options now belong to the injected PSR-18 client. The static `S3::setRetryAttempts()`/`S3::setRetryDelay()` moved into the `S3\RetryStrategy` used by the default client's `Retry` decorator — inject your own client to tune or disable retries.
 - `setTransferChunkSize()`/`getTransferChunkSize()` became a per-call argument: `transfer($path, $destination, $device, $chunkSize)`.
 - String constants became enums: the `Storage::DEVICE_*` constants are now the `Utopia\Storage\DeviceType` enum (`getType()` returns it), and the `S3::ACL_*` constants are now the `Utopia\Storage\Acl` enum.
 - The S3 adapter no longer stores request headers on the instance, so one device can serve concurrent requests (for example Swoole coroutines) without data races.
 - Requests go through a PSR-18 client instead of raw cURL calls. The default is [utopia-php/client](https://github.com/utopia-php/client) with the cURL adapter; pass the `client` constructor argument to swap the transport.
+- Uploads are data-based: `upload($sourcePath, ...)` was removed — read the file yourself and call `uploadData($data, ...)` — and `uploadChunk()` now takes the chunk contents instead of a source file path.
+- Filesystem-only methods (`createDirectory()`, `getDirectorySize()`, `getPartitionFreeSpace()`, `getPartitionTotalSpace()`, `getFiles()`) left the base `Device` contract; they remain on `Local` (and `getFiles()` on `S3` with its listing shape).
+- `getName()` and `getDescription()` were removed; use `getType()` to identify an adapter.
 
 ## Adding new adapters
 

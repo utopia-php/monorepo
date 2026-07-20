@@ -7,8 +7,6 @@ namespace Utopia\Storage\Device;
 use Psr\Http\Client\ClientInterface;
 use Utopia\Storage\Acl;
 use Utopia\Storage\DeviceType;
-use Utopia\Telemetry\Adapter as Telemetry;
-use Utopia\Telemetry\Adapter\None as NoTelemetry;
 
 class Backblaze extends S3
 {
@@ -39,23 +37,10 @@ class Backblaze extends S3
         string $bucket,
         string $region = self::US_WEST_004,
         Acl $acl = Acl::Private,
-        Telemetry $telemetry = new NoTelemetry(),
         ?ClientInterface $client = null,
     ) {
         $host = $bucket . '.' . 's3' . '.' . $region . '.backblazeb2.com';
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $telemetry, $client);
-    }
-
-    #[\Override]
-    public function getName(): string
-    {
-        return 'Backblaze B2 Storage';
-    }
-
-    #[\Override]
-    public function getDescription(): string
-    {
-        return 'Backblaze B2 Storage';
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $client);
     }
 
     #[\Override]

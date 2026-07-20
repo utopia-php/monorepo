@@ -7,8 +7,6 @@ namespace Utopia\Storage\Device;
 use Psr\Http\Client\ClientInterface;
 use Utopia\Storage\Acl;
 use Utopia\Storage\DeviceType;
-use Utopia\Telemetry\Adapter as Telemetry;
-use Utopia\Telemetry\Adapter\None as NoTelemetry;
 
 class Linode extends S3
 {
@@ -34,23 +32,10 @@ class Linode extends S3
         string $bucket,
         string $region = self::EU_CENTRAL_1,
         Acl $acl = Acl::Private,
-        Telemetry $telemetry = new NoTelemetry(),
         ?ClientInterface $client = null,
     ) {
         $host = $bucket . '.' . $region . '.' . 'linodeobjects.com';
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $telemetry, $client);
-    }
-
-    #[\Override]
-    public function getName(): string
-    {
-        return 'Linode Object Storage';
-    }
-
-    #[\Override]
-    public function getDescription(): string
-    {
-        return 'Linode Object Storage';
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $client);
     }
 
     #[\Override]

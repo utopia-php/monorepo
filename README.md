@@ -82,7 +82,6 @@ graph TD
     queue --> validators
     servers --> di
     servers --> validators
-    storage --> system
     storage --> telemetry
     storage --> validators
     storage --> client

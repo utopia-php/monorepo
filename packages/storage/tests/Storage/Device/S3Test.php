@@ -28,18 +28,9 @@ final class S3Test extends S3Base
         $this->object = new S3($this->root, $key, $secret, $host, 'us-east-1', Acl::Private);
     }
 
-    protected function getAdapterName(): string
-    {
-        return 'S3 Storage';
-    }
-
     protected function getAdapterType(): DeviceType
     {
         return $this->object->getType();
     }
 
-    protected function getAdapterDescription(): string
-    {
-        return 'S3 Storage drive for generic S3-compatible provider';
-    }
 }

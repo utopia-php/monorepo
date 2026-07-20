@@ -10,6 +10,7 @@ use Psr\Http\Client\ClientInterface;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Client as HttpClient;
 use Utopia\Client\Decorator\Retry;
+use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Stream;
 use Utopia\Psr7\Uri;
@@ -17,9 +18,6 @@ use Utopia\Storage\Acl;
 use Utopia\Storage\Device;
 use Utopia\Storage\DeviceType;
 use Utopia\Storage\Exception\NotFoundException;
-use Utopia\Telemetry\Adapter as Telemetry;
-use Utopia\Telemetry\Adapter\None as NoTelemetry;
-use Utopia\Telemetry\Histogram;
 
 /**
  * @see \Utopia\Tests\Storage\Device\S3Test
@@ -28,31 +26,11 @@ use Utopia\Telemetry\Histogram;
  */
 class S3 extends Device
 {
-    public const METHOD_GET = 'GET';
-
-    public const METHOD_POST = 'POST';
-
-    public const METHOD_PUT = 'PUT';
-
-    public const METHOD_PATCH = 'PATCH';
-
-    public const METHOD_DELETE = 'DELETE';
-
-    public const METHOD_HEAD = 'HEAD';
-
-    public const METHOD_OPTIONS = 'OPTIONS';
-
-    public const METHOD_CONNECT = 'CONNECT';
-
-    public const METHOD_TRACE = 'TRACE';
-
     protected const MAX_PAGE_SIZE = 1000;
 
     private readonly string $fqdn;
 
     private readonly string $host;
-
-    private readonly Histogram $telemetry;
 
     private readonly ClientInterface $client;
 
@@ -69,7 +47,6 @@ class S3 extends Device
         string $host,
         protected readonly string $region,
         protected readonly Acl $acl = Acl::Private,
-        Telemetry $telemetry = new NoTelemetry(),
         ?ClientInterface $client = null,
     ) {
         if (str_starts_with($host, 'http://') || str_starts_with($host, 'https://')) {
@@ -84,18 +61,6 @@ class S3 extends Device
             new HttpClient(new CurlAdapter())->withTimeout(0.0),
             new S3\RetryStrategy(),
         );
-
-        $this->telemetry = Histogram::lazy(
-            telemetry: $telemetry,
-            name: 'storage.operation',
-            unit: 's',
-            advisory: ['ExplicitBucketBoundaries' => [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]],
-        );
-    }
-
-    public function getName(): string
-    {
-        return 'S3 Storage';
     }
 
     public function getType(): DeviceType
@@ -103,41 +68,14 @@ class S3 extends Device
         return DeviceType::S3;
     }
 
-    public function getDescription(): string
-    {
-        return 'S3 Storage drive for generic S3-compatible provider';
-    }
-
     public function getRoot(): string
     {
         return $this->root;
     }
 
-    public function getPath(string $filename, ?string $prefix = null): string
+    public function getPath(string $filename): string
     {
         return $this->getRoot() . DIRECTORY_SEPARATOR . $filename;
-    }
-
-    /**
-     * Upload.
-     *
-     * Upload a file to desired destination in the selected disk.
-     * return number of chunks uploaded or 0 if it fails.
-     *
-     *
-     * @throws Exception
-     */
-    public function upload(string $source, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
-    {
-        $contentType = mime_content_type($source) ?: '';
-        $this->prepareUpload($path, $contentType, $chunks, $metadata);
-        $chunksReceived = $this->uploadChunk($source, $path, $chunk, $chunks, $metadata);
-
-        if ($chunks > 1 && $chunks === $chunksReceived && ! $this->finalizeUpload($path, $chunks, $metadata)) {
-            throw new Exception('Failed to finalize upload ' . $path);
-        }
-
-        return $chunksReceived;
     }
 
     /**
@@ -154,16 +92,6 @@ class S3 extends Device
         }
 
         $metadata['uploadId'] = $this->createMultipartUpload($path, $contentType);
-    }
-
-    public function uploadChunk(string $source, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
-    {
-        $data = file_get_contents($source);
-        if ($data === false) {
-            throw new Exception('Can\'t read file ' . $source);
-        }
-
-        return $this->uploadChunkData($data, $path, $metadata['content_type'] ?? (mime_content_type($source) ?: ''), $chunk, $chunks, $metadata);
     }
 
     public function finalizeUpload(string $path, int $chunks = 1, array &$metadata = []): bool
@@ -193,31 +121,12 @@ class S3 extends Device
     }
 
     /**
-     * Upload Data.
-     *
-     * Upload file contents to desired destination in the selected disk.
-     * return number of chunks uploaded or 0 if it fails.
-     *
-     *
-     * @throws Exception
-     */
-    public function uploadData(string $data, string $path, string $contentType, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
-    {
-        $this->prepareUpload($path, $contentType, $chunks, $metadata);
-        $chunksReceived = $this->uploadChunkData($data, $path, $contentType, $chunk, $chunks, $metadata);
-
-        if ($chunks > 1 && $chunks === $chunksReceived && ! $this->finalizeUpload($path, $chunks, $metadata)) {
-            throw new Exception('Failed to finalize upload ' . $path);
-        }
-
-        return $chunksReceived;
-    }
-
-    /**
      * @param  UploadMetadata  $metadata
      */
-    private function uploadChunkData(string $data, string $path, string $contentType, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
+    public function uploadChunk(string $data, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
     {
+        $contentType = $metadata['content_type'] ?? '';
+
         if ($chunk === 1 && $chunks === 1) {
             $this->write($path, $data, $contentType);
             $metadata['parts'][$chunk] = true;
@@ -287,8 +196,7 @@ class S3 extends Device
         $uri = $path !== '' ? '/' . str_replace(['%2F', '%3F'], ['/', '?'], rawurlencode($path)) : '/';
 
         $response = $this->call(
-            's3:createMultipartUpload',
-            self::METHOD_POST,
+            Method::POST,
             $uri,
             '',
             ['uploads' => ''],
@@ -316,8 +224,7 @@ class S3 extends Device
 
         // ACL header is not allowed in parts, only createMultipartUpload accepts this header.
         $response = $this->call(
-            's3:uploadPart',
-            self::METHOD_PUT,
+            Method::PUT,
             $uri,
             $data,
             [
@@ -353,8 +260,7 @@ class S3 extends Device
         $body .= '</CompleteMultipartUpload>';
 
         $this->call(
-            's3:completeMultipartUpload',
-            self::METHOD_POST,
+            Method::POST,
             $uri,
             $body,
             ['uploadId' => $uploadId],
@@ -370,10 +276,10 @@ class S3 extends Device
      *
      * @throws Exception
      */
-    public function abort(string $path, string $extra = ''): bool
+    public function abort(string $path, string $uploadId = ''): bool
     {
         $uri = $path !== '' ? '/' . str_replace(['%2F', '%3F'], ['/', '?'], rawurlencode($path)) : '/';
-        $this->call('s3:abort', self::METHOD_DELETE, $uri, '', ['uploadId' => $extra]);
+        $this->call(Method::DELETE, $uri, '', ['uploadId' => $uploadId]);
 
         return true;
     }
@@ -393,7 +299,7 @@ class S3 extends Device
             $end = $offset + $length - 1;
             $headers['range'] = "bytes=$offset-$end";
         }
-        $response = $this->call('s3:read', self::METHOD_GET, $uri, headers: $headers, decode: false);
+        $response = $this->call(Method::GET, $uri, headers: $headers, decode: false);
 
         if (! \is_string($response->body)) {
             throw new Exception('Unexpected S3 read response');
@@ -413,8 +319,7 @@ class S3 extends Device
         $uri = $path !== '' ? '/' . str_replace(['%2F', '%3F'], ['/', '?'], rawurlencode($path)) : '/';
 
         $this->call(
-            's3:write',
-            self::METHOD_PUT,
+            Method::PUT,
             $uri,
             $data,
             headers: ['content-type' => $contentType],
@@ -435,7 +340,7 @@ class S3 extends Device
     {
         $uri = ($path !== '') ? '/' . str_replace('%2F', '/', rawurlencode($path)) : '/';
 
-        $this->call('s3:delete', self::METHOD_DELETE, $uri);
+        $this->call(Method::DELETE, $uri);
 
         return true;
     }
@@ -466,7 +371,7 @@ class S3 extends Device
             $parameters['continuation-token'] = $continuationToken;
         }
 
-        $response = $this->call('s3:list', self::METHOD_GET, $uri, '', $parameters, headers: ['content-type' => 'text/plain']);
+        $response = $this->call(Method::GET, $uri, '', $parameters, headers: ['content-type' => 'text/plain']);
 
         if (! \is_array($response->body)) {
             throw new Exception('Unexpected S3 list response');
@@ -514,7 +419,7 @@ class S3 extends Device
             }
             $body .= '<Quiet>true</Quiet>';
             $body .= '</Delete>';
-            $this->call('s3:deletePath', self::METHOD_POST, $uri, $body, ['delete' => ''], headers: ['content-type' => 'application/xml']);
+            $this->call(Method::POST, $uri, $body, ['delete' => ''], headers: ['content-type' => 'application/xml']);
         } while ($continuationToken !== '');
 
         return true;
@@ -571,49 +476,6 @@ class S3 extends Device
     }
 
     /**
-     * Create a directory at the specified path.
-     *
-     * Returns true on success or if the directory already exists and false on error
-     */
-    public function createDirectory(string $path): bool
-    {
-        /* S3 is an object store and does not have the concept of directories */
-        return true;
-    }
-
-    /**
-     * Get directory size in bytes.
-     *
-     * Return -1 on error
-     *
-     * Based on http://www.jonasjohn.de/snippets/php/dir-size.htm
-     */
-    public function getDirectorySize(string $path): int
-    {
-        return -1;
-    }
-
-    /**
-     * Get Partition Free Space.
-     *
-     * disk_free_space — Returns available space on filesystem or disk partition
-     */
-    public function getPartitionFreeSpace(): float
-    {
-        return -1;
-    }
-
-    /**
-     * Get Partition Total Space.
-     *
-     * disk_total_space — Returns the total size of a filesystem or disk partition
-     */
-    public function getPartitionTotalSpace(): float
-    {
-        return -1;
-    }
-
-    /**
      * Get all files and directories inside a directory.
      *
      * @param  string  $dir  Directory to scan
@@ -649,7 +511,7 @@ class S3 extends Device
     private function getInfo(string $path): array
     {
         $uri = $path !== '' ? '/' . str_replace('%2F', '/', rawurlencode($path)) : '/';
-        $response = $this->call('s3:info', self::METHOD_HEAD, $uri);
+        $response = $this->call(Method::HEAD, $uri);
 
         return $response->headers;
     }
@@ -745,10 +607,8 @@ class S3 extends Device
      *
      * @throws Exception
      */
-    protected function call(string $operation, string $method, string $uri, string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true): S3\Response
+    protected function call(string $method, string $uri, string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true): S3\Response
     {
-        $startTime = microtime(true);
-
         $uri = $this->getAbsolutePath($uri);
         $url = $this->fqdn . $uri . '?' . http_build_query($parameters, '', '&', PHP_QUERY_RFC3986);
 
@@ -770,42 +630,31 @@ class S3 extends Device
             ->withHeader('user-agent', 'utopia-php/storage');
 
         try {
-            try {
-                $response = $this->client->sendRequest($request);
-            } catch (ClientExceptionInterface $e) {
-                throw new Exception($e->getMessage(), $e->getCode(), previous: $e);
-            }
-
-            $code = $response->getStatusCode();
-            $responseBody = (string) $response->getBody();
-
-            if ($code >= 400) {
-                $this->parseAndThrowS3Error($responseBody, $code);
-            }
-
-            $responseHeaders = [];
-            foreach ($response->getHeaders() as $name => $values) {
-                $responseHeaders[strtolower((string) $name)] = implode(', ', $values);
-            }
-
-            $contentType = $responseHeaders['content-type'] ?? '';
-            $isXml = $contentType === 'application/xml' || (str_starts_with($responseBody, '<?xml') && $contentType !== 'image/svg+xml');
-
-            return new S3\Response(
-                code: $code,
-                headers: $responseHeaders,
-                body: $decode && $isXml ? $this->decodeXml($responseBody) : $responseBody,
-            );
-        } finally {
-
-            $this->telemetry->record(
-                microtime(true) - $startTime,
-                [
-                    'storage' => $this->getType()->value,
-                    'operation' => $operation,
-                ],
-            );
+            $response = $this->client->sendRequest($request);
+        } catch (ClientExceptionInterface $e) {
+            throw new Exception($e->getMessage(), $e->getCode(), previous: $e);
         }
+
+        $code = $response->getStatusCode();
+        $responseBody = (string) $response->getBody();
+
+        if ($code >= 400) {
+            $this->parseAndThrowS3Error($responseBody, $code);
+        }
+
+        $responseHeaders = [];
+        foreach ($response->getHeaders() as $name => $values) {
+            $responseHeaders[strtolower((string) $name)] = implode(', ', $values);
+        }
+
+        $contentType = $responseHeaders['content-type'] ?? '';
+        $isXml = $contentType === 'application/xml' || (str_starts_with($responseBody, '<?xml') && $contentType !== 'image/svg+xml');
+
+        return new S3\Response(
+            code: $code,
+            headers: $responseHeaders,
+            body: $decode && $isXml ? $this->decodeXml($responseBody) : $responseBody,
+        );
     }
 
     /**

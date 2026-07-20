@@ -7,8 +7,6 @@ namespace Utopia\Storage\Device;
 use Psr\Http\Client\ClientInterface;
 use Utopia\Storage\Acl;
 use Utopia\Storage\DeviceType;
-use Utopia\Telemetry\Adapter as Telemetry;
-use Utopia\Telemetry\Adapter\None as NoTelemetry;
 
 class DOSpaces extends S3
 {
@@ -38,23 +36,10 @@ class DOSpaces extends S3
         string $bucket,
         string $region = self::NYC3,
         Acl $acl = Acl::Private,
-        Telemetry $telemetry = new NoTelemetry(),
         ?ClientInterface $client = null,
     ) {
         $host = $bucket . '.' . $region . '.digitaloceanspaces.com';
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $telemetry, $client);
-    }
-
-    #[\Override]
-    public function getName(): string
-    {
-        return 'Digitalocean Spaces Storage';
-    }
-
-    #[\Override]
-    public function getDescription(): string
-    {
-        return 'Digitalocean Spaces Storage';
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $client);
     }
 
     #[\Override]
