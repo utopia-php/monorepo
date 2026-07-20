@@ -69,8 +69,6 @@ class AWS extends S3
 
     /**
      * AWS Constructor
-     *
-     * @param  int  $retryDelay  Delay between retries in milliseconds
      */
     public function __construct(
         string $root,
@@ -80,8 +78,6 @@ class AWS extends S3
         string $bucket,
         string $region = self::US_EAST_1,
         Acl $acl = Acl::Private,
-        int $retryAttempts = 3,
-        int $retryDelay = 500,
         Telemetry $telemetry = new NoTelemetry(),
         ?ClientInterface $client = null,
     ) {
@@ -89,7 +85,7 @@ class AWS extends S3
             self::CN_NORTH_1, self::CN_NORTH_4, self::CN_NORTHWEST_1 => $bucket . '.s3.' . $region . '.amazonaws.cn',
             default => $bucket . '.s3.' . $region . '.amazonaws.com'
         };
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $retryAttempts, $retryDelay, $telemetry, $client);
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $telemetry, $client);
     }
 
     #[\Override]

@@ -9,6 +9,7 @@ use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Client as HttpClient;
+use Utopia\Client\Decorator\Retry;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Stream;
 use Utopia\Psr7\Uri;
@@ -58,8 +59,7 @@ class S3 extends Device
     /**
      * S3 Constructor
      *
-     * @param  int  $retryDelay  Delay between retries in milliseconds
-     * @param  ClientInterface|null  $client  PSR-18 client used for every request; defaults to `utopia-php/client` with the cURL adapter and no request timeout
+     * @param  ClientInterface|null  $client  PSR-18 client used for every request; defaults to `utopia-php/client` with the cURL adapter, no request timeout, and transient-error retries via `S3\RetryStrategy`
      */
     public function __construct(
         protected readonly string $root,
@@ -69,8 +69,6 @@ class S3 extends Device
         string $host,
         protected readonly string $region,
         protected readonly Acl $acl = Acl::Private,
-        protected readonly int $retryAttempts = 3,
-        protected readonly int $retryDelay = 500,
         Telemetry $telemetry = new NoTelemetry(),
         ?ClientInterface $client = null,
     ) {
@@ -82,7 +80,10 @@ class S3 extends Device
             $this->host = $host;
         }
 
-        $this->client = $client ?? new HttpClient(new CurlAdapter())->withTimeout(0.0);
+        $this->client = $client ?? new Retry(
+            new HttpClient(new CurlAdapter())->withTimeout(0.0),
+            new S3\RetryStrategy(),
+        );
 
         $this->telemetry = Histogram::lazy(
             telemetry: $telemetry,
@@ -768,27 +769,15 @@ class S3 extends Device
             ->withHeader('authorization', $this->getSignatureV4($method, $uri, $parameters, $headers, $amzHeaders))
             ->withHeader('user-agent', 'utopia-php/storage');
 
-        $attempt = 0;
         try {
-            while (true) {
-                $request->getBody()->rewind();
-
-                try {
-                    $response = $this->client->sendRequest($request);
-                } catch (ClientExceptionInterface $e) {
-                    throw new Exception($e->getMessage(), $e->getCode(), previous: $e);
-                }
-
-                $code = $response->getStatusCode();
-                $responseBody = (string) $response->getBody();
-
-                if ($attempt >= $this->retryAttempts || ! $this->isTransientError($code, $responseBody)) {
-                    break;
-                }
-
-                usleep($this->retryDelay * 1000);
-                ++$attempt;
+            try {
+                $response = $this->client->sendRequest($request);
+            } catch (ClientExceptionInterface $e) {
+                throw new Exception($e->getMessage(), $e->getCode(), previous: $e);
             }
+
+            $code = $response->getStatusCode();
+            $responseBody = (string) $response->getBody();
 
             if ($code >= 400) {
                 $this->parseAndThrowS3Error($responseBody, $code);
@@ -814,7 +803,6 @@ class S3 extends Device
                 [
                     'storage' => $this->getType()->value,
                     'operation' => $operation,
-                    'attempts' => $attempt,
                 ],
             );
         }
@@ -867,38 +855,6 @@ class S3 extends Device
         }
 
         throw new Exception($errorBody, $statusCode);
-    }
-
-    /**
-     * Determine whether an S3 response indicates a transient rate-limiting error
-     * (e.g. SlowDown, ServiceUnavailable) that should be retried with exponential backoff.
-     *
-     * The XML body is parsed first so that specific S3 error codes are detected regardless
-     * of HTTP status. A 503/429 with a parseable but non-transient error code is NOT retried.
-     * Unparseable 429/503 responses fall back to status-code detection.
-     *
-     * @param  int  $statusCode  HTTP response status code
-     * @param  string  $body  Response body
-     */
-    protected function isTransientError(int $statusCode, string $body): bool
-    {
-        $trimmed = ltrim($body);
-        if (str_starts_with($trimmed, '<?xml') || str_starts_with($trimmed, '<Error')) {
-            $xml = @simplexml_load_string($body);
-            if ($xml !== false) {
-                $code = (string) ($xml->Code ?? '');
-                if (\in_array($code, ['SlowDown', 'ServiceUnavailable', 'Throttling', 'RequestThrottled'], true)) {
-                    return true;
-                }
-                // Successfully parsed XML with a non-transient error code — do not retry.
-                if ($code !== '') {
-                    return false;
-                }
-            }
-        }
-
-        // Fall back to HTTP status code for responses that cannot be parsed as XML.
-        return $statusCode === 429 || $statusCode === 503;
     }
 
     /**

@@ -5,18 +5,22 @@ declare(strict_types=1);
 namespace Utopia\Tests\Storage\Device;
 
 use PHPUnit\Framework\TestCase;
-use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
+use Utopia\Client\Adapter;
+use Utopia\Client\Decorator\Retry;
+use Utopia\Client\Tls;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
 use Utopia\Storage\Device\S3;
+use Utopia\Storage\Device\S3\RetryStrategy;
 use Utopia\Storage\Exception\NotFoundException;
 
 /**
- * PSR-18 client stub that replays scripted responses and records every request.
+ * Client stub that replays scripted responses and records every request.
+ * Implements the full utopia-php/client Adapter so the Retry decorator can wrap it.
  */
-final class ScriptedClient implements ClientInterface
+final class ScriptedClient implements Adapter
 {
     /**
      * @var array<RequestInterface>
@@ -38,6 +42,49 @@ final class ScriptedClient implements ClientInterface
 
         return $response;
     }
+
+    public function stream(RequestInterface $request, callable $sink): ResponseInterface
+    {
+        $response = $this->sendRequest($request);
+        $sink((string) $response->getBody());
+
+        return $response;
+    }
+
+    public function withTimeout(float $seconds): static
+    {
+        return $this;
+    }
+
+    public function withConnectTimeout(float $seconds): static
+    {
+        return $this;
+    }
+
+    public function withSslVerification(bool $enabled = true): static
+    {
+        return $this;
+    }
+
+    public function withCustomCA(string $path): static
+    {
+        return $this;
+    }
+
+    public function withCertificate(string $certPath, string $keyPath, ?string $passphrase = null): static
+    {
+        return $this;
+    }
+
+    public function withMinTlsVersion(Tls $version): static
+    {
+        return $this;
+    }
+
+    public function withConnectionReuse(bool $enabled = true): static
+    {
+        return $this;
+    }
 }
 
 final class S3ClientTest extends TestCase
@@ -50,8 +97,7 @@ final class S3ClientTest extends TestCase
             secretKey: 'test-secret',
             host: 'https://s3.example.com',
             region: 'us-east-1',
-            retryDelay: 0,
-            client: $client,
+            client: new Retry($client, new RetryStrategy(delay: 0.0)),
         );
     }
 

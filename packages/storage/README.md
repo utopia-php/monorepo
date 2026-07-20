@@ -86,10 +86,8 @@ $device = new AWS(
     'YOUR_BUCKET_NAME',
     AWS::US_EAST_1,
     Acl::Private,
-    retryAttempts: 3, // Retries on transient errors such as SlowDown (default: 3)
-    retryDelay: 500, // Delay between retries in milliseconds (default: 500)
     telemetry: $telemetryAdapter, // utopia-php/telemetry adapter (default: none)
-    client: $psrClient, // any PSR-18 client (default: utopia-php/client with the cURL adapter)
+    client: $psrClient, // any PSR-18 client (default: utopia-php/client with retries, see below)
 );
 
 // Available ACL options
@@ -233,17 +231,26 @@ $sourceDevice->transfer('source/path.jpg', 'target/path.jpg', $targetDevice, 100
 
 ## Custom HTTP client
 
-The S3-family adapters send requests through any [PSR-18](https://www.php-fig.org/psr/psr-18/) client. By default they use [utopia-php/client](https://github.com/utopia-php/client) with the cURL adapter and no request timeout. Inject your own to change the transport — for example the Swoole coroutine adapter, or a client with timeouts and TLS options:
+The S3-family adapters send requests through any [PSR-18](https://www.php-fig.org/psr/psr-18/) client. By default they use [utopia-php/client](https://github.com/utopia-php/client) with the cURL adapter, no request timeout, and the `Retry` decorator configured with `S3\RetryStrategy` — it retries transient S3 rate-limiting errors (`SlowDown`, `ServiceUnavailable`, `Throttling`, `RequestThrottled`, and plain 429/503 responses) three times with a 500 ms delay.
+
+Inject your own client to change the transport or the retry policy — for example the Swoole coroutine adapter with more aggressive retries:
 
 ```php
 use Utopia\Client;
 use Utopia\Client\Adapter\SwooleCoroutine\Client as SwooleAdapter;
+use Utopia\Client\Decorator\Retry;
 use Utopia\Storage\Device\S3;
+use Utopia\Storage\Device\S3\RetryStrategy;
 
-$client = new Client(new SwooleAdapter())->withTimeout(60);
+$client = new Retry(
+    new Client(new SwooleAdapter())->withTimeout(60),
+    new RetryStrategy(retries: 5, delay: 1.0),
+);
 
 $device = new S3('root', 'ACCESS_KEY', 'SECRET_KEY', 'HOST', 'us-east-1', client: $client);
 ```
+
+Omit the `Retry` decorator to disable retries entirely, or pass any `Utopia\Client\Decorator\Retry\Strategy` of your own.
 
 ## Telemetry
 
@@ -261,7 +268,7 @@ $device = new Telemetry($telemetryAdapter, new Local('/path/to/storage'));
 Version 3.0 makes every device immutable and safe to share across coroutines, and removes all global state:
 
 - The static device registry is gone: replace `Storage::setDevice('files', $device)` and `Storage::getDevice('files')` with your own wiring (a container, or passing the device instance directly). `Storage` now only holds the `Storage::human()` helper.
-- Setters are gone in favour of constructor arguments: `setTelemetry()` and the static `S3::setRetryAttempts()`/`S3::setRetryDelay()` became the `telemetry`, `retryAttempts`, and `retryDelay` named constructor arguments on `S3` and its subclasses. `setHttpVersion()` is gone: transport options now belong to the injected PSR-18 client.
+- Setters are gone in favour of constructor arguments: `setTelemetry()` became the `telemetry` named constructor argument on `S3` and its subclasses. `setHttpVersion()` is gone: transport options now belong to the injected PSR-18 client. The static `S3::setRetryAttempts()`/`S3::setRetryDelay()` moved into the `S3\RetryStrategy` used by the default client's `Retry` decorator — inject your own client to tune or disable retries.
 - `setTransferChunkSize()`/`getTransferChunkSize()` became a per-call argument: `transfer($path, $destination, $device, $chunkSize)`.
 - String constants became enums: the `Storage::DEVICE_*` constants are now the `Utopia\Storage\DeviceType` enum (`getType()` returns it), and the `S3::ACL_*` constants are now the `Utopia\Storage\Acl` enum.
 - The S3 adapter no longer stores request headers on the instance, so one device can serve concurrent requests (for example Swoole coroutines) without data races.

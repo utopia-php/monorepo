@@ -25,8 +25,6 @@ class Linode extends S3
 
     /**
      * Object Storage Constructor
-     *
-     * @param  int  $retryDelay  Delay between retries in milliseconds
      */
     public function __construct(
         string $root,
@@ -36,13 +34,11 @@ class Linode extends S3
         string $bucket,
         string $region = self::EU_CENTRAL_1,
         Acl $acl = Acl::Private,
-        int $retryAttempts = 3,
-        int $retryDelay = 500,
         Telemetry $telemetry = new NoTelemetry(),
         ?ClientInterface $client = null,
     ) {
         $host = $bucket . '.' . $region . '.' . 'linodeobjects.com';
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $retryAttempts, $retryDelay, $telemetry, $client);
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $telemetry, $client);
     }
 
     #[\Override]
