@@ -88,6 +88,7 @@ graph TD
     storage --> psr7
     auth
     circuit-breaker
+    image
     nats
     replication
     user-agent
