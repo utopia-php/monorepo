@@ -1,82 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Storage;
 
-use Exception;
-
-class Storage
+/**
+ * @see \Utopia\Tests\Storage\StorageTest
+ */
+final class Storage
 {
-    /**
-     * Supported devices
-     */
-    public const DEVICE_LOCAL = 'local';
-
-    public const DEVICE_S3 = 's3';
-
-    public const DEVICE_AWS_S3 = 'awss3';
-
-    public const DEVICE_DO_SPACES = 'dospaces';
-
-    public const DEVICE_WASABI = 'wasabi';
-
-    public const DEVICE_BACKBLAZE = 'backblaze';
-
-    public const DEVICE_LINODE = 'linode';
-
-    /**
-     * Devices.
-     *
-     * List of all available storage devices
-     *
-     * @var array
-     */
-    public static $devices = [];
-
-    /**
-     * Set Device.
-     *
-     * Add device by name
-     *
-     * @param  string  $name
-     *
-     * @throws Exception
-     */
-    public static function setDevice($name, Device $device): void
-    {
-        self::$devices[$name] = $device;
-    }
-
-    /**
-     * Get Device.
-     *
-     * Get device by name
-     *
-     * @param  string  $name
-     * @return Device
-     *
-     * @throws Exception
-     */
-    public static function getDevice($name)
-    {
-        if (! \array_key_exists($name, self::$devices)) {
-            throw new Exception('The device "' . $name . '" is not listed');
-        }
-
-        return self::$devices[$name];
-    }
-
-    /**
-     * Exists.
-     *
-     * Checks if given storage name is registered or not
-     *
-     * @param  string  $name
-     */
-    public static function exists($name): bool
-    {
-        return \array_key_exists($name, self::$devices);
-    }
-
     /**
      * Human readable data size format from bytes input.
      *

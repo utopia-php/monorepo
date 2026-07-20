@@ -1,19 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Storage\Device;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Storage\Device\S3;
+use Utopia\Storage\Device\S3\Response as S3Response;
 
 /**
  * Testable S3 subclass that exposes protected helpers.
  */
 class TestableS3 extends S3
 {
+    /**
+     * @var array<string>
+     */
     public array $calls = [];
 
     public string $completedBody = '';
 
+    /**
+     * @var array<string, array<string, string>>
+     */
     public array $headersByOperation = [];
 
     private bool $objectExists = false;
@@ -24,35 +33,35 @@ class TestableS3 extends S3
     }
 
     #[\Override]
-    protected function call(string $operation, string $method, string $uri, string $data = '', array $parameters = [], bool $decode = true): \stdClass
+    protected function call(string $operation, string $method, string $uri, string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true): S3Response
     {
         $this->calls[] = $operation;
-        $this->headersByOperation[$operation] = $this->headers;
+        $this->headersByOperation[$operation] = $headers;
 
         if ($operation === 's3:info') {
             if (! $this->objectExists) {
                 throw new \Exception('Not found');
             }
 
-            return (object) ['headers' => ['content-length' => 1], 'body' => ''];
+            return new S3Response(code: 200, headers: ['content-length' => '1'], body: '');
         }
 
         if ($operation === 's3:createMultipartUpload') {
-            return (object) ['headers' => [], 'body' => ['UploadId' => 'upload-123']];
+            return new S3Response(code: 200, headers: [], body: ['UploadId' => 'upload-123']);
         }
 
         if ($operation === 's3:uploadPart') {
-            return (object) ['headers' => ['etag' => 'etag-' . $parameters['partNumber']], 'body' => ''];
+            return new S3Response(code: 200, headers: ['etag' => 'etag-' . $parameters['partNumber']], body: '');
         }
 
         if ($operation === 's3:completeMultipartUpload') {
             $this->completedBody = $data;
             $this->objectExists = true;
 
-            return (object) ['headers' => [], 'body' => ''];
+            return new S3Response(code: 200, headers: [], body: '');
         }
 
-        return (object) ['headers' => [], 'body' => ''];
+        return new S3Response(code: 200, headers: [], body: '');
     }
 }
 
@@ -69,12 +78,6 @@ final class S3SlowDownTest extends TestCase
             host: 'https://s3.example.com',
             region: 'us-east-1',
         );
-    }
-
-    protected function tearDown(): void
-    {
-        S3::setRetryAttempts(3);
-        S3::setRetryDelay(500);
     }
 
     public function testTransientXmlErrorIsRetried(): void
@@ -104,7 +107,7 @@ final class S3SlowDownTest extends TestCase
 
     public function testDefaultRetrySettings(): void
     {
-        $prop = fn(string $name): mixed => new \ReflectionProperty(S3::class, $name)->getValue();
+        $prop = fn(string $name): mixed => new \ReflectionProperty(S3::class, $name)->getValue($this->s3);
         $this->assertSame(3, $prop('retryAttempts'));
         $this->assertSame(500, $prop('retryDelay'));
     }
@@ -115,9 +118,9 @@ final class S3SlowDownTest extends TestCase
 
         $this->s3->prepareUpload('/root/file.txt', 'text/plain', 2, $metadata);
 
-        $this->assertSame('upload-123', $metadata['uploadId']);
-        $this->assertSame([], $metadata['parts']);
-        $this->assertSame(0, $metadata['chunks']);
+        $this->assertSame('upload-123', $metadata['uploadId'] ?? null);
+        $this->assertSame([], $metadata['parts'] ?? null);
+        $this->assertSame(0, $metadata['chunks'] ?? null);
         $this->assertSame(['s3:createMultipartUpload'], $this->s3->calls);
     }
 
@@ -131,7 +134,7 @@ final class S3SlowDownTest extends TestCase
         $chunks = $this->s3->uploadChunk($source, '/root/file.txt', 1, 2, $metadata);
 
         $this->assertSame(1, $chunks);
-        $this->assertSame('etag-1', $metadata['parts'][1]);
+        $this->assertSame('etag-1', ($metadata['parts'] ?? [])[1] ?? null);
         $this->assertNotContains('s3:completeMultipartUpload', $this->s3->calls);
 
         unlink($source);
@@ -143,8 +146,8 @@ final class S3SlowDownTest extends TestCase
 
         $this->assertSame(1, $this->s3->uploadData('aaa', '/root/file.txt', 'text/plain', 1, 1, $metadata));
         $this->assertSame(['s3:write'], $this->s3->calls);
-        $this->assertSame([1 => true], $metadata['parts']);
-        $this->assertSame(1, $metadata['chunks']);
+        $this->assertSame([1 => true], $metadata['parts'] ?? null);
+        $this->assertSame(1, $metadata['chunks'] ?? null);
     }
 
     public function testFinalizeUploadRequiresAllS3Parts(): void

@@ -4,46 +4,25 @@ declare(strict_types=1);
 
 namespace Utopia\Tests\Storage;
 
-use Exception;
 use PHPUnit\Framework\TestCase;
 use Utopia\Storage\Device\Local;
 use Utopia\Storage\Device\Telemetry;
 use Utopia\Storage\Storage;
 use Utopia\Telemetry\Adapter\Test as TestTelemetry;
 
-Storage::setDevice('disk-a', new Local(__DIR__ . '/../resources/disk-a'));
-Storage::setDevice('disk-b', new Local(__DIR__ . '/../resources/disk-b'));
-
 final class StorageTest extends TestCase
 {
-    protected function setUp(): void {}
-
-    protected function tearDown(): void {}
-
-    public function testGetters(): void
+    public function testHuman(): void
     {
-        $this->assertInstanceOf(\Utopia\Storage\Device\Local::class, Storage::getDevice('disk-a'));
-        $this->assertInstanceOf(\Utopia\Storage\Device\Local::class, Storage::getDevice('disk-b'));
-
-        try {
-            Storage::getDevice('disk-c');
-            $this->fail('Expected exception not thrown');
-        } catch (Exception $e) {
-            $this->assertSame('The device "disk-c" is not listed', $e->getMessage());
-        }
-    }
-
-    public function testExists(): void
-    {
-        $this->assertTrue(Storage::exists('disk-a'));
-        $this->assertTrue(Storage::exists('disk-b'));
-        $this->assertFalse(Storage::exists('disk-c'));
+        $this->assertSame('1.00kB', Storage::human(1000));
+        $this->assertSame('1.00KiB', Storage::human(1024, system: 'binary'));
+        $this->assertSame('2.5MB', Storage::human(2500000, 1));
     }
 
     public function testMoveIdenticalName(): void
     {
         $file = '/kitten-1.jpg';
-        $device = Storage::getDevice('disk-a');
+        $device = new Local(__DIR__ . '/../resources/disk-a');
         $this->assertFalse($device->move($file, $file));
     }
 

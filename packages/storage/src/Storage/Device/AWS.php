@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Utopia\Storage\Device;
 
-use Utopia\Storage\Storage;
+use Utopia\Storage\Acl;
+use Utopia\Storage\DeviceType;
+use Utopia\Telemetry\Adapter as Telemetry;
+use Utopia\Telemetry\Adapter\None as NoTelemetry;
 
 class AWS extends S3
 {
@@ -64,15 +67,28 @@ class AWS extends S3
     public const US_GOV_WEST_1 = 'us-gov-west-1';
 
     /**
-     * S3 Constructor
+     * AWS Constructor
+     *
+     * @param  int  $retryDelay  Delay between retries in milliseconds
      */
-    public function __construct(string $root, string $accessKey, string $secretKey, string $bucket, string $region = self::US_EAST_1, string $acl = self::ACL_PRIVATE)
-    {
+    public function __construct(
+        string $root,
+        string $accessKey,
+        #[\SensitiveParameter]
+        string $secretKey,
+        string $bucket,
+        string $region = self::US_EAST_1,
+        Acl $acl = Acl::Private,
+        ?int $httpVersion = null,
+        int $retryAttempts = 3,
+        int $retryDelay = 500,
+        Telemetry $telemetry = new NoTelemetry(),
+    ) {
         $host = match ($region) {
             self::CN_NORTH_1, self::CN_NORTH_4, self::CN_NORTHWEST_1 => $bucket . '.s3.' . $region . '.amazonaws.cn',
             default => $bucket . '.s3.' . $region . '.amazonaws.com'
         };
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl);
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $httpVersion, $retryAttempts, $retryDelay, $telemetry);
     }
 
     #[\Override]
@@ -82,9 +98,9 @@ class AWS extends S3
     }
 
     #[\Override]
-    public function getType(): string
+    public function getType(): DeviceType
     {
-        return Storage::DEVICE_AWS_S3;
+        return DeviceType::AwsS3;
     }
 
     #[\Override]

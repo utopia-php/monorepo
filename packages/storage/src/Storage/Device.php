@@ -1,46 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Storage;
 
 use Exception;
-use Utopia\Telemetry\Adapter as Telemetry;
-use Utopia\Telemetry\Adapter\None as NoTelemetry;
-use Utopia\Telemetry\Histogram;
 
+/**
+ * @phpstan-type UploadMetadata array{parts?: array<int, bool|string>, chunks?: int, content_type?: string, uploadId?: string}
+ */
 abstract class Device
 {
     /**
-     * Max chunk size while transferring file from one device to another
+     * Default max chunk size while transferring file from one device to another
      */
-    protected int $transferChunkSize = 20000000; // 20 MB
+    public const TRANSFER_CHUNK_SIZE = 20000000; // 20 MB
 
     /**
      * Sets the maximum number of keys returned to the response. By default, the action returns up to 1,000 key names.
      */
     protected const MAX_PAGE_SIZE = PHP_INT_MAX;
-
-    protected Histogram $storageOperationTelemetry;
-
-    public function __construct(Telemetry $telemetry = new NoTelemetry())
-    {
-        $this->setTelemetry($telemetry);
-    }
-
-    /**
-     * Set Transfer Chunk Size
-     */
-    public function setTransferChunkSize(int $chunkSize): void
-    {
-        $this->transferChunkSize = $chunkSize;
-    }
-
-    /**
-     * Get Transfer Chunk Size
-     */
-    public function getTransferChunkSize(): int
-    {
-        return $this->transferChunkSize;
-    }
 
     /**
      * Get Name.
@@ -54,7 +33,7 @@ abstract class Device
      *
      * Get storage device type
      */
-    abstract public function getType(): string;
+    abstract public function getType(): DeviceType;
 
     /**
      * Get Description.
@@ -62,16 +41,6 @@ abstract class Device
      * Get storage device description and purpose.
      */
     abstract public function getDescription(): string;
-
-    public function setTelemetry(Telemetry $telemetry): void
-    {
-        $this->storageOperationTelemetry = Histogram::lazy(
-            telemetry: $telemetry,
-            name: 'storage.operation',
-            unit: 's',
-            advisory: ['ExplicitBucketBoundaries' => [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]],
-        );
-    }
 
     /**
      * Get Root.
@@ -93,6 +62,7 @@ abstract class Device
      * Upload a file to desired destination in the selected disk
      * return number of chunks uploaded or 0 if it fails.
      *
+     * @param  UploadMetadata  $metadata
      *
      * @throws Exception
      */
@@ -103,6 +73,8 @@ abstract class Device
      *
      * Initialize adapter-specific upload state without transferring a chunk body.
      *
+     * @param  UploadMetadata  $metadata
+     *
      * @throws Exception
      */
     abstract public function prepareUpload(string $path, string $contentType, int $chunks = 1, array &$metadata = []): void;
@@ -112,6 +84,8 @@ abstract class Device
      *
      * Upload exactly one chunk without finalizing the full upload.
      *
+     * @param  UploadMetadata  $metadata
+     *
      * @throws Exception
      */
     abstract public function uploadChunk(string $source, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int;
@@ -120,6 +94,8 @@ abstract class Device
      * Finalize Upload.
      *
      * Complete a prepared upload once all chunks are known to be present.
+     *
+     * @param  UploadMetadata  $metadata
      *
      * @throws Exception
      */
@@ -131,6 +107,7 @@ abstract class Device
      * Upload file contents to desired destination in the selected disk.
      * return number of chunks uploaded or 0 if it fails.
      *
+     * @param  UploadMetadata  $metadata
      *
      * @throws Exception
      */
@@ -143,14 +120,19 @@ abstract class Device
 
     /**
      * Read file by given path.
+     *
+     * @param  int<0, max>  $offset
+     * @param  int<0, max>|null  $length
      */
     abstract public function read(string $path, int $offset = 0, ?int $length = null): string;
 
     /**
      * Transfer
      * Transfer a file from current device to destination device.
+     *
+     * @param  positive-int  $chunkSize
      */
-    abstract public function transfer(string $path, string $destination, Device $device): bool;
+    abstract public function transfer(string $path, string $destination, Device $device, int $chunkSize = self::TRANSFER_CHUNK_SIZE): bool;
 
     /**
      * Write file by given path.

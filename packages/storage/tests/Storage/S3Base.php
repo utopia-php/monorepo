@@ -11,11 +11,38 @@ use Utopia\Storage\Exception\NotFoundException;
 
 abstract class S3Base extends TestCase
 {
+    /**
+     * @return resource
+     */
+    private function openStream(string $path)
+    {
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException('Failed to open ' . $path);
+        }
+
+        return $handle;
+    }
+
+    /**
+     * @param  resource  $handle
+     * @param  int<1, max>  $length
+     */
+    private function readBytes($handle, int $length): string
+    {
+        $contents = fread($handle, $length);
+        if ($contents === false) {
+            throw new \RuntimeException('Failed to read stream');
+        }
+
+        return $contents;
+    }
+
     abstract protected function init(): void;
 
     abstract protected function getAdapterName(): string;
 
-    abstract protected function getAdapterType(): string;
+    abstract protected function getAdapterType(): \Utopia\Storage\DeviceType;
 
     abstract protected function getAdapterDescription(): string;
 
@@ -64,7 +91,10 @@ abstract class S3Base extends TestCase
         $this->assertEquals(false, $files['IsTruncated']);
         $this->assertIsArray($files['Contents']);
 
-        $file = $files['Contents'][0];
+        $file = $files['Contents'][0] ?? null;
+        if (! \is_array($file)) {
+            self::fail('Missing first object in S3 list response');
+        }
 
         $this->assertArrayHasKey('Key', $file);
         $this->assertArrayHasKey('LastModified', $file);
@@ -84,7 +114,12 @@ abstract class S3Base extends TestCase
         $this->assertIsArray($files['Contents']);
         $this->assertArrayHasKey('NextContinuationToken', $files);
 
-        $files = $this->object->getFiles($path, 1000, $files['NextContinuationToken']);
+        $token = $files['NextContinuationToken'] ?? null;
+        if (! \is_string($token)) {
+            self::fail('Missing continuation token in S3 list response');
+        }
+
+        $files = $this->object->getFiles($path, 1000, $token);
         $this->assertEquals(1, $files['KeyCount']);
         $this->assertEquals(1000, $files['MaxKeys']);
         $this->assertEquals(false, $files['IsTruncated']);
@@ -252,7 +287,7 @@ abstract class S3Base extends TestCase
         $this->assertEquals(-1, $this->object->getPartitionTotalSpace());
     }
 
-    public function testPartUpload()
+    public function testPartUpload(): string
     {
         $source = __DIR__ . '/../resources/disk-a/large_file.mp4';
         $dest = $this->object->getPath('uploaded.mp4');
@@ -268,20 +303,16 @@ abstract class S3Base extends TestCase
         $metadata = [
             'parts' => [],
             'chunks' => 0,
-            'uploadId' => null,
-            'content_type' => mime_content_type($source),
+            'content_type' => mime_content_type($source) ?: '',
         ];
-        $handle = @fopen($source, 'rb');
+        $handle = $this->openStream($source);
         $op = __DIR__ . '/chunk.part';
         while ($start < $totalSize) {
-            $contents = fread($handle, $chunkSize);
-            $op = __DIR__ . '/chunk.part';
-            $cc = fopen($op, 'wb');
-            fwrite($cc, $contents);
-            fclose($cc);
+            $contents = $this->readBytes($handle, $chunkSize);
+            file_put_contents($op, $contents);
             $this->object->upload($op, $dest, $chunk, $chunks, $metadata);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             fseek($handle, $start);
         }
         @fclose($handle);
@@ -299,7 +330,7 @@ abstract class S3Base extends TestCase
         return $dest;
     }
 
-    public function testPartUploadRetry()
+    public function testPartUploadRetry(): string
     {
         $source = __DIR__ . '/../resources/disk-a/large_file.mp4';
         $dest = $this->object->getPath('uploaded.mp4');
@@ -315,20 +346,16 @@ abstract class S3Base extends TestCase
         $metadata = [
             'parts' => [],
             'chunks' => 0,
-            'uploadId' => null,
-            'content_type' => mime_content_type($source),
+            'content_type' => mime_content_type($source) ?: '',
         ];
-        $handle = @fopen($source, 'rb');
+        $handle = $this->openStream($source);
         $op = __DIR__ . '/chunk.part';
         while ($start < $totalSize) {
-            $contents = fread($handle, $chunkSize);
-            $op = __DIR__ . '/chunk.part';
-            $cc = fopen($op, 'wb');
-            fwrite($cc, $contents);
-            fclose($cc);
+            $contents = $this->readBytes($handle, $chunkSize);
+            file_put_contents($op, $contents);
             $this->object->upload($op, $dest, $chunk, $chunks, $metadata);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             break;
         }
         @fclose($handle);
@@ -337,17 +364,14 @@ abstract class S3Base extends TestCase
         $chunk = 1;
         $start = 0;
         // retry from first to make sure duplicate chunk re-upload works without issue
-        $handle = @fopen($source, 'rb');
+        $handle = $this->openStream($source);
         $op = __DIR__ . '/chunk.part';
         while ($start < $totalSize) {
-            $contents = fread($handle, $chunkSize);
-            $op = __DIR__ . '/chunk.part';
-            $cc = fopen($op, 'wb');
-            fwrite($cc, $contents);
-            fclose($cc);
+            $contents = $this->readBytes($handle, $chunkSize);
+            file_put_contents($op, $contents);
             $this->object->upload($op, $dest, $chunk, $chunks, $metadata);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             fseek($handle, $start);
         }
         @fclose($handle);
@@ -365,7 +389,7 @@ abstract class S3Base extends TestCase
         return $dest;
     }
 
-    public function testOutOfOrderPartUpload()
+    public function testOutOfOrderPartUpload(): string
     {
         $source = __DIR__ . '/../resources/disk-a/large_file.mp4';
         $dest = $this->object->getPath('uploaded-out-of-order.mp4');
@@ -377,28 +401,24 @@ abstract class S3Base extends TestCase
 
         // Read all chunk contents into memory so we can upload out of order
         $parts = [];
-        $handle = @fopen($source, 'rb');
+        $handle = $this->openStream($source);
         $chunkNum = 1;
         while ($chunkNum <= $chunks) {
-            $contents = fread($handle, $chunkSize);
-            $parts[$chunkNum] = $contents;
-            $chunkNum++;
+            $parts[$chunkNum] = $this->readBytes($handle, $chunkSize);
+            ++$chunkNum;
         }
-        @fclose($handle);
+        fclose($handle);
 
         $metadata = [
             'parts' => [],
             'chunks' => 0,
-            'uploadId' => null,
-            'content_type' => mime_content_type($source),
+            'content_type' => mime_content_type($source) ?: '',
         ];
 
         // Upload chunks in reverse order
-        for ($i = $chunks; $i >= 1; $i--) {
+        for ($i = $chunks; $i >= 1; --$i) {
             $op = __DIR__ . '/chunk.part';
-            $cc = fopen($op, 'wb');
-            fwrite($cc, $parts[$i]);
-            fclose($cc);
+            file_put_contents($op, $parts[$i]);
             $this->object->upload($op, $dest, $i, $chunks, $metadata);
             unlink($op);
         }
@@ -425,12 +445,10 @@ abstract class S3Base extends TestCase
     public function testTransferLarge(string $path): void
     {
         // chunked file
-        $this->object->setTransferChunkSize(10000000); // 10 mb
-
         $device = new Local(__DIR__ . '/../resources/disk-a');
         $destination = $device->getPath('largefile.mp4');
 
-        $this->assertTrue($this->object->transfer($path, $destination, $device));
+        $this->assertTrue($this->object->transfer($path, $destination, $device, 10000000)); // 10 mb chunks
         $this->assertTrue($device->exists($destination));
         $this->assertSame('video/mp4', $device->getFileMimeType($destination));
 
@@ -440,15 +458,13 @@ abstract class S3Base extends TestCase
 
     public function testTransferSmall(): void
     {
-        $this->object->setTransferChunkSize(10000000); // 10 mb
-
         $device = new Local(__DIR__ . '/../resources/disk-a');
 
         $path = $this->object->getPath('text-for-read.txt');
         $this->object->write($path, 'Hello World', 'text/plain');
 
         $destination = $device->getPath('hello.txt');
-        $this->assertTrue($this->object->transfer($path, $destination, $device));
+        $this->assertTrue($this->object->transfer($path, $destination, $device, 10000000)); // 10 mb chunks
         $this->assertTrue($device->exists($destination));
         $this->assertSame('Hello World', $device->read($destination));
 
