@@ -12,7 +12,7 @@ How to shape a utopia-php package. Apply when designing a new package, preparing
 - All configuration enters through the constructor as `readonly` promoted properties. No `setX()` methods, no static mutable state, no global registries. If a value must vary per operation, make it a method argument (`transfer(..., int $chunkSize)`), not instance state.
 - Guarantee coroutine safety: an instance must hold zero per-request state. Build request-scoped data (headers, buffers) as locals and pass them through; two concurrent calls on one instance must never race. Grep for instance properties written outside the constructor — each one is a suspect.
 - Mark secrets `#[\SensitiveParameter]`. Optional dependencies default in the signature (`?ClientInterface $client = null`) and resolve in the constructor body.
-- Prefer removals that fail loudly. Deleting a method breaks callers at call time; changing the *meaning* of a same-shaped signature (e.g. a `string` param switching from file path to raw data) corrupts silently. When semantics must change, change the method name too, or delete the old name.
+- Prefer removals that fail loudly. Deleting a method breaks callers at call time; changing the *meaning* of a same-shaped signature (e.g. a `string` parameter switching from file path to raw data) corrupts silently. When semantics must change, change the method name too, or delete the old name.
 
 ## Surface area
 
@@ -25,9 +25,9 @@ How to shape a utopia-php package. Apply when designing a new package, preparing
 
 ## Dependencies
 
-- Audit `composer.json` against actual usage (`grep` each dep and each `ext-*`) — absorbed packages carry fossils.
+- Audit `composer.json` against actual usage (`grep` each dependency and each `ext-*`) — absorbed packages carry fossils.
 - Depend on PSR interfaces at the seam; default to the utopia implementation (`utopia-php/client`, `utopia-php/psr7`) in the constructor body. Match transport defaults to the old behavior deliberately (e.g. no request timeout for unbounded uploads) — a client's own defaults are tuned for RPC, not file transfer.
-- Sibling deps use Packagist constraints, never path repositories. Run `bin/monorepo validate` and regenerate the root dependency graph (`bin/monorepo graph`) after touching a manifest.
+- Sibling dependencies use Packagist constraints, never path repositories. Run `bin/monorepo validate` and regenerate the root dependency graph (`bin/monorepo graph`) after touching a manifest.
 
 ## Static analysis and guards
 

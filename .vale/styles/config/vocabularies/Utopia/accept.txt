@@ -145,6 +145,10 @@ backoff
 backpressure
 allowlist
 accessor(?:s)?
+ACLs?
+composable
+docblocks?
+redeclaring
 lookups
 loopback
 lockdown
