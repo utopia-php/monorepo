@@ -43,6 +43,39 @@ Fux
 Dittmann
 Torsten
 United States
+Wget
+aiohttp
+Axios
+HTTPie
+GPTBot
+ClaudeBot
+PerplexityBot
+OkHttp
+Guzzle
+macOS
+iOS
+iPadOS
+tvOS
+watchOS
+HarmonyOS
+webOS
+Sailfish
+KaiOS
+BlackBerry
+PlayStation
+Nintendo
+Ubuntu
+Debian
+Fedora
+Vivaldi
+Yandex
+DuckDuckGo
+Huawei
+Coc
+Silk
+WebView
+QQ
+UC
 
 # Protocols, formats, acronyms
 OAuth
