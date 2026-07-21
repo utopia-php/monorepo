@@ -9,6 +9,9 @@ use Psr\Http\Client\ClientInterface;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Client as HttpClient;
 use Utopia\Client\Decorator\Retry;
+use Utopia\Client\Pool as ClientPool;
+use Utopia\Pools\Adapter\Stack;
+use Utopia\Pools\Pool as Connections;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Stream;
@@ -33,6 +36,12 @@ class S3 extends Device
 {
     protected const MAX_PAGE_SIZE = 1000;
 
+    /**
+     * Connections in the default client pool. The pool is lazy: connections
+     * are dialled on first use, so idle devices cost nothing.
+     */
+    protected const CLIENT_POOL_SIZE = 16;
+
     private readonly string $fqdn;
 
     private readonly string $host;
@@ -42,7 +51,7 @@ class S3 extends Device
     /**
      * S3 Constructor
      *
-     * @param  ClientInterface|null  $client  PSR-18 client used for every request; defaults to `utopia-php/client` with the cURL adapter, no request timeout, and transient-error retries via `S3\RetryStrategy`
+     * @param  ClientInterface|null  $client  PSR-18 client used for every request; defaults to a lazy pool of `utopia-php/client` cURL connections with keep-alive, no request timeout, and transient-error retries via `S3\RetryStrategy`
      */
     public function __construct(
         protected readonly string $root,
@@ -62,10 +71,15 @@ class S3 extends Device
             $this->host = $host;
         }
 
-        $this->client = $client ?? new Retry(
-            new HttpClient(new CurlAdapter())->withTimeout(0.0),
-            new S3\RetryStrategy(),
-        );
+        $this->client = $client ?? new ClientPool(new Connections(
+            pool: new Stack(),
+            name: 's3',
+            size: self::CLIENT_POOL_SIZE,
+            init: fn(): HttpClient => new HttpClient(new Retry(
+                new CurlAdapter()->withConnectionReuse()->withTimeout(0.0),
+                new S3\RetryStrategy(),
+            )),
+        ));
     }
 
     public function getType(): DeviceType

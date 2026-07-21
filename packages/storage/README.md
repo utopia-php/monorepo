@@ -239,7 +239,7 @@ $sourceDevice->transfer('source/path.jpg', 'target/path.jpg', $targetDevice, 100
 
 ## Custom HTTP client
 
-The S3-family adapters send requests through any [PSR-18](https://www.php-fig.org/psr/psr-18/) client. By default they use [utopia-php/client](https://github.com/utopia-php/client) with the cURL adapter, no request timeout, and the `Retry` decorator configured with `S3\RetryStrategy` — it retries transient S3 rate-limiting errors (`SlowDown`, `ServiceUnavailable`, `Throttling`, `RequestThrottled`, and plain 429/503 responses) three times with a 500 ms delay.
+The S3-family adapters send requests through any [PSR-18](https://www.php-fig.org/psr/psr-18/) client. By default they use a lazily initialized [utopia-php/client](https://github.com/utopia-php/client) `Pool` of 16 cURL connections with keep-alive enabled, no request timeout, and the `Retry` decorator configured with `S3\RetryStrategy` — it retries transient S3 rate-limiting errors (`SlowDown`, `ServiceUnavailable`, `Throttling`, `RequestThrottled`, and plain 429/503 responses) three times with a 500 ms delay. The pool makes one shared device both safe and fast under concurrent coroutines: each request borrows a connection for its duration, and connections persist between borrows so the TCP and TLS handshake is paid once rather than per request.
 
 Inject your own client to change the transport or the retry policy — for example the Swoole coroutine adapter with more aggressive retries:
 

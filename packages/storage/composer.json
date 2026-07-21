@@ -36,7 +36,8 @@
         "psr/http-client": "^1.0",
         "psr/http-message": "^1.1 || ^2.0",
         "utopia-php/client": "0.2.*",
-        "utopia-php/psr7": "0.2.*"
+        "utopia-php/psr7": "0.2.*",
+        "utopia-php/pools": "1.*"
     },
     "config": {
         "allow-plugins": {
