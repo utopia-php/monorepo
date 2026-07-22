@@ -6,9 +6,11 @@ namespace Utopia\Storage\Device;
 
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\StreamInterface;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Client as HttpClient;
 use Utopia\Client\Decorator\Retry;
+use Utopia\Psr18\StreamingClientInterface;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Stream;
@@ -33,16 +35,20 @@ class S3 extends Device
 {
     protected const MAX_PAGE_SIZE = 1000;
 
+    private const int ERROR_BODY_BUFFER_SIZE = 16384;
+
+    private const int PIPE_CHUNK_SIZE = 524288; // 512 KB
+
     private readonly string $fqdn;
 
     private readonly string $host;
 
-    private readonly ClientInterface $client;
+    private readonly ClientInterface&StreamingClientInterface $client;
 
     /**
      * S3 Constructor
      *
-     * @param  ClientInterface|null  $client  PSR-18 client used for every request; defaults to `utopia-php/client` with the cURL adapter — no overall deadline (large transfers may take arbitrarily long), a stall watchdog that aborts once no bytes move for 60s, TCP keepalive, and transient-error retries via `S3\RetryStrategy`
+     * @param  (ClientInterface&StreamingClientInterface)|null  $client  PSR-18 client used for every request; defaults to `utopia-php/client` with the cURL adapter — no overall deadline (large transfers may take arbitrarily long), a stall watchdog that aborts once no bytes move for 60s, TCP keepalive, and transient-error retries via `S3\RetryStrategy`
      */
     public function __construct(
         protected readonly string $root,
@@ -52,7 +58,7 @@ class S3 extends Device
         string $host,
         protected readonly string $region,
         protected readonly Acl $acl = Acl::Private,
-        ?ClientInterface $client = null,
+        (ClientInterface&StreamingClientInterface)|null $client = null,
     ) {
         if (str_starts_with($host, 'http://') || str_starts_with($host, 'https://')) {
             $this->fqdn = $host;
@@ -91,20 +97,20 @@ class S3 extends Device
     /**
      * @param  UploadMetadata  $metadata
      */
-    public function prepareUpload(string $path, string $contentType, int $chunks = 1, array &$metadata = []): void
+    public function prepare(string $path, string $contentType, int $chunks = 1, array &$metadata = []): void
     {
         $metadata['parts'] ??= [];
         $metadata['chunks'] ??= 0;
         $metadata['content_type'] ??= $contentType;
 
-        if ($chunks === 1 || isset($metadata['uploadId']) && !\in_array($metadata['uploadId'], ['', '0', [], 0], true)) {
+        if ($chunks === 1 || isset($metadata['uploadId']) && ! \in_array($metadata['uploadId'], ['', '0', [], 0], true)) {
             return;
         }
 
         $metadata['uploadId'] = $this->createMultipartUpload($path, $contentType);
     }
 
-    public function finalizeUpload(string $path, int $chunks = 1, array &$metadata = []): bool
+    public function finalize(string $path, int $chunks = 1, array &$metadata = []): bool
     {
         if ($this->exists($path)) {
             return true;
@@ -119,7 +125,7 @@ class S3 extends Device
         }
 
         $metadata['parts'] ??= [];
-        for ($i = 1; $i <= $chunks; ++$i) {
+        for ($i = 1; $i <= $chunks; $i++) {
             if (! \array_key_exists($i, $metadata['parts'])) {
                 throw new UploadException('Missing chunk ' . $i);
             }
@@ -131,9 +137,12 @@ class S3 extends Device
     }
 
     /**
+     * @param  int[]  $metadata
+     */
+    /**
      * @param  UploadMetadata  $metadata
      */
-    public function uploadChunk(string $data, string $path, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
+    protected function uploadChunk(StreamInterface $data, string $path, int $chunk, int $chunks, array &$metadata): int
     {
         $contentType = $metadata['content_type'] ?? '';
 
@@ -155,55 +164,11 @@ class S3 extends Device
         $etag = $this->uploadPart($data, $path, $contentType, $chunk, $metadata['uploadId']);
         // skip incrementing if the chunk was re-uploaded
         if (! \array_key_exists($chunk, $metadata['parts'])) {
-            ++$metadata['chunks'];
+            $metadata['chunks']++;
         }
         $metadata['parts'][$chunk] = $etag;
 
         return $metadata['chunks'];
-    }
-
-    /**
-     * Transfer
-     */
-    public function transfer(string $path, string $destination, Device $device, int $chunkSize = self::TRANSFER_CHUNK_SIZE): bool
-    {
-        if ($chunkSize <= 0) {
-            throw new \InvalidArgumentException('Chunk size must be greater than zero');
-        }
-
-        $response = $this->getInfo($path);
-        $size = (int) ($response['content-length'] ?? 0);
-        $contentType = $response['content-type'] ?? '';
-
-        if ($size <= $chunkSize) {
-            $source = $this->read($path);
-
-            return $device->write($destination, $source, $contentType);
-        }
-
-        $totalChunks = (int) ceil($size / $chunkSize);
-        $metadata = ['content_type' => $contentType];
-        try {
-            for ($counter = 0; $counter < $totalChunks; ++$counter) {
-                $start = $counter * $chunkSize;
-                $data = $this->read($path, $start, $chunkSize);
-                $device->uploadData($data, $destination, $contentType, $counter + 1, $totalChunks, $metadata);
-            }
-        } catch (\Throwable $e) {
-            // Best effort, and only once a multipart upload was actually started —
-            // its unclaimed parts are billed until aborted. Aborting without one
-            // could delete a pre-existing destination the transfer never touched.
-            $uploadId = $metadata['uploadId'] ?? null;
-            if (\is_string($uploadId) && $uploadId !== '') {
-                try {
-                    $device->abort($destination, $uploadId);
-                } catch (\Throwable) {
-                }
-            }
-            throw $e;
-        }
-
-        return true;
     }
 
     /**
@@ -241,7 +206,7 @@ class S3 extends Device
      *
      * @throws StorageException
      */
-    protected function uploadPart(string $data, string $path, string $contentType, int $chunk, string $uploadId): string
+    protected function uploadPart(StreamInterface $data, string $path, string $contentType, int $chunk, string $uploadId): string
     {
         $uri = $path !== '' ? '/' . str_replace(['%2F', '%3F'], ['/', '?'], rawurlencode($path)) : '/';
 
@@ -310,10 +275,12 @@ class S3 extends Device
     /**
      * Read file or part of file by given path, offset and length.
      *
+     * The body streams into a temporary stream as it arrives, so memory stays
+     * bounded regardless of object size.
      *
      * @throws StorageException
      */
-    public function read(string $path, int $offset = 0, ?int $length = null): string
+    public function read(string $path, int $offset = 0, ?int $length = null): StreamInterface
     {
         $uri = ($path !== '') ? '/' . str_replace('%2F', '/', rawurlencode($path)) : '/';
 
@@ -321,14 +288,21 @@ class S3 extends Device
         if ($length !== null) {
             $end = $offset + $length - 1;
             $headers['range'] = "bytes=$offset-$end";
-        }
-        $response = $this->call(Method::GET, $uri, headers: $headers, decode: false);
-
-        if (! \is_string($response->body)) {
-            throw new RemoteException('Unexpected S3 read response');
+        } elseif ($offset > 0) {
+            $headers['range'] = "bytes=$offset-";
         }
 
-        return $response->body;
+        $handle = fopen('php://temp', 'r+b');
+        if ($handle === false) {
+            throw new StorageException('Failed to allocate read buffer');
+        }
+
+        $this->call(Method::GET, $uri, headers: $headers, decode: false, sink: static function (string $chunk) use ($handle): void {
+            fwrite($handle, $chunk);
+        });
+        rewind($handle);
+
+        return Stream::fromResource($handle);
     }
 
     /**
@@ -337,7 +311,7 @@ class S3 extends Device
      *
      * @throws StorageException
      */
-    public function write(string $path, string $data, string $contentType = ''): bool
+    public function write(string $path, StreamInterface $data, string $contentType = ''): bool
     {
         $uri = $path !== '' ? '/' . str_replace(['%2F', '%3F'], ['/', '?'], rawurlencode($path)) : '/';
 
@@ -383,7 +357,6 @@ class S3 extends Device
 
         $uri = '/';
         $prefix = ltrim($prefix, '/'); /** S3 specific requirement that prefix should never contain a leading slash */
-
         $parameters = [
             'list-type' => 2,
             'prefix' => $prefix,
@@ -639,28 +612,42 @@ class S3 extends Device
      * Headers are built per call — the instance holds no request state, so a
      * single device is safe to share across concurrent coroutines.
      *
+     * When a $sink is given, the response body is delivered to it chunk by
+     * chunk instead of being buffered; only its head is kept so an error
+     * response can still be parsed.
+     *
      * @param  non-empty-string  $method
      * @param  array<string, int|string>  $parameters
      * @param  array<string, string>  $headers
      * @param  array<string, string>  $amzHeaders
+     * @param  (callable(string): void)|null  $sink
      *
      * @throws StorageException
      */
-    protected function call(string $method, string $uri, string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true): S3\Response
+    protected function call(string $method, string $uri, StreamInterface|string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true, ?callable $sink = null): S3\Response
     {
         $uri = $this->getAbsolutePath($uri);
         $url = $this->fqdn . $uri . '?' . http_build_query($parameters, '', '&', PHP_QUERY_RFC3986);
 
+        if ($data instanceof StreamInterface) {
+            [$md5, $sha256] = $this->hashBody($data);
+            $body = $data;
+        } else {
+            $md5 = base64_encode(md5($data, true));
+            $sha256 = hash('sha256', $data);
+            $body = new Stream($data);
+        }
+
         $headers = array_filter($headers, fn(string $value): bool => $value !== '');
         $headers['host'] = $this->host;
         $headers['date'] = gmdate('D, d M Y H:i:s T');
-        $headers['content-md5'] = base64_encode(md5($data, true));
+        $headers['content-md5'] = $md5;
 
         $amzHeaders = array_filter($amzHeaders, fn(string $value): bool => $value !== '');
         $amzHeaders['x-amz-date'] = gmdate('Ymd\THis\Z');
-        $amzHeaders['x-amz-content-sha256'] = hash('sha256', $data);
+        $amzHeaders['x-amz-content-sha256'] = $sha256;
 
-        $request = new Request($method, Uri::parse($url), new Stream($data));
+        $request = new Request($method, Uri::parse($url), $body);
         foreach ([...$amzHeaders, ...$headers] as $header => $value) {
             $request = $request->withHeader($header, $value);
         }
@@ -669,13 +656,25 @@ class S3 extends Device
             ->withHeader('user-agent', 'utopia-php/storage');
 
         try {
-            $response = $this->client->sendRequest($request);
+            if ($sink === null) {
+                $response = $this->client->sendRequest($request);
+                $responseBody = (string) $response->getBody();
+            } else {
+                $head = '';
+                $tee = static function (string $chunk) use ($sink, &$head): void {
+                    if (\strlen($head) < self::ERROR_BODY_BUFFER_SIZE) {
+                        $head .= substr($chunk, 0, self::ERROR_BODY_BUFFER_SIZE - \strlen($head));
+                    }
+                    $sink($chunk);
+                };
+                $response = $this->client->stream($request, $tee);
+                $responseBody = $head;
+            }
         } catch (ClientExceptionInterface $e) {
             throw new TransportException($e->getMessage(), $e->getCode(), $e);
         }
 
         $code = $response->getStatusCode();
-        $responseBody = (string) $response->getBody();
 
         $responseHeaders = [];
         foreach ($response->getHeaders() as $name => $values) {
@@ -694,6 +693,38 @@ class S3 extends Device
             headers: $responseHeaders,
             body: $decode && $isXml ? $this->decodeXml($responseBody) : $responseBody,
         );
+    }
+
+    /**
+     * Hash a request body for signing without materializing it as a string.
+     *
+     * SigV4 needs the payload digests before the first byte is sent, so the
+     * stream is read once for hashing and rewound for the actual send — the
+     * same approach the AWS SDK takes. This is why S3 requires seekable
+     * streams.
+     *
+     * @return array{string, string} Base64 MD5 and hex SHA-256 of the full stream
+     */
+    private function hashBody(StreamInterface $body): array
+    {
+        if (! $body->isSeekable()) {
+            throw new \InvalidArgumentException('S3 requires a seekable stream so the payload can be signed');
+        }
+
+        $body->rewind();
+        $md5 = hash_init('md5');
+        $sha256 = hash_init('sha256');
+        while (! $body->eof()) {
+            $chunk = $body->read(self::PIPE_CHUNK_SIZE);
+            if ($chunk === '') {
+                break;
+            }
+            hash_update($md5, $chunk);
+            hash_update($sha256, $chunk);
+        }
+        $body->rewind();
+
+        return [base64_encode(hash_final($md5, true)), hash_final($sha256)];
     }
 
     /**
