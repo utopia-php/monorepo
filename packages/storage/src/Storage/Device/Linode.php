@@ -36,7 +36,7 @@ class Linode extends S3
         (ClientInterface&StreamingClientInterface)|null $client = null,
     ) {
         $host = $bucket . '.' . $region . '.' . 'linodeobjects.com';
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $client);
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $client, $bucket);
     }
 
     #[\Override]

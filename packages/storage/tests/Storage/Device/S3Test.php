@@ -46,7 +46,14 @@ class TestableS3 extends S3
 
     public ?int $failPart = null;
 
-    private bool $objectExists = false;
+    public bool $objectExists = false;
+
+    public string $infoContentLength = '1';
+
+    /**
+     * @var array<string, array<int, array<string, string>>>
+     */
+    public array $amzHeadersByOperation = [];
 
     #[\Override]
     protected function call(string $method, string $uri, StreamInterface|string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true, ?callable $sink = null): S3Response
@@ -54,6 +61,8 @@ class TestableS3 extends S3
         $operation = match (true) {
             $method === 'HEAD' => 's3:info',
             $method === 'POST' && \array_key_exists('uploads', $parameters) => 's3:createMultipartUpload',
+            $method === 'PUT' && isset($parameters['partNumber'], $amzHeaders['x-amz-copy-source']) => 's3:uploadPartCopy',
+            $method === 'PUT' && isset($amzHeaders['x-amz-copy-source']) => 's3:copyObject',
             $method === 'PUT' && isset($parameters['partNumber']) => 's3:uploadPart',
             $method === 'POST' && isset($parameters['uploadId']) => 's3:completeMultipartUpload',
             $method === 'DELETE' && isset($parameters['uploadId']) => 's3:abort',
@@ -62,13 +71,22 @@ class TestableS3 extends S3
         };
         $this->calls[] = $operation;
         $this->headersByOperation[$operation] = $headers;
+        $this->amzHeadersByOperation[$operation][] = $amzHeaders;
 
         if ($operation === 's3:info') {
             if (! $this->objectExists) {
                 throw new NotFoundException('Not found');
             }
 
-            return new S3Response(code: 200, headers: ['content-length' => '1'], body: '');
+            return new S3Response(code: 200, headers: ['content-length' => $this->infoContentLength], body: '');
+        }
+
+        if ($operation === 's3:copyObject') {
+            return new S3Response(code: 200, headers: [], body: ['ETag' => '"etag-copy"']);
+        }
+
+        if ($operation === 's3:uploadPartCopy') {
+            return new S3Response(code: 200, headers: [], body: ['ETag' => '"etag-' . $parameters['partNumber'] . '"']);
         }
 
         if ($operation === 's3:createMultipartUpload') {
@@ -380,6 +398,62 @@ final class S3Test extends TestCase
             $this->assertSame('Access denied.', $e->getMessage());
             $this->assertSame(403, $e->getCode());
         }
+    }
+
+    private function bucketDevice(): TestableS3
+    {
+        $s3 = new TestableS3(
+            root: '/root',
+            accessKey: 'test-key',
+            secretKey: 'test-secret',
+            host: 'https://s3.example.com',
+            region: 'us-east-1',
+            bucket: 'my-bucket',
+        );
+        $s3->objectExists = true;
+
+        return $s3;
+    }
+
+    public function testCopySameDeviceRunsServerSide(): void
+    {
+        $s3 = $this->bucketDevice();
+
+        $this->assertTrue($s3->copy('/root/a.jpg', '/root/b.jpg'));
+        $this->assertSame(['s3:info', 's3:copyObject'], $s3->calls);
+
+        $amzHeaders = $s3->amzHeadersByOperation['s3:copyObject'][0];
+        $this->assertSame('/my-bucket/root/a.jpg', $amzHeaders['x-amz-copy-source']);
+        $this->assertSame('COPY', $amzHeaders['x-amz-metadata-directive']);
+    }
+
+    public function testCopyLargeObjectUsesMultipartServerSideCopy(): void
+    {
+        $s3 = $this->bucketDevice();
+        $s3->infoContentLength = (string) (6 * 1024 * 1024 * 1024); // 6 GB — above the CopyObject limit
+
+        $this->assertTrue($s3->copy('/root/a.bin', '/root/b.bin'));
+        $this->assertSame([
+            's3:info',
+            's3:createMultipartUpload',
+            's3:uploadPartCopy',
+            's3:uploadPartCopy',
+            's3:completeMultipartUpload',
+        ], $s3->calls);
+
+        $ranges = array_column($s3->amzHeadersByOperation['s3:uploadPartCopy'], 'x-amz-copy-source-range');
+        $this->assertSame(['bytes=0-5368709119', 'bytes=5368709120-6442450943'], $ranges);
+        $this->assertStringContainsString('etag-2', $s3->completedBody);
+    }
+
+    public function testCopyWithoutBucketFallsBackToStreaming(): void
+    {
+        $this->s3->objectExists = true;
+
+        $this->assertTrue($this->s3->copy('/root/a.jpg', '/root/b.jpg'));
+        $this->assertNotContains('s3:copyObject', $this->s3->calls);
+        $this->assertContains('s3:get', $this->s3->calls);
+        $this->assertContains('s3:write', $this->s3->calls);
     }
 
     public function testExistsReturnsFalseOnlyForNotFound(): void

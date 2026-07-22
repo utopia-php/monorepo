@@ -39,6 +39,8 @@ class S3 extends Device
 
     private const int PIPE_CHUNK_SIZE = 524288; // 512 KB
 
+    private const int MAX_COPY_OBJECT_SIZE = 5368709120; // 5 GB — the CopyObject limit; larger objects copy server side part by part
+
     private readonly string $fqdn;
 
     private readonly string $host;
@@ -49,6 +51,7 @@ class S3 extends Device
      * S3 Constructor
      *
      * @param  (ClientInterface&StreamingClientInterface)|null  $client  PSR-18 client used for every request; defaults to `utopia-php/client` with the cURL adapter — no overall deadline (large transfers may take arbitrarily long), a stall watchdog that aborts once no bytes move for 60s, TCP keepalive, and transient-error retries via `S3\RetryStrategy`
+     * @param  string|null  $bucket  Bucket name, required by the `x-amz-copy-source` header. When set, same-device `copy()` (and therefore `move()`) runs server side without moving bytes through PHP; when null it falls back to a streamed download and re-upload.
      */
     public function __construct(
         protected readonly string $root,
@@ -59,6 +62,7 @@ class S3 extends Device
         protected readonly string $region,
         protected readonly Acl $acl = Acl::Private,
         (ClientInterface&StreamingClientInterface)|null $client = null,
+        protected readonly ?string $bucket = null,
     ) {
         if (str_starts_with($host, 'http://') || str_starts_with($host, 'https://')) {
             $this->fqdn = $host;
@@ -136,9 +140,6 @@ class S3 extends Device
         return true;
     }
 
-    /**
-     * @param  int[]  $metadata
-     */
     /**
      * @param  UploadMetadata  $metadata
      */
@@ -374,6 +375,89 @@ class S3 extends Device
         }
 
         return $response->body;
+    }
+
+    /**
+     * Copy a file to another path, on this device or onto another one.
+     *
+     * A same-device copy with a known bucket runs entirely server side —
+     * `CopyObject` up to 5 GB, `UploadPartCopy` beyond — so no bytes move
+     * through PHP. Everything else falls back to the streamed base copy.
+     *
+     * @throws StorageException
+     */
+    #[\Override]
+    public function copy(string $source, string $target, ?Device $to = null, int $chunkSize = self::COPY_CHUNK_SIZE): bool
+    {
+        if ((!$to instanceof \Utopia\Storage\Device || $to === $this) && $this->bucket !== null) {
+            return $this->copyObject($source, $target);
+        }
+
+        return parent::copy($source, $target, $to, $chunkSize);
+    }
+
+    /**
+     * Copy an object server side within this bucket.
+     *
+     * @throws StorageException
+     */
+    private function copyObject(string $source, string $target): bool
+    {
+        $info = $this->getInfo($source);
+        $size = (int) ($info['content-length'] ?? 0);
+
+        $copySource = '/' . $this->bucket . '/' . ltrim(str_replace('%2F', '/', rawurlencode($source)), '/');
+        $uri = $target !== '' ? '/' . str_replace(['%2F', '%3F'], ['/', '?'], rawurlencode($target)) : '/';
+
+        if ($size <= self::MAX_COPY_OBJECT_SIZE) {
+            $response = $this->call(Method::PUT, $uri, amzHeaders: [
+                'x-amz-copy-source' => $copySource,
+                'x-amz-metadata-directive' => 'COPY',
+                'x-amz-acl' => $this->acl->value,
+            ]);
+
+            // S3 reports CopyObject failures in a 200 body, so success is the ETag.
+            if (! \is_array($response->body) || ! isset($response->body['ETag'])) {
+                throw new RemoteException('Unexpected S3 copy response');
+            }
+
+            return true;
+        }
+
+        $uploadId = $this->createMultipartUpload($target, $info['content-type'] ?? '');
+        try {
+            $parts = [];
+            $totalParts = (int) ceil($size / self::MAX_COPY_OBJECT_SIZE);
+            for ($part = 1; $part <= $totalParts; ++$part) {
+                $start = ($part - 1) * self::MAX_COPY_OBJECT_SIZE;
+                $end = min($size, $start + self::MAX_COPY_OBJECT_SIZE) - 1;
+                $response = $this->call(
+                    Method::PUT,
+                    $uri,
+                    parameters: ['partNumber' => $part, 'uploadId' => $uploadId],
+                    amzHeaders: [
+                        'x-amz-copy-source' => $copySource,
+                        'x-amz-copy-source-range' => "bytes=$start-$end",
+                    ],
+                );
+
+                $etag = \is_array($response->body) ? ($response->body['ETag'] ?? null) : null;
+                if (! \is_string($etag)) {
+                    throw new RemoteException('Missing ETag in S3 response');
+                }
+                $parts[$part] = $etag;
+            }
+            $this->completeMultipartUpload($target, $uploadId, $parts);
+        } catch (\Throwable $e) {
+            // Best effort — unclaimed multipart parts are billed until aborted.
+            try {
+                $this->abort($target, $uploadId);
+            } catch (\Throwable) {
+            }
+            throw $e;
+        }
+
+        return true;
     }
 
     /**

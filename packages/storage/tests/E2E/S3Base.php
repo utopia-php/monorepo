@@ -182,6 +182,18 @@ abstract class S3Base extends TestCase
         $this->object->delete($this->object->getPath('text-for-move-new.txt'));
     }
 
+    public function testCopySameDevice(): void
+    {
+        $source = $this->object->getPath('testing/kitten-1.jpg');
+        $target = $this->object->getPath('testing/kitten-copy.jpg');
+
+        $this->assertTrue($this->object->copy($source, $target));
+        $this->assertSame($this->object->getFileHash($source), $this->object->getFileHash($target));
+        $this->assertSame($this->object->getFileSize($source), $this->object->getFileSize($target));
+
+        $this->object->delete($target);
+    }
+
     public function testMoveIdenticalName(): void
     {
         $file = '/kitten-1.jpg';

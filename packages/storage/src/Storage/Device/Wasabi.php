@@ -48,7 +48,7 @@ class Wasabi extends S3
         (ClientInterface&StreamingClientInterface)|null $client = null,
     ) {
         $host = $bucket . '.' . 's3' . '.' . $region . '.' . 'wasabisys' . '.' . 'com';
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $client);
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $client, $bucket);
     }
 
     #[\Override]

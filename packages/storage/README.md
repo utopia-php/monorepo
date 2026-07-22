@@ -70,9 +70,12 @@ $device = new S3(
     'YOUR_SECRET_KEY',
     'YOUR_BUCKET_NAME.s3.us-east-1.amazonaws.com', // Host
     'us-east-1', // Region
-    Acl::Private // Access control (default: private)
+    Acl::Private, // Access control (default: private)
+    bucket: 'YOUR_BUCKET_NAME', // Optional: enables server-side copy
 );
 ```
+
+When the bucket name is known, a same-device `copy()` — and therefore `move()` — runs entirely server side (`CopyObject`, or `UploadPartCopy` above 5 GB), so no bytes move through PHP. The provider-specific adapters below pass their bucket automatically. Without it, `copy()` falls back to a streamed download and re-upload.
 
 The provider-specific adapters below build the host for you from a bucket and region. Every S3-family adapter also accepts optional named constructor arguments:
 

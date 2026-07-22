@@ -83,7 +83,7 @@ class AWS extends S3
             self::CN_NORTH_1, self::CN_NORTH_4, self::CN_NORTHWEST_1 => $bucket . '.s3.' . $region . '.amazonaws.cn',
             default => $bucket . '.s3.' . $region . '.amazonaws.com'
         };
-        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $client);
+        parent::__construct($root, $accessKey, $secretKey, $host, $region, $acl, $client, $bucket);
     }
 
     #[\Override]
