@@ -115,7 +115,8 @@ abstract class Device
     /**
      * Write file by given path.
      *
-     * The stream is consumed from its current position to its end.
+     * The stream is consumed in full: seekable streams are rewound and sent
+     * from the beginning on every adapter.
      */
     abstract public function write(string $path, StreamInterface $data, string $contentType): bool;
 

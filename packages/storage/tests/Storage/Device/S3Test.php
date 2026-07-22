@@ -456,6 +456,14 @@ final class S3Test extends TestCase
         $this->assertContains('s3:write', $this->s3->calls);
     }
 
+    public function testZeroLengthReadReturnsEmptyStreamWithoutARequest(): void
+    {
+        $client = new ScriptedClient([]);
+
+        $this->assertSame('', (string) $this->device($client)->read('/root/file.txt', 5, 0));
+        $this->assertCount(0, $client->requests);
+    }
+
     public function testExistsReturnsFalseOnlyForNotFound(): void
     {
         $client = new ScriptedClient([new Response(404)]);

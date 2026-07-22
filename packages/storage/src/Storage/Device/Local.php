@@ -271,6 +271,10 @@ class Local extends Device
      */
     private function writeFile(string $path, StreamInterface $data): void
     {
+        if ($data->isSeekable()) {
+            $data->rewind();
+        }
+
         $handle = fopen($path, 'wb');
         if ($handle === false) {
             throw new StorageException('Can\'t write file ' . $path);
@@ -279,11 +283,17 @@ class Local extends Device
         try {
             while (! $data->eof()) {
                 $chunk = $data->read(self::PIPE_CHUNK_SIZE);
-                if ($chunk === '') {
+                $written = 0;
+                $length = \strlen($chunk);
+                if ($length === 0) {
                     break;
                 }
-                if (fwrite($handle, $chunk) === false) {
-                    throw new StorageException('Can\'t write file ' . $path);
+                while ($written < $length) {
+                    $bytes = fwrite($handle, substr($chunk, $written));
+                    if ($bytes === false || $bytes === 0) {
+                        throw new StorageException('Can\'t write file ' . $path);
+                    }
+                    $written += $bytes;
                 }
             }
         } finally {

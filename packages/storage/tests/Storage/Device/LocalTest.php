@@ -95,6 +95,18 @@ final class LocalTest extends TestCase
         $this->object->delete($this->object->getPath('text-for-read.txt'));
     }
 
+    public function testWriteRewindsPartiallyConsumedStream(): void
+    {
+        $stream = new Stream('Hello World');
+        $stream->read(6); // consume a prefix — seekable streams are sent from the beginning
+
+        $path = $this->object->getPath('text-for-rewind.txt');
+        $this->assertTrue($this->object->write($path, $stream));
+        $this->assertSame('Hello World', (string) $this->object->read($path));
+
+        $this->object->delete($path);
+    }
+
     public function testReadNonExistentFile(): void
     {
         $this->expectException(NotFoundException::class);

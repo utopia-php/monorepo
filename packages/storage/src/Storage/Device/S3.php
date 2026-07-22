@@ -285,6 +285,10 @@ class S3 extends Device
     {
         $uri = ($path !== '') ? '/' . str_replace('%2F', '/', rawurlencode($path)) : '/';
 
+        if ($length === 0) {
+            return new Stream('');
+        }
+
         $headers = [];
         if ($length !== null) {
             $end = $offset + $length - 1;
@@ -299,7 +303,15 @@ class S3 extends Device
         }
 
         $this->call(Method::GET, $uri, headers: $headers, decode: false, sink: static function (string $chunk) use ($handle): void {
-            fwrite($handle, $chunk);
+            $written = 0;
+            $total = \strlen($chunk);
+            while ($written < $total) {
+                $bytes = fwrite($handle, substr($chunk, $written));
+                if ($bytes === false || $bytes === 0) {
+                    throw new StorageException('Failed to buffer S3 read response');
+                }
+                $written += $bytes;
+            }
         });
         rewind($handle);
 
@@ -785,7 +797,9 @@ class S3 extends Device
      * SigV4 needs the payload digests before the first byte is sent, so the
      * stream is read once for hashing and rewound for the actual send — the
      * same approach the AWS SDK takes. This is why S3 requires seekable
-     * streams.
+     * streams. Hashing starts from the beginning, matching the transport:
+     * the cURL adapter rewinds seekable bodies before sending, so the
+     * signature must cover the full stream.
      *
      * @return array{string, string} Base64 MD5 and hex SHA-256 of the full stream
      */
