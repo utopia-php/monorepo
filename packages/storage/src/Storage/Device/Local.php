@@ -212,10 +212,15 @@ class Local extends Device
                 $device->uploadData($data, $destination, $contentType, $counter + 1, $totalChunks, $metadata);
             }
         } catch (\Throwable $e) {
-            // Best effort — unclaimed multipart parts are billed until aborted.
-            try {
-                $device->abort($destination, \is_string($metadata['uploadId'] ?? null) ? $metadata['uploadId'] : '');
-            } catch (\Throwable) {
+            // Best effort, and only once a multipart upload was actually started —
+            // its unclaimed parts are billed until aborted. Aborting without one
+            // could delete a pre-existing destination the transfer never touched.
+            $uploadId = $metadata['uploadId'] ?? null;
+            if (\is_string($uploadId) && $uploadId !== '') {
+                try {
+                    $device->abort($destination, $uploadId);
+                } catch (\Throwable) {
+                }
             }
             throw $e;
         }
@@ -436,6 +441,10 @@ class Local extends Device
      */
     public function getDirectorySize(string $path): int
     {
+        if ($path === '') {
+            return -1;
+        }
+
         $size = 0;
         $path = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 

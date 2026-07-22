@@ -223,9 +223,13 @@ final class LocalTest extends TestCase
             $this->object->getDirectorySize(__DIR__ . '/../../resources/disk-a/'),
             $this->object->getDirectorySize(__DIR__ . '/../../resources/disk-a'),
         );
+
+        // An empty path is an error, not the filesystem root.
+        $this->assertSame(-1, $this->object->getDirectorySize(''));
     }
 
-    public function testTransferAbortsDestinationUploadOnFailure(): void
+    /** Without a started multipart upload there is nothing to reclaim — aborting could delete a pre-existing destination. */
+    public function testFailedTransferDoesNotAbortOrDeleteExistingDestination(): void
     {
         $source = $this->object->getPath(uniqid() . '.txt');
         $this->object->write($source, str_repeat('a', 30), 'text/plain');
@@ -248,12 +252,15 @@ final class LocalTest extends TestCase
             {
                 ++$this->aborts;
 
-                return true;
+                return parent::abort($path, $uploadId);
             }
         };
 
+        $destination = $device->getPath(uniqid() . '-dest.txt');
+        $device->write($destination, 'pre-existing', 'text/plain');
+
         try {
-            $this->object->transfer($source, $device->getPath('dest.txt'), $device, 10);
+            $this->object->transfer($source, $destination, $device, 10);
             self::fail('Expected the injected chunk failure to surface');
         } catch (UploadException $e) {
             $this->assertSame('Injected chunk failure', $e->getMessage());
@@ -261,7 +268,9 @@ final class LocalTest extends TestCase
             $this->object->delete($source);
         }
 
-        $this->assertSame(1, $device->aborts);
+        $this->assertSame(0, $device->aborts);
+        $this->assertSame('pre-existing', $device->read($destination));
+        $device->delete($destination);
     }
 
     public function testPartUpload(): string
