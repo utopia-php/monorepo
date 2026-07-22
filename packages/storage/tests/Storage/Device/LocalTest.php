@@ -217,6 +217,51 @@ final class LocalTest extends TestCase
     {
         $this->assertGreaterThan(0, $this->object->getDirectorySize(__DIR__ . '/../../resources/disk-a/'));
         $this->assertGreaterThan(0, $this->object->getDirectorySize(__DIR__ . '/../../resources/disk-b/'));
+
+        // Paths without a trailing separator must measure the same tree.
+        $this->assertSame(
+            $this->object->getDirectorySize(__DIR__ . '/../../resources/disk-a/'),
+            $this->object->getDirectorySize(__DIR__ . '/../../resources/disk-a'),
+        );
+    }
+
+    public function testTransferAbortsDestinationUploadOnFailure(): void
+    {
+        $source = $this->object->getPath(uniqid() . '.txt');
+        $this->object->write($source, str_repeat('a', 30), 'text/plain');
+
+        $device = new class (sys_get_temp_dir()) extends Local {
+            public int $aborts = 0;
+
+            #[\Override]
+            public function uploadData(string $data, string $path, string $contentType, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
+            {
+                if ($chunk === 2) {
+                    throw new UploadException('Injected chunk failure');
+                }
+
+                return parent::uploadData($data, $path, $contentType, $chunk, $chunks, $metadata);
+            }
+
+            #[\Override]
+            public function abort(string $path, string $uploadId = ''): bool
+            {
+                ++$this->aborts;
+
+                return true;
+            }
+        };
+
+        try {
+            $this->object->transfer($source, $device->getPath('dest.txt'), $device, 10);
+            self::fail('Expected the injected chunk failure to surface');
+        } catch (UploadException $e) {
+            $this->assertSame('Injected chunk failure', $e->getMessage());
+        } finally {
+            $this->object->delete($source);
+        }
+
+        $this->assertSame(1, $device->aborts);
     }
 
     public function testPartUpload(): string

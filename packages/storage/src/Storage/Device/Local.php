@@ -205,10 +205,19 @@ class Local extends Device
 
         $totalChunks = (int) ceil($size / $chunkSize);
         $metadata = ['content_type' => $contentType];
-        for ($counter = 0; $counter < $totalChunks; ++$counter) {
-            $start = $counter * $chunkSize;
-            $data = $this->read($path, $start, $chunkSize);
-            $device->uploadData($data, $destination, $contentType, $counter + 1, $totalChunks, $metadata);
+        try {
+            for ($counter = 0; $counter < $totalChunks; ++$counter) {
+                $start = $counter * $chunkSize;
+                $data = $this->read($path, $start, $chunkSize);
+                $device->uploadData($data, $destination, $contentType, $counter + 1, $totalChunks, $metadata);
+            }
+        } catch (\Throwable $e) {
+            // Best effort — unclaimed multipart parts are billed until aborted.
+            try {
+                $device->abort($destination, \is_string($metadata['uploadId'] ?? null) ? $metadata['uploadId'] : '');
+            } catch (\Throwable) {
+            }
+            throw $e;
         }
 
         return true;
@@ -428,6 +437,7 @@ class Local extends Device
     public function getDirectorySize(string $path): int
     {
         $size = 0;
+        $path = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
         $directory = opendir($path);
 
