@@ -144,7 +144,7 @@ abstract class Device
         $totalChunks = (int) ceil($size / $chunkSize);
         $metadata = ['content_type' => $contentType];
         try {
-            for ($counter = 0; $counter < $totalChunks; $counter++) {
+            for ($counter = 0; $counter < $totalChunks; ++$counter) {
                 $data = $this->read($source, $counter * $chunkSize, $chunkSize);
                 $to->upload($data, $target, $contentType, $counter + 1, $totalChunks, $metadata);
             }

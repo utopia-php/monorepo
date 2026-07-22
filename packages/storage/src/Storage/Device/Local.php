@@ -99,7 +99,7 @@ class Local extends Device
         }
 
         $tmp = \dirname($path) . DIRECTORY_SEPARATOR . 'tmp_' . basename($path);
-        for ($i = 1; $i <= $chunks; $i++) {
+        for ($i = 1; $i <= $chunks; ++$i) {
             $part = $tmp . DIRECTORY_SEPARATOR . pathinfo($path, PATHINFO_FILENAME) . '.part.' . $i;
             if (! file_exists($part)) {
                 throw new UploadException('Missing chunk ' . $i);
@@ -123,7 +123,7 @@ class Local extends Device
         $count = 0;
         foreach ($files as $file) {
             if (preg_match('/\.part\.\d+$/', $file)) {
-                $count++;
+                ++$count;
             }
         }
 
@@ -145,7 +145,7 @@ class Local extends Device
         }
 
         $partsToUnlink = [];
-        for ($i = 1; $i <= $chunks; $i++) {
+        for ($i = 1; $i <= $chunks; ++$i) {
             $part = $tmp . DIRECTORY_SEPARATOR . pathinfo($path, PATHINFO_FILENAME) . '.part.' . $i;
             $src = @fopen($part, 'rb');
             if ($src === false) {

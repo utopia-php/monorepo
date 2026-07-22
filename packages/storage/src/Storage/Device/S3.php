@@ -125,7 +125,7 @@ class S3 extends Device
         }
 
         $metadata['parts'] ??= [];
-        for ($i = 1; $i <= $chunks; $i++) {
+        for ($i = 1; $i <= $chunks; ++$i) {
             if (! \array_key_exists($i, $metadata['parts'])) {
                 throw new UploadException('Missing chunk ' . $i);
             }
@@ -164,7 +164,7 @@ class S3 extends Device
         $etag = $this->uploadPart($data, $path, $contentType, $chunk, $metadata['uploadId']);
         // skip incrementing if the chunk was re-uploaded
         if (! \array_key_exists($chunk, $metadata['parts'])) {
-            $metadata['chunks']++;
+            ++$metadata['chunks'];
         }
         $metadata['parts'][$chunk] = $etag;
 

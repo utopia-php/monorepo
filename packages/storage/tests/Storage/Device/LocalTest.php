@@ -255,7 +255,7 @@ final class LocalTest extends TestCase
             #[\Override]
             public function abort(string $path, string $uploadId = ''): bool
             {
-                $this->aborts++;
+                ++$this->aborts;
 
                 return parent::abort($path, $uploadId);
             }
@@ -295,7 +295,7 @@ final class LocalTest extends TestCase
             $contents = $this->readBytes($handle, $chunkSize);
             $this->object->upload(new Stream($contents), $dest, '', $chunk, $chunks);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             fseek($handle, $start);
         }
         fclose($handle);
@@ -357,7 +357,7 @@ final class LocalTest extends TestCase
             $contents = $this->readBytes($handle, $chunkSize);
             $this->object->upload(new Stream($contents), $dest, '', $chunk, $chunks);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             break;
         }
         fclose($handle);
@@ -370,7 +370,7 @@ final class LocalTest extends TestCase
             $contents = $this->readBytes($handle, $chunkSize);
             $this->object->upload(new Stream($contents), $dest, '', $chunk, $chunks);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             fseek($handle, $start);
         }
         fclose($handle);
@@ -397,7 +397,7 @@ final class LocalTest extends TestCase
             $contents = $this->readBytes($handle, $chunkSize);
             $this->object->upload(new Stream($contents), $dest, '', $chunk, $chunks);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             fseek($handle, $start);
         }
         fclose($handle);
@@ -417,7 +417,7 @@ final class LocalTest extends TestCase
             $contents = $this->readBytes($handle, $chunkSize);
             $this->object->upload(new Stream($contents), $dest1, '', $chunk, $chunks);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             fseek($handle, $start);
         }
         fclose($handle);
@@ -585,7 +585,7 @@ final class LocalTest extends TestCase
 
         $this->assertDirectoryDoesNotExist($tmpDir, 'Temp chunk directory should be removed after assembly');
         $this->assertFileDoesNotExist($tmpAssemble, 'Temp assembly file should be removed after rename');
-        for ($i = 1; $i <= 3; $i++) {
+        for ($i = 1; $i <= 3; ++$i) {
             $this->assertFileDoesNotExist(
                 $tmpDir . DIRECTORY_SEPARATOR . 'test.part.' . $i,
                 "Part file $i should be removed after assembly",

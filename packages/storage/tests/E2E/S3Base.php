@@ -282,7 +282,7 @@ abstract class S3Base extends TestCase
             $contents = $this->readBytes($handle, $chunkSize);
             $this->object->upload(new Stream($contents), $dest, $metadata['content_type'] ?? '', $chunk, $chunks, $metadata);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             fseek($handle, $start);
         }
         fclose($handle);
@@ -322,7 +322,7 @@ abstract class S3Base extends TestCase
             $contents = $this->readBytes($handle, $chunkSize);
             $this->object->upload(new Stream($contents), $dest, $metadata['content_type'] ?? '', $chunk, $chunks, $metadata);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             break;
         }
         fclose($handle);
@@ -335,7 +335,7 @@ abstract class S3Base extends TestCase
             $contents = $this->readBytes($handle, $chunkSize);
             $this->object->upload(new Stream($contents), $dest, $metadata['content_type'] ?? '', $chunk, $chunks, $metadata);
             $start += \strlen($contents);
-            $chunk++;
+            ++$chunk;
             fseek($handle, $start);
         }
         fclose($handle);
@@ -368,7 +368,7 @@ abstract class S3Base extends TestCase
         $chunkNum = 1;
         while ($chunkNum <= $chunks) {
             $parts[$chunkNum] = $this->readBytes($handle, $chunkSize);
-            $chunkNum++;
+            ++$chunkNum;
         }
         fclose($handle);
 
@@ -379,7 +379,7 @@ abstract class S3Base extends TestCase
         ];
 
         // Upload chunks in reverse order
-        for ($i = $chunks; $i >= 1; $i--) {
+        for ($i = $chunks; $i >= 1; --$i) {
             $this->object->upload(new Stream($parts[$i]), $dest, $metadata['content_type'] ?? '', $i, $chunks, $metadata);
         }
 
