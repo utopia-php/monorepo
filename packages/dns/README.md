@@ -165,7 +165,7 @@ foreach ($response->answers as $answer) {
 
 ## Benchmarking
 
-Run the bundled benchmark tool to measure throughput against your server:
+Run `composer bench` to start a sample Swoole server and measure throughput against it (tune with the `PORT`, `ITERATIONS`, and `CONCURRENCY` environment variables). To benchmark an already-running server directly:
 
 ```bash
 php tests/benchmark.php --server=127.0.0.1 --port=5300 --iterations=1000 --concurrency=20
