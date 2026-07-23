@@ -18,6 +18,9 @@ Install using Composer:
 composer require utopia-php/auth
 ```
 
+> [!WARNING]
+> Use 0.10.1 or later. GitHub serves a truncated source archive for the 0.10.0 commit, so `composer install --prefer-dist` fails on that version with `ZipDownloader.php ... not a valid zip archive, got error code: 35`. The corruption is server-side and cannot be fixed by re-tagging, since archives are keyed by commit.
+
 ```php
 <?php
 
