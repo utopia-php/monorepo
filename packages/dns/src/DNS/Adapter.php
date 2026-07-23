@@ -26,9 +26,4 @@ abstract class Adapter
      * Start the DNS server
      */
     abstract public function start(): void;
-
-    /**
-     * Get the name of the adapter
-     */
-    abstract public function getName(): string;
 }

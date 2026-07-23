@@ -22,7 +22,14 @@ Span::setStorage(new Storage\Coroutine());
 Span::setExporters(new Exporter\Stdout());
 
 $port = (int) (getenv('PORT') ?: 5300);
-$server = new Swoole('0.0.0.0', $port);
+$httpPort = (int) (getenv('HTTP_PORT') ?: 5301);
+$proxyPort = (int) (getenv('PROXY_PORT') ?: 5302);
+$server = new Swoole([
+    new Swoole\Udp('0.0.0.0', $port),
+    new Swoole\Tcp('0.0.0.0', $port),
+    new Swoole\Http('0.0.0.0', $httpPort),
+    new Swoole\Tcp('0.0.0.0', $proxyPort, proxyProtocol: true),
+]);
 
 $records = [
     // Single A
