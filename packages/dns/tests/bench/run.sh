@@ -1,16 +1,31 @@
 #!/usr/bin/env bash
-# Benchmark the DNS server: start the sample Swoole server from the test
-# resources on offset ports, drive it with tests/benchmark.php over UDP,
-# and tear down. Requires ext-swoole.
+# Benchmark the DNS server across its transports: start the sample Swoole
+# server from the test resources on offset ports and drive UDP, TCP, and
+# DNS over HTTPS with dnspyre. Requires ext-swoole and jq; fetches the
+# dnspyre release binary when it is not on the PATH.
 set -eu
 
 cd "$(dirname "$0")/../.." # packages/dns
 
 php -r 'exit(extension_loaded("swoole") ? 0 : 1);' || { echo "ext-swoole is required" >&2; exit 1; }
+command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
 
 PORT="${PORT:-8053}"
-ITERATIONS="${ITERATIONS:-1000}"
+QUERIES="${QUERIES:-250}" # dnspyre -n: repetitions per worker per domain
 CONCURRENCY="${CONCURRENCY:-20}"
+DOMAINS="${DOMAINS:-dev.appwrite.io dev2.appwrite.io alias.appwrite.io}"
+
+if ! command -v dnspyre >/dev/null; then
+    os=$(uname -s | tr '[:upper:]' '[:lower:]')
+    arch=$(uname -m)
+    case "$arch" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; esac
+    dir="${TMPDIR:-/tmp}/dnspyre-bin"
+    if [ ! -x "$dir/dnspyre" ]; then
+        mkdir -p "$dir"
+        curl -fsSL "https://github.com/Tantalor93/dnspyre/releases/latest/download/dnspyre_${os}_${arch}.tar.gz" | tar xz -C "$dir"
+    fi
+    PATH="$dir:$PATH"
+fi
 
 PORT=$PORT HTTP_PORT=$((PORT + 1)) PROXY_PORT=$((PORT + 2)) \
     php tests/resources/server.php >/tmp/dns-bench-server.log 2>&1 &
@@ -28,17 +43,34 @@ if [ -z "$up" ]; then
     exit 1
 fi
 
-out=$(php tests/benchmark.php --server=127.0.0.1 --port="$PORT" --iterations="$ITERATIONS" --concurrency="$CONCURRENCY")
-echo "$out"
+rows=""
+bench() { # label [dnspyre args...]
+    local label=$1
+    shift
+    local json row
+    # shellcheck disable=SC2086 # DOMAINS is a deliberate word-split list
+    json=$(dnspyre -n "$QUERIES" -c "$CONCURRENCY" --json --no-color "$@" $DOMAINS 2>/dev/null)
+    row=$(echo "$json" | jq -r --arg label "$label" \
+        '"| \($label) | \(.queriesPerSecond) | \(.totalSuccessResponses)/\(.totalRequests) | \(.latencyStats.p50Ms) | \(.latencyStats.p95Ms) | \(.latencyStats.p99Ms) | \(.latencyStats.maxMs) |"')
+    rows+="$row"$'\n'
+    echo "  $label -> $(echo "$json" | jq -r '"\(.queriesPerSecond) req/s, \(.totalSuccessResponses)/\(.totalRequests) ok"')" >&2
+}
 
-metric() { echo "$out" | grep -m1 "^$1:" | awk -F': ' '{print $2}' | cut -d' ' -f1 || true; }
+bench udp --server "127.0.0.1:$PORT"
+bench tcp --tcp --server "127.0.0.1:$PORT"
+bench doh --server "http://127.0.0.1:$((PORT + 1))/dns-query"
 
 CORES=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo '?')
-section="### dns — UDP throughput (${CORES} cores, ${ITERATIONS} queries per record, concurrency ${CONCURRENCY})
+table="| transport | req/s | ok | p50 ms | p95 | p99 | max |
+|---|---|---|---|---|---|---|
+${rows%$'\n'}"
 
-| req/s | avg ms | p50 | p95 | p99 | max |
-|---|---|---|---|---|---|
-| $(metric 'Requests Per Second') | $(metric 'Avg') | $(metric 'p50') | $(metric 'p95') | $(metric 'p99') | $(metric 'Max') |"
+section="### dns — transport throughput (${CORES} cores, ${QUERIES} repeats x ${CONCURRENCY} workers x 3 domains per transport)
+
+${table}"
+
+echo
+echo "$table"
 
 # GITHUB_STEP_SUMMARY: the run's own job summary.
 # BENCH_REPORT: shared file a bench script appends its section to, so a

@@ -44,7 +44,6 @@
         }
     },
     "suggest": {
-        "ext-swoole": "Required by the Swoole adapter",
-        "ext-pcntl": "Required by the benchmark (composer bench)"
+        "ext-swoole": "Required by the Swoole adapter"
     }
 }

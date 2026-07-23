@@ -165,13 +165,13 @@ foreach ($response->answers as $answer) {
 
 ## Benchmarking
 
-Run `composer bench` to start a sample Swoole server and measure throughput against it (tune with the `PORT`, `ITERATIONS`, and `CONCURRENCY` environment variables). To benchmark an already-running server directly:
+Run `composer bench` to start a sample Swoole server and measure UDP, TCP, and DNS over HTTPS throughput against it with [dnspyre](https://github.com/Tantalor93/dnspyre) (fetched automatically when not installed; tune with the `PORT`, `QUERIES`, `CONCURRENCY`, and `DOMAINS` environment variables). To benchmark an already-running server directly:
 
 ```bash
-php tests/benchmark.php --server=127.0.0.1 --port=5300 --iterations=1000 --concurrency=20
+dnspyre -n 250 -c 20 --server 127.0.0.1:5300 dev.appwrite.io
 ```
 
-The script reports requests per second, latency distribution, and error counts across common record types.
+The report covers requests per second, success counts, and latency percentiles per transport.
 
 ## Upgrading from 1.x
 

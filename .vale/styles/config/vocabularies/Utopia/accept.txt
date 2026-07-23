@@ -57,6 +57,7 @@ DigitalOcean
 DigitalOcean Spaces
 Dittmann
 DNS
+dnspyre
 docblocks?
 dotenv
 DuckDuckGo
