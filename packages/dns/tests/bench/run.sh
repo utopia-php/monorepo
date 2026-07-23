@@ -28,4 +28,22 @@ if [ -z "$up" ]; then
     exit 1
 fi
 
-php tests/benchmark.php --server=127.0.0.1 --port="$PORT" --iterations="$ITERATIONS" --concurrency="$CONCURRENCY"
+out=$(php tests/benchmark.php --server=127.0.0.1 --port="$PORT" --iterations="$ITERATIONS" --concurrency="$CONCURRENCY")
+echo "$out"
+
+metric() { echo "$out" | grep -m1 "^$1:" | awk -F': ' '{print $2}' | cut -d' ' -f1 || true; }
+
+CORES=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo '?')
+section="### dns — UDP throughput (${CORES} cores, ${ITERATIONS} queries per record, concurrency ${CONCURRENCY})
+
+| req/s | avg ms | p50 | p95 | p99 | max |
+|---|---|---|---|---|---|
+| $(metric 'Requests Per Second') | $(metric 'Avg') | $(metric 'p50') | $(metric 'p95') | $(metric 'p99') | $(metric 'Max') |"
+
+# GITHUB_STEP_SUMMARY: the run's own job summary.
+# BENCH_REPORT: shared file a bench script appends its section to, so a
+# caller (the Benchmark workflow) can collect every package into one place.
+[ -n "${GITHUB_STEP_SUMMARY:-}" ] && printf '%s\n\n' "$section" >> "$GITHUB_STEP_SUMMARY"
+[ -n "${BENCH_REPORT:-}" ] && printf '%s\n\n' "$section" >> "$BENCH_REPORT"
+
+exit 0
