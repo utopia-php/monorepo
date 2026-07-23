@@ -10,16 +10,10 @@ use Utopia\DNS\Server;
 use Utopia\DNS\Zone;
 use Utopia\DNS\Zone\File;
 use Utopia\DNS\Zone\Resolver as ZoneResolver;
-use Utopia\Span\Exporter;
-use Utopia\Span\Span;
-use Utopia\Span\Storage;
 
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') !== __FILE__) {
     return;
 }
-
-Span::setStorage(new Storage\Coroutine());
-Span::setExporters(new Exporter\Stdout());
 
 $port = (int) (getenv('PORT') ?: 5300);
 $httpPort = (int) (getenv('HTTP_PORT') ?: 5301);
@@ -115,11 +109,5 @@ $multiZoneResolver = new readonly class ([$appwriteZone, $localhostZone]) implem
 
 $dns = new Server($server, $multiZoneResolver);
 $dns->setDebug(false);
-
-$dns->onWorkerStart(function (Server $server, int $workerId): void {
-    $span = Span::init('dns.worker.start');
-    $span->set('worker.id', $workerId);
-    $span->finish();
-});
 
 $dns->start();

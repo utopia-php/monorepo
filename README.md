@@ -54,7 +54,6 @@ graph TD
     client --> span
     config --> validators
     console --> validators
-    dns --> span
     dns --> telemetry
     dns --> validators
     fastly --> client

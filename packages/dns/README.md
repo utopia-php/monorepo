@@ -162,6 +162,7 @@ Version 2.0 replaces per-adapter protocol flags with composable transports:
 - `enableTcp: false` → omit the `Tcp` transport
 - TCP tuning options (`maxTcpClients`, `maxTcpBufferSize`, `maxTcpFrameSize`, `tcpIdleTimeout`) moved to the `Native\Tcp` constructor as `maxClients`, `maxBufferSize`, `maxFrameSize`, and `idleTimeout`
 - `Adapter::getName()` was removed without replacement
+- The server no longer emits `utopia-php/span` traces (`dns.packet`); metrics via `Server::setTelemetry()` are unchanged. Emit spans from your `Resolver` implementation if you need tracing
 
 ## License
 

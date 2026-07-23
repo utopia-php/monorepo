@@ -4,7 +4,6 @@ namespace Utopia\DNS;
 
 use Throwable;
 use Utopia\DNS\Exception\Message\PartialDecodingException;
-use Utopia\Span\Span;
 use Utopia\Telemetry\Adapter as Telemetry;
 use Utopia\Telemetry\Adapter\None as NoTelemetry;
 use Utopia\Telemetry\Counter;
@@ -143,12 +142,8 @@ class Server
      */
     protected function onPacket(string $buffer, string $ip, int $port, ?int $maxResponseSize = null): string
     {
-        $span = Span::init('dns.packet');
-        $span->set('client.ip', $ip);
-
         $question = null;
         $response = null;
-        $level = null;
 
         try {
             // 1. Parse Message.
@@ -158,7 +153,6 @@ class Server
             } catch (PartialDecodingException $e) {
                 $this->handleError($e);
 
-                $level = 'warn';
                 $response = Message::response(
                     $e->getHeader(),
                     Message::RCODE_FORMERR,
@@ -166,13 +160,10 @@ class Server
                 );
                 return $response->encode($maxResponseSize);
             } catch (Throwable $e) {
-                $span->setError($e);
                 $this->handleError($e);
                 return '';
             }
-            $decodeDuration = microtime(true) - $decodeStart;
-            $this->duration?->record($decodeDuration, ['phase' => 'decode']);
-            $span->set('dns.duration.decode', $decodeDuration);
+            $this->duration?->record(microtime(true) - $decodeStart, ['phase' => 'decode']);
 
             // RFC 1035: Only OPCODE 0 (QUERY) is supported
             // Return NOTIMP for other opcodes (IQUERY=1 is obsolete, STATUS=2, others reserved)
@@ -187,7 +178,6 @@ class Server
 
             $question = $query->questions[0] ?? null;
             if ($question === null) {
-                $level = 'warn';
                 $response = Message::response(
                     $query->header,
                     Message::RCODE_FORMERR,
@@ -195,9 +185,6 @@ class Server
                 );
                 return $response->encode($maxResponseSize);
             }
-
-            $span->set('dns.question.name', $question->name);
-            $span->set('dns.question.type', $question->type);
 
             $this->queriesTotal?->add(1, [
                 'type' => $question->type,
@@ -208,7 +195,6 @@ class Server
             try {
                 $response = $this->resolver->resolve($query);
             } catch (Throwable $e) {
-                $span->setError($e);
                 $this->handleError($e);
 
                 $response = Message::response(
@@ -218,19 +204,16 @@ class Server
                     authoritative: false,
                 );
             }
-            $resolveDuration = microtime(true) - $resolveStart;
-            $this->duration?->record($resolveDuration, [
+            $this->duration?->record(microtime(true) - $resolveStart, [
                 'phase' => 'resolve',
                 'responseCode' => $response->header->responseCode,
             ]);
-            $span->set('dns.duration.resolve', $resolveDuration);
 
             // 3. Encode response
             $encodeStart = microtime(true);
             try {
                 return $response->encode($maxResponseSize);
             } catch (Throwable $e) {
-                $span->setError($e);
                 $this->handleError($e);
 
                 $response = Message::response(
@@ -241,12 +224,10 @@ class Server
                 );
                 return $response->encode($maxResponseSize);
             } finally {
-                $encodeDuration = microtime(true) - $encodeStart;
-                $this->duration?->record($encodeDuration, [
+                $this->duration?->record(microtime(true) - $encodeStart, [
                     'phase' => 'encode',
                     'responseCode' => $response->header->responseCode,
                 ]);
-                $span->set('dns.duration.encode', $encodeDuration);
             }
         } finally {
             if ($question !== null) {
@@ -255,12 +236,6 @@ class Server
                     'responseCode' => $response?->header->responseCode,
                 ]);
             }
-
-            if ($response instanceof \Utopia\DNS\Message) {
-                $span->set('dns.response.code', $response->header->responseCode);
-                $span->set('dns.response.answer_count', $response->header->answerCount);
-            }
-            $span->finish($level);
         }
     }
 
