@@ -15,14 +15,15 @@ QUERIES="${QUERIES:-250}" # dnspyre -n: repetitions per worker per domain
 CONCURRENCY="${CONCURRENCY:-20}"
 DOMAINS="${DOMAINS:-dev.appwrite.io dev2.appwrite.io alias.appwrite.io}"
 
-if ! command -v dnspyre >/dev/null; then
+DNSPYRE_VERSION="3.11.1"
+if [ "$(dnspyre --version 2>/dev/null || true)" != "$DNSPYRE_VERSION" ]; then
     os=$(uname -s | tr '[:upper:]' '[:lower:]')
     arch=$(uname -m)
     case "$arch" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; esac
-    dir="${TMPDIR:-/tmp}/dnspyre-bin"
+    dir="${TMPDIR:-/tmp}/dnspyre-${DNSPYRE_VERSION}"
     if [ ! -x "$dir/dnspyre" ]; then
         mkdir -p "$dir"
-        curl -fsSL "https://github.com/Tantalor93/dnspyre/releases/latest/download/dnspyre_${os}_${arch}.tar.gz" | tar xz -C "$dir"
+        curl -fsSL "https://github.com/Tantalor93/dnspyre/releases/download/v${DNSPYRE_VERSION}/dnspyre_${os}_${arch}.tar.gz" | tar xz -C "$dir"
     fi
     PATH="$dir:$PATH"
 fi
