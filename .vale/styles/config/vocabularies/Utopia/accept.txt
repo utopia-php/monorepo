@@ -89,6 +89,7 @@ JSON
 JWS
 JWT(?:s)?
 KaiOS
+keepalive
 keypair(?:s)?
 libcurl
 Linode
