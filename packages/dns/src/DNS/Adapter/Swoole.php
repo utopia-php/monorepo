@@ -10,6 +10,7 @@ use Swoole\Server\Port;
 use Utopia\DNS\Adapter;
 use Utopia\DNS\Adapter\Swoole\Http;
 use Utopia\DNS\Adapter\Swoole\Transport;
+use Utopia\DNS\Protocol;
 
 /**
  * Composes one or more Swoole transports onto a single Swoole server,
@@ -82,7 +83,7 @@ class Swoole extends Adapter
     }
 
     /**
-     * @phpstan-param callable(string $buffer, string $ip, int $port, ?int $maxResponseSize):string $callback
+     * @phpstan-param callable(string $buffer, string $ip, int $port, Protocol $protocol): string $callback
      */
     public function onPacket(callable $callback): void
     {

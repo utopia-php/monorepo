@@ -5,6 +5,7 @@ namespace Utopia\DNS\Adapter;
 use Exception;
 use Utopia\DNS\Adapter;
 use Utopia\DNS\Adapter\Native\Transport;
+use Utopia\DNS\Protocol;
 
 /**
  * Composes one or more Native transports into a single blocking select loop.
@@ -12,7 +13,7 @@ use Utopia\DNS\Adapter\Native\Transport;
  */
 class Native extends Adapter
 {
-    /** @var callable(string $buffer, string $ip, int $port, ?int $maxResponseSize): string */
+    /** @var callable(string $buffer, string $ip, int $port, Protocol $protocol): string */
     protected mixed $onPacket;
 
     /** @var list<callable(int $workerId): void> */
@@ -40,7 +41,7 @@ class Native extends Adapter
     }
 
     /**
-     * @phpstan-param callable(string $buffer, string $ip, int $port, ?int $maxResponseSize):string $callback
+     * @phpstan-param callable(string $buffer, string $ip, int $port, Protocol $protocol): string $callback
      */
     public function onPacket(callable $callback): void
     {

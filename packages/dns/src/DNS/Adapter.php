@@ -17,8 +17,8 @@ abstract class Adapter
     /**
      * Packet handler
      *
-     * @param callable(string $buffer, string $ip, int $port, ?int $maxResponseSize): string $callback
-     * @phpstan-param callable(string $buffer, string $ip, int $port, ?int $maxResponseSize):string $callback
+     * @param callable(string $buffer, string $ip, int $port, Protocol $protocol): string $callback
+     * @phpstan-param callable(string $buffer, string $ip, int $port, Protocol $protocol):string $callback
      */
     abstract public function onPacket(callable $callback): void;
 

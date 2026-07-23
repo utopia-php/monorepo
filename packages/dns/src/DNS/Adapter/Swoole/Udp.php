@@ -4,7 +4,7 @@ namespace Utopia\DNS\Adapter\Swoole;
 
 use Swoole\Server;
 use Swoole\Server\Port;
-use Utopia\DNS\Message;
+use Utopia\DNS\Protocol;
 
 class Udp extends Transport
 {
@@ -29,7 +29,7 @@ class Udp extends Transport
             $ip = \is_string($clientInfo['address'] ?? null) ? $clientInfo['address'] : '';
             $port = \is_int($clientInfo['port'] ?? null) ? $clientInfo['port'] : 0;
 
-            $response = \call_user_func($onPacket, $data, $ip, $port, Message::MAX_UDP_SIZE);
+            $response = \call_user_func($onPacket, $data, $ip, $port, Protocol::Udp);
 
             if ($response !== '' && $server instanceof Server) {
                 $server->sendto($ip, $port, $response);

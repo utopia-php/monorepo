@@ -140,8 +140,9 @@ class Server
      *
      *
      */
-    protected function onPacket(string $buffer, string $ip, int $port, ?int $maxResponseSize = null): string
+    protected function onPacket(string $buffer, string $ip, int $port, Protocol $protocol): string
     {
+        $maxResponseSize = $protocol->maxResponseSize();
         $question = null;
         $response = null;
 
@@ -149,7 +150,7 @@ class Server
             // 1. Parse Message.
             $decodeStart = microtime(true);
             try {
-                $query = Message::decode($buffer);
+                $message = Message::decode($buffer);
             } catch (PartialDecodingException $e) {
                 $this->handleError($e);
 
@@ -167,19 +168,19 @@ class Server
 
             // RFC 1035: Only OPCODE 0 (QUERY) is supported
             // Return NOTIMP for other opcodes (IQUERY=1 is obsolete, STATUS=2, others reserved)
-            if ($query->header->opcode !== 0) {
+            if ($message->header->opcode !== 0) {
                 $response = Message::response(
-                    $query->header,
+                    $message->header,
                     Message::RCODE_NOTIMP,
                     authoritative: false,
                 );
                 return $response->encode($maxResponseSize);
             }
 
-            $question = $query->questions[0] ?? null;
+            $question = $message->questions[0] ?? null;
             if ($question === null) {
                 $response = Message::response(
-                    $query->header,
+                    $message->header,
                     Message::RCODE_FORMERR,
                     authoritative: false,
                 );
@@ -193,14 +194,14 @@ class Server
             // 2. Resolve query
             $resolveStart = microtime(true);
             try {
-                $response = $this->resolver->resolve($query);
+                $response = $this->resolver->resolve(new Query($message, $ip, $port, $protocol));
             } catch (Throwable $e) {
                 $this->handleError($e);
 
                 $response = Message::response(
-                    $query->header,
+                    $message->header,
                     Message::RCODE_SERVFAIL,
-                    questions: $query->questions,
+                    questions: $message->questions,
                     authoritative: false,
                 );
             }
@@ -217,9 +218,9 @@ class Server
                 $this->handleError($e);
 
                 $response = Message::response(
-                    $query->header,
+                    $message->header,
                     Message::RCODE_SERVFAIL,
-                    questions: $query->questions,
+                    questions: $message->questions,
                     authoritative: false,
                 );
                 return $response->encode($maxResponseSize);

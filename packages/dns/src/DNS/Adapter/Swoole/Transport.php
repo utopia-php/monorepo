@@ -6,6 +6,7 @@ namespace Utopia\DNS\Adapter\Swoole;
 
 use Swoole\Server;
 use Swoole\Server\Port;
+use Utopia\DNS\Protocol;
 
 /**
  * A single protocol endpoint composed onto a shared Swoole server.
@@ -36,7 +37,7 @@ abstract class Transport
      * Register event handlers. $target is the Server itself when this transport
      * is the master listener, or the Port returned by addListener() otherwise.
      *
-     * @param callable(string $buffer, string $ip, int $port, ?int $maxResponseSize): string $onPacket
+     * @param callable(string $buffer, string $ip, int $port, Protocol $protocol): string $onPacket
      */
     abstract public function attach(Server|Port $target, callable $onPacket): void;
 }

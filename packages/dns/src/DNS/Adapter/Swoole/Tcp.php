@@ -7,6 +7,7 @@ namespace Utopia\DNS\Adapter\Swoole;
 use Swoole\Server;
 use Swoole\Server\Port;
 use Utopia\DNS\Message;
+use Utopia\DNS\Protocol;
 use Utopia\DNS\ProxyProtocol;
 
 class Tcp extends Transport
@@ -61,7 +62,7 @@ class Tcp extends Transport
                 [$ip, $port] = $this->getClientAddress($server, $fd, $reactorId);
                 $payload = substr($data, 2); // strip 2-byte length prefix
 
-                $response = \call_user_func($onPacket, $payload, $ip, $port, Message::MAX_SIZE);
+                $response = \call_user_func($onPacket, $payload, $ip, $port, Protocol::Tcp);
 
                 if ($response !== '') {
                     $server->send($fd, pack('n', \strlen($response)) . $response);
@@ -109,7 +110,7 @@ class Tcp extends Transport
 
                 [$ip, $port] = $this->peers[$fd] ?? $this->getClientAddress($server, $fd, $reactorId);
 
-                $response = \call_user_func($onPacket, $payload, $ip, $port, Message::MAX_SIZE);
+                $response = \call_user_func($onPacket, $payload, $ip, $port, Protocol::Tcp);
 
                 if ($response !== '') {
                     $server->send($fd, pack('n', \strlen($response)) . $response);

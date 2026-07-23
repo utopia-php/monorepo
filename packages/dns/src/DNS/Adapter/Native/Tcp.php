@@ -5,6 +5,7 @@ namespace Utopia\DNS\Adapter\Native;
 use Exception;
 use Socket;
 use Utopia\DNS\Message;
+use Utopia\DNS\Protocol;
 use Utopia\DNS\ProxyProtocol;
 
 class Tcp extends Transport
@@ -128,7 +129,7 @@ class Tcp extends Transport
     }
 
     /**
-     * @param callable(string $buffer, string $ip, int $port, ?int $maxResponseSize): string $onPacket
+     * @param callable(string $buffer, string $ip, int $port, Protocol $protocol): string $onPacket
      */
     protected function handleClient(Socket $client, callable $onPacket): void
     {
@@ -204,7 +205,7 @@ class Tcp extends Transport
             }
 
             if (\is_string($ip) && \is_int($port)) {
-                $answer = \call_user_func($onPacket, $message, $ip, $port, Message::MAX_SIZE);
+                $answer = \call_user_func($onPacket, $message, $ip, $port, Protocol::Tcp);
 
                 if ($answer !== '') {
                     $this->respond($client, $answer);

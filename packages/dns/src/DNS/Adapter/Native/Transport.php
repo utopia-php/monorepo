@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Utopia\DNS\Adapter\Native;
 
 use Socket;
+use Utopia\DNS\Protocol;
 
 /**
  * A single protocol endpoint multiplexed into the Native adapter's
@@ -32,7 +33,7 @@ abstract class Transport
     /**
      * Handle one of this transport's sockets becoming readable.
      *
-     * @param callable(string $buffer, string $ip, int $port, ?int $maxResponseSize): string $onPacket
+     * @param callable(string $buffer, string $ip, int $port, Protocol $protocol): string $onPacket
      */
     abstract public function onReadable(Socket $socket, callable $onPacket): void;
 

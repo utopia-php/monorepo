@@ -7,7 +7,7 @@ use Swoole\Http\Request;
 use Swoole\Http\Response;
 use Swoole\Server;
 use Swoole\Server\Port;
-use Utopia\DNS\Message;
+use Utopia\DNS\Protocol;
 
 /**
  * DNS over HTTPS transport per RFC 8484.
@@ -80,7 +80,7 @@ class Http extends Transport
                 }
             }
 
-            $answer = \call_user_func($onPacket, $query, $ip, $port, Message::MAX_SIZE);
+            $answer = \call_user_func($onPacket, $query, $ip, $port, Protocol::Https);
 
             if ($answer === '') {
                 $response->status(400);

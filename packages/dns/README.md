@@ -70,6 +70,26 @@ The server listens on UDP and TCP port `5300` (RFC 5966) and answers queries for
 
 Resolvers can be combined with any adapter. Implementing the `Resolver` interface allows you to plug in custom logic while reusing the message encoding/decoding and telemetry tooling.
 
+Resolvers receive a `Query`, which carries the decoded `Message` plus its source: the client IP, port, and transport protocol. Cross-cutting concerns such as tracing or rate limiting compose as resolver decorators:
+
+```php
+final readonly class RateLimited implements Resolver
+{
+    public function __construct(private Resolver $inner) {}
+
+    public function resolve(Query $query): Message
+    {
+        if ($this->isFlooding($query->ip)) {
+            return Message::response($query->message->header, Message::RCODE_REFUSED, authoritative: false);
+        }
+
+        return $this->inner->resolve($query);
+    }
+}
+```
+
+Note that UDP source addresses can be forged; stream transports (`Protocol::Tcp`, `Protocol::Https`) carry verified peer addresses.
+
 ## Adapters and transports
 
 An adapter composes one or more transports into a single process. Transports are responsible only for receiving and returning raw packets — they call back into the server with the payload, source IP, and port so your resolver logic stays isolated.
@@ -161,7 +181,8 @@ Version 2.0 replaces per-adapter protocol flags with composable transports:
 - `new Swoole($host, $port, $numWorkers)` → `new Swoole([new Swoole\Udp($host, $port), new Swoole\Tcp($host, $port)], workers: $numWorkers)`
 - `enableTcp: false` → omit the `Tcp` transport
 - TCP tuning options (`maxTcpClients`, `maxTcpBufferSize`, `maxTcpFrameSize`, `tcpIdleTimeout`) moved to the `Native\Tcp` constructor as `maxClients`, `maxBufferSize`, `maxFrameSize`, and `idleTimeout`
-- `Adapter::getName()` was removed without replacement
+- `Resolver::resolve()` now receives a `Utopia\DNS\Query` carrying the decoded message and its source (`$query->message`, `$query->ip`, `$query->port`, `$query->protocol`) instead of a bare `Message`
+- `Adapter::getName()` and `Resolver::getName()` were removed without replacement
 - The server no longer emits `utopia-php/span` traces (`dns.packet`); metrics via `Server::setTelemetry()` are unchanged. Emit spans from your `Resolver` implementation if you need tracing
 
 ## License

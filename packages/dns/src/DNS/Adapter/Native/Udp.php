@@ -4,7 +4,7 @@ namespace Utopia\DNS\Adapter\Native;
 
 use Exception;
 use Socket;
-use Utopia\DNS\Message;
+use Utopia\DNS\Protocol;
 
 class Udp extends Transport
 {
@@ -37,7 +37,7 @@ class Udp extends Transport
         $length = socket_recvfrom($socket, $buffer, 1024 * 4, 0, $ip, $port);
 
         if ($length > 0 && \is_string($buffer) && \is_string($ip) && \is_int($port)) {
-            $answer = \call_user_func($onPacket, $buffer, $ip, $port, Message::MAX_UDP_SIZE);
+            $answer = \call_user_func($onPacket, $buffer, $ip, $port, Protocol::Udp);
 
             if ($answer !== '') {
                 socket_sendto($socket, $answer, \strlen($answer), 0, $ip, $port);
