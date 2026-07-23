@@ -26,11 +26,13 @@ class Swoole extends Adapter
 
     /**
      * @param list<Transport> $transports
+     * @param int $idleTimeout Seconds before idle TCP connections are closed (RFC 7766)
      */
     public function __construct(
         array $transports,
         protected int $workers = 1,
         protected int $maxCoroutines = 3000,
+        protected int $idleTimeout = 30,
     ) {
         if ($transports === []) {
             throw new Exception('At least one transport is required.');
@@ -48,6 +50,10 @@ class Swoole extends Adapter
         $this->server->set($master->getSettings() + [
             'worker_num' => $this->workers,
             'max_coroutine' => $this->maxCoroutines,
+            // RFC 7766 Section 6.2.3: close idle TCP connections so slow
+            // clients cannot hold per-connection buffers open indefinitely
+            'heartbeat_idle_time' => $this->idleTimeout,
+            'heartbeat_check_interval' => max(1, intdiv($this->idleTimeout, 3)),
         ]);
 
         $this->listeners[] = [$master, $this->server];
