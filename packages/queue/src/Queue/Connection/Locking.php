@@ -14,7 +14,7 @@ use Utopia\Queue\Connection;
  * Outside of a coroutine there is no preemption, so the lock degrades to a
  * plain in-process flag (see {@see Mutex}).
  */
-class Locking implements Connection
+class Locking implements Connection, Lua
 {
     /**
      * Wait forever when acquiring the lock; a command should never be dropped
@@ -37,6 +37,18 @@ class Locking implements Connection
     protected function synchronize(callable $command): mixed
     {
         return $this->lock->withLock($command, self::ACQUIRE_TIMEOUT);
+    }
+
+    #[\Override]
+    public function evaluate(string $script, array $keys = [], array $arguments = []): mixed
+    {
+        if (!$this->connection instanceof Lua) {
+            throw new \Utopia\Queue\Exception\Unsupported('atomic Lua scripts');
+        }
+
+        return $this->synchronize(
+            fn(): mixed => $this->connection->evaluate($script, $keys, $arguments),
+        );
     }
 
     public function rightPushArray(string $queue, array $payload): bool

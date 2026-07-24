@@ -8,6 +8,7 @@ class Message
     protected string $queue;
     protected int $timestamp;
     protected array $payload;
+    protected ?string $receipt = null;
 
     public function __construct(array $array = [])
     {
@@ -19,6 +20,7 @@ class Message
         $this->queue = $array['queue'];
         $this->timestamp = $array['timestamp'];
         $this->payload = $array['payload'] ?? [];
+        $this->receipt = $array['receipt'] ?? null;
     }
 
     public function setPid(string $pid): self
@@ -69,13 +71,31 @@ class Message
         return $this->payload;
     }
 
+    public function setReceipt(?string $receipt): self
+    {
+        $this->receipt = $receipt;
+
+        return $this;
+    }
+
+    public function getReceipt(): ?string
+    {
+        return $this->receipt;
+    }
+
     public function asArray(): array
     {
-        return [
+        $message = [
             'pid' => $this->pid,
             'queue' => $this->queue,
             'timestamp' => $this->timestamp,
             'payload' => $this->payload ?? null,
         ];
+
+        if ($this->receipt !== null) {
+            $message['receipt'] = $this->receipt;
+        }
+
+        return $message;
     }
 }

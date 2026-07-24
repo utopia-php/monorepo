@@ -10,6 +10,7 @@ use Utopia\Lock\Lock;
 use Utopia\Lock\Mutex;
 use Utopia\Queue\Connection;
 use Utopia\Queue\Connection\Locking;
+use Utopia\Queue\Connection\Lua;
 
 final class LockingTest extends TestCase
 {
@@ -84,6 +85,24 @@ final class LockingTest extends TestCase
         $lock = new \ReflectionProperty(Locking::class, 'lock')->getValue($locking);
 
         $this->assertInstanceOf(Mutex::class, $lock);
+    }
+
+    public function testLuaEvaluationIsSynchronized(): void
+    {
+        $recorder = new Recorder();
+        $locking = new Locking(
+            new RecordingConnection($recorder),
+            new RecordingLock($recorder),
+        );
+
+        $result = $locking->evaluate('return ARGV[1]', ['queue'], ['value']);
+
+        $this->assertSame('evaluated', $result);
+        $this->assertSame(['acquire', 'evaluate', 'release'], $recorder->events);
+        $this->assertSame(
+            ['evaluate' => ['return ARGV[1]', ['queue'], ['value']]],
+            $recorder->calls,
+        );
     }
 
     /**
@@ -182,7 +201,7 @@ class RecordingLock implements Lock
     }
 }
 
-class RecordingConnection implements Connection
+class RecordingConnection implements Connection, Lua
 {
     public function __construct(private readonly Recorder $recorder) {}
 
@@ -190,6 +209,13 @@ class RecordingConnection implements Connection
     {
         $this->recorder->events[] = $method;
         $this->recorder->calls[$method] = $args;
+    }
+
+    public function evaluate(string $script, array $keys = [], array $arguments = []): mixed
+    {
+        $this->record('evaluate', [$script, $keys, $arguments]);
+
+        return 'evaluated';
     }
 
     public function rightPushArray(string $queue, array $payload): bool

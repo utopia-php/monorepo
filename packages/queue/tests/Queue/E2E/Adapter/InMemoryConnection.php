@@ -4,13 +4,14 @@ namespace Tests\E2E\Adapter;
 
 use Swoole\Coroutine;
 use Utopia\Queue\Connection;
+use Utopia\Queue\Connection\Lua;
 
 /**
  * Minimal in-memory {@see Connection} for tests, backing the broker without a
  * real Redis server. An empty pop yields so a busy receive loop doesn't starve
  * the handler coroutines.
  */
-class InMemoryConnection implements Connection
+class InMemoryConnection implements Connection, Lua
 {
     /** @var array<string, list<mixed>> */
     private array $lists = [];
@@ -20,6 +21,40 @@ class InMemoryConnection implements Connection
 
     /** @var array<string, int> */
     private array $counters = [];
+
+    /** @var array<string, array<string, string>> */
+    private array $hashes = [];
+
+    public function evaluate(string $script, array $keys = [], array $arguments = []): mixed
+    {
+        if (str_contains($script, '-- queue:claim')) {
+            $message = $this->pop($keys[0], fromTail: true);
+            if (!\is_array($message)) {
+                return ['', '', '0', 'empty'];
+            }
+
+            $pid = $message['pid'];
+            $encoded = json_encode($message, JSON_THROW_ON_ERROR);
+            $this->hashes[$keys[1]][$pid] = $encoded;
+            $this->hashes[$keys[2]][$pid] = (string) $arguments[2];
+
+            return [$encoded, $arguments[2], '0', 'new'];
+        }
+
+        if (str_contains($script, '-- queue:acknowledge')) {
+            $pid = (string) $arguments[0];
+            $receipt = (string) $arguments[1];
+            if (($this->hashes[$keys[1]][$pid] ?? null) !== $receipt) {
+                return 0;
+            }
+
+            unset($this->hashes[$keys[0]][$pid], $this->hashes[$keys[1]][$pid]);
+
+            return 1;
+        }
+
+        throw new \LogicException('Unsupported in-memory Lua script.');
+    }
 
     public function rightPushArray(string $queue, array $payload): bool
     {

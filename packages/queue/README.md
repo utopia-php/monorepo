@@ -73,9 +73,56 @@ $client->enqueue([
 ]);
 ```
 
+## Idempotent publication
+
+Redis publishers implement `Utopia\Queue\Publisher\Idempotent`. Use
+`enqueueOnce()` when a producer can retry after losing the publish response:
+
+```php
+use Utopia\Queue\Publisher\Result;
+use Utopia\Queue\Queue;
+
+$queue = new Queue('my-queue');
+$result = $publisher->enqueueOnce(
+    $queue,
+    messageId: $operationId,
+    payload: ['operationId' => $operationId],
+);
+
+if ($result === Result::Existing) {
+    // The same envelope was already accepted.
+}
+```
+
+`Result::Enqueued` and `Result::Existing` both acknowledge success. Message IDs
+are retained per queue without an implicit expiry. Reusing an ID with a
+different canonical payload or priority throws
+`Utopia\Queue\Exception\Conflict`.
+
+## Visibility leases
+
+Redis claims atomically move a pending envelope into processing state.
+Visibility reclaim is disabled by default to preserve existing long-running
+workers. Set an application-specific timeout on the queue to recover messages
+when a worker loses its acknowledgement:
+
+```php
+$queue = new Queue('my-queue', visibilityTimeout: $leaseSeconds);
+$message = $consumer->receive($queue, timeout: 2);
+
+if ($message !== null) {
+    $consumer->renew($queue, $message);
+    $consumer->commit($queue, $message);
+}
+```
+
+Call `renew()` before the deadline while processing valid long-running work.
+Each redelivery receives a new receipt, so an acknowledgement from an older
+delivery cannot complete the active claim.
+
 ## System requirements
 
-Utopia Framework requires PHP 8.0 or later. We recommend using the latest PHP version whenever possible.
+Utopia Queue requires PHP 8.5 or later.
 
 ## Copyright and license
 

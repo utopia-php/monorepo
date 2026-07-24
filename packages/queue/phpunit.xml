@@ -13,6 +13,8 @@
         </testsuite>
         <testsuite name="e2e">
             <file>./tests/Queue/E2E/Adapter/PoolTest.php</file>
+            <file>./tests/Queue/E2E/Adapter/RedisClusterDurabilityTest.php</file>
+            <file>./tests/Queue/E2E/Adapter/RedisDurabilityTest.php</file>
             <file>./tests/Queue/E2E/Adapter/SwooleTest.php</file>
             <file>./tests/Queue/E2E/Adapter/SwooleRedisClusterTest.php</file>
             <file>./tests/Queue/E2E/Adapter/WorkermanTest.php</file>

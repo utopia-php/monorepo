@@ -7,6 +7,7 @@ namespace Tests\E2E\Adapter;
 use PHPUnit\Framework\TestCase;
 use Utopia\Queue\Broker\Redis as RedisBroker;
 use Utopia\Queue\Connection;
+use Utopia\Queue\Connection\Lua;
 use Utopia\Queue\Queue;
 
 final class RedisReconnectCallbackTest extends TestCase
@@ -74,9 +75,14 @@ final class RedisReconnectCallbackTest extends TestCase
     }
 }
 
-class FailingRedisConnection implements Connection
+class FailingRedisConnection implements Connection, Lua
 {
     public int $popAttempts = 0;
+
+    public function evaluate(string $script, array $keys = [], array $arguments = []): mixed
+    {
+        return $this->rightPopArray($keys[0] ?? '', 0);
+    }
 
     public function rightPushArray(string $queue, array $payload): bool
     {

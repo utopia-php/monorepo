@@ -4,7 +4,7 @@ namespace Utopia\Queue\Connection;
 
 use Utopia\Queue\Connection;
 
-class RedisCluster implements Connection
+class RedisCluster implements Connection, Lua
 {
     protected const int CONNECT_MAX_ATTEMPTS = 5;
     protected const int CONNECT_BACKOFF_MS = 100;
@@ -12,6 +12,16 @@ class RedisCluster implements Connection
     protected ?\RedisCluster $redis = null;
 
     public function __construct(protected array $seeds, protected float $connectTimeout = -1, protected float $readTimeout = -1) {}
+
+    #[\Override]
+    public function evaluate(string $script, array $keys = [], array $arguments = []): mixed
+    {
+        return $this->getRedis()->eval(
+            $script,
+            [...$keys, ...$arguments],
+            \count($keys),
+        );
+    }
 
     public function rightPopLeftPushArray(string $queue, string $destination, int $timeout): array|false
     {
