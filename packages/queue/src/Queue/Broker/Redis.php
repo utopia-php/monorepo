@@ -162,7 +162,12 @@ class Redis implements IdempotentPublisher, LeasedConsumer
             return 0
         end
 
-        redis.call('ZADD', KEYS[2], ARGV[3], ARGV[1])
+        local deadline = tonumber(redis.call('ZSCORE', KEYS[2], ARGV[1]) or '0')
+        if deadline <= tonumber(ARGV[3]) then
+            return 0
+        end
+
+        redis.call('ZADD', KEYS[2], ARGV[4], ARGV[1])
 
         return 1
         LUA;
@@ -318,13 +323,15 @@ class Redis implements IdempotentPublisher, LeasedConsumer
         }
 
         $keys = Keys::from($queue);
+        $now = $this->now();
         $renewed = $this->lua($this->commands)->evaluate(
             self::RENEW_SCRIPT,
             [$keys->receipts, $keys->visibility],
             [
                 $message->getPid(),
                 $receipt,
-                $this->now() + ($queue->visibilityTimeout * 1_000),
+                $now,
+                $now + ($queue->visibilityTimeout * 1_000),
             ],
         );
 

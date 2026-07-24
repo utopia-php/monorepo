@@ -165,6 +165,25 @@ final class RedisDurabilityTest extends TestCase
         $this->assertSame($message->getPid(), $redelivered->getPid());
     }
 
+    public function testExpiredClaimCannotBeRenewedBeforeItIsReclaimed(): void
+    {
+        $queue = $this->queue(visibilityTimeout: 1);
+        $broker = $this->broker();
+        $broker->enqueue($queue, ['value' => 'expired']);
+
+        $expired = $broker->receive($queue, 0);
+        $this->assertInstanceOf(Message::class, $expired);
+
+        usleep(1_100_000);
+
+        $this->assertFalse($broker->renew($queue, $expired));
+
+        $redelivered = $broker->receive($queue, 0);
+        $this->assertInstanceOf(Message::class, $redelivered);
+        $this->assertSame($expired->getPid(), $redelivered->getPid());
+        $this->assertNotSame($expired->getReceipt(), $redelivered->getReceipt());
+    }
+
     public function testVisibilityTimeoutRemainsDisabledByDefault(): void
     {
         $queue = $this->queue();
