@@ -10,9 +10,7 @@ use Utopia\Span\Exporter\SentryField;
 use Utopia\Span\Level;
 use Utopia\Span\Span;
 
-class NamespacedTestException extends \RuntimeException
-{
-}
+class NamespacedTestException extends \RuntimeException {}
 
 class SentryTest extends TestCase
 {
@@ -303,6 +301,23 @@ class SentryTest extends TestCase
 
         $values = $this->buildPayload($fatalSpan)['exception']['values'];
         $this->assertFalse($values[0]['mechanism']['handled']);
+    }
+
+    public function testEnvelopeMechanismHandledAttributeOverridesLevel(): void
+    {
+        $unhandledError = new Span('test');
+        $unhandledError->set('span.handled', false);
+        $unhandledError->finish(level: Level::Error, error: new \RuntimeException('escaped'));
+
+        $values = $this->buildPayload($unhandledError)['exception']['values'];
+        $this->assertFalse($values[0]['mechanism']['handled']);
+
+        $handledFatal = new Span('test');
+        $handledFatal->set('span.handled', true);
+        $handledFatal->finish(level: Level::Fatal, error: new \RuntimeException('caught but fatal'));
+
+        $values = $this->buildPayload($handledFatal)['exception']['values'];
+        $this->assertTrue($values[0]['mechanism']['handled']);
     }
 
     public function testEnvelopeIncludesExceptionModule(): void

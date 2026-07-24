@@ -18,8 +18,9 @@ use Utopia\Span\Span;
  *
  * The span's error and its full getPrevious() chain (up to 10 links) are sent
  * as chained exception values, so Sentry shows the root cause alongside the
- * reported exception. Each value carries a mechanism: warning/error spans are
- * marked handled, fatal spans unhandled.
+ * reported exception. Each value carries a mechanism whose handled flag comes
+ * from a boolean `span.handled` attribute when set; otherwise warning/error
+ * spans are marked handled and fatal spans unhandled.
  *
  * ## HTTP Attribute Conventions
  *
@@ -246,7 +247,7 @@ class Sentry implements Exporter
             'message' => $error->getMessage(),
             'contexts' => $contexts,
             'exception' => [
-                'values' => $this->buildExceptionValues($error, $level),
+                'values' => $this->buildExceptionValues($error, $level, \is_bool($attributes['span.handled'] ?? null) ? $attributes['span.handled'] : null),
             ],
         ];
 
@@ -293,16 +294,17 @@ class Sentry implements Exporter
      *
      * @return array<int, array<string, mixed>>
      */
-    private function buildExceptionValues(\Throwable $error, Level $level): array
+    private function buildExceptionValues(\Throwable $error, Level $level, ?bool $handledOverride = null): array
     {
         $chain = [];
         for ($current = $error; $current instanceof \Throwable && \count($chain) < self::MAX_CHAIN_DEPTH; $current = $current->getPrevious()) {
             $chain[] = $current;
         }
 
-        // Fatal means the process-level handler caught it; anything the app
-        // reported via finish() at warning/error was handled by user code.
-        $handled = $level !== Level::Fatal;
+        // A 'span.handled' attribute states the handling state explicitly; the
+        // level is only a fallback heuristic (fatal implies a process-level
+        // handler, anything reported at warning/error implies user code).
+        $handled = $handledOverride ?? ($level !== Level::Fatal);
         $chained = \count($chain) > 1;
         $values = [];
 
