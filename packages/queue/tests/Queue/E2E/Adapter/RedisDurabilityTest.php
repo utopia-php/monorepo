@@ -349,11 +349,11 @@ final class RedisDurabilityTest extends TestCase
         $this->assertNotInstanceOf(Message::class, $broker->receive($queue, 0));
     }
 
-    public function testLegacyFailedRecordSurvivesFalseEnqueueResult(): void
+    public function testLegacyFailedRecordSurvivesEnqueueFailure(): void
     {
         $queue = $this->queue();
         $pid = 'legacy-message';
-        $connection = new FailedEnqueueRedisConnection('127.0.0.1', 16379);
+        $connection = new FailedLegacyRetryPublicationRedisConnection('127.0.0.1', 16379);
         $connection->setArray(
             "{$queue->namespace}.jobs.{$queue->name}.{$pid}",
             [
@@ -366,7 +366,13 @@ final class RedisDurabilityTest extends TestCase
         $connection->leftPush("{$queue->namespace}.failed.{$queue->name}", $pid);
 
         $broker = new RedisBroker($connection, $connection);
-        $broker->retry($queue);
+
+        try {
+            $broker->retry($queue);
+            $this->fail('Expected the legacy retry publication to fail.');
+        } catch (\RedisException) {
+            $this->assertTrue($connection->failed);
+        }
 
         $this->assertSame(1, $broker->getQueueSize($queue, failedJobs: true));
         $this->assertSame(0, $broker->getQueueSize($queue));
@@ -380,6 +386,49 @@ final class RedisDurabilityTest extends TestCase
         $this->assertSame($pid, $message->getPid());
         $this->assertSame(['value' => 'legacy'], $message->getPayload());
         $recovered->commit($queue, $message);
+    }
+
+    public function testLegacyRetryResponseLossDoesNotPublishTheStablePidTwice(): void
+    {
+        $queue = $this->queue();
+        $pid = 'legacy-response-loss';
+        $connection = new LostLegacyRetryPublicationRedisConnection('127.0.0.1', 16379);
+        $connection->setArray(
+            "{$queue->namespace}.jobs.{$queue->name}.{$pid}",
+            [
+                'pid' => $pid,
+                'queue' => $queue->name,
+                'timestamp' => time() - 1,
+                'payload' => ['value' => 'legacy'],
+            ],
+        );
+        $connection->leftPush("{$queue->namespace}.failed.{$queue->name}", $pid);
+
+        $retrying = new RedisBroker($connection, $connection);
+
+        try {
+            $retrying->retry($queue);
+            $this->fail('Expected the legacy retry publication response to be lost.');
+        } catch (\RedisException) {
+            $this->assertTrue($connection->lost);
+        }
+
+        $this->assertSame(1, $retrying->getQueueSize($queue, failedJobs: true));
+        $this->assertSame(1, $retrying->getQueueSize($queue));
+
+        $recovered = $this->broker();
+        $recovered->retry($queue);
+
+        $this->assertSame(0, $recovered->getQueueSize($queue, failedJobs: true));
+        $this->assertSame(1, $recovered->getQueueSize($queue));
+
+        $message = $recovered->receive($queue, 0);
+        $this->assertInstanceOf(Message::class, $message);
+        $this->assertSame($pid, $message->getPid());
+        $this->assertSame(['value' => 'legacy'], $message->getPayload());
+        $recovered->commit($queue, $message);
+
+        $this->assertNotInstanceOf(Message::class, $recovered->receive($queue, 0));
     }
 
     public function testConcurrentProducerRetriesPublishExactlyOnce(): void
@@ -471,11 +520,56 @@ final class LostRetryRedisConnection extends RedisConnection
     }
 }
 
-final class FailedEnqueueRedisConnection extends RedisConnection
+final class FailedLegacyRetryPublicationRedisConnection extends RedisConnection
 {
+    public bool $failed = false;
+
+    #[\Override]
+    public function evaluate(string $script, array $keys = [], array $arguments = []): mixed
+    {
+        if (str_contains($script, '-- queue:enqueue-once')) {
+            $this->failed = true;
+
+            throw new \RedisException('The legacy retry was not stored.');
+        }
+
+        return parent::evaluate($script, $keys, $arguments);
+    }
+}
+
+final class LostLegacyRetryPublicationRedisConnection extends RedisConnection
+{
+    public bool $lost = false;
+
     #[\Override]
     public function leftPushArray(string $queue, array $value): bool
     {
-        return false;
+        $result = parent::leftPushArray($queue, $value);
+        $this->loseResponse();
+
+        return $result;
+    }
+
+    #[\Override]
+    public function evaluate(string $script, array $keys = [], array $arguments = []): mixed
+    {
+        $result = parent::evaluate($script, $keys, $arguments);
+
+        if (str_contains($script, '-- queue:enqueue-once')) {
+            $this->loseResponse();
+        }
+
+        return $result;
+    }
+
+    private function loseResponse(): void
+    {
+        if ($this->lost) {
+            return;
+        }
+
+        $this->lost = true;
+
+        throw new \RedisException('The legacy retry was stored, but its response was lost.');
     }
 }

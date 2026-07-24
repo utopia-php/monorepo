@@ -89,6 +89,17 @@ final class RedisKeysTest extends TestCase
             "{$emptyBase}.failed",
         ], $this->values(Keys::from(new Queue('empty{}tag', 'keys'))));
 
+        $emptyThenTaggedBase = '{queue-a429fd0c6f8d7ac8e892efe60288a8300369de135cb2aac169411338a13713b1-28059}';
+        $this->assertSame([
+            'keys.queue.empty{}{bar}',
+            "{$emptyThenTaggedBase}.once",
+            "{$emptyThenTaggedBase}.processing",
+            "{$emptyThenTaggedBase}.receipts",
+            "{$emptyThenTaggedBase}.visibility",
+            "{$emptyThenTaggedBase}.expiry",
+            "{$emptyThenTaggedBase}.failed",
+        ], $this->values(Keys::from(new Queue('empty{}{bar}', 'keys'))));
+
         $closingBase = '{queue-fe8071e1812350a96bfdf172f755736cc7d13e4f8822ae5a941d685a35e61c29-11925}';
         $this->assertSame([
             'keys.queue.close}tag',

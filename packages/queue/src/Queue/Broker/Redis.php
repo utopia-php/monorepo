@@ -488,17 +488,11 @@ class Redis implements IdempotentPublisher, LeasedConsumer
                     continue;
                 }
 
-                if (!$this->commands->leftPushArray(
-                    $keys->pending,
-                    [
-                        'pid' => $job->getPid(),
-                        'queue' => $queue->name,
-                        'timestamp' => time(),
-                        'payload' => $job->getPayload(),
-                    ],
-                )) {
-                    return;
-                }
+                $this->enqueueOnce(
+                    $queue,
+                    $job->getPid(),
+                    $job->getPayload(),
+                );
 
                 $this->commands->listRemove($failedQueue, $failed);
                 $processed++;
