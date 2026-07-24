@@ -10,8 +10,35 @@ use Utopia\Span\Exporter\SentryField;
 use Utopia\Span\Level;
 use Utopia\Span\Span;
 
+class NamespacedTestException extends \RuntimeException
+{
+}
+
 class SentryTest extends TestCase
 {
+    /**
+     * Build the envelope for a span and return the decoded event payload.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildPayload(Span $span): array
+    {
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123');
+
+        $method = new \ReflectionMethod(Sentry::class, 'buildEnvelope');
+        $envelope = $method->invoke($exporter, $span);
+
+        $this->assertIsString($envelope);
+
+        $lines = explode("\n", $envelope);
+        $this->assertCount(3, $lines);
+
+        $payload = json_decode($lines[2], true);
+        $this->assertIsArray($payload);
+
+        return $payload;
+    }
+
     public function testConstructorParsesDsn(): void
     {
         $exporter = new Sentry(dsn: 'https://publickey@sentry.io/123456');
@@ -214,5 +241,134 @@ class SentryTest extends TestCase
         $exporter->export($span);
 
         $this->assertTrue(true);
+    }
+
+    public function testEnvelopeContainsChainedExceptions(): void
+    {
+        $root = new \LogicException('root cause');
+        $middle = new \InvalidArgumentException('middle', 0, $root);
+        $outer = new \RuntimeException('outer', 0, $middle);
+
+        $span = new Span('test');
+        $span->finish(error: $outer);
+
+        $values = $this->buildPayload($span)['exception']['values'];
+
+        $this->assertCount(3, $values);
+
+        // Oldest cause first, reported exception last
+        $this->assertSame(\LogicException::class, $values[0]['type']);
+        $this->assertSame('root cause', $values[0]['value']);
+        $this->assertSame(\InvalidArgumentException::class, $values[1]['type']);
+        $this->assertSame(\RuntimeException::class, $values[2]['type']);
+        $this->assertSame('outer', $values[2]['value']);
+
+        // The reported exception is the root of the mechanism tree (id 0)
+        $this->assertSame(0, $values[2]['mechanism']['exception_id']);
+        $this->assertArrayNotHasKey('parent_id', $values[2]['mechanism']);
+        $this->assertSame(1, $values[1]['mechanism']['exception_id']);
+        $this->assertSame(0, $values[1]['mechanism']['parent_id']);
+        $this->assertSame('__previous__', $values[1]['mechanism']['source']);
+        $this->assertSame(2, $values[0]['mechanism']['exception_id']);
+        $this->assertSame(1, $values[0]['mechanism']['parent_id']);
+
+        foreach ($values as $value) {
+            $this->assertNotEmpty($value['stacktrace']['frames']);
+        }
+    }
+
+    public function testEnvelopeSingleExceptionHasNoChainIds(): void
+    {
+        $span = new Span('test');
+        $span->finish(error: new \RuntimeException('alone'));
+
+        $values = $this->buildPayload($span)['exception']['values'];
+
+        $this->assertCount(1, $values);
+        $this->assertSame('generic', $values[0]['mechanism']['type']);
+        $this->assertArrayNotHasKey('exception_id', $values[0]['mechanism']);
+        $this->assertArrayNotHasKey('parent_id', $values[0]['mechanism']);
+    }
+
+    public function testEnvelopeMechanismHandledReflectsLevel(): void
+    {
+        $handledSpan = new Span('test');
+        $handledSpan->finish(level: Level::Error, error: new \RuntimeException('caught'));
+
+        $values = $this->buildPayload($handledSpan)['exception']['values'];
+        $this->assertTrue($values[0]['mechanism']['handled']);
+
+        $fatalSpan = new Span('test');
+        $fatalSpan->finish(level: Level::Fatal, error: new \RuntimeException('crashed'));
+
+        $values = $this->buildPayload($fatalSpan)['exception']['values'];
+        $this->assertFalse($values[0]['mechanism']['handled']);
+    }
+
+    public function testEnvelopeIncludesExceptionModule(): void
+    {
+        $span = new Span('test');
+        $span->finish(error: new NamespacedTestException('namespaced'));
+
+        $values = $this->buildPayload($span)['exception']['values'];
+
+        $this->assertSame(NamespacedTestException::class, $values[0]['type']);
+        $this->assertSame(__NAMESPACE__, $values[0]['module']);
+
+        $globalSpan = new Span('test');
+        $globalSpan->finish(error: new \RuntimeException('global'));
+
+        $values = $this->buildPayload($globalSpan)['exception']['values'];
+        $this->assertArrayNotHasKey('module', $values[0]);
+    }
+
+    public function testEnvelopeFramesCarryFunctionNames(): void
+    {
+        $error = $this->throwAndCatch();
+
+        $span = new Span('test');
+        $span->finish(error: $error);
+
+        $frames = $this->buildPayload($span)['exception']['values'][0]['stacktrace']['frames'];
+
+        $this->assertNotEmpty($frames);
+
+        foreach ($frames as $frame) {
+            if (\array_key_exists('function', $frame)) {
+                $this->assertNotSame('', $frame['function']);
+            }
+        }
+
+        // The throw-site frame is last and names its enclosing function
+        $throwSite = end($frames);
+        $this->assertSame(self::class . '->throwAndCatch', $throwSite['function']);
+        $this->assertSame(__FILE__, $throwSite['filename']);
+    }
+
+    public function testEnvelopeCapsExceptionChainDepth(): void
+    {
+        $error = new \RuntimeException('level 0');
+        for ($i = 1; $i < 15; $i++) {
+            $error = new \RuntimeException("level {$i}", 0, $error);
+        }
+
+        $span = new Span('test');
+        $span->finish(error: $error);
+
+        $values = $this->buildPayload($span)['exception']['values'];
+
+        $this->assertCount(10, $values);
+        // Reported exception is always kept (last); the deepest causes are dropped
+        $this->assertSame('level 14', $values[9]['value']);
+        $this->assertSame('level 5', $values[0]['value']);
+    }
+
+    private function throwAndCatch(): \Throwable
+    {
+        try {
+            throw new \RuntimeException('thrown here');
+        } catch (\RuntimeException $error) {
+            return $error;
+        }
     }
 }

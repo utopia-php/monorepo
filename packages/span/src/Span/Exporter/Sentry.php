@@ -14,6 +14,13 @@ use Utopia\Span\Span;
  * Only spans whose level is warning, error, or fatal are sent, at that level.
  * Lower levels (info, debug) are skipped — use the Stdout exporter for those.
  *
+ * ## Exceptions
+ *
+ * The span's error and its full getPrevious() chain (up to 10 links) are sent
+ * as chained exception values, so Sentry shows the root cause alongside the
+ * reported exception. Each value carries a mechanism: warning/error spans are
+ * marked handled, fatal spans unhandled.
+ *
  * ## HTTP Attribute Conventions
  *
  * The following span attributes are mapped to Sentry's request/response structures:
@@ -47,7 +54,12 @@ class Sentry implements Exporter
     /**
      * Span levels that are exported. Anything below warning (info, debug) is skipped.
      */
-    private const EXPORT_LEVELS = [Level::Warn, Level::Error, Level::Fatal];
+    private const array EXPORT_LEVELS = [Level::Warn, Level::Error, Level::Fatal];
+
+    /**
+     * Maximum number of chained exceptions (via getPrevious()) sent per event.
+     */
+    private const int MAX_CHAIN_DEPTH = 10;
 
     private readonly string $endpoint;
     private readonly string $publicKey;
@@ -197,28 +209,6 @@ class Sentry implements Exporter
             'content_type' => 'application/json',
         ]);
 
-        $frames = [];
-        foreach (array_reverse($error->getTrace()) as $frame) {
-            if (!isset($frame['file'])) {
-                continue;
-            }
-            $sentryFrame = [
-                'filename' => $frame['file'],
-                'lineno' => $frame['line'] ?? 0,
-                'in_app' => !str_contains($frame['file'], '/vendor/'),
-            ];
-            $sentryFrame['function'] = isset($frame['class'])
-                ? $frame['class'] . ($frame['type'] ?? '::') . $frame['function']
-                : $frame['function'];
-            $frames[] = $sentryFrame;
-        }
-
-        $frames[] = [
-            'filename' => $error->getFile(),
-            'lineno' => $error->getLine(),
-            'in_app' => !str_contains($error->getFile(), '/vendor/'),
-        ];
-
         $contexts = [
             'trace' => $traceContext,
             'runtime' => [
@@ -256,11 +246,7 @@ class Sentry implements Exporter
             'message' => $error->getMessage(),
             'contexts' => $contexts,
             'exception' => [
-                'values' => [[
-                    'type' => $error::class,
-                    'value' => $error->getMessage(),
-                    'stacktrace' => ['frames' => $frames],
-                ]],
+                'values' => $this->buildExceptionValues($error, $level),
             ],
         ];
 
@@ -297,7 +283,114 @@ class Sentry implements Exporter
         return "{$header}\n{$itemHeader}\n{$payload}";
     }
 
-    private const HANDLED_HTTP_KEYS = [
+    /**
+     * Build the Sentry exception values list, following the getPrevious() chain.
+     *
+     * Values are ordered oldest cause first (root cause at index 0, reported
+     * exception last), as required by the Sentry exception interface. Each value
+     * carries a mechanism; chained values are linked via exception_id/parent_id
+     * so Sentry renders the cause tree.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildExceptionValues(\Throwable $error, Level $level): array
+    {
+        $chain = [];
+        for ($current = $error; $current instanceof \Throwable && \count($chain) < self::MAX_CHAIN_DEPTH; $current = $current->getPrevious()) {
+            $chain[] = $current;
+        }
+
+        // Fatal means the process-level handler caught it; anything the app
+        // reported via finish() at warning/error was handled by user code.
+        $handled = $level !== Level::Fatal;
+        $chained = \count($chain) > 1;
+        $values = [];
+
+        // $chain[0] is the reported (outermost) exception — the root of the
+        // mechanism tree, so it gets exception_id 0.
+        foreach ($chain as $id => $exception) {
+            $mechanism = [
+                'type' => 'generic',
+                'handled' => $handled,
+            ];
+
+            if ($chained) {
+                $mechanism['exception_id'] = $id;
+                if ($id > 0) {
+                    $mechanism['parent_id'] = $id - 1;
+                    $mechanism['source'] = '__previous__';
+                }
+            }
+
+            $value = [
+                'type' => $exception::class,
+                'value' => $exception->getMessage(),
+                'stacktrace' => ['frames' => $this->buildFrames($exception)],
+                'mechanism' => $mechanism,
+            ];
+
+            $namespaceEnd = strrpos($exception::class, '\\');
+            if ($namespaceEnd !== false) {
+                $value['module'] = substr($exception::class, 0, $namespaceEnd);
+            }
+
+            $values[] = $value;
+        }
+
+        return array_reverse($values);
+    }
+
+    /**
+     * Build Sentry stacktrace frames for one throwable, oldest call first,
+     * ending with the throw site.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildFrames(\Throwable $error): array
+    {
+        $trace = $error->getTrace();
+
+        $frames = [];
+        foreach (array_reverse($trace) as $frame) {
+            if (!isset($frame['file'])) {
+                continue;
+            }
+            $frames[] = [
+                'filename' => $frame['file'],
+                'lineno' => $frame['line'] ?? 0,
+                'in_app' => !str_contains($frame['file'], '/vendor/'),
+                'function' => $this->formatFunction($frame),
+            ];
+        }
+
+        // PHP traces describe call sites, not the throw site itself — append it.
+        // Its enclosing function is the callee recorded in the first trace frame.
+        $throwSite = [
+            'filename' => $error->getFile(),
+            'lineno' => $error->getLine(),
+            'in_app' => !str_contains($error->getFile(), '/vendor/'),
+        ];
+
+        if (isset($trace[0]['function'])) {
+            $throwSite['function'] = $this->formatFunction($trace[0]);
+        }
+
+        $frames[] = $throwSite;
+
+        return $frames;
+    }
+
+    /**
+     * @param array{function: string, class?: class-string, type?: string} $frame
+     */
+    private function formatFunction(array $frame): string
+    {
+        return isset($frame['class'])
+            ? $frame['class'] . ($frame['type'] ?? '::') . $frame['function']
+            : $frame['function'];
+    }
+
+    private const array HANDLED_HTTP_KEYS = [
         'http.url',
         'http.method',
         'http.query',
