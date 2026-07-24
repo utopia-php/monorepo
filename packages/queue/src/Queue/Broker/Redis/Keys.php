@@ -43,7 +43,9 @@ final class Keys
         if ($open !== false) {
             $close = strpos($key, '}', $open + 1);
             if ($close !== false && $close > $open + 1) {
-                return substr($key, $open, $close - $open + 1);
+                return substr($key, $open, $close - $open + 1)
+                    . '.queue-'
+                    . hash('sha256', $key);
             }
         }
 

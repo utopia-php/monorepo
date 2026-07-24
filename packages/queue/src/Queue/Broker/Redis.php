@@ -455,7 +455,7 @@ class Redis implements IdempotentPublisher, LeasedConsumer
                     $replacement = $job instanceof Message
                         ? json_encode(
                             [
-                                'pid' => uniqid(more_entropy: true),
+                                'pid' => $job->getPid(),
                                 'queue' => $queue->name,
                                 'timestamp' => time(),
                                 'payload' => $job->getPayload(),
@@ -488,7 +488,15 @@ class Redis implements IdempotentPublisher, LeasedConsumer
                     continue;
                 }
 
-                if (!$this->enqueue($queue, $job->getPayload())) {
+                if (!$this->commands->leftPushArray(
+                    $keys->pending,
+                    [
+                        'pid' => $job->getPid(),
+                        'queue' => $queue->name,
+                        'timestamp' => time(),
+                        'payload' => $job->getPayload(),
+                    ],
+                )) {
                     return;
                 }
 

@@ -218,8 +218,76 @@ final class RedisDurabilityTest extends TestCase
         $retried = $broker->receive($queue, 0);
         $this->assertInstanceOf(Message::class, $retried);
         $this->assertSame(['value' => 'retry'], $retried->getPayload());
-        $this->assertNotSame($failed->getPid(), $retried->getPid());
+        $this->assertSame($failed->getPid(), $retried->getPid());
         $broker->commit($queue, $retried);
+    }
+
+    public function testExplicitHashTagQueuesKeepIndependentDeliveryLifecycles(): void
+    {
+        $first = new Queue(
+            'first{shared}a',
+            $this->namespace,
+            jobTtl: 5,
+            visibilityTimeout: 1,
+        );
+        $second = new Queue(
+            'second{shared}b',
+            $this->namespace,
+            jobTtl: 5,
+            visibilityTimeout: 1,
+        );
+        $broker = $this->broker();
+
+        $this->assertSame(
+            Result::Enqueued,
+            $broker->enqueueOnce($first, 'same-id', ['queue' => 'first']),
+        );
+        $this->assertSame(
+            Result::Enqueued,
+            $broker->enqueueOnce($second, 'same-id', ['queue' => 'second']),
+        );
+        $this->assertSame(1, $broker->getQueueSize($first));
+        $this->assertSame(1, $broker->getQueueSize($second));
+
+        $firstMessage = $broker->receive($first, 0);
+        $secondMessage = $broker->receive($second, 0);
+        $this->assertInstanceOf(Message::class, $firstMessage);
+        $this->assertInstanceOf(Message::class, $secondMessage);
+        $this->assertSame('same-id', $firstMessage->getPid());
+        $this->assertSame('same-id', $secondMessage->getPid());
+        $this->assertSame(['queue' => 'first'], $firstMessage->getPayload());
+        $this->assertSame(['queue' => 'second'], $secondMessage->getPayload());
+        $this->assertNotSame($firstMessage->getReceipt(), $secondMessage->getReceipt());
+
+        usleep(600_000);
+        $this->assertTrue($broker->renew($first, $firstMessage));
+        usleep(600_000);
+
+        $reclaimed = $broker->receive($second, 0);
+        $this->assertInstanceOf(Message::class, $reclaimed);
+        $this->assertSame($secondMessage->getPid(), $reclaimed->getPid());
+        $this->assertNotSame($secondMessage->getReceipt(), $reclaimed->getReceipt());
+
+        $broker->commit($first, $firstMessage);
+        $this->assertTrue($broker->renew($second, $reclaimed));
+        $broker->reject($second, $reclaimed);
+
+        $this->assertSame(0, $broker->getQueueSize($first, failedJobs: true));
+        $this->assertSame(1, $broker->getQueueSize($second, failedJobs: true));
+
+        $broker->retry($second);
+
+        $this->assertSame(0, $broker->getQueueSize($second, failedJobs: true));
+        $this->assertSame(1, $broker->getQueueSize($second));
+
+        $retried = $broker->receive($second, 0);
+        $this->assertInstanceOf(Message::class, $retried);
+        $this->assertSame('same-id', $retried->getPid());
+        $this->assertSame(['queue' => 'second'], $retried->getPayload());
+        $broker->commit($second, $retried);
+
+        $this->assertNotInstanceOf(Message::class, $broker->receive($first, 0));
+        $this->assertNotInstanceOf(Message::class, $broker->receive($second, 0));
     }
 
     public function testFailedRecordSurvivesRetryPublicationFailure(): void
@@ -245,6 +313,7 @@ final class RedisDurabilityTest extends TestCase
         $this->assertSame(0, $broker->getQueueSize($queue, failedJobs: true));
         $retried = $broker->receive($queue, 0);
         $this->assertInstanceOf(Message::class, $retried);
+        $this->assertSame($failed->getPid(), $retried->getPid());
         $this->assertSame(['value' => 'retry'], $retried->getPayload());
         $broker->commit($queue, $retried);
     }
@@ -308,6 +377,7 @@ final class RedisDurabilityTest extends TestCase
         $this->assertSame(0, $recovered->getQueueSize($queue, failedJobs: true));
         $message = $recovered->receive($queue, 0);
         $this->assertInstanceOf(Message::class, $message);
+        $this->assertSame($pid, $message->getPid());
         $this->assertSame(['value' => 'legacy'], $message->getPayload());
         $recovered->commit($queue, $message);
     }
