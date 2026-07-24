@@ -124,7 +124,6 @@ class Redis implements IdempotentPublisher, LeasedConsumer
         LUA;
 
     private const int POLL_INTERVAL_MICROSECONDS = 100_000;
-    private const int POP_TIMEOUT = 2;
     private const int RECONNECT_BACKOFF_MS = 100;
     private const int RECONNECT_MAX_BACKOFF_MS = 5_000;
 
@@ -168,6 +167,25 @@ class Redis implements IdempotentPublisher, LeasedConsumer
         end
 
         redis.call('ZADD', KEYS[2], ARGV[4], ARGV[1])
+
+        return 1
+        LUA;
+
+    private const string RETRY_SCRIPT = <<<'LUA'
+        -- queue:retry
+        local failed = redis.call('LINDEX', KEYS[1], -1)
+        if not failed then
+            return 0
+        end
+
+        if failed ~= ARGV[1] then
+            return -1
+        end
+
+        if ARGV[2] ~= '' then
+            redis.call('LPUSH', KEYS[2], ARGV[2])
+        end
+        redis.call('RPOP', KEYS[1])
 
         return 1
         LUA;
@@ -424,8 +442,8 @@ class Redis implements IdempotentPublisher, LeasedConsumer
                     return;
                 }
 
-                $failed = $this->commands->rightPop($failedQueue, self::POP_TIMEOUT);
-                if ($failed === false) {
+                $failed = $this->commands->listRange($failedQueue, 1, -1)[0] ?? null;
+                if (!\is_string($failed)) {
                     break;
                 }
 
@@ -433,15 +451,48 @@ class Redis implements IdempotentPublisher, LeasedConsumer
                     ? $this->getFailedJob($failed)
                     : $this->getJob($queue, $failed);
 
-                if ($job === null) {
+                if ($failedQueue === $keys->failed) {
+                    $replacement = $job instanceof Message
+                        ? json_encode(
+                            [
+                                'pid' => uniqid(more_entropy: true),
+                                'queue' => $queue->name,
+                                'timestamp' => time(),
+                                'payload' => $job->getPayload(),
+                            ],
+                            JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION,
+                        )
+                        : '';
+                    $retried = (int) $this->lua($this->commands)->evaluate(
+                        self::RETRY_SCRIPT,
+                        [$keys->failed, $keys->pending],
+                        [$failed, $replacement],
+                    );
+
+                    if ($retried === 0) {
+                        break;
+                    }
+                    if ($retried !== 1) {
+                        continue;
+                    }
+                    if (!$job instanceof Message) {
+                        continue;
+                    }
+
+                    $processed++;
                     continue;
                 }
 
-                if ($job === false) {
+                if (!$job instanceof Message) {
+                    $this->commands->listRemove($failedQueue, $failed);
                     continue;
                 }
 
-                $this->enqueue($queue, $job->getPayload());
+                if (!$this->enqueue($queue, $job->getPayload())) {
+                    return;
+                }
+
+                $this->commands->listRemove($failedQueue, $failed);
                 $processed++;
             }
         }

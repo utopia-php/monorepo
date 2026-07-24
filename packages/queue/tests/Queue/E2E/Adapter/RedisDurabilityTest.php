@@ -222,6 +222,96 @@ final class RedisDurabilityTest extends TestCase
         $broker->commit($queue, $retried);
     }
 
+    public function testFailedRecordSurvivesRetryPublicationFailure(): void
+    {
+        $queue = $this->queue(visibilityTimeout: 1);
+        $broker = $this->broker();
+        $broker->enqueue($queue, ['value' => 'retry']);
+
+        $failed = $broker->receive($queue, 0);
+        $this->assertInstanceOf(Message::class, $failed);
+        $broker->reject($queue, $failed);
+
+        $connection = $this->connection();
+        $connection->set("{$queue->namespace}.queue.{$queue->name}", 'incompatible');
+
+        $broker->retry($queue);
+
+        $this->assertSame(1, $broker->getQueueSize($queue, failedJobs: true));
+        $connection->remove("{$queue->namespace}.queue.{$queue->name}");
+
+        $broker->retry($queue);
+
+        $this->assertSame(0, $broker->getQueueSize($queue, failedJobs: true));
+        $retried = $broker->receive($queue, 0);
+        $this->assertInstanceOf(Message::class, $retried);
+        $this->assertSame(['value' => 'retry'], $retried->getPayload());
+        $broker->commit($queue, $retried);
+    }
+
+    public function testRetryResponseLossDoesNotDuplicateOrLoseTheFailedRecord(): void
+    {
+        $queue = $this->queue(visibilityTimeout: 1);
+        $broker = $this->broker();
+        $broker->enqueue($queue, ['value' => 'retry']);
+
+        $failed = $broker->receive($queue, 0);
+        $this->assertInstanceOf(Message::class, $failed);
+        $broker->reject($queue, $failed);
+
+        $lost = new LostRetryRedisConnection('127.0.0.1', 16379);
+        $retrying = new RedisBroker($lost, $lost);
+
+        try {
+            $retrying->retry($queue);
+            $this->fail('Expected the stored retry response to be lost.');
+        } catch (\RedisException) {
+            $this->assertTrue($lost->lost);
+        }
+
+        $this->assertSame(0, $broker->getQueueSize($queue, failedJobs: true));
+        $this->assertSame(1, $broker->getQueueSize($queue));
+
+        $retried = $broker->receive($queue, 0);
+        $this->assertInstanceOf(Message::class, $retried);
+        $this->assertSame(['value' => 'retry'], $retried->getPayload());
+        $broker->commit($queue, $retried);
+
+        $this->assertNotInstanceOf(Message::class, $broker->receive($queue, 0));
+    }
+
+    public function testLegacyFailedRecordSurvivesFalseEnqueueResult(): void
+    {
+        $queue = $this->queue();
+        $pid = 'legacy-message';
+        $connection = new FailedEnqueueRedisConnection('127.0.0.1', 16379);
+        $connection->setArray(
+            "{$queue->namespace}.jobs.{$queue->name}.{$pid}",
+            [
+                'pid' => $pid,
+                'queue' => $queue->name,
+                'timestamp' => time() - 1,
+                'payload' => ['value' => 'legacy'],
+            ],
+        );
+        $connection->leftPush("{$queue->namespace}.failed.{$queue->name}", $pid);
+
+        $broker = new RedisBroker($connection, $connection);
+        $broker->retry($queue);
+
+        $this->assertSame(1, $broker->getQueueSize($queue, failedJobs: true));
+        $this->assertSame(0, $broker->getQueueSize($queue));
+
+        $recovered = $this->broker();
+        $recovered->retry($queue);
+
+        $this->assertSame(0, $recovered->getQueueSize($queue, failedJobs: true));
+        $message = $recovered->receive($queue, 0);
+        $this->assertInstanceOf(Message::class, $message);
+        $this->assertSame(['value' => 'legacy'], $message->getPayload());
+        $recovered->commit($queue, $message);
+    }
+
     public function testConcurrentProducerRetriesPublishExactlyOnce(): void
     {
         $queue = $this->queue();
@@ -290,5 +380,32 @@ final class LostClaimRedisConnection extends RedisConnection
         }
 
         return $result;
+    }
+}
+
+final class LostRetryRedisConnection extends RedisConnection
+{
+    public bool $lost = false;
+
+    #[\Override]
+    public function evaluate(string $script, array $keys = [], array $arguments = []): mixed
+    {
+        $result = parent::evaluate($script, $keys, $arguments);
+
+        if (!$this->lost && str_contains($script, '-- queue:retry')) {
+            $this->lost = true;
+            throw new \RedisException('The retry was stored, but its response was lost.');
+        }
+
+        return $result;
+    }
+}
+
+final class FailedEnqueueRedisConnection extends RedisConnection
+{
+    #[\Override]
+    public function leftPushArray(string $queue, array $value): bool
+    {
+        return false;
     }
 }

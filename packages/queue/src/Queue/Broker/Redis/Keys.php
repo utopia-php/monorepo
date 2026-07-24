@@ -8,7 +8,7 @@ use Utopia\Queue\Queue;
 
 final class Keys
 {
-    /** @var array<int, string> */
+    /** @var array<string, string> */
     private static array $tags = [];
 
     private function __construct(
@@ -51,15 +51,17 @@ final class Keys
             return '{' . $key . '}';
         }
 
-        $slot = self::slot($key);
-        if (isset(self::$tags[$slot])) {
-            return self::$tags[$slot];
+        if (isset(self::$tags[$key])) {
+            return self::$tags[$key];
         }
 
+        $slot = self::slot($key);
+        $digest = hash('sha256', $key);
+
         for ($candidate = 0; ; $candidate++) {
-            $tag = "queue-{$candidate}";
+            $tag = "queue-{$digest}-{$candidate}";
             if (self::slot($tag) === $slot) {
-                return self::$tags[$slot] = '{' . $tag . '}';
+                return self::$tags[$key] = '{' . $tag . '}';
             }
         }
     }
