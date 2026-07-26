@@ -507,6 +507,14 @@ class Http
         return $hook;
     }
 
+    /**
+     * Bind the server and run the {@see onStart()} hooks.
+     *
+     * A failing start hook is deliberately left to propagate. {@see error()}
+     * hooks are request-scoped: they inject `request`/`response`, which do not
+     * exist before the server accepts anything, so dispatching them here would
+     * only replace the real exception with a DI lookup failure.
+     */
     public function start(): void
     {
 
@@ -516,25 +524,10 @@ class Http
 
         $this->adapter->onStart(function ($server) {
             $this->resources()->set('server', fn() => $server);
-            try {
 
-                foreach (self::$startHooks as $hook) {
-                    $arguments = $this->getArguments($hook, [], []);
-                    \call_user_func_array($hook->getAction(), $arguments);
-                }
-            } catch (\Exception $e) {
-                $this->resources()->set('error', fn() => $e);
-
-                foreach (self::$errors as $error) { // Global error hooks
-                    if (\in_array('*', $error->getGroups())) {
-                        try {
-                            $arguments = $this->getArguments($error, [], []);
-                            \call_user_func_array($error->getAction(), $arguments);
-                        } catch (\Throwable $e) {
-                            throw new Exception('Error handler had an error: ' . $e->getMessage(), 500, $e);
-                        }
-                    }
-                }
+            foreach (self::$startHooks as $hook) {
+                $arguments = $this->getArguments($hook, [], []);
+                \call_user_func_array($hook->getAction(), $arguments);
             }
         });
 

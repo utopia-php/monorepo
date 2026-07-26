@@ -50,6 +50,74 @@ final class HttpTest extends TestCase
         $_SERVER['REQUEST_URI'] = $this->uri;
     }
 
+    /**
+     * An adapter that runs start hooks but never dispatches a request, so
+     * `start()` can be exercised with no request context in existence.
+     */
+    protected function startOnlyServer(): Adapter
+    {
+        return new class ($this->resources) extends Adapter {
+            public function __construct(private Container $resources) {}
+
+            public function onStart(callable $callback): void
+            {
+                \call_user_func($callback, $this);
+            }
+
+            public function onRequest(callable $callback): void {}
+
+            public function start(): void {}
+
+            public function resources(): Container
+            {
+                return $this->resources;
+            }
+
+            public function context(): Container
+            {
+                return $this->resources;
+            }
+        };
+    }
+
+    public function testStartHooksRunWithTheServerInjected(): void
+    {
+        $adapter = $this->startOnlyServer();
+        $http = new Http($adapter, 'UTC');
+
+        $injected = null;
+
+        Http::onStart()
+            ->inject('server')
+            ->action(function (Adapter $server) use (&$injected): void {
+                $injected = $server;
+            });
+
+        $http->start();
+
+        $this->assertSame($adapter, $injected, 'Start hooks should run with the server adapter injected');
+    }
+
+    public function testFailingStartHookKeepsItsOwnException(): void
+    {
+        $http = new Http($this->startOnlyServer(), 'UTC');
+
+        Http::error()
+            ->inject('request')
+            ->action(function (Request $request): void {
+                $this->fail('Request-scoped error hooks must not run on the server start path');
+            });
+
+        Http::onStart()->action(function (): void {
+            throw new \RuntimeException('start hook failed');
+        });
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('start hook failed');
+
+        $http->start();
+    }
+
     public function testCanGetDifferentModes(): void
     {
         $this->assertEmpty(Http::getMode());
