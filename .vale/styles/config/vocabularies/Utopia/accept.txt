@@ -1,5 +1,6 @@
-
-
+# Brands, products, people
+# Protocols, formats, acronyms
+# Tech vocabulary
 [Cc]harset(?:s)?
 [Cc]onfig(?:s)?
 [Cc]ron
@@ -13,9 +14,6 @@
 [Ss]tdout
 [Ss]ubtree
 [Vv]alidator(?:s)?
-# Brands, products, people
-# Protocols, formats, acronyms
-# Tech vocabulary
 accessor(?:s)?
 ACLs?
 aiohttp
@@ -68,6 +66,7 @@ Fedora
 FPM
 Fux
 GET
+getters?
 GPTBot
 Grafana
 Guzzle
@@ -148,6 +147,7 @@ Sailfish
 sanitization
 Scrypt
 Sentry
+setters?
 Silk
 Sinch
 SMS
