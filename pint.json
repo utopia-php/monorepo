@@ -21,6 +21,9 @@
         "single_quote": true,
         "trailing_comma_in_multiline": {
             "elements": ["arrays", "arguments", "parameters"]
+        },
+        "php_unit_method_casing": {
+            "case": "camel_case"
         }
     }
 }
