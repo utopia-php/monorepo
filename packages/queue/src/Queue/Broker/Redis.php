@@ -5,10 +5,10 @@ namespace Utopia\Queue\Broker;
 use Utopia\Queue\Connection;
 use Utopia\Queue\Consumer;
 use Utopia\Queue\Message;
-use Utopia\Queue\Publisher;
+use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
 
-class Redis implements Publisher, Consumer
+class Redis implements Synchronous, Consumer
 {
     private const int POP_TIMEOUT = 2;
     private const int RECONNECT_BACKOFF_MS = 100;
@@ -155,7 +155,7 @@ class Redis implements Publisher, Consumer
         }
     }
 
-    public function enqueue(Queue $queue, array $payload, bool $priority = false): bool
+    public function publish(Queue $queue, array $payload, bool $priority = false): bool
     {
         $payload = [
             'pid' => uniqid(more_entropy: true),
@@ -203,7 +203,7 @@ class Redis implements Publisher, Consumer
                 break;
             }
 
-            $this->enqueue($queue, $job->getPayload());
+            $this->publish($queue, $job->getPayload());
             $processed++;
         }
     }

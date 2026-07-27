@@ -5,6 +5,7 @@ namespace Utopia\Queue;
 use Exception;
 use Throwable;
 use Utopia\DI\Container;
+use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Servers\Hook;
 use Utopia\Telemetry\Adapter as Telemetry;
 use Utopia\Telemetry\Adapter\None as NoTelemetry;
@@ -155,7 +156,7 @@ class Server
         );
 
         $this->queueDepth->observe(function (callable $observe): void {
-            if (!$this->adapter->consumer instanceof Publisher) {
+            if (!$this->adapter->consumer instanceof Synchronous) {
                 return;
             }
 
