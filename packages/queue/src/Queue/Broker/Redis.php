@@ -11,6 +11,7 @@ use Utopia\Queue\Queue;
 class Redis implements Publisher, Consumer
 {
     private const int POP_TIMEOUT = 2;
+    private const int COMMAND_MAX_ATTEMPTS = 3;
     private const int RECONNECT_BACKOFF_MS = 100;
     private const int RECONNECT_MAX_BACKOFF_MS = 5_000;
 
@@ -104,20 +105,24 @@ class Redis implements Publisher, Consumer
     {
         $pid = $message->getPid();
 
-        $this->commands->remove("{$queue->namespace}.jobs.{$queue->name}.{$pid}");
-        $this->commands->increment("{$queue->namespace}.stats.{$queue->name}.success");
-        $this->commands->listRemove("{$queue->namespace}.processing.{$queue->name}", $pid);
-        $this->commands->decrement("{$queue->namespace}.stats.{$queue->name}.processing");
+        $this->executeCommand($queue, function () use ($queue, $pid): void {
+            $this->commands->remove("{$queue->namespace}.jobs.{$queue->name}.{$pid}");
+            $this->commands->increment("{$queue->namespace}.stats.{$queue->name}.success");
+            $this->commands->listRemove("{$queue->namespace}.processing.{$queue->name}", $pid);
+            $this->commands->decrement("{$queue->namespace}.stats.{$queue->name}.processing");
+        });
     }
 
     public function reject(Queue $queue, Message $message): void
     {
         $pid = $message->getPid();
 
-        $this->commands->leftPush("{$queue->namespace}.failed.{$queue->name}", $pid);
-        $this->commands->increment("{$queue->namespace}.stats.{$queue->name}.failed");
-        $this->commands->listRemove("{$queue->namespace}.processing.{$queue->name}", $pid);
-        $this->commands->decrement("{$queue->namespace}.stats.{$queue->name}.processing");
+        $this->executeCommand($queue, function () use ($queue, $pid): void {
+            $this->commands->leftPush("{$queue->namespace}.failed.{$queue->name}", $pid);
+            $this->commands->increment("{$queue->namespace}.stats.{$queue->name}.failed");
+            $this->commands->listRemove("{$queue->namespace}.processing.{$queue->name}", $pid);
+            $this->commands->decrement("{$queue->namespace}.stats.{$queue->name}.processing");
+        });
     }
 
     public function close(): void
@@ -155,6 +160,48 @@ class Redis implements Publisher, Consumer
         }
     }
 
+    /**
+     * Run a command on the commands connection, transparently reconnecting if
+     * it drops mid-flight. Mirrors the reconnect handling in {@see receive()},
+     * but retries inline since publishing and acks have no outer poll loop.
+     *
+     * @template T
+     * @param  callable(): T  $command
+     * @return T
+     */
+    private function executeCommand(Queue $queue, callable $command): mixed
+    {
+        $attempt = 0;
+        $backoffMs = self::RECONNECT_BACKOFF_MS;
+
+        while (true) {
+            try {
+                $result = $command();
+                if ($attempt > 0) {
+                    $this->triggerReconnectSuccessCallback($queue, $attempt);
+                }
+
+                return $result;
+            } catch (\RedisException|\RedisClusterException $e) {
+                $attempt++;
+                if ($attempt >= self::COMMAND_MAX_ATTEMPTS) {
+                    throw $e;
+                }
+
+                try {
+                    $this->commands->close();
+                } catch (\Throwable) {
+                }
+
+                $sleepMs = mt_rand(0, $backoffMs);
+                $this->triggerReconnectCallback($queue, $e, $attempt, $sleepMs);
+
+                usleep($sleepMs * 1000);
+                $backoffMs = min(self::RECONNECT_MAX_BACKOFF_MS, $backoffMs * 2);
+            }
+        }
+    }
+
     public function enqueue(Queue $queue, array $payload, bool $priority = false): bool
     {
         $payload = [
@@ -163,10 +210,12 @@ class Redis implements Publisher, Consumer
             'timestamp' => time(),
             'payload' => $payload,
         ];
-        if ($priority) {
-            return $this->commands->rightPushArray("{$queue->namespace}.queue.{$queue->name}", $payload);
-        }
-        return $this->commands->leftPushArray("{$queue->namespace}.queue.{$queue->name}", $payload);
+        return $this->executeCommand($queue, function () use ($queue, $payload, $priority): bool {
+            if ($priority) {
+                return $this->commands->rightPushArray("{$queue->namespace}.queue.{$queue->name}", $payload);
+            }
+            return $this->commands->leftPushArray("{$queue->namespace}.queue.{$queue->name}", $payload);
+        });
     }
 
     /**
@@ -179,7 +228,7 @@ class Redis implements Publisher, Consumer
         $processed = 0;
 
         while (true) {
-            $pid = $this->commands->rightPop("{$queue->namespace}.failed.{$queue->name}", self::POP_TIMEOUT);
+            $pid = $this->executeCommand($queue, fn(): string|false => $this->commands->rightPop("{$queue->namespace}.failed.{$queue->name}", self::POP_TIMEOUT));
 
             // No more jobs to retry
             if ($pid === false) {
@@ -210,7 +259,7 @@ class Redis implements Publisher, Consumer
 
     private function getJob(Queue $queue, string $pid): Message|false
     {
-        $value = $this->commands->get("{$queue->namespace}.jobs.{$queue->name}.{$pid}");
+        $value = $this->executeCommand($queue, fn(): array|string|null => $this->commands->get("{$queue->namespace}.jobs.{$queue->name}.{$pid}"));
 
         // Missing/expired jobs return false or null depending on the driver.
         if (!\is_string($value)) {
@@ -228,6 +277,6 @@ class Redis implements Publisher, Consumer
         if ($failedJobs) {
             $queueName = "{$queue->namespace}.failed.{$queue->name}";
         }
-        return $this->commands->listSize($queueName);
+        return $this->executeCommand($queue, fn(): int => $this->commands->listSize($queueName));
     }
 }
