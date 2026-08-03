@@ -42,6 +42,9 @@ final class HazelcastTest extends Base
         }
 
         Services::compose('up', '-d', '--wait', 'hazelcast');
+        // Reconnecting is what the adapter is on the hook for; serving the
+        // first write afterwards is Hazelcast's own start-up.
+        Services::waitUntil(fn(): bool => self::$cache->save('test:ready', 'ready') !== false);
 
         $this->assertSame('reconnect', self::$cache->save('test:reconnect', 'reconnect', 'test:reconnect'));
         $this->assertEquals('reconnect', self::$cache->load('test:reconnect', 5));

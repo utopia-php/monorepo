@@ -3,6 +3,7 @@
 namespace Utopia\Tests;
 
 use RuntimeException;
+use Throwable;
 
 /**
  * Where the package's compose services listen on the host. Ports are offset so
@@ -23,6 +24,28 @@ final class Services
     public const int MEMCACHED_PORT = 11212;
 
     public const int HAZELCAST_PORT = 15701;
+
+    /**
+     * Polls until the probe passes. A healthy container is not always a
+     * service ready to answer — Hazelcast reports its node active before the
+     * Memcached listener serves traffic.
+     */
+    public static function waitUntil(callable $probe, int $seconds = 60): void
+    {
+        for ($attempt = 0; $attempt < $seconds; $attempt++) {
+            try {
+                if ($probe() === true) {
+                    return;
+                }
+            } catch (Throwable) {
+                // Not up yet.
+            }
+
+            sleep(1);
+        }
+
+        throw new RuntimeException('Timed out waiting for the service to come back.');
+    }
 
     /**
      * Runs a docker compose command against this package's stack.
