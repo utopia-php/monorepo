@@ -60,7 +60,9 @@ docblocks?
 dotenv
 DuckDuckGo
 Eldad
+enqueue(?:s|d)?
 enum(?:s)?
+etcd
 Fastly
 Fedora
 FPM
@@ -82,6 +84,7 @@ Huawei
 ID
 Infobip
 Inforu
+inlined
 iOS
 iPadOS
 JetStream
@@ -143,6 +146,7 @@ rebases
 Rector
 redeclaring
 repo(?:s)?
+requeue(?:s|d)?
 resync
 RFC
 ruleset(?:s)?
