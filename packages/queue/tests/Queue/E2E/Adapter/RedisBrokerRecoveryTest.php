@@ -174,4 +174,32 @@ final class RedisBrokerRecoveryTest extends TestCase
         $this->assertSame(0, $this->broker->getQueueSize($this->queue, failedJobs: true), 'the expired entry does not block the sweep');
         $this->assertSame(1, $this->broker->getQueueSize($this->queue), 'the recoverable entry is requeued');
     }
+    public function testRetryParksEntriesOlderThanTheAgeGate(): void
+    {
+        $this->broker->enqueue($this->queue, ['n' => 1]);
+        $claimed = $this->broker->receive($this->queue, 0);
+        $this->assertInstanceOf(\Utopia\Queue\Message::class, $claimed);
+        $this->broker->reject($this->queue, $claimed);
+        $this->backdate($claimed->getPid(), 3600);
+
+        $this->broker->retry($this->queue, newerThan: 600);
+
+        $this->assertSame(0, $this->broker->getQueueSize($this->queue), 'ancient work is not resurrected');
+        $this->assertSame(0, $this->broker->getQueueSize($this->queue, failedJobs: true));
+        $this->assertSame(1, $this->deadSize(), 'the ancient entry is parked for inspection');
+    }
+
+    public function testReapParksClaimsOlderThanTheAgeGate(): void
+    {
+        $this->broker->enqueue($this->queue, ['n' => 1]);
+        $claimed = $this->broker->receive($this->queue, 0);
+        $this->assertInstanceOf(\Utopia\Queue\Message::class, $claimed);
+        $this->backdate($claimed->getPid(), 3600);
+
+        $requeued = $this->broker->reap($this->queue, olderThan: 0, newerThan: 600);
+
+        $this->assertSame(0, $requeued);
+        $this->assertSame(0, $this->processingSize());
+        $this->assertSame(1, $this->deadSize(), 'the ancient claim is parked, not re-run');
+    }
 }
