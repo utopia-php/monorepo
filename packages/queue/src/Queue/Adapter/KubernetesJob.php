@@ -72,10 +72,15 @@ class KubernetesJob extends Adapter
         return $this;
     }
 
+    /**
+     * Flips the stop flag only. Closing the consumer here would break the
+     * in-flight commit/reject; the blocking receive() unblocks within
+     * RECEIVE_TIMEOUT, and the server's workerStop callback closes the
+     * consumer once the drain returns.
+     */
     public function stop(): self
     {
         $this->stopped = true;
-        $this->consumer->close();
 
         return $this;
     }
