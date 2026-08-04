@@ -4,7 +4,7 @@ Runs queue jobs as Kubernetes Jobs the K8s-native way: the payload stays in the
 **Redis queue**, and [KEDA](https://keda.sh) scales worker Jobs off the queue
 depth. No custom broker, no payload on any Kubernetes object.
 
-Contrast with the env-var `KubernetesJob` broker (branch `feat/queue-kubernetes-job`),
+Contrast with the environment-variable `KubernetesJob` broker (branch `feat/queue-kubernetes-job`),
 which creates one Job per message with the payload inlined in an environment
 variable.
 
@@ -31,11 +31,11 @@ It stands up kind, installs KEDA, deploys Redis + the ScaledJob, loads the worke
 image, then runs `KedaTest`, which enqueues messages and asserts KEDA spawns Jobs
 that drain the queue.
 
-## env-var `KubernetesJob` vs KEDA `ScaledJob`
+## Comparison with the environment-variable broker
 
-| | env-var KubernetesJob | KEDA ScaledJob |
+| | environment-variable KubernetesJob | KEDA ScaledJob |
 |---|---|---|
-| Payload | inlined in the Job's env var — etcd (~1.5 MB) / `ARG_MAX` limits, visible in the pod spec, duplicated per Pod | stays in Redis; never on a K8s object |
+| Payload | inlined in the Job's environment variable — etcd (~1.5 MB) / `ARG_MAX` limits, visible in the pod spec, duplicated per Pod | stays in Redis; never on a K8s object |
 | Custom broker | yes (`KubernetesJob` publisher) | none — reuses the `Redis` broker |
 | Producer needs cluster access | yes (creates Jobs) | no (just Redis) |
 | Scaling | one Job per message | KEDA scales N Jobs off queue depth; workers batch-drain |
