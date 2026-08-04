@@ -10,9 +10,9 @@ Utopia Auth is a simple, dependency-free PHP library for building authentication
 
 Although it is part of the [Utopia Framework](https://github.com/utopia-php/framework) project, it is dependency free and can be used standalone with any PHP project or framework.
 
-## Getting Started
+## Getting started
 
-Install using composer:
+Install using Composer:
 
 ```bash
 composer require utopia-php/auth
@@ -28,25 +28,26 @@ $hash = $password->hash('user-password');
 $isValid = $password->verify('user-password', $hash);
 ```
 
-## System Requirements
+## System requirements
 
-Utopia Auth requires PHP 8.1 or later. We recommend using the latest PHP version whenever possible.
+Utopia Auth requires PHP 8.3 or later. We recommend using the latest PHP version whenever possible.
 
 ## Features
 
 - **Password hashing** — Argon2, Bcrypt, Scrypt (and a modified Scrypt), SHA, PHPass, and MD5 (legacy only)
 - **Authentication proofs** — cryptographically random tokens, one-time codes (e.g. 2FA), and human-readable phrases
 - **Data store** — a base64-encodable key/value envelope for serializing authentication state
-- **Token issuers** — mint signed [JWS](https://datatracker.ietf.org/doc/html/rfc7515): OAuth2 access tokens (RFC 9068), refresh tokens, and OpenID Connect id_tokens
+- **Token issuers** — mint signed [JWS](https://datatracker.ietf.org/doc/html/rfc7515): OAuth2 access tokens (RFC 9068), refresh tokens, and OpenID Connect ID tokens
 - **Token verifiers** — verify RS256/HS256 JWS with an `alg`-confusion guard and standard claim checks
-- **OAuth2 helpers** — RFC 8707 resource indicators
+- **OAuth2 helpers** — RFC 8707 resource indicators, OpenID Connect prompts, RFC 9126 pushed authorization request URIs, and OAuth Client ID Metadata Documents
 
 ## Documentation
 
 - [Password Hashing](docs/hashing.md) — algorithms and tuning
 - [Authentication Proofs](docs/proofs.md) — tokens, one-time codes, and phrases
 - [Data Store](docs/store.md) — encode/decode authentication state
-- [JSON Web Tokens](docs/jwt.md) — issuing and verifying OAuth2 / OpenID Connect tokens
+- [JSON Web Tokens](docs/jwt.md) — JWS mechanics, verification, and claim/header names
+- [OAuth2 and OpenID Connect](docs/oauth2.md) — token examples and protocol helpers
 
 ## Tests
 
@@ -64,7 +65,7 @@ We take security seriously. If you discover any security-related issues, please 
 
 All code contributions - including those of people having commit access - must go through a pull request and be approved by a core developer before being merged. This is to ensure a proper review of all the code.
 
-We truly ❤️ pull requests! If you wish to help, you can learn more about how you can contribute to this project in the [contribution guide](CONTRIBUTING.md).
+We truly ❤️ pull requests! If you wish to help, you can learn more about how you can contribute to this project in the [contribution guide](https://github.com/utopia-php/monorepo/blob/main/CONTRIBUTING.md).
 
 ## Copyright and license
 

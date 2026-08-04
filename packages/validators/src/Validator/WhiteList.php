@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Validator;
 
 use Utopia\Validator;
@@ -23,7 +25,7 @@ class WhiteList extends Validator
     {
         if (!$this->strict) {
             foreach ($this->list as $key => &$value) {
-                $this->list[$key] = strtolower($value);
+                $this->list[$key] = strtolower((string) $value);
             }
         }
     }
@@ -77,7 +79,7 @@ class WhiteList extends Validator
             return false;
         }
 
-        $value = ($this->strict) ? $value : strtolower($value);
+        $value = ($this->strict) ? $value : strtolower((string) $value);
         return \in_array($value, $this->list, $this->strict);
     }
 }

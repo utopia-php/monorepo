@@ -50,7 +50,7 @@ class Globstar extends Validator
 
         $hasInclusions = false;
         foreach ($this->patterns as $p) {
-            if (!str_starts_with($p, '!')) {
+            if (!str_starts_with((string) $p, '!')) {
                 $hasInclusions = true;
                 break;
             }
@@ -58,23 +58,17 @@ class Globstar extends Validator
 
         // Pure-exclusion mode: default to valid; any matching exclusion invalidates.
         if (!$hasInclusions) {
-            foreach ($this->patterns as $pattern) {
-                if ($this->match($value, substr($pattern, 1))) {
-                    return false;
-                }
-            }
-
-            return true;
+            return array_all($this->patterns, fn($pattern): bool => !$this->match($value, substr((string) $pattern, 1)));
         }
 
         // Inclusion mode.
         //
         // Step 1 — literal (no *, ?, [) inclusion patterns always win:
         //   if any specific inclusion matches, the value is valid regardless of later exclusions.
-        $isWildcard = fn($p): bool => str_contains($p, '*') || str_contains($p, '?') || str_contains($p, '[');
+        $isWildcard = fn($p): bool => str_contains((string) $p, '*') || str_contains((string) $p, '?') || str_contains((string) $p, '[');
 
         foreach ($this->patterns as $pattern) {
-            if (!str_starts_with($pattern, '!') && !$isWildcard($pattern) && $this->match($value, $pattern)) {
+            if (!str_starts_with((string) $pattern, '!') && !$isWildcard($pattern) && $this->match($value, $pattern)) {
                 return true;
             }
         }
@@ -85,8 +79,8 @@ class Globstar extends Validator
         //   Literal inclusions already handled above; skip them here.
         $state = false;
         foreach ($this->patterns as $pattern) {
-            if (str_starts_with($pattern, '!')) {
-                if ($this->match($value, substr($pattern, 1))) {
+            if (str_starts_with((string) $pattern, '!')) {
+                if ($this->match($value, substr((string) $pattern, 1))) {
                     $state = false;
                 }
             } elseif ($isWildcard($pattern)) {

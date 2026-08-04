@@ -11,7 +11,7 @@ A simple, memory-safe span tracing library for PHP with Swoole coroutine support
 composer require utopia-php/span
 ```
 
-## Quick Start
+## Quick start
 
 ```php
 use Utopia\Span\Span;
@@ -30,7 +30,7 @@ $span->finish();
 
 ## Usage
 
-### Setting Attributes
+### Setting attributes
 
 Everything is a flat key-value attribute. Only scalar types are allowed (string, int, float, bool, null):
 
@@ -42,7 +42,7 @@ $span->set('request.cached', true);
 $span->finish();
 ```
 
-### Built-in Attributes
+### Built-in attributes
 
 Spans automatically include these attributes:
 
@@ -55,7 +55,7 @@ Spans automatically include these attributes:
 | `span.duration`    | Duration in seconds (float)         |
 | `level`            | `error` if error set, `info` otherwise |
 
-### Static Helpers
+### Static helpers
 
 Use static methods anywhere in your codebase without passing the span around:
 
@@ -67,7 +67,7 @@ Span::add('db.query_count', 5);
 Span::add('warning', 'retry scheduled');
 ```
 
-### Error Handling
+### Error handling
 
 Pass the exception to `finish()` when the span ends because of an error:
 
@@ -103,7 +103,7 @@ Span::add('warning', 'retry scheduled');
 Span::add('warning.message', $message);
 ```
 
-### Distributed Tracing
+### Distributed tracing
 
 Propagate trace context across services using W3C Trace Context headers:
 
@@ -134,7 +134,7 @@ Span::setExporters(
 
 The Sentry exporter is hard-wired to error spans only; a custom sampler is composed with that filter and can further restrict — but not broaden — what is sent.
 
-## Storage Backends
+## Storage backends
 
 | Backend             | Use Case                                |
 | ------------------- | --------------------------------------- |
@@ -151,7 +151,7 @@ The Sentry exporter is hard-wired to error spans only; a custom sampler is compo
 | `Exporter\Sentry`  | Sentry events (Issues)               |
 | `Exporter\None`    | Discard (for testing)                |
 
-### Stdout Exporter
+### Stdout exporter
 
 ```php
 Span::setExporters(new Exporter\Stdout(
@@ -161,7 +161,7 @@ Span::setExporters(new Exporter\Stdout(
 
 Outputs JSON to stdout (info) or stderr (errors). Exports every span by default; pass `sampler:` to filter.
 
-### Pretty Exporter
+### Pretty exporter
 
 ```php
 Span::setExporters(new Exporter\Pretty(
@@ -182,7 +182,7 @@ http.request · 12.3ms · abc12345
 ────────────────────────────────────────────────────────────
 ```
 
-### Sentry Exporter
+### Sentry exporter
 
 ```php
 Span::setExporters(new Exporter\Sentry(
@@ -193,7 +193,7 @@ Span::setExporters(new Exporter\Sentry(
 
 Only exports error spans with full stacktraces. Non-error spans are skipped, even if you pass a custom `sampler`.
 
-### Custom Exporter
+### Custom exporter
 
 ```php
 use Utopia\Span\Exporter\Exporter;
@@ -239,7 +239,7 @@ $this->assertCount(1, $spans);
 $this->assertEquals('http.request', $spans[0]->get('action'));
 ```
 
-## API Reference
+## API reference
 
 ### Span (static)
 
@@ -265,7 +265,7 @@ $this->assertEquals('http.request', $spans[0]->get('action'));
 | `getTraceparent(): string`              | Get W3C traceparent header value   |
 | `finish(?Level $level = null, ?Throwable $error = null): void` | End span and export |
 
-### Attribute Conventions
+### Attribute conventions
 
 | Prefix   | Description            |
 | -------- | ---------------------- |

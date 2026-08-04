@@ -87,8 +87,6 @@ class Hook
 
     /**
      * Add Label
-     *
-     * @return $this
      */
     public function label(string $key, mixed $value): static
     {

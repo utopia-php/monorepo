@@ -17,7 +17,7 @@ A modern PHP client for [NATS](https://nats.io) messaging system with JetStream 
 composer require utopia-php/nats
 ```
 
-## Quick Start
+## Quick start
 
 ```php
 use Utopia\NATS\Connection;
@@ -105,7 +105,7 @@ $sub->unsubscribe();
 $conn->unsubscribe($sub, maxMessages: 10);
 ```
 
-### Request-Reply
+### Request-reply
 
 ```php
 // Responder
@@ -119,7 +119,7 @@ $response = $conn->request('math.double', '21', timeout: 2.0);
 echo $response->data; // "42"
 ```
 
-### Connection Management
+### Connection management
 
 ```php
 $conn->flush();                    // Ensure all messages are sent
@@ -162,7 +162,7 @@ $names = $js->getStreamNames();
 $stream->delete();
 ```
 
-### Publishing with Acknowledgment
+### Publishing with acknowledgment
 
 ```php
 $ack = $js->publish('orders.new', '{"id": 1}');
@@ -211,7 +211,7 @@ echo "Stream seq: {$meta->streamSequence}\n";
 echo "Deliveries: {$meta->numDelivered}\n";
 ```
 
-## Key-Value Store
+## Key-value store
 
 ```php
 use Utopia\NATS\KeyValue\KeyValueConfig;
@@ -304,7 +304,7 @@ $conn = Connection::connect(new ConnectionOptions(
 ));
 ```
 
-## Event Callbacks
+## Event callbacks
 
 ```php
 $conn = Connection::connect(new ConnectionOptions(

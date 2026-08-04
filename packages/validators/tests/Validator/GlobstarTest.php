@@ -54,9 +54,9 @@ final class GlobstarTest extends TestCase
     public function testSingleWildcardWithDirectoryPrefix(): void
     {
         // baz/*.txt — * matches within a single directory segment
-        $this->assertTrue((new Globstar(['baz/*.txt']))->isValid('baz/file.txt'));
-        $this->assertFalse((new Globstar(['baz/*.txt']))->isValid('a/baz/file.txt')); // prefix must match literally
-        $this->assertFalse((new Globstar(['baz/*.txt']))->isValid('baz/file.log'));
+        $this->assertTrue(new Globstar(['baz/*.txt'])->isValid('baz/file.txt'));
+        $this->assertFalse(new Globstar(['baz/*.txt'])->isValid('a/baz/file.txt')); // prefix must match literally
+        $this->assertFalse(new Globstar(['baz/*.txt'])->isValid('baz/file.log'));
     }
 
     public function testWildcardWithDash(): void
@@ -99,10 +99,10 @@ final class GlobstarTest extends TestCase
     public function testQuestionMarkSuffix(): void
     {
         // qux? — question mark matches exactly one character as suffix
-        $this->assertTrue((new Globstar(['qux?']))->isValid('qux1'));
-        $this->assertTrue((new Globstar(['qux?']))->isValid('quxa'));
-        $this->assertFalse((new Globstar(['qux?']))->isValid('qux'));   // requires exactly one char
-        $this->assertFalse((new Globstar(['qux?']))->isValid('qux12')); // does not match two chars
+        $this->assertTrue(new Globstar(['qux?'])->isValid('qux1'));
+        $this->assertTrue(new Globstar(['qux?'])->isValid('quxa'));
+        $this->assertFalse(new Globstar(['qux?'])->isValid('qux'));   // requires exactly one char
+        $this->assertFalse(new Globstar(['qux?'])->isValid('qux12')); // does not match two chars
     }
 
     public function testDoubleWildcardAtEnd(): void
@@ -329,55 +329,55 @@ final class GlobstarTest extends TestCase
     public function testDoubleWildcardAtStartAlternateFilename(): void
     {
         // **/temp.txt — different filename from existing **/file.txt tests
-        $this->assertTrue((new Globstar(['**/temp.txt']))->isValid('temp.txt'));
-        $this->assertTrue((new Globstar(['**/temp.txt']))->isValid('a/temp.txt'));
-        $this->assertTrue((new Globstar(['**/temp.txt']))->isValid('a/b/temp.txt'));
+        $this->assertTrue(new Globstar(['**/temp.txt'])->isValid('temp.txt'));
+        $this->assertTrue(new Globstar(['**/temp.txt'])->isValid('a/temp.txt'));
+        $this->assertTrue(new Globstar(['**/temp.txt'])->isValid('a/b/temp.txt'));
     }
 
     public function testDoubleWildcardAtEndNoExtension(): void
     {
         // src/** without extension filter
-        $this->assertTrue((new Globstar(['src/**']))->isValid('src/file.txt'));
-        $this->assertTrue((new Globstar(['src/**']))->isValid('src/a/file.txt'));
+        $this->assertTrue(new Globstar(['src/**'])->isValid('src/file.txt'));
+        $this->assertTrue(new Globstar(['src/**'])->isValid('src/a/file.txt'));
     }
 
     public function testDoubleWildcardLogExtension(): void
     {
         // src/**/*.log
-        $this->assertTrue((new Globstar(['src/**/*.log']))->isValid('src/error.log'));
-        $this->assertTrue((new Globstar(['src/**/*.log']))->isValid('src/a/debug.log'));
+        $this->assertTrue(new Globstar(['src/**/*.log'])->isValid('src/error.log'));
+        $this->assertTrue(new Globstar(['src/**/*.log'])->isValid('src/a/debug.log'));
     }
 
     public function testDoubleWildcardMiddleWithTwoSegmentTail(): void
     {
         // a/**/b/c — tail is two segments (b/c)
-        $this->assertTrue((new Globstar(['a/**/b/c']))->isValid('a/b/c'));      // zero intermediate
-        $this->assertTrue((new Globstar(['a/**/b/c']))->isValid('a/x/b/c'));    // one intermediate
-        $this->assertTrue((new Globstar(['a/**/b/c']))->isValid('a/x/y/b/c')); // two intermediate
-        $this->assertFalse((new Globstar(['a/**/b/c']))->isValid('a/b/d'));     // wrong tail
+        $this->assertTrue(new Globstar(['a/**/b/c'])->isValid('a/b/c'));      // zero intermediate
+        $this->assertTrue(new Globstar(['a/**/b/c'])->isValid('a/x/b/c'));    // one intermediate
+        $this->assertTrue(new Globstar(['a/**/b/c'])->isValid('a/x/y/b/c')); // two intermediate
+        $this->assertFalse(new Globstar(['a/**/b/c'])->isValid('a/b/d'));     // wrong tail
     }
 
     public function testDoubleWildcardBothSides(): void
     {
         // **/d/e/** — globstar on both sides of a literal segment pair
-        $this->assertTrue((new Globstar(['**/d/e/**']))->isValid('d/e/file.txt'));
-        $this->assertTrue((new Globstar(['**/d/e/**']))->isValid('x/d/e/file.txt'));
-        $this->assertTrue((new Globstar(['**/d/e/**']))->isValid('x/y/d/e/z/file.txt'));
-        $this->assertFalse((new Globstar(['**/d/e/**']))->isValid('d/f/file.txt'));
+        $this->assertTrue(new Globstar(['**/d/e/**'])->isValid('d/e/file.txt'));
+        $this->assertTrue(new Globstar(['**/d/e/**'])->isValid('x/d/e/file.txt'));
+        $this->assertTrue(new Globstar(['**/d/e/**'])->isValid('x/y/d/e/z/file.txt'));
+        $this->assertFalse(new Globstar(['**/d/e/**'])->isValid('d/f/file.txt'));
     }
 
     public function testDoubleWildcardWithJsExtension(): void
     {
         // src/foo/**/*.js
-        $this->assertTrue((new Globstar(['src/foo/**/*.js']))->isValid('src/foo/app/file.js'));
-        $this->assertTrue((new Globstar(['src/foo/**/*.js']))->isValid('src/foo/file.js'));
-        $this->assertFalse((new Globstar(['src/foo/**/*.js']))->isValid('src/bar/app/file.js'));
+        $this->assertTrue(new Globstar(['src/foo/**/*.js'])->isValid('src/foo/app/file.js'));
+        $this->assertTrue(new Globstar(['src/foo/**/*.js'])->isValid('src/foo/file.js'));
+        $this->assertFalse(new Globstar(['src/foo/**/*.js'])->isValid('src/bar/app/file.js'));
     }
 
     public function testDoubleWildcardDeepNesting(): void
     {
         // Very deep path with ** in the middle
-        $this->assertTrue((new Globstar(['deep/**/logs/*.log']))->isValid('deep/level1/level2/level3/level4/level5/level6/level7/logs/app.log'));
+        $this->assertTrue(new Globstar(['deep/**/logs/*.log'])->isValid('deep/level1/level2/level3/level4/level5/level6/level7/logs/app.log'));
     }
 
     // -------------------------------------------------------------------------
@@ -569,141 +569,141 @@ final class GlobstarTest extends TestCase
 
     public function testLiteralsExact(): void
     {
-        $this->assertTrue((new Globstar(['file.txt']))->isValid('file.txt'));
-        $this->assertFalse((new Globstar(['file.txt']))->isValid('file.txt.bak'));
+        $this->assertTrue(new Globstar(['file.txt'])->isValid('file.txt'));
+        $this->assertFalse(new Globstar(['file.txt'])->isValid('file.txt.bak'));
     }
 
     public function testSingleAsteriskDoesNotCrossSlash(): void
     {
-        $this->assertTrue((new Globstar(['*.txt']))->isValid('file.txt'));
-        $this->assertTrue((new Globstar(['*.txt']))->isValid('another.txt'));
-        $this->assertFalse((new Globstar(['*.txt']))->isValid('file.txt.bak'));
-        $this->assertFalse((new Globstar(['*.txt']))->isValid('dir/file.txt')); // * does not cross /
+        $this->assertTrue(new Globstar(['*.txt'])->isValid('file.txt'));
+        $this->assertTrue(new Globstar(['*.txt'])->isValid('another.txt'));
+        $this->assertFalse(new Globstar(['*.txt'])->isValid('file.txt.bak'));
+        $this->assertFalse(new Globstar(['*.txt'])->isValid('dir/file.txt')); // * does not cross /
     }
 
     public function testQuestionMarkSingleChar(): void
     {
-        $this->assertTrue((new Globstar(['file.?xt']))->isValid('file.txt'));
-        $this->assertTrue((new Globstar(['file.?xt']))->isValid('file.dxt'));
-        $this->assertFalse((new Globstar(['file.?xt']))->isValid('file.xtt'));
+        $this->assertTrue(new Globstar(['file.?xt'])->isValid('file.txt'));
+        $this->assertTrue(new Globstar(['file.?xt'])->isValid('file.dxt'));
+        $this->assertFalse(new Globstar(['file.?xt'])->isValid('file.xtt'));
     }
 
     public function testDoubleStarPrefixFileMatch(): void
     {
-        $this->assertTrue((new Globstar(['**/file.txt']))->isValid('file.txt'));
-        $this->assertTrue((new Globstar(['**/file.txt']))->isValid('dir/file.txt'));
-        $this->assertTrue((new Globstar(['**/file.txt']))->isValid('dir/subdir/file.txt'));
-        $this->assertFalse((new Globstar(['**/file.txt']))->isValid('file.txt.bak'));
+        $this->assertTrue(new Globstar(['**/file.txt'])->isValid('file.txt'));
+        $this->assertTrue(new Globstar(['**/file.txt'])->isValid('dir/file.txt'));
+        $this->assertTrue(new Globstar(['**/file.txt'])->isValid('dir/subdir/file.txt'));
+        $this->assertFalse(new Globstar(['**/file.txt'])->isValid('file.txt.bak'));
     }
 
     public function testDoubleStarMiddleFileMatch(): void
     {
-        $this->assertTrue((new Globstar(['src/**/file.txt']))->isValid('src/file.txt'));
-        $this->assertTrue((new Globstar(['src/**/file.txt']))->isValid('src/dir/file.txt'));
-        $this->assertTrue((new Globstar(['src/**/file.txt']))->isValid('src/dir/subdir/file.txt'));
-        $this->assertFalse((new Globstar(['src/**/file.txt']))->isValid('other/file.txt'));
+        $this->assertTrue(new Globstar(['src/**/file.txt'])->isValid('src/file.txt'));
+        $this->assertTrue(new Globstar(['src/**/file.txt'])->isValid('src/dir/file.txt'));
+        $this->assertTrue(new Globstar(['src/**/file.txt'])->isValid('src/dir/subdir/file.txt'));
+        $this->assertFalse(new Globstar(['src/**/file.txt'])->isValid('other/file.txt'));
     }
 
     public function testEscapedAsteriskIsLiteral(): void
     {
-        $this->assertTrue((new Globstar(['file\*.txt']))->isValid('file*.txt'));
-        $this->assertFalse((new Globstar(['file\*.txt']))->isValid('fileX.txt'));
+        $this->assertTrue(new Globstar(['file\*.txt'])->isValid('file*.txt'));
+        $this->assertFalse(new Globstar(['file\*.txt'])->isValid('fileX.txt'));
     }
 
     public function testEscapedHashIsNotComment(): void
     {
         // \# must be treated as a literal # character, not a comment marker
-        $this->assertTrue((new Globstar(['\#not_a_comment.txt']))->isValid('#not_a_comment.txt'));
+        $this->assertTrue(new Globstar(['\#not_a_comment.txt'])->isValid('#not_a_comment.txt'));
     }
 
     public function testEscapedQuestionMarkIsLiteral(): void
     {
         // \? must match literal ? rather than any single character
-        $this->assertTrue((new Globstar(['file\?.txt']))->isValid('file?.txt'));
+        $this->assertTrue(new Globstar(['file\?.txt'])->isValid('file?.txt'));
     }
 
     public function testBasicCharacterClasses(): void
     {
-        $this->assertTrue((new Globstar(['[a]bc.txt']))->isValid('abc.txt'));
-        $this->assertFalse((new Globstar(['[a]bc.txt']))->isValid('bbc.txt'));
-        $this->assertTrue((new Globstar(['[a-z]est.txt']))->isValid('test.txt'));
-        $this->assertFalse((new Globstar(['[a-z]est.txt']))->isValid('Test.txt'));
-        $this->assertTrue((new Globstar(['[A-Z]est.txt']))->isValid('Test.txt'));
-        $this->assertFalse((new Globstar(['[A-Z]est.txt']))->isValid('test.txt'));
-        $this->assertTrue((new Globstar(['file[0-9].log']))->isValid('file5.log'));
-        $this->assertFalse((new Globstar(['file[0-9].log']))->isValid('fileA.log'));
-        $this->assertTrue((new Globstar(['[a-zA-Z]file.txt']))->isValid('afile.txt'));
-        $this->assertTrue((new Globstar(['[a-zA-Z]file.txt']))->isValid('Afile.txt'));
-        $this->assertFalse((new Globstar(['[a-zA-Z]file.txt']))->isValid('1file.txt'));
+        $this->assertTrue(new Globstar(['[a]bc.txt'])->isValid('abc.txt'));
+        $this->assertFalse(new Globstar(['[a]bc.txt'])->isValid('bbc.txt'));
+        $this->assertTrue(new Globstar(['[a-z]est.txt'])->isValid('test.txt'));
+        $this->assertFalse(new Globstar(['[a-z]est.txt'])->isValid('Test.txt'));
+        $this->assertTrue(new Globstar(['[A-Z]est.txt'])->isValid('Test.txt'));
+        $this->assertFalse(new Globstar(['[A-Z]est.txt'])->isValid('test.txt'));
+        $this->assertTrue(new Globstar(['file[0-9].log'])->isValid('file5.log'));
+        $this->assertFalse(new Globstar(['file[0-9].log'])->isValid('fileA.log'));
+        $this->assertTrue(new Globstar(['[a-zA-Z]file.txt'])->isValid('afile.txt'));
+        $this->assertTrue(new Globstar(['[a-zA-Z]file.txt'])->isValid('Afile.txt'));
+        $this->assertFalse(new Globstar(['[a-zA-Z]file.txt'])->isValid('1file.txt'));
     }
 
     public function testNegatedCharacterClasses(): void
     {
-        $this->assertTrue((new Globstar(['[!a-z]file.txt']))->isValid('Afile.txt'));
-        $this->assertFalse((new Globstar(['[!a-z]file.txt']))->isValid('afile.txt'));
-        $this->assertTrue((new Globstar(['^[^a-z]file.txt']))->isValid('^1file.txt'));
-        $this->assertFalse((new Globstar(['[^a-z]file.txt']))->isValid('afile.txt'));
-        $this->assertTrue((new Globstar(['[!a-z0-9]file.txt']))->isValid('#file.txt'));
-        $this->assertFalse((new Globstar(['[!a-z0-9]file.txt']))->isValid('afile.txt'));
-        $this->assertFalse((new Globstar(['[!a-z0-9]file.txt']))->isValid('5file.txt'));
+        $this->assertTrue(new Globstar(['[!a-z]file.txt'])->isValid('Afile.txt'));
+        $this->assertFalse(new Globstar(['[!a-z]file.txt'])->isValid('afile.txt'));
+        $this->assertTrue(new Globstar(['^[^a-z]file.txt'])->isValid('^1file.txt'));
+        $this->assertFalse(new Globstar(['[^a-z]file.txt'])->isValid('afile.txt'));
+        $this->assertTrue(new Globstar(['[!a-z0-9]file.txt'])->isValid('#file.txt'));
+        $this->assertFalse(new Globstar(['[!a-z0-9]file.txt'])->isValid('afile.txt'));
+        $this->assertFalse(new Globstar(['[!a-z0-9]file.txt'])->isValid('5file.txt'));
     }
 
     public function testCaretNegatedCharacterClass(): void
     {
-        $this->assertTrue((new Globstar(['[^a-z]file.txt']))->isValid('1file.txt'));
-        $this->assertFalse((new Globstar(['[^a-z]file.txt']))->isValid('afile.txt'));
+        $this->assertTrue(new Globstar(['[^a-z]file.txt'])->isValid('1file.txt'));
+        $this->assertFalse(new Globstar(['[^a-z]file.txt'])->isValid('afile.txt'));
     }
 
     public function testSpecialCharsInsideCharacterClasses(): void
     {
-        $this->assertTrue((new Globstar(['file[.+]name.txt']))->isValid('file.name.txt'));
-        $this->assertTrue((new Globstar(['file[.+]name.txt']))->isValid('file+name.txt'));
-        $this->assertFalse((new Globstar(['file[.+]name.txt']))->isValid('filename.txt'));
-        $this->assertTrue((new Globstar(['[_!@#]special.txt']))->isValid('_special.txt'));
-        $this->assertTrue((new Globstar(['[_!@#]special.txt']))->isValid('@special.txt'));
-        $this->assertFalse((new Globstar(['[_!@#]special.txt']))->isValid('xspecial.txt'));
-        $this->assertTrue((new Globstar(['[-abc]dash.txt']))->isValid('-dash.txt'));
-        $this->assertTrue((new Globstar(['[-abc]dash.txt']))->isValid('adash.txt'));
-        $this->assertTrue((new Globstar(['[abc-]dash.txt']))->isValid('-dash.txt'));
+        $this->assertTrue(new Globstar(['file[.+]name.txt'])->isValid('file.name.txt'));
+        $this->assertTrue(new Globstar(['file[.+]name.txt'])->isValid('file+name.txt'));
+        $this->assertFalse(new Globstar(['file[.+]name.txt'])->isValid('filename.txt'));
+        $this->assertTrue(new Globstar(['[_!@#]special.txt'])->isValid('_special.txt'));
+        $this->assertTrue(new Globstar(['[_!@#]special.txt'])->isValid('@special.txt'));
+        $this->assertFalse(new Globstar(['[_!@#]special.txt'])->isValid('xspecial.txt'));
+        $this->assertTrue(new Globstar(['[-abc]dash.txt'])->isValid('-dash.txt'));
+        $this->assertTrue(new Globstar(['[-abc]dash.txt'])->isValid('adash.txt'));
+        $this->assertTrue(new Globstar(['[abc-]dash.txt'])->isValid('-dash.txt'));
     }
 
     public function testCharacterClassCombinedWithGlobstar(): void
     {
-        $this->assertTrue((new Globstar(['[a-z]*.txt']))->isValid('abc.txt'));
-        $this->assertFalse((new Globstar(['[a-z]*.txt']))->isValid('Abc.txt'));
-        $this->assertTrue((new Globstar(['**/[a-z]*.txt']))->isValid('dir/abc.txt'));
-        $this->assertTrue((new Globstar(['**/[a-z]*.txt']))->isValid('dir/subdir/abc.txt'));
-        $this->assertFalse((new Globstar(['**/[a-z]*.txt']))->isValid('dir/Abc.txt'));
-        $this->assertTrue((new Globstar(['[a-z][0-9]*.txt']))->isValid('a1file.txt'));
-        $this->assertFalse((new Globstar(['[a-z][0-9]*.txt']))->isValid('ab.txt'));
-        $this->assertFalse((new Globstar(['[a-z][0-9]*.txt']))->isValid('A1file.txt'));
+        $this->assertTrue(new Globstar(['[a-z]*.txt'])->isValid('abc.txt'));
+        $this->assertFalse(new Globstar(['[a-z]*.txt'])->isValid('Abc.txt'));
+        $this->assertTrue(new Globstar(['**/[a-z]*.txt'])->isValid('dir/abc.txt'));
+        $this->assertTrue(new Globstar(['**/[a-z]*.txt'])->isValid('dir/subdir/abc.txt'));
+        $this->assertFalse(new Globstar(['**/[a-z]*.txt'])->isValid('dir/Abc.txt'));
+        $this->assertTrue(new Globstar(['[a-z][0-9]*.txt'])->isValid('a1file.txt'));
+        $this->assertFalse(new Globstar(['[a-z][0-9]*.txt'])->isValid('ab.txt'));
+        $this->assertFalse(new Globstar(['[a-z][0-9]*.txt'])->isValid('A1file.txt'));
     }
 
     public function testEdgeCaseEmptyCharacterClass(): void
     {
         // Empty character class [] matches nothing
-        $this->assertFalse((new Globstar(['[]file.txt']))->isValid('file.txt'));
+        $this->assertFalse(new Globstar(['[]file.txt'])->isValid('file.txt'));
     }
 
     public function testEdgeCaseUnclosedBracket(): void
     {
         // Unclosed bracket treated as literal
-        $this->assertTrue((new Globstar(['[abc']))->isValid('[abc'));
-        $this->assertFalse((new Globstar(['[abc']))->isValid('abc'));
+        $this->assertTrue(new Globstar(['[abc'])->isValid('[abc'));
+        $this->assertFalse(new Globstar(['[abc'])->isValid('abc'));
     }
 
     public function testEdgeCaseExclamationOnlyClass(): void
     {
         // [!] — exclamation as sole content; behaviour is implementation-defined
         // but the implementation treats it as a literal class containing '!'
-        $this->assertTrue((new Globstar(['[!]file.txt']))->isValid('!file.txt'));
+        $this->assertTrue(new Globstar(['[!]file.txt'])->isValid('!file.txt'));
     }
 
     public function testEdgeCaseCaretOnlyClass(): void
     {
         // [^] — caret as sole content; behaviour is implementation-defined
         // but the implementation treats it as a literal class containing '^'
-        $this->assertTrue((new Globstar(['[^]file.txt']))->isValid('^file.txt'));
+        $this->assertTrue(new Globstar(['[^]file.txt'])->isValid('^file.txt'));
     }
 
     // -------------------------------------------------------------------------
@@ -718,10 +718,10 @@ final class GlobstarTest extends TestCase
         // - README-private*.md is re-included by the third pattern
         $patterns = ['*.md', '!README*.md', 'README-private*.md'];
 
-        $this->assertTrue((new Globstar($patterns))->isValid('documentation.md'));      // included, not excluded
-        $this->assertFalse((new Globstar($patterns))->isValid('README.md'));             // excluded by !README*.md
-        $this->assertFalse((new Globstar($patterns))->isValid('README-public.md'));      // excluded by !README*.md
-        $this->assertTrue((new Globstar($patterns))->isValid('README-private.md'));      // re-included by README-private*.md
-        $this->assertTrue((new Globstar($patterns))->isValid('README-private-draft.md')); // re-included by README-private*.md
+        $this->assertTrue(new Globstar($patterns)->isValid('documentation.md'));      // included, not excluded
+        $this->assertFalse(new Globstar($patterns)->isValid('README.md'));             // excluded by !README*.md
+        $this->assertFalse(new Globstar($patterns)->isValid('README-public.md'));      // excluded by !README*.md
+        $this->assertTrue(new Globstar($patterns)->isValid('README-private.md'));      // re-included by README-private*.md
+        $this->assertTrue(new Globstar($patterns)->isValid('README-private-draft.md')); // re-included by README-private*.md
     }
 }

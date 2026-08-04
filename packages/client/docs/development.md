@@ -1,6 +1,6 @@
 # Development
 
-The repository includes local copies of the relevant PSR and multipart RFC documents under `docs/`, with translated coverage requirements in [testing-requirements.md](testing-requirements.md).
+The repository includes a local copy of the PSR-18 specification under `docs/`, with translated coverage requirements in [testing-requirements.md](testing-requirements.md).
 
 ```bash
 composer install

@@ -11,7 +11,7 @@ bin/monorepo check http --fix      # apply code style, fix what phpstan/rector s
 bin/monorepo validate              # check package conventions (CI enforces this)
 ```
 
-Edit code under `packages/<name>` and open a pull request here — the mirrors are read-only and redirect PRs back. Cross-package changes are fine in a single commit. Code style is monorepo-wide (`pint.json`), as is the phpstan level-5 floor (the root `phpstan.neon`, enforced for every package). A package adds its own `phpstan.neon` only to raise the level or add settings; rector rules stay per-package (`rector.php`) since they encode per-library decisions.
+Edit code under `packages/<name>` and open a pull request here — the mirrors are read-only and redirect PRs back. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow. Cross-package changes are fine in a single commit. Code style is monorepo-wide (`pint.json`), as is the PHPStan level-5 floor (the root `phpstan.neon`, enforced for every package). A package adds its own `phpstan.neon` only to raise the level or add settings; rector rules stay per-package (`rector.php`) since they encode per-library decisions. Markdown documentation is linted with [Vale](https://vale.sh) (`.vale.ini` and the vendored `Utopia` style in `.vale/styles`) — errors fail CI, warnings are advisory.
 
 Run `bin/monorepo` with no arguments for the full command list — `absorb` and `split` are maintainer operations, covered in [docs/absorbing.md](docs/absorbing.md) and [docs/distribution.md](docs/distribution.md). To start a brand-new library, see [docs/creating.md](docs/creating.md).
 
@@ -38,6 +38,8 @@ composer require utopia-php/di:@dev
 
 Revert `composer.json` before committing — `bin/monorepo validate` and CI test against released versions.
 
+To use an unmerged branch from an *external* consumer (e.g. test a fix in Appwrite before it's released), dispatch the **Split Dev** workflow on the branch: it publishes the package's split to the mirror so the consumer can `composer require utopia-php/<name>:dev-<branch>` — see [docs/distribution.md](docs/distribution.md#dev-branches).
+
 ## Dependency graph
 
 Arrows point at dependencies (`platform --> http` means platform requires http). Regenerate with `bin/monorepo graph` after changing a package's requirements — `bin/monorepo validate` (which CI runs on every push) fails while it is stale.
@@ -45,18 +47,30 @@ Arrows point at dependencies (`platform --> http` means platform requires http).
 <!-- graph -->
 ```mermaid
 graph TD
+    audit --> validators
+    cache --> circuit-breaker
+    cache --> pools
+    cache --> telemetry
     cli --> servers
     client --> pools
+    client --> psr7
     client --> span
     config --> validators
     console --> validators
+    dns --> telemetry
+    dns --> validators
     fastly --> client
+    fastly --> psr7
     http --> di
     http --> servers
     http --> compression
+    http --> psr7
     http --> telemetry
     http --> validators
     http --> system
+    messaging --> client
+    messaging --> pools
+    messaging --> telemetry
     platform --> cli
     platform --> http
     platform --> queue
@@ -70,9 +84,15 @@ graph TD
     queue --> validators
     servers --> di
     servers --> validators
+    storage --> telemetry
+    storage --> validators
+    storage --> client
+    storage --> psr7
     auth
+    image
     nats
     replication
+    user-agent
 ```
 <!-- /graph -->
 

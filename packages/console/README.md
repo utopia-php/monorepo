@@ -41,7 +41,7 @@ $exitCode = Console::execute($command, '', $output, $stderr, 3);
 Console::log("Command returned {$exitCode} with: {$output}");
 ```
 
-### Log Messages
+### Log messages
 
 ```php
 Console::log('Plain log');        // stdout
@@ -51,7 +51,7 @@ Console::warning('Yellow log');   // stderr
 Console::error('Red log');        // stderr
 ```
 
-### Execute Commands
+### Execute commands
 
 `Console::execute()` returns the exit code and writes stdout and stderr into the referenced output variables. Pass a timeout (in seconds) to stop long-running processes and an optional progress callback to stream intermediate output. Prefer `Utopia\Command` or argv arrays when you want structured command building.
 
@@ -68,7 +68,7 @@ echo $exitCode;  // 0
 echo $output;    // "success\n"
 ```
 
-### Build Commands
+### Build commands
 
 Use `flag()` for switches without a value, `option()` for keys that take a value, and `argument()` for positional arguments.
 
@@ -80,7 +80,7 @@ $command = new Command('tar')
     ->argument('.');
 ```
 
-### Compose Commands
+### Compose commands
 
 Use the static helpers when you need shell operators such as pipes, `&&`, `||`, grouping, or redirects.
 
@@ -112,7 +112,7 @@ $logs = Command::appendStdout(
 
 Plain commands execute in argv mode. Composed, grouped, and redirected commands execute through shell syntax.
 
-### Create a Daemon
+### Create a daemon
 
 Use `Console::loop()` to build daemons without tight loops. The helper sleeps between iterations and periodically triggers garbage collection.
 
@@ -126,7 +126,7 @@ Console::loop(function () {
 }, 1); // 1 second
 ```
 
-## System Requirements
+## System requirements
 
 Utopia Console requires PHP 8.0 or later. We recommend using the latest PHP version whenever possible.
 

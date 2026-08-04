@@ -63,6 +63,7 @@ abstract class Symmetric extends Issuer
     /**
      * @return array<string, mixed>
      */
+    #[\Override]
     protected function getHeaders(): array
     {
         return $this->keyId !== null ? [Header::KeyId->value => $this->keyId] : [];

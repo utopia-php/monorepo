@@ -23,7 +23,7 @@ final class ConsoleTest extends TestCase
 
     public function testExecuteBasic(): void
     {
-        $command = (new Command(PHP_BINARY))
+        $command = new Command(PHP_BINARY)
             ->option('-r', "echo 'hello world';");
         $output = '';
         $stderr = '';
@@ -36,7 +36,7 @@ final class ConsoleTest extends TestCase
 
     public function testCommandToArray(): void
     {
-        $command = (new Command('tar'))
+        $command = new Command('tar')
             ->flag('-cz')
             ->option('-f', 'archive.tar.gz')
             ->option('-C', '/tmp/project')
@@ -47,7 +47,7 @@ final class ConsoleTest extends TestCase
 
     public function testCommandToStringEscapesArguments(): void
     {
-        $command = (new Command('php'))
+        $command = new Command('php')
             ->option('-r', "echo 'hello'; rm -rf /");
 
         $this->assertSame("'php' '-r' 'echo '\''hello'\''; rm -rf /'", $command->toString());
@@ -58,12 +58,12 @@ final class ConsoleTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Command argument cannot be empty');
 
-        (new Command('git'))->argument('');
+        new Command('git')->argument('');
     }
 
     public function testCommandValidatorSuccess(): void
     {
-        $command = (new Command('git'))
+        $command = new Command('git')
             ->argument('checkout')
             ->argument('develop', fn(string $value): bool => \in_array($value, ['main', 'develop', 'staging'], true));
 
@@ -75,7 +75,7 @@ final class ConsoleTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Invalid command argument: feature/test; rm -rf /');
 
-        (new Command('git'))
+        new Command('git')
             ->argument('checkout')
             ->argument('feature/test; rm -rf /', fn(string $value): bool => preg_match('/^[A-Za-z0-9._\/-]+$/', $value) === 1);
     }
@@ -85,7 +85,7 @@ final class ConsoleTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Invalid command flag: verbose');
 
-        (new Command('git'))->flag('verbose');
+        new Command('git')->flag('verbose');
     }
 
     public function testCommandRejectsInvalidOption(): void
@@ -93,7 +93,7 @@ final class ConsoleTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Invalid command option: -cz');
 
-        (new Command('tar'))->option('-cz', 'archive.tar.gz');
+        new Command('tar')->option('-cz', 'archive.tar.gz');
     }
 
     public function testCommandRejectsEmptyRedirectTarget(): void
@@ -148,7 +148,7 @@ final class ConsoleTest extends TestCase
 
     public function testExecuteStream(): void
     {
-        $command = (new Command(PHP_BINARY))
+        $command = new Command(PHP_BINARY)
             ->option('-r', 'for ($i = 1; $i <= 5; $i++) { echo $i; usleep(1000000); }');
         $output = '';
         $stderr = '';
@@ -165,7 +165,7 @@ final class ConsoleTest extends TestCase
 
     public function testExecuteStdOut(): void
     {
-        $command = (new Command(PHP_BINARY))
+        $command = new Command(PHP_BINARY)
             ->option('-r', 'fwrite(STDOUT, "success\n");');
         $output = '';
         $stderr = '';
@@ -179,7 +179,7 @@ final class ConsoleTest extends TestCase
 
     public function testExecuteStdErr(): void
     {
-        $command = (new Command(PHP_BINARY))
+        $command = new Command(PHP_BINARY)
             ->option('-r', 'fwrite(STDERR, "error\n");');
         $output = '';
         $stderr = '';
@@ -193,7 +193,7 @@ final class ConsoleTest extends TestCase
 
     public function testExecuteExitCode(): void
     {
-        $command = (new Command(PHP_BINARY))
+        $command = new Command(PHP_BINARY)
             ->option('-r', "echo 'hello world'; exit(2);");
         $output = '';
         $stderr = '';
@@ -203,7 +203,7 @@ final class ConsoleTest extends TestCase
         $this->assertSame('hello world', $output);
         $this->assertSame(2, $code);
 
-        $command = (new Command(PHP_BINARY))
+        $command = new Command(PHP_BINARY)
             ->option('-r', "echo 'hello world'; exit(100);");
         $output = '';
         $stderr = '';
@@ -216,7 +216,7 @@ final class ConsoleTest extends TestCase
 
     public function testExecuteTimeout(): void
     {
-        $command = (new Command(PHP_BINARY))
+        $command = new Command(PHP_BINARY)
             ->option('-r', "sleep(1); echo 'hello world'; exit(0);");
         $output = '';
         $stderr = '';
@@ -226,7 +226,7 @@ final class ConsoleTest extends TestCase
         $this->assertSame('hello world', $output);
         $this->assertSame(0, $code);
 
-        $command = (new Command(PHP_BINARY))
+        $command = new Command(PHP_BINARY)
             ->option('-r', "sleep(4); echo 'hello world'; exit(0);");
         $output = '';
         $stderr = '';
@@ -240,7 +240,7 @@ final class ConsoleTest extends TestCase
     public function testLoop(): void
     {
         $file = __DIR__ . '/../resources/loop.php';
-        $command = (new Command(PHP_BINARY))
+        $command = new Command(PHP_BINARY)
             ->argument($file);
         $input = '';
         $output = '';
@@ -272,9 +272,9 @@ final class ConsoleTest extends TestCase
     public function testCommandPipeToString(): void
     {
         $command = Command::pipe(
-            (new Command('ps'))->flag('-ef'),
-            (new Command('grep'))->argument('php-fpm'),
-            (new Command('wc'))->flag('-l'),
+            new Command('ps')->flag('-ef'),
+            new Command('grep')->argument('php-fpm'),
+            new Command('wc')->flag('-l'),
         );
 
         $this->assertSame("'ps' '-ef' | 'grep' 'php-fpm' | 'wc' '-l'", $command->toString());
@@ -284,8 +284,8 @@ final class ConsoleTest extends TestCase
     {
         $command = Command::appendStdout(
             Command::pipe(
-                (new Command('cat'))->argument('app.log'),
-                (new Command('grep'))->argument('ERROR'),
+                new Command('cat')->argument('app.log'),
+                new Command('grep')->argument('ERROR'),
             ),
             'errors.log',
         );
@@ -392,8 +392,8 @@ final class ConsoleTest extends TestCase
     public function testExecutePipeExpression(): void
     {
         $command = Command::pipe(
-            (new Command(PHP_BINARY))->option('-r', 'echo "alpha\nbeta\n";'),
-            (new Command('grep'))->argument('beta'),
+            new Command(PHP_BINARY)->option('-r', 'echo "alpha\nbeta\n";'),
+            new Command('grep')->argument('beta'),
         );
         $output = '';
         $stderr = '';
@@ -410,11 +410,11 @@ final class ConsoleTest extends TestCase
         $command = Command::and(
             Command::group(
                 Command::or(
-                    (new Command(PHP_BINARY))->option('-r', 'exit(1);'),
-                    (new Command(PHP_BINARY))->option('-r', 'echo "fallback";'),
+                    new Command(PHP_BINARY)->option('-r', 'exit(1);'),
+                    new Command(PHP_BINARY)->option('-r', 'echo "fallback";'),
                 ),
             ),
-            (new Command(PHP_BINARY))->option('-r', 'echo " publish";'),
+            new Command(PHP_BINARY)->option('-r', 'echo " publish";'),
         );
         $output = '';
         $stderr = '';
@@ -429,8 +429,8 @@ final class ConsoleTest extends TestCase
     public function testExecuteAndStopsOnFailure(): void
     {
         $command = Command::and(
-            (new Command(PHP_BINARY))->option('-r', 'echo "start"; exit(1);'),
-            (new Command(PHP_BINARY))->option('-r', 'echo "never";'),
+            new Command(PHP_BINARY)->option('-r', 'echo "start"; exit(1);'),
+            new Command(PHP_BINARY)->option('-r', 'echo "never";'),
         );
         $output = '';
         $stderr = '';
@@ -445,8 +445,8 @@ final class ConsoleTest extends TestCase
     public function testExecuteOrStopsAfterSuccess(): void
     {
         $command = Command::or(
-            (new Command(PHP_BINARY))->option('-r', 'echo "done";'),
-            (new Command(PHP_BINARY))->option('-r', 'echo "fallback";'),
+            new Command(PHP_BINARY)->option('-r', 'echo "done";'),
+            new Command(PHP_BINARY)->option('-r', 'echo "fallback";'),
         );
         $output = '';
         $stderr = '';
@@ -463,11 +463,11 @@ final class ConsoleTest extends TestCase
         $command = Command::and(
             Command::group(
                 Command::or(
-                    (new Command(PHP_BINARY))->option('-r', 'exit(1);'),
-                    (new Command(PHP_BINARY))->option('-r', 'echo "fallback";'),
+                    new Command(PHP_BINARY)->option('-r', 'exit(1);'),
+                    new Command(PHP_BINARY)->option('-r', 'echo "fallback";'),
                 ),
             ),
-            (new Command(PHP_BINARY))->option('-r', 'echo " publish";'),
+            new Command(PHP_BINARY)->option('-r', 'echo " publish";'),
         );
         $output = '';
         $stderr = '';
@@ -485,7 +485,7 @@ final class ConsoleTest extends TestCase
 
         try {
             $command = Command::redirectStdout(
-                (new Command(PHP_BINARY))->option('-r', 'echo "saved";'),
+                new Command(PHP_BINARY)->option('-r', 'echo "saved";'),
                 $file,
             );
             $output = '';
@@ -511,7 +511,7 @@ final class ConsoleTest extends TestCase
             file_put_contents($file, "first\n");
 
             $command = Command::appendStdout(
-                (new Command(PHP_BINARY))->option('-r', 'echo "second";'),
+                new Command(PHP_BINARY)->option('-r', 'echo "second";'),
                 $file,
             );
             $output = '';

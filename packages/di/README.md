@@ -13,7 +13,7 @@ Utopia DI is a small PSR-11 compatible dependency injection container with paren
 
 Although this library is part of the Utopia Framework project it is dependency free, and can be used as standalone with any other PHP project or framework.
 
-## Getting Started
+## Getting started
 
 Install using Composer:
 
@@ -91,7 +91,7 @@ $child->get('requestId'); // "request-2" (child now uses its own local definitio
 $di->get('requestId'); // "request-1" (parent is unchanged)
 ```
 
-## System Requirements
+## System requirements
 
 Utopia DI requires PHP 8.2 or later. We recommend using the latest PHP version whenever possible.
 
@@ -99,7 +99,7 @@ Utopia DI requires PHP 8.2 or later. We recommend using the latest PHP version w
 
 Our ecosystem supports other thin PHP projects aiming to extend the core PHP Utopia libraries.
 
-Each project is focused on solving a single, very simple problem and you can use composer to include any of them in your next project.
+Each project is focused on solving a single, very simple problem and you can use Composer to include any of them in your next project.
 
 You can find all libraries in [GitHub Utopia organization](https://github.com/utopia-php).
 
@@ -107,9 +107,9 @@ You can find all libraries in [GitHub Utopia organization](https://github.com/ut
 
 All code contributions - including those of people having commit access - must go through a pull request and approved by a core developer before being merged. This is to ensure proper review of all the code.
 
-Fork the project, create a feature branch, and send us a pull request.
+Fork the [utopia-php monorepo](https://github.com/utopia-php/monorepo), create a feature branch, and send us a pull request.
 
-You can refer to the [Contributing Guide](https://github.com/utopia-php/di/blob/master/CONTRIBUTING.md) for more info.
+You can refer to the [Contributing Guide](https://github.com/utopia-php/monorepo/blob/main/CONTRIBUTING.md) for more info.
 
 For security issues, please email security@appwrite.io instead of posting a public issue in GitHub.
 

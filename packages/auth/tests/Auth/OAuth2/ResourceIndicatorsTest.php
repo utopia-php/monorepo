@@ -16,6 +16,10 @@ final class ResourceIndicatorsTest extends TestCase
         $this->assertSame([], ResourceIndicators::from(null)->toArray());
         $this->assertSame([], ResourceIndicators::from('')->toArray());
         $this->assertSame(['https://api.example.com/'], ResourceIndicators::from('https://api.example.com/')->toArray());
+        $this->assertSame(
+            ['https://api.example.com/'],
+            ResourceIndicators::from(null, 'https://api.example.com/')->toArray(),
+        );
 
         $this->assertSame(
             ['https://api.example.com/', 'http://localhost:8080/v1'],
@@ -25,20 +29,27 @@ final class ResourceIndicatorsTest extends TestCase
                 'https://api.example.com/',
             ])->toArray(),
         );
+        $this->assertSame(
+            ['https://api.example.com/', 'http://localhost:8080/v1'],
+            ResourceIndicators::from([
+                'https://api.example.com/',
+                'http://localhost:8080/v1',
+            ], 'https://api.example.com/')->toArray(),
+        );
     }
 
     /**
      * @param string|array<int, mixed> $resources
      */
     #[DataProvider('invalidResourceProvider')]
-    public function testRejectsInvalidResources(string|array $resources, string $message): void
+    public function testRejectsInvalidResources(string|array $resources, string $message, ?string $audience = null): void
     {
         $this->assertSame('invalid_target', InvalidResourceException::ERROR_CODE);
 
         $this->expectException(InvalidResourceException::class);
         $this->expectExceptionMessage($message);
 
-        ResourceIndicators::from($resources);
+        ResourceIndicators::from($resources, $audience);
     }
 
     public function testComparesResourceSets(): void
@@ -108,6 +119,16 @@ final class ResourceIndicatorsTest extends TestCase
         yield 'non-string' => [
             'resources' => ['https://api.example.com/', 42],
             'message' => 'resource must be a non-empty absolute URI.',
+        ];
+        yield 'invalid audience' => [
+            'resources' => [],
+            'message' => 'resource must be an absolute HTTP(S) URI with no fragment component.',
+            'audience' => 'not-a-uri',
+        ];
+        yield 'audience outside resources' => [
+            'resources' => ['https://api.example.com/'],
+            'message' => 'audience must match one of the resource values when both parameters are provided.',
+            'audience' => 'https://files.example.com/',
         ];
     }
 }

@@ -13,15 +13,15 @@ use Utopia\Span\Span;
  */
 readonly class Pretty implements Exporter
 {
-    private const RESET = "\033[0m";
-    private const BOLD = "\033[1m";
-    private const DIM = "\033[2m";
+    private const string RESET = "\033[0m";
+    private const string BOLD = "\033[1m";
+    private const string DIM = "\033[2m";
 
-    private const RED = "\033[31m";
-    private const GREEN = "\033[32m";
-    private const YELLOW = "\033[33m";
-    private const CYAN = "\033[36m";
-    private const WHITE = "\033[37m";
+    private const string RED = "\033[31m";
+    private const string GREEN = "\033[32m";
+    private const string YELLOW = "\033[33m";
+    private const string CYAN = "\033[36m";
+    private const string WHITE = "\033[37m";
 
     /** @var Closure(Span): bool */
     private Closure $sampler;

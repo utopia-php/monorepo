@@ -5,7 +5,7 @@ namespace Utopia\Auth\OAuth2;
 class ResourceIndicators
 {
     /**
-     * @var array<int, string>
+     * @var list<non-empty-string>
      */
     private readonly array $resources;
 
@@ -35,19 +35,20 @@ class ResourceIndicators
             $seen[] = $resource;
         }
 
-        /** @var array<int, string> $resources */
+        /** @var list<non-empty-string> $resources */
         $this->resources = $resources;
     }
 
     /**
      * @param string|array<int, mixed>|null $value
+     * @param string|null $audience Compatibility alias for a single resource indicator.
      *
      * @throws InvalidResourceException
      */
-    public static function from(string|array|null $value): self
+    public static function from(string|array|null $value, ?string $audience = null): self
     {
         if ($value === null || $value === '') {
-            return new self([]);
+            $value = [];
         }
 
         $resources = \is_array($value) ? $value : [$value];
@@ -59,7 +60,22 @@ class ResourceIndicators
             }
         }
 
-        return new self($normalized);
+        $resources = new self($normalized);
+
+        if ($audience === null || $audience === '') {
+            return $resources;
+        }
+
+        $audienceResource = new self([$audience]);
+        if ($resources->resources === []) {
+            return $audienceResource;
+        }
+
+        if (!$audienceResource->isSubsetOf($resources)) {
+            throw new InvalidResourceException('audience must match one of the resource values when both parameters are provided.');
+        }
+
+        return $resources;
     }
 
     /**
@@ -82,7 +98,7 @@ class ResourceIndicators
     }
 
     /**
-     * @return array<int, string>
+     * @return list<non-empty-string>
      */
     public function audience(string $defaultAudience): array
     {
@@ -94,7 +110,7 @@ class ResourceIndicators
     }
 
     /**
-     * @return array<int, string>
+     * @return list<non-empty-string>
      */
     public function toArray(): array
     {

@@ -6,11 +6,11 @@ One command runs the whole playbook:
 bin/monorepo absorb database
 ```
 
-It imports the library with full history, strips the QA tooling the monorepo hoists (pint/phpstan/rector/phpunit dependencies, QA scripts and `pint.json`, points test scripts at the root `phpunit`, refreshes a committed `composer.lock`), removes the library's own CI workflows and writes a single `mirror.yml` that redirects pull requests opened against the mirror back here, banners the README, and normalises the mirror's branch ruleset (PR-only, no force-push, split app bypassed). Every step is idempotent — re-run it freely; the ruleset step updates an existing, even differently-named, ruleset in place rather than skipping it.
+It imports the library with full history, strips the QA tooling the monorepo hoists (Pint/PHPStan/Rector/PHPUnit dependencies, QA scripts and `pint.json`, points test scripts at the root `phpunit`, refreshes a committed `composer.lock`), removes the library's own CI workflows and writes a single `mirror.yml` that redirects pull requests opened against the mirror back here, banners the README, and normalises the mirror's branch ruleset (PR-only, no force-push, split app bypassed). Every step is idempotent — re-run it freely; the ruleset step updates an existing, even differently-named, ruleset in place rather than skipping it.
 
 Then, by hand:
 
-1. `bin/monorepo check <name> --fix` — apply the canonical style; fix whatever phpstan and rector surface.
+1. `bin/monorepo check <name> --fix` — apply the canonical style; fix whatever PHPStan and Rector surface.
 2. `bin/monorepo test <name>` — make the package satisfy the test contract (see the README's Testing section): unit tier in `composer test`, services tier in `composer test:e2e`.
 3. Commit and push, then confirm the Split run is green. Land it as a **merge commit, never a squash** — the import's subtree annotation lives in that merge, and a squash drops it (which would orphan the package from its mirror history).
 4. Triage pull requests already open on the mirror (the redirect only covers new ones), then make the library's next release from the monorepo.

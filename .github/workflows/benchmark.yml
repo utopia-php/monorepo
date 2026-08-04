@@ -82,7 +82,7 @@ jobs:
           BENCH_REPORT: ${{ github.workspace }}/bench-report.md
           # via env so the package list is data, not shell-interpolated
           PACKAGES: ${{ needs.changed.outputs.packages }}
-        run: bin/monorepo benchmark $PACKAGES
+        run: bin/monorepo benchmark $PACKAGES --linked
 
       - name: Upsert PR comment
         if: ${{ always() && github.event_name == 'pull_request' }}

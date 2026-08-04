@@ -31,8 +31,8 @@
         "test": "phpunit"
     },
     "require": {
-        "php": ">=8.2",
+        "php": ">=8.5",
         "utopia-php/di": "^0.3",
-        "utopia-php/validators": "^0.2"
+        "utopia-php/validators": "0.3.*"
     }
 }

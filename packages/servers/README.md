@@ -10,9 +10,9 @@ Utopia Queue is base library for building Utopia style servers. This library is 
 
 Although this library is part of the [Utopia](https://github.com/utopia-php/framework) project it is dependency free and can be used as standalone with any other PHP project or framework.
 
-## Getting Started
+## Getting started
 
-Install using composer:
+Install using Composer:
 
 ```bash
 composer require utopia-php/servers
@@ -28,7 +28,7 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 // TBD
 ```
 
-## System Requirements
+## System requirements
 
 Utopia Servers requires PHP 8.2 or later. We recommend using the latest PHP version whenever possible.
 

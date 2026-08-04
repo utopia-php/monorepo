@@ -18,7 +18,7 @@ mkdir -p packages/<name>/src/<Ns> packages/<name>/tests
 
 Create these files. They mirror an existing small package (`packages/span` is a
 good reference) — note what the monorepo hoists and therefore **must not** appear
-here: no `pint.json`, and no pint/phpstan/rector/phpunit entries in
+here: no `pint.json`, and no Pint/PHPStan/Rector/PHPUnit entries in
 `require-dev` (the root toolchain supplies them; see `check`/`test` in
 `bin/monorepo`).
 
@@ -49,7 +49,7 @@ Packagist constraints, never path repositories.
 
 **`phpunit.xml`**, **`rector.php`**, **`.gitignore`** — copy
 from `packages/span` verbatim (the `.gitignore` ignores `/vendor/`,
-`composer.lock`, and the phpunit caches). A **`phpstan.neon`** is optional:
+`composer.lock`, and the PHPUnit caches). A **`phpstan.neon`** is optional:
 `check` analyses every package at the monorepo's level-5 floor (the root
 `phpstan.neon`), so add one only to raise the level or add package-specific
 settings — it overrides the baseline when present.
