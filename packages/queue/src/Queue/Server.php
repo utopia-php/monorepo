@@ -343,9 +343,7 @@ class Server
                 $hook->getAction()(...$this->getArguments($this->resources(), $hook));
             }
 
-            if ($this->adapter->runsToCompletion()) {
-                throw $error;
-            }
+            throw $error;
         }
         return $this;
     }

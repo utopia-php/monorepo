@@ -85,12 +85,6 @@ class KubernetesJob extends Adapter
         return $this;
     }
 
-    #[\Override]
-    public function runsToCompletion(): bool
-    {
-        return true;
-    }
-
     /**
      * Drain the queue, then return. Processes messages until a receive() times
      * out (the queue is empty) or stop() is called, so the Job completes rather
