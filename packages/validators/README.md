@@ -46,6 +46,28 @@ For advanced flows combine validators with `Multiple`, `AnyOf`, `AllOf`, `NoneOf
 - `Boolean`, `Integer`, `FloatValidator`, `Numeric`, `Range`
 - `Domain`, `Host`, `Hostname`, `IP`, `URL`
 - `HexColor`, `JSON`, `Text`
+- `JSON\ObjectValidator`, `JSON\ArrayValidator` – JSON shape checks that accept encoded strings
+
+### Validating JSON shape
+
+`JSON` accepts any valid JSON, including scalars such as `"1"` and `"\"text\""`. When a parameter must be
+an object or a list, reach for the shape-specific validators instead. Both accept a value that is already
+decoded or still encoded as a string:
+
+```php
+use Utopia\Validator\JSON;
+
+$data = new JSON\ObjectValidator();
+
+$data->isValid('{"event": "login"}'); // true
+$data->isValid(['event' => 'login']); // true
+$data->isValid('"login"');            // false
+$data->isValid('[]');                 // false
+```
+
+Strings decode to objects rather than associative arrays, so `'{}'` and `'[]'` stay distinguishable. A value
+that arrives already decoded as an empty array is ambiguous — PHP represents both `{}` and `[]` that way — so
+both validators accept it.
 
 ## Development
 
