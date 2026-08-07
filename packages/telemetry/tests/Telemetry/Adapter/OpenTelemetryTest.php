@@ -52,6 +52,43 @@ final class OpenTelemetryTest extends TestCase
     }
 
     /**
+     * A collect() that fires while another collect() is still running must not start a second export.
+     * Under Swoole the export parks on a shared cURL handle; a concurrent collect() operating that
+     * same handle throws an uncaught Swoole\Error that kills the whole process. The guard turns the
+     * re-entrant call into a no-op that returns false, and clears once the outer call returns, so a
+     * later collect() proceeds normally.
+     */
+    public function testConcurrentCollectIsSkipped(): void
+    {
+        $payloads = [];
+        $telemetry = new OpenTelemetry(
+            'http://localhost:4318/v1/metrics',
+            'namespace',
+            'service',
+            'instance',
+            $this->transport($payloads),
+        );
+
+        // The observable callback runs during the outer collect(), i.e. while a collect is in flight.
+        $reentrantResult = null;
+        $telemetry->createObservableGauge('recorded.observable_gauge', '%')
+            ->observe(function (callable $observer) use ($telemetry, &$reentrantResult): void {
+                $reentrantResult = $telemetry->collect();
+                $observer(1);
+            });
+
+        $outer = $telemetry->collect();
+
+        $this->assertTrue($outer);              // the outer export ran
+        $this->assertFalse($reentrantResult);   // the re-entrant collect() was skipped, not run
+        $this->assertCount(1, $payloads);       // exactly one export reached the wire
+
+        // Guard cleared: a subsequent, non-overlapping collect() exports again.
+        $this->assertTrue($telemetry->collect());
+        $this->assertCount(2, $payloads);
+    }
+
+    /**
      * @param list<string> $payloads
      * @return TransportInterface<string>
      */
