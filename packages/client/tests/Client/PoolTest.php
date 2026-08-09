@@ -58,13 +58,13 @@ final class PoolTest extends TestCase
      *
      * @template T of \Psr\Http\Client\ClientInterface&StreamingClientInterface
      *
-     * @param callable(): T $init
+     * @param \Closure(): T $init
      *
      * @return Connections<T>
      */
-    private function connections(callable $init, int $size = 4): Connections
+    private function connections(\Closure $init, int $size = 4): Connections
     {
-        return new Connections(new Stack(), 'test', $size, $init);
+        return new Connections(new Stack(), 'test', $size, $init, timeout: 0.0);
     }
 
     private function request(): RequestInterface

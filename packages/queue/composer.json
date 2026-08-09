@@ -37,7 +37,7 @@
         "utopia-php/di": "^0.3",
         "utopia-php/lock": "^0.2",
         "utopia-php/servers": "^0.4",
-        "utopia-php/pools": "^1.0",
+        "utopia-php/pools": "^2.0",
         "utopia-php/telemetry": "^0.4",
         "utopia-php/validators": "0.3.*"
     },
@@ -48,7 +48,8 @@
     },
     "suggest": {
         "ext-swoole": "Needed to support Swoole.",
-        "workerman/workerman": "Needed to support Workerman."
+        "workerman/workerman": "Needed to support Workerman.",
+        "ext-pcntl": "Fallback for Adapter\\KubernetesJob graceful shutdown when Swoole is unavailable."
     },
     "config": {
         "allow-plugins": {

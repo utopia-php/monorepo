@@ -22,7 +22,7 @@
         "php": ">=8.2"
     },
     "require-dev": {
-        "utopia-php/telemetry": "^0.4"
+        "utopia-php/telemetry": "^0.4.6"
     },
     "suggest": {
         "utopia-php/telemetry": "Required when passing telemetry adapters or running the local telemetry demo.",

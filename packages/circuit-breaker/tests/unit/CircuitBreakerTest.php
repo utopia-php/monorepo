@@ -253,10 +253,10 @@ final class CircuitBreakerTest extends TestCase
         $this->assertSame(CircuitState::CLOSED, $breaker->getState());
         $this->assertSame(0, $breaker->getFailureCount());
         $this->assertSame(0, $breaker->getSuccessCount());
-        $this->assertSame([], $telemetry->gauges['breaker.state']->values);
-        $this->assertSame([], $telemetry->gauges['breaker.failures']->values);
-        $this->assertSame([], $telemetry->gauges['breaker.successes']->values);
-        $this->assertSame([], $telemetry->counters['breaker.calls']->values);
+        $this->assertArrayNotHasKey('breaker.state', $telemetry->gauges);
+        $this->assertArrayNotHasKey('breaker.failures', $telemetry->gauges);
+        $this->assertArrayNotHasKey('breaker.successes', $telemetry->gauges);
+        $this->assertArrayNotHasKey('breaker.calls', $telemetry->counters);
         $this->assertArrayNotHasKey('breaker.callback_failures', $telemetry->counters);
         $this->assertArrayNotHasKey('breaker.fallbacks', $telemetry->counters);
         $this->assertArrayNotHasKey('breaker.transitions', $telemetry->counters);

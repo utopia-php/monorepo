@@ -271,10 +271,13 @@ abstract class Adapter
 
         $run = function () use ($requests, $timeout, $connectTimeout, &$results): void {
             $pool = new ConnectionPool(
-                pool: new SwoolePoolAdapter(),
+                adapter: new SwoolePoolAdapter(),
                 name: self::CONNECTION_POOL_NAME,
-                size: min(\count($requests), self::MAX_CONCURRENT_REQUESTS),
+                size: max(1, min(\count($requests), self::MAX_CONCURRENT_REQUESTS)),
                 init: $this->clientFactory ?? $this->defaultClient($timeout, $connectTimeout)->withConnectionReuse(...),
+                // A slot per request, so acquisition never queues; the request
+                // timeouts belong to the client, not to getting hold of one.
+                timeout: 0.0,
             );
 
             $group = new WaitGroup();

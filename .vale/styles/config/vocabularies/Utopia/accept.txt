@@ -1,5 +1,3 @@
-
-
 [Cc]harset(?:s)?
 [Cc]onfig(?:s)?
 [Cc]ron
@@ -62,18 +60,22 @@ docblocks?
 dotenv
 DuckDuckGo
 Eldad
+enqueue(?:s|d)?
 enum(?:s)?
+etcd
 Fastly
 Fedora
 FPM
 Fux
 GET
+getters?
 GPTBot
 Grafana
 Guzzle
 gzip
 HAProxy
 HarmonyOS
+Hazelcast
 healthcheck(?:s)?
 hostname(?:s)?
 HTTP(?:S)?
@@ -82,6 +84,7 @@ Huawei
 ID
 Infobip
 Inforu
+inlined
 iOS
 iPadOS
 JetStream
@@ -121,9 +124,11 @@ PATCH
 PerplexityBot
 PHP
 PHPass
+phpredis
 PHPStan
 PHPUnit
 Pint
+pipelining
 plaintext
 PlayStation
 Plivo
@@ -141,6 +146,8 @@ rebases
 Rector
 redeclaring
 repo(?:s)?
+requeue(?:s|d)?
+resync
 RFC
 ruleset(?:s)?
 S3
@@ -148,6 +155,7 @@ Sailfish
 sanitization
 Scrypt
 Sentry
+setters?
 Silk
 Sinch
 SMS
