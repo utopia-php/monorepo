@@ -12,7 +12,7 @@ final class IdentifierTest extends TestCase
     {
         $identifier = new Identifier();
 
-        $this->assertTrue($identifier->isValid('EZVIZ_APP_SECRET'));
+        $this->assertTrue($identifier->isValid('APPWRITE_APP_SECRET'));
         $this->assertTrue($identifier->isValid('_private'));
         $this->assertTrue($identifier->isValid('lowercase_ok'));
         $this->assertTrue($identifier->isValid('A1'));
@@ -25,8 +25,8 @@ final class IdentifierTest extends TestCase
     {
         $identifier = new Identifier();
 
-        $this->assertFalse($identifier->isValid("EZVIZ_APP_SECRET\t"), 'trailing tab');
-        $this->assertFalse($identifier->isValid('ID_DO_BANCO_DE_DADOS_DE_GRAVAÇÃO'), 'accented letters');
+        $this->assertFalse($identifier->isValid("APPWRITE_APP_SECRET\t"), 'trailing tab');
+        $this->assertFalse($identifier->isValid('GRAVAÇÃO'), 'accented letters');
         $this->assertFalse($identifier->isValid('9FOO'), 'leading digit');
         $this->assertFalse($identifier->isValid('MY-VAR'), 'hyphen');
         $this->assertFalse($identifier->isValid('MY VAR'), 'space');
