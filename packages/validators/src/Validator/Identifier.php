@@ -20,6 +20,7 @@ class Identifier extends Text
         parent::__construct($length, 1);
     }
 
+    #[\Override]
     public function getDescription(): string
     {
         $description = 'Value must contain only letters, digits and underscores and must not start with a digit';
@@ -31,8 +32,9 @@ class Identifier extends Text
         return $description . '.';
     }
 
+    #[\Override]
     public function isValid(mixed $value): bool
     {
-        return parent::isValid($value) && \preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $value) === 1;
+        return parent::isValid($value) && preg_match('/^[A-Za-z_]\w*$/', (string) $value) === 1;
     }
 }
