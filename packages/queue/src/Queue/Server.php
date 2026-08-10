@@ -57,6 +57,7 @@ class Server
     private Histogram $jobWaitTime;
     private Histogram $processDuration;
     private ObservableGauge $queueDepth;
+    private ObservableGauge $slaSeconds;
 
     /**
      * Creates an instance of a Queue server.
@@ -153,6 +154,25 @@ class Server
             '{message}',
             'Number of pending messages in the queue.',
         );
+
+        // A series rather than an attribute of the wait histogram: PromQL cannot
+        // do arithmetic with a label, so only as a series can one query compare
+        // a measured wait against its target. A queue with no target observes
+        // nothing, which leaves a reader able to tell the two apart.
+        $this->slaSeconds = $telemetry->createObservableGauge(
+            'messaging.destination.sla',
+            's',
+            'Target wait time for messages on this queue.',
+        );
+
+        if ($this->adapter->queue->slaSeconds !== null) {
+            $this->slaSeconds->observe(function (callable $observe): void {
+                $observe($this->adapter->queue->slaSeconds, [
+                    'messaging.destination.name' => $this->adapter->queue->name,
+                    'messaging.destination.namespace' => $this->adapter->queue->namespace,
+                ]);
+            });
+        }
 
         $this->queueDepth->observe(function (callable $observe): void {
             if (!$this->adapter->consumer instanceof Publisher) {

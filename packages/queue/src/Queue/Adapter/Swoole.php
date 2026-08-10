@@ -32,8 +32,9 @@ class Swoole extends Adapter
         string $namespace = 'utopia-queue',
         int $maxCoroutines = 1,
         Container $resources = new Container(),
+        ?int $slaSeconds = null,
     ) {
-        parent::__construct($consumer, $workerNum, $queue, $namespace, $resources);
+        parent::__construct($consumer, $workerNum, $queue, $namespace, $resources, $slaSeconds);
         $this->maxCoroutines = max(1, $maxCoroutines);
     }
 

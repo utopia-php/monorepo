@@ -65,6 +65,54 @@ final class ServerTelemetryTest extends TestCase
         }
     }
 
+    public function testExportsTheQueueSlaAsASeries(): void
+    {
+        // A reader compares the measured wait against this series, so a target
+        // published as anything but a value is one PromQL cannot compute with.
+        $consumer = new ServerTelemetryConsumer();
+        $adapter = new ServerTelemetryAdapter($consumer, 1, 'stats-usage', 'appwrite', slaSeconds: 7200);
+        $telemetry = new TestTelemetry();
+
+        $server = new Server($adapter);
+        $server->setTelemetry($telemetry);
+        $server
+            ->job()
+            ->inject('message')
+            ->action(fn(Message $message): null => null);
+
+        $server->start();
+
+        $this->assertArrayHasKey('messaging.destination.sla', $telemetry->observableGauges);
+        $this->assertSame([7200], $this->collectObservations($telemetry, 'messaging.destination.sla'));
+    }
+
+    public function testExportsNoSlaForAnUndeclaredQueue(): void
+    {
+        // Absence is the signal: it distinguishes a queue nobody classified
+        // from one with a target, so no default has to be invented here.
+        $consumer = new ServerTelemetryConsumer();
+        $adapter = new ServerTelemetryAdapter($consumer, 1, 'emails', 'appwrite');
+        $telemetry = new TestTelemetry();
+
+        $server = new Server($adapter);
+        $server->setTelemetry($telemetry);
+        $server
+            ->job()
+            ->inject('message')
+            ->action(fn(Message $message): null => null);
+
+        $server->start();
+
+        $this->assertArrayNotHasKey('messaging.destination.sla', $telemetry->observableGauges);
+    }
+
+    public function testRejectsANonPositiveSla(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new Queue('emails', slaSeconds: 0);
+    }
+
     public function testRecordsQueueDepth(): void
     {
         $consumer = new ServerTelemetryPublisherConsumer([3, 2]);
@@ -233,8 +281,9 @@ final class ServerTelemetryAdapter extends Adapter
         string $queue,
         string $namespace = 'utopia-queue',
         Container $resources = new Container(),
+        ?int $slaSeconds = null,
     ) {
-        parent::__construct($consumer, $workerNum, $queue, $namespace, $resources);
+        parent::__construct($consumer, $workerNum, $queue, $namespace, $resources, $slaSeconds);
     }
 
     public function start(): self

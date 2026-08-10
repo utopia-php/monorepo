@@ -24,8 +24,9 @@ abstract class Adapter
         string $queue,
         public string $namespace = 'utopia-queue',
         protected Container $resources = new Container(),
+        ?int $slaSeconds = null,
     ) {
-        $this->queue = new Queue($queue, $namespace);
+        $this->queue = new Queue($queue, $namespace, slaSeconds: $slaSeconds);
     }
 
     /**

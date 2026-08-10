@@ -73,6 +73,26 @@ $client->enqueue([
 ]);
 ```
 
+## Service levels
+
+A queue can declare a target wait time, which the server publishes as the
+`messaging.destination.sla` gauge alongside its wait-time histogram:
+
+```php
+$adapter = new Queue\Adapter\Swoole($connection, 12, 'my-queue', slaSeconds: 30);
+```
+
+Nothing in the library acts on the number. A message that waits longer than the
+target is still delivered, and no timeout, rejection, or change of priority
+follows from it. The target is there for whoever reads the telemetry, to compare
+against the measured wait and decide what it means — page someone, escalate, or
+add consumers.
+
+It is published as a series rather than an attribute of the histogram so that a
+single query can relate the two, since PromQL cannot do arithmetic with a label
+value. A queue that declares no target publishes no gauge, which leaves a
+reader able to tell an unclassified queue from one that has a target.
+
 ## System requirements
 
 Utopia Framework requires PHP 8.0 or later. We recommend using the latest PHP version whenever possible.

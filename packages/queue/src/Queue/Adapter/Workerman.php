@@ -17,8 +17,9 @@ class Workerman extends Adapter
         string $queue,
         string $namespace = 'utopia-queue',
         Container $resources = new Container(),
+        ?int $slaSeconds = null,
     ) {
-        parent::__construct($consumer, $workerNum, $queue, $namespace, $resources);
+        parent::__construct($consumer, $workerNum, $queue, $namespace, $resources, $slaSeconds);
 
         $this->worker = new Worker();
         $this->worker->count = $workerNum;
