@@ -2,6 +2,17 @@
 
 All notable changes to `utopia-php/validators` are documented in this file.
 
+## 0.3.3
+
+### Added
+
+- New `Identifier` validator. Extends `Text` and additionally requires a C-style
+  identifier (`^[A-Za-z_][A-Za-z0-9_]*$`): letters, digits and underscores only,
+  not starting with a digit. This is the shape required of environment variable
+  names and shell identifiers, so a value that passes a plain length check but
+  contains a tab, a space or an accented letter is rejected. Accepts an optional
+  `int $length` (0 = unlimited); minimum length is 1.
+
 ## 0.3.1
 
 ### URL validator — OAuth2 secure-redirect transport policy
