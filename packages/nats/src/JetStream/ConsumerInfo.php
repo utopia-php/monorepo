@@ -15,6 +15,10 @@ final class ConsumerInfo
         public readonly int $numRedelivered,
         public readonly int $numWaiting,
         public readonly int $numPending,
+        public readonly SequenceInfo $delivered,
+        public readonly SequenceInfo $ackFloor,
+        public readonly bool $pushBound = false,
+        public readonly ?string $cluster = null,
     ) {}
 
     public static function fromArray(array $data): self
@@ -28,6 +32,10 @@ final class ConsumerInfo
             numRedelivered: $data['num_redelivered'] ?? 0,
             numWaiting: $data['num_waiting'] ?? 0,
             numPending: $data['num_pending'] ?? 0,
+            delivered: SequenceInfo::fromArray($data['delivered'] ?? []),
+            ackFloor: SequenceInfo::fromArray($data['ack_floor'] ?? []),
+            pushBound: $data['push_bound'] ?? false,
+            cluster: isset($data['cluster']['name']) ? (string) $data['cluster']['name'] : null,
         );
     }
 }

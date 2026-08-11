@@ -136,6 +136,57 @@ final class JetStream
         return $data['consumers'] ?? [];
     }
 
+    /**
+     * Create a push consumer and deliver its messages to the callback.
+     *
+     * If the config has no deliver subject, an inbox is generated. The callback
+     * receives a JetStreamMessage and may ack it. Drive delivery with
+     * Connection::wait().
+     */
+    public function pushSubscribe(string $stream, ConsumerConfig $config, \Closure $callback): PushSubscription
+    {
+        if ($config->deliverSubject === null) {
+            $config = ConsumerConfig::fromArray(
+                ['deliver_subject' => $this->conn->newInbox()] + $config->toArray(),
+            );
+        }
+
+        $consumer = $this->createConsumer($stream, $config);
+
+        return new PushSubscription($this->conn, $consumer->info(), $callback);
+    }
+
+    /**
+     * Create an ordered (ephemeral, in-order, auto-healing) push consumer.
+     */
+    public function orderedConsumer(string $stream, DeliverPolicy $deliverPolicy = DeliverPolicy::All, ?string $filterSubject = null, float $idleHeartbeat = 5.0): OrderedConsumer
+    {
+        return new OrderedConsumer($this->conn, $this, $stream, $deliverPolicy, $filterSubject, $idleHeartbeat);
+    }
+
+    // --- Stream Message Operations ---
+
+    public function getMessage(string $stream, int $seq): StreamMessage
+    {
+        $data = $this->apiRequest("STREAM.MSG.GET.{$stream}", ['seq' => $seq]);
+        return StreamMessage::fromArray($data['message'] ?? []);
+    }
+
+    public function getLastMessage(string $stream, string $subject): StreamMessage
+    {
+        $data = $this->apiRequest("STREAM.MSG.GET.{$stream}", ['last_by_subj' => $subject]);
+        return StreamMessage::fromArray($data['message'] ?? []);
+    }
+
+    public function deleteMessage(string $stream, int $seq, bool $noErase = false): void
+    {
+        $payload = ['seq' => $seq];
+        if ($noErase) {
+            $payload['no_erase'] = true;
+        }
+        $this->apiRequest("STREAM.MSG.DELETE.{$stream}", $payload);
+    }
+
     // --- Publishing ---
 
     public function publish(string $subject, string $data = '', ?Headers $headers = null, ?string $msgId = null, ?string $expectedLastMsgId = null, ?int $expectedLastSeq = null, ?int $expectedLastSubjectSeq = null, ?string $expectedStream = null): PubAck

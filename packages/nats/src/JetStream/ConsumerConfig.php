@@ -9,6 +9,7 @@ final class ConsumerConfig
     /**
      * @param float|null $ackWait Ack wait in seconds
      * @param float|null $inactiveThreshold Inactive threshold in seconds
+     * @param float|null $idleHeartbeat Idle heartbeat interval in seconds (push consumers)
      * @param list<string>|null $filterSubjects
      */
     public function __construct(
@@ -31,6 +32,10 @@ final class ConsumerConfig
         public readonly ?int $maxBytes = null,
         public readonly bool $memStorage = false,
         public readonly ?int $numReplicas = null,
+        public readonly ?string $deliverSubject = null,
+        public readonly ?string $deliverGroup = null,
+        public readonly bool $flowControl = false,
+        public readonly ?float $idleHeartbeat = null,
     ) {}
 
     public function toArray(): array
@@ -89,6 +94,18 @@ final class ConsumerConfig
         if ($this->numReplicas !== null) {
             $data['num_replicas'] = $this->numReplicas;
         }
+        if ($this->deliverSubject !== null) {
+            $data['deliver_subject'] = $this->deliverSubject;
+        }
+        if ($this->deliverGroup !== null) {
+            $data['deliver_group'] = $this->deliverGroup;
+        }
+        if ($this->flowControl) {
+            $data['flow_control'] = true;
+        }
+        if ($this->idleHeartbeat !== null) {
+            $data['idle_heartbeat'] = StreamConfig::secondsToNanos($this->idleHeartbeat);
+        }
 
         return $data;
     }
@@ -115,6 +132,10 @@ final class ConsumerConfig
             maxBytes: $data['max_bytes'] ?? null,
             memStorage: $data['mem_storage'] ?? false,
             numReplicas: $data['num_replicas'] ?? null,
+            deliverSubject: $data['deliver_subject'] ?? null,
+            deliverGroup: $data['deliver_group'] ?? null,
+            flowControl: $data['flow_control'] ?? false,
+            idleHeartbeat: isset($data['idle_heartbeat']) ? StreamConfig::nanosToSeconds($data['idle_heartbeat']) : null,
         );
     }
 }

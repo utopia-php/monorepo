@@ -48,10 +48,25 @@ final class TlsTransport implements Transport
     public function write(string $data): int
     {
         $stream = $this->ensureConnected();
-        $written = @fwrite($stream, $data);
+        $total = \strlen($data);
+        $written = 0;
 
-        if ($written === false) {
-            throw new ConnectionException('Failed to write to TLS socket');
+        // Loop until every byte is on the wire: fwrite may perform a short write.
+        while ($written < $total) {
+            $chunk = @fwrite($stream, substr($data, $written));
+
+            if ($chunk === false || $chunk === 0) {
+                $info = stream_get_meta_data($stream);
+                if ($info['timed_out']) {
+                    throw new TimeoutException('Write timed out');
+                }
+                if (feof($stream)) {
+                    throw new ConnectionException('Connection closed by server');
+                }
+                throw new ConnectionException('Failed to write to TLS socket');
+            }
+
+            $written += $chunk;
         }
 
         return $written;
@@ -143,6 +158,9 @@ final class TlsTransport implements Transport
         }
         if (isset($this->tlsOptions['local_pk'])) {
             $opts['local_pk'] = $this->tlsOptions['local_pk'];
+        }
+        if (isset($this->tlsOptions['peer_name'])) {
+            $opts['peer_name'] = $this->tlsOptions['peer_name'];
         }
 
         return $opts;
