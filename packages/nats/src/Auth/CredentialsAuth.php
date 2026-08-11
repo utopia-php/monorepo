@@ -33,8 +33,8 @@ final class CredentialsAuth implements Authenticator
         }
 
         $this->jwt = $jwt;
-        // We need the public key from the seed for NKeyAuth, but for creds auth
-        // we derive it. For now, pass empty and override authenticate().
+        // NKeyAuth derives the real public key from the seed when none is given,
+        // so authenticate() below sends the correct nkey rather than an empty one.
         $this->nkeyAuth = new NKeyAuth('', $seed);
     }
 

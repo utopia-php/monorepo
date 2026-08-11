@@ -19,15 +19,23 @@ final class Consumer
     /**
      * Fetch a batch of messages from the consumer.
      */
-    public function fetch(int $batch = 1, ?float $timeout = null): MessageBatch
+    public function fetch(int $batch = 1, ?float $timeout = null, bool $noWait = false, ?int $maxBytes = null): MessageBatch
     {
         $timeout ??= 5.0;
         $requestSubject = "{$this->apiPrefix}.CONSUMER.MSG.NEXT.{$this->stream}.{$this->getName()}";
 
-        $payload = json_encode([
+        $request = [
             'batch' => $batch,
             'expires' => StreamConfig::secondsToNanos($timeout),
-        ], JSON_THROW_ON_ERROR);
+        ];
+        if ($noWait) {
+            $request['no_wait'] = true;
+        }
+        if ($maxBytes !== null) {
+            $request['max_bytes'] = $maxBytes;
+        }
+
+        $payload = json_encode($request, JSON_THROW_ON_ERROR);
 
         $inbox = $this->conn->newInbox();
         $sub = $this->conn->subscribe($inbox);
@@ -53,6 +61,13 @@ final class Consumer
                 $status = $msg->headers->getStatus();
                 if (\in_array($status, ['408', '404', '409'], true)) {
                     break;
+                }
+                // 100 = flow control / idle heartbeat: keep-alive, not data.
+                if ($status === '100') {
+                    if ($msg->replyTo !== null && $msg->replyTo !== '') {
+                        $this->conn->publish($msg->replyTo, '');
+                    }
+                    continue;
                 }
             }
 
