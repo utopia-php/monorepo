@@ -64,6 +64,10 @@ final class ObjectStore
         $this->js->publish($this->metaSubject($name), json_encode($meta->toArray(), JSON_THROW_ON_ERROR), $headers);
 
         // Reclaim chunks left behind by a prior version of this object.
+        // ponytail: last-writer-wins, matching the reference object store — two concurrent
+        // put()s of the same name can orphan the loser's chunks. Add optimistic concurrency
+        // (publish meta with expected-last-subject-seq, purge own chunks on conflict) if
+        // concurrent overwrites of the same object become a real workload.
         if ($previous instanceof ObjectMeta && $previous->nuid !== '' && $previous->nuid !== $nuid) {
             $this->purgeChunks($previous->nuid);
         }

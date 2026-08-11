@@ -10,6 +10,7 @@ use Utopia\NATS\JetStream\JetStream;
 use Utopia\NATS\KeyValue\KeyValue;
 use Utopia\NATS\KeyValue\KeyValueConfig;
 use Utopia\NATS\KeyValue\KeyValueOperation;
+use Utopia\NATS\Exception\KeyValueException;
 
 final class KeyValueWatchTest extends TestCase
 {
@@ -75,6 +76,16 @@ final class KeyValueWatchTest extends TestCase
         $this->assertSame('alice', $entry->value);
         $this->assertSame($r1, $entry->revision);
         $this->assertSame('name', $entry->key);
+    }
+
+    public function testGetRevisionRejectsSeqFromAnotherKey(): void
+    {
+        // 'alpha' revision seq must not resolve when requested under 'beta'.
+        $alphaSeq = $this->kv->put('alpha', 'a-value');
+        $this->kv->put('beta', 'b-value');
+
+        $this->expectException(KeyValueException::class);
+        $this->kv->getRevision('beta', $alphaSeq);
     }
 
     public function testWatchFiresCallbackOnPut(): void

@@ -336,6 +336,12 @@ final class KeyValue
             throw new KeyValueException("Revision not found for key: {$key}");
         }
 
+        // A sequence lookup is stream-global: reject a revision that belongs to a different key.
+        $expectedSubject = "\$KV.{$this->bucket}.{$key}";
+        if (isset($stored['subject']) && $stored['subject'] !== $expectedSubject) {
+            throw new KeyValueException("Revision not found for key: {$key}");
+        }
+
         $headers = null;
         if (isset($stored['hdrs']) && \is_string($stored['hdrs'])) {
             $headers = Headers::fromWire((string) base64_decode($stored['hdrs'], true));
