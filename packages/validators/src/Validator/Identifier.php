@@ -35,6 +35,6 @@ class Identifier extends Text
     #[\Override]
     public function isValid(mixed $value): bool
     {
-        return parent::isValid($value) && preg_match('/^[A-Za-z_]\w*$/', (string) $value) === 1;
+        return parent::isValid($value) && preg_match('/^[A-Za-z_]\w*$/D', (string) $value) === 1;
     }
 }
