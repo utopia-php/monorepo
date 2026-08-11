@@ -9,6 +9,7 @@ use Utopia\NATS\Connection;
 use Utopia\NATS\JetStream\JetStream;
 use Utopia\NATS\KeyValue\KeyValue;
 use Utopia\NATS\KeyValue\KeyValueConfig;
+use Utopia\NATS\KeyValue\KeyValueEntry;
 use Utopia\NATS\KeyValue\KeyValueOperation;
 use Utopia\NATS\KeyValue\KeyValueWatchOptions;
 
@@ -56,13 +57,14 @@ final class KeyValueWatchOptionsTest extends TestCase
         $this->kv->put('k', 'v3');
         $this->kv->delete('k');
 
+        /** @var list<KeyValueEntry> $received */
         $received = [];
         $initDone = false;
         $countAtInit = null;
 
         $sub = $this->kv->watch(
             'k',
-            function ($entry) use (&$received): void {
+            function (KeyValueEntry $entry) use (&$received): void {
                 $received[] = $entry;
             },
             new KeyValueWatchOptions(includeHistory: true),
