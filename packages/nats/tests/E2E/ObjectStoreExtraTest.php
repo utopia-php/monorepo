@@ -151,4 +151,30 @@ final class ObjectStoreExtraTest extends TestCase
             $this->conn->processMessage(0.2);
         }
     }
+
+    public function testDeleteConflictLeavesReplacementIntact(): void
+    {
+        // A stale delete must not corrupt a concurrent replacement: it should conflict
+        // on the guarded tombstone publish BEFORE purging any chunks.
+        $this->store->put('doc', 'v1');
+
+        $readMeta = new \ReflectionMethod($this->store, 'readMetaWithSeq');
+        [$staleMeta, $staleSeq] = $readMeta->invoke($this->store, 'doc');
+
+        // A writer replaces the object, advancing the meta subject past $staleSeq.
+        $this->store->put('doc', 'v2');
+
+        // Replay the stale delete: it expects $staleSeq but the subject moved on.
+        $deleteVersion = new \ReflectionMethod($this->store, 'deleteVersion');
+        $conflicted = false;
+        try {
+            $deleteVersion->invoke($this->store, $staleMeta, $staleSeq);
+        } catch (ObjectStoreException) {
+            $conflicted = true;
+        }
+
+        $this->assertTrue($conflicted, 'stale delete should have conflicted');
+        // The replacement is intact — its chunks were never purged by the stale delete.
+        $this->assertSame('v2', $this->store->get('doc'));
+    }
 }

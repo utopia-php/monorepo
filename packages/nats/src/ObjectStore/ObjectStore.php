@@ -170,10 +170,17 @@ final class ObjectStore
             return;
         }
 
-        if ($meta->nuid !== '') {
-            $this->purgeChunks($meta->nuid);
-        }
+        $this->deleteVersion($meta, $expectedSeq);
+    }
 
+    /**
+     * Commit a deletion tombstone guarded by optimistic concurrency, then reclaim the
+     * object's chunks. The guarded publish goes FIRST: a concurrent put()/updateMeta()
+     * advances the meta subject, so this conflicts and throws before any chunk is purged,
+     * leaving the replacement version intact. Separated so the conflict path is testable.
+     */
+    private function deleteVersion(ObjectMeta $meta, int $expectedSeq): void
+    {
         // Write a deletion marker (tombstone) rather than purging the meta subject,
         // so watchers observe the delete and get()/list() still treat it as gone.
         // The rollup header collapses the subject to this single record.
@@ -190,6 +197,11 @@ final class ObjectStore
         );
 
         $this->publishMeta($tombstone, $expectedSeq);
+
+        // Only after the tombstone is committed do we reclaim the chunks.
+        if ($meta->nuid !== '') {
+            $this->purgeChunks($meta->nuid);
+        }
     }
 
     /**
