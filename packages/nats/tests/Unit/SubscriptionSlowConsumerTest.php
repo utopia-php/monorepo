@@ -20,8 +20,6 @@ final class SubscriptionSlowConsumerTest extends TestCase
         $sub = new Subscription(
             sid: '1',
             subject: 'foo',
-            queue: null,
-            callback: null,
             pendingMsgsLimit: 3,
             pendingBytesLimit: 1_000_000,
             onSlowConsumer: function (Subscription $s) use (&$signaled): void {
@@ -45,8 +43,6 @@ final class SubscriptionSlowConsumerTest extends TestCase
         $sub = new Subscription(
             sid: '2',
             subject: 'foo',
-            queue: null,
-            callback: null,
             pendingMsgsLimit: 1_000_000,
             pendingBytesLimit: 10,
             onSlowConsumer: function () use (&$fired): void {
@@ -71,8 +67,6 @@ final class SubscriptionSlowConsumerTest extends TestCase
         $sub = new Subscription(
             sid: '3',
             subject: 'foo',
-            queue: null,
-            callback: null,
             pendingMsgsLimit: 2,
             pendingBytesLimit: 1_000_000,
             onSlowConsumer: function () use (&$fired): void {
@@ -100,7 +94,6 @@ final class SubscriptionSlowConsumerTest extends TestCase
         $sub = new Subscription(
             sid: '4',
             subject: 'foo',
-            queue: null,
             callback: function () use (&$received): void {
                 $received++;
             },

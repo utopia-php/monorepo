@@ -63,7 +63,7 @@ final class ServiceTest extends TestCase
         $this->assertSame('io.nats.micro.v1.info_response', $data['type']);
         $this->assertSame('Test service', $data['description']);
 
-        $subjects = array_map(fn($e) => $e['subject'], $data['endpoints']);
+        $subjects = array_map(fn(array $e) => $e['subject'], $data['endpoints']);
         $this->assertContains($this->echoSubject, $subjects);
     }
 

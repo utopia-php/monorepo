@@ -41,7 +41,7 @@ final class Subscription
             // Drain anything already queued before blocking on the socket.
             if (!$this->pendingMessages->isEmpty()) {
                 $msg = $this->pendingMessages->dequeue();
-                $this->pendingBytes -= \strlen($msg->data);
+                $this->pendingBytes -= \strlen((string) $msg->data);
                 if ($this->pendingBytes < 0) {
                     $this->pendingBytes = 0;
                 }

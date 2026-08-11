@@ -19,7 +19,7 @@ final class OrderedConsumer
 {
     private \Utopia\NATS\Subscription $sub;
     private ConsumerInfo $info;
-    private int $expectedConsumerSeq = 1;
+    private int $expectedConsumerSeq;
     private int $lastStreamSeq = 0;
 
     public function __construct(

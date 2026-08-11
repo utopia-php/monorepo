@@ -38,7 +38,7 @@ final class ConfigTest extends TestCase
 
         $this->assertSame('x.y', $config->deliverSubject);
         $this->assertTrue($config->flowControl);
-        $this->assertSame(5.0, $config->idleHeartbeat);
+        $this->assertEqualsWithDelta(5.0, $config->idleHeartbeat, PHP_FLOAT_EPSILON);
     }
 
     public function testConsumerInfoPopulatesSequences(): void

@@ -105,12 +105,12 @@ final class SwooleTransport implements Transport
 
     public function isConnected(): bool
     {
-        return $this->client !== null && $this->client->isConnected();
+        return $this->client instanceof \Swoole\Coroutine\Client && $this->client->isConnected();
     }
 
     public function close(): void
     {
-        if ($this->client !== null) {
+        if ($this->client instanceof \Swoole\Coroutine\Client) {
             $this->client->close();
             $this->client = null;
         }
@@ -138,7 +138,7 @@ final class SwooleTransport implements Transport
 
     private function ensureConnected(): Client
     {
-        if ($this->client === null) {
+        if (!$this->client instanceof \Swoole\Coroutine\Client) {
             throw new ConnectionException('Not connected');
         }
 

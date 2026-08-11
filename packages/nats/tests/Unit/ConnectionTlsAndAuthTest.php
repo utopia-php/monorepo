@@ -42,7 +42,6 @@ final class ConnectionTlsAndAuthTest extends TestCase
         ]);
 
         $method = new \ReflectionMethod(Connection::class, 'tlsOptions');
-        $method->setAccessible(true);
         /** @var array<string, mixed> $tls */
         $tls = $method->invoke($conn);
 
@@ -62,7 +61,6 @@ final class ConnectionTlsAndAuthTest extends TestCase
         ]);
 
         $method = new \ReflectionMethod(TlsTransport::class, 'buildSslOptions');
-        $method->setAccessible(true);
         /** @var array<string, mixed> $ssl */
         $ssl = $method->invoke($transport);
 

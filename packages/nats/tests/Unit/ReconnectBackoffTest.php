@@ -14,16 +14,16 @@ final class ReconnectBackoffTest extends TestCase
 {
     public function testFirstAttemptIsImmediate(): void
     {
-        $this->assertSame(0.0, Connection::reconnectBackoff(0, 2.0, 30.0));
+        $this->assertEqualsWithDelta(0.0, Connection::reconnectBackoff(0, 2.0, 30.0), PHP_FLOAT_EPSILON);
     }
 
     public function testBackoffGrowsExponentially(): void
     {
         // base 2.0, factor 2.0: 2, 4, 8, 16 ...
-        $this->assertSame(2.0, Connection::reconnectBackoff(1, 2.0, 100.0));
-        $this->assertSame(4.0, Connection::reconnectBackoff(2, 2.0, 100.0));
-        $this->assertSame(8.0, Connection::reconnectBackoff(3, 2.0, 100.0));
-        $this->assertSame(16.0, Connection::reconnectBackoff(4, 2.0, 100.0));
+        $this->assertEqualsWithDelta(2.0, Connection::reconnectBackoff(1, 2.0, 100.0), PHP_FLOAT_EPSILON);
+        $this->assertEqualsWithDelta(4.0, Connection::reconnectBackoff(2, 2.0, 100.0), PHP_FLOAT_EPSILON);
+        $this->assertEqualsWithDelta(8.0, Connection::reconnectBackoff(3, 2.0, 100.0), PHP_FLOAT_EPSILON);
+        $this->assertEqualsWithDelta(16.0, Connection::reconnectBackoff(4, 2.0, 100.0), PHP_FLOAT_EPSILON);
     }
 
     public function testBackoffIsCapped(): void
@@ -39,9 +39,9 @@ final class ReconnectBackoffTest extends TestCase
 
     public function testCustomFactor(): void
     {
-        $this->assertSame(1.0, Connection::reconnectBackoff(1, 1.0, 100.0, 3.0));
-        $this->assertSame(3.0, Connection::reconnectBackoff(2, 1.0, 100.0, 3.0));
-        $this->assertSame(9.0, Connection::reconnectBackoff(3, 1.0, 100.0, 3.0));
+        $this->assertEqualsWithDelta(1.0, Connection::reconnectBackoff(1, 1.0, 100.0, 3.0), PHP_FLOAT_EPSILON);
+        $this->assertEqualsWithDelta(3.0, Connection::reconnectBackoff(2, 1.0, 100.0, 3.0), PHP_FLOAT_EPSILON);
+        $this->assertEqualsWithDelta(9.0, Connection::reconnectBackoff(3, 1.0, 100.0, 3.0), PHP_FLOAT_EPSILON);
     }
 
     public function testBufferAcceptsUntilCap(): void

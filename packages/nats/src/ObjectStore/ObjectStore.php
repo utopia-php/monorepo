@@ -167,7 +167,7 @@ final class ObjectStore
             $objects = [];
             foreach ($consumer->fetch(1024, 1.0) as $msg) {
                 $msg->ack();
-                $decoded = json_decode($msg->getData(), true, 512, JSON_THROW_ON_ERROR);
+                $decoded = json_decode((string) $msg->getData(), true, 512, JSON_THROW_ON_ERROR);
                 if (!\is_array($decoded)) {
                     continue;
                 }

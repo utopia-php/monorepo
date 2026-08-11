@@ -305,9 +305,7 @@ final class Connection
 
             try {
                 [$op, $data] = $this->parser->next($remaining);
-            } catch (TimeoutException) {
-                break;
-            } catch (ConnectionException) {
+            } catch (TimeoutException|ConnectionException) {
                 break;
             }
 
@@ -403,7 +401,7 @@ final class Connection
         $scheme = $parsed['scheme'];
 
         // Create transport
-        if ($this->options->transportFactory !== null) {
+        if ($this->options->transportFactory instanceof \Closure) {
             $this->transport = ($this->options->transportFactory)($scheme);
         } elseif ($scheme === 'tls' || $this->options->tls) {
             $this->transport = new TlsTransport($this->tlsOptions());

@@ -17,7 +17,7 @@ final class PartialWriteStream
     public static int $chunk = 3;
     public static int $writeCalls = 0;
 
-    public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
+    public function stream_open(): bool
     {
         return true;
     }
@@ -37,10 +37,8 @@ final class PartialWriteStream
     }
 
     /** Needed so stream_set_blocking()/stream_set_timeout() don't warn. */
-    public function stream_set_option(int $option, int $arg1, int $arg2): bool
+    public function stream_set_option(): bool
     {
         return true;
     }
-
-    public function stream_close(): void {}
 }

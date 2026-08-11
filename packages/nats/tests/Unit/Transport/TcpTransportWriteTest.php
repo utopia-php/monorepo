@@ -40,7 +40,6 @@ final class TcpTransportWriteTest extends TestCase
 
         $transport = new TcpTransport();
         $prop = new \ReflectionProperty(TcpTransport::class, 'stream');
-        $prop->setAccessible(true);
         $prop->setValue($transport, $stream);
 
         $data = 'HELLO NATS WORLD'; // 16 bytes, chunk size 3

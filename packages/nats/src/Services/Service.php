@@ -185,7 +185,7 @@ final class Service
             'version' => $this->version,
             'description' => $this->description,
             'metadata' => new \stdClass(),
-            'endpoints' => array_map(fn(Endpoint $e) => $e->info(), array_values($this->endpoints)),
+            'endpoints' => array_map(fn(Endpoint $e): array => $e->info(), array_values($this->endpoints)),
         ]);
     }
 
@@ -198,7 +198,7 @@ final class Service
             'version' => $this->version,
             'started' => $this->started,
             'metadata' => new \stdClass(),
-            'endpoints' => array_map(fn(Endpoint $e) => $e->stats(), array_values($this->endpoints)),
+            'endpoints' => array_map(fn(Endpoint $e): array => $e->stats(), array_values($this->endpoints)),
         ]);
     }
 

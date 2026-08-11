@@ -255,7 +255,7 @@ final class KeyValue
                 'deliver_policy' => 'new',
                 'ack_policy' => 'none',
                 'filter_subject' => $filter,
-                'inactive_threshold' => (int) (30 * 1_000_000_000),
+                'inactive_threshold' => 30 * 1_000_000_000,
             ],
         ], JSON_THROW_ON_ERROR);
 
@@ -325,7 +325,7 @@ final class KeyValue
                 json_encode($request, JSON_THROW_ON_ERROR),
             );
         } catch (\Throwable $e) {
-            throw new KeyValueException("Revision not found for key: {$key}", previous: $e);
+            throw new KeyValueException("Revision not found for key: {$key}", $e->getCode(), previous: $e);
         }
 
         $data = json_decode($response->data, true, 512, JSON_THROW_ON_ERROR);
