@@ -40,6 +40,16 @@ final class ObjectStore
     {
         [$previous, $previousSeq] = $this->readMetaWithSeq($name);
 
+        return $this->writeVersion($name, $data, $previous, $previousSeq);
+    }
+
+    /**
+     * Write a new version of an object, expecting the meta subject to still be at
+     * $expectedSeq (0 = must not exist yet). Separated from put() so the optimistic
+     * concurrency path can be driven deterministically in tests.
+     */
+    private function writeVersion(string $name, string $data, ?ObjectMeta $previous, int $expectedSeq): ObjectMeta
+    {
         $nuid = strtoupper(bin2hex(random_bytes(12)));
         $chunkSubject = "\$O.{$this->bucket}.C.{$nuid}";
 
@@ -73,7 +83,7 @@ final class ObjectStore
                 $this->metaSubject($name),
                 json_encode($meta->toArray(), JSON_THROW_ON_ERROR),
                 $headers,
-                expectedLastSubjectSeq: $previousSeq,
+                expectedLastSubjectSeq: $expectedSeq,
             );
         } catch (\Throwable $e) {
             $this->purgeChunks($nuid);

@@ -118,76 +118,34 @@ final class ObjectStoreTest extends TestCase
 
     public function testConcurrentOverwriteConflictsInsteadOfOrphaning(): void
     {
-        if (!\function_exists('pcntl_fork')) {
-            $this->markTestSkipped('pcntl extension required for the concurrent-writer race.');
-        }
+        // Deterministically drive the optimistic-concurrency conflict rather than
+        // racing two real writers (which serialises on a fast host). Capture the meta
+        // sequence a stale writer would hold, let a second write advance the subject,
+        // then replay the stale write via the seq-aware seam and assert it conflicts
+        // and cleans up its own chunks.
+        $this->store->put('conflict.bin', 'v1');
 
-        $url = getenv('NATS_URL') ?: 'nats://127.0.0.1:4222';
-        $chunkSize = 128 * 1024;
-        // 2 MB => exactly 16 chunks; the wide chunk-publish window guarantees both
-        // writers read the meta sequence (0, object absent) before either publishes
-        // its meta, so exactly one loses the optimistic-concurrency check.
-        $payload = random_bytes(16 * $chunkSize);
-        $expectedChunks = 16;
+        $readMeta = new \ReflectionMethod($this->store, 'readMetaWithSeq');
+        [$stalePrev, $staleSeq] = $readMeta->invoke($this->store, 'conflict.bin');
 
-        $resultFile = tempnam(sys_get_temp_dir(), 'nats_race_');
-        $this->assertNotFalse($resultFile);
+        // A second writer wins, advancing the meta subject past $staleSeq.
+        $this->store->put('conflict.bin', 'v2');
 
-        // Fixed wall-clock barrier both writers spin to before calling put().
-        $barrier = microtime(true) + 0.5;
-
-        $pid = pcntl_fork();
-        $this->assertNotSame(-1, $pid, 'fork failed');
-
-        if ($pid === 0) {
-            // Child: its own connection, no reuse of the parent's socket.
-            $outcome = 'error';
-            try {
-                $conn = Connection::connect($url);
-                $store = new ObjectStore($conn, $conn->jetStream(), $this->bucket);
-                $delay = $barrier - microtime(true);
-                if ($delay > 0) {
-                    usleep((int) ($delay * 1_000_000));
-                }
-                $store->put('race.bin', $payload);
-                $outcome = 'success';
-            } catch (ObjectStoreException) {
-                $outcome = 'conflict';
-            } catch (\Throwable) {
-                $outcome = 'error';
-            }
-            file_put_contents($resultFile, $outcome);
-            // Hard-exit so no inherited destructor writes to the parent's shared socket.
-            posix_kill(posix_getpid(), SIGKILL);
-        }
-
-        // Parent writer.
-        $parentOutcome = 'error';
+        // Replay the stale write: it expects $staleSeq but the subject moved on.
+        $writeVersion = new \ReflectionMethod($this->store, 'writeVersion');
+        $conflicted = false;
         try {
-            $delay = $barrier - microtime(true);
-            if ($delay > 0) {
-                usleep((int) ($delay * 1_000_000));
-            }
-            $this->store->put('race.bin', $payload);
-            $parentOutcome = 'success';
+            $writeVersion->invoke($this->store, 'conflict.bin', 'v3-stale', $stalePrev, $staleSeq);
         } catch (ObjectStoreException) {
-            $parentOutcome = 'conflict';
+            $conflicted = true;
         }
 
-        pcntl_waitpid($pid, $status);
-        $childOutcome = (string) file_get_contents($resultFile);
-        @unlink($resultFile);
+        $this->assertTrue($conflicted, 'stale write should have conflicted');
 
-        $outcomes = [$parentOutcome, $childOutcome];
-        sort($outcomes);
-        $this->assertSame(['conflict', 'success'], $outcomes, "unexpected race outcomes: parent={$parentOutcome} child={$childOutcome}");
-
-        // The winning object is fully intact: get() reassembles and verifies the digest.
-        $this->assertSame($payload, $this->store->get('race.bin'));
+        // Winner intact, and no orphaned chunks: only v2's single chunk plus the
+        // rolled-up meta remain (the stale attempt purged its own chunk).
+        $this->assertSame('v2', $this->store->get('conflict.bin'));
         $this->assertCount(1, $this->store->list());
-
-        // No orphaned chunk set from the loser: only the winner's chunks plus the
-        // single rolled-up meta remain. The loser purged its own chunks on conflict.
-        $this->assertSame($expectedChunks + 1, $this->store->status()->state->messages);
+        $this->assertSame(2, $this->store->status()->state->messages);
     }
 }
