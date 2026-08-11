@@ -89,11 +89,7 @@ final class NKeyAuth implements Authenticator
         for ($i = 0, $len = \strlen($data); $i < $len; $i++) {
             $crc ^= \ord($data[$i]) << 8;
             for ($j = 0; $j < 8; $j++) {
-                if (($crc & 0x8000) !== 0) {
-                    $crc = (($crc << 1) ^ 0x1021) & 0xFFFF;
-                } else {
-                    $crc = ($crc << 1) & 0xFFFF;
-                }
+                $crc = ($crc & 0x8000) !== 0 ? (($crc << 1) ^ 0x1021) & 0xFFFF : ($crc << 1) & 0xFFFF;
             }
         }
 
