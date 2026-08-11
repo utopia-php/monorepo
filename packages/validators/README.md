@@ -45,7 +45,7 @@ For advanced flows combine validators with `Multiple`, `AnyOf`, `AllOf`, `NoneOf
 - `ArrayList`, `Assoc`, `Nullable`, `WhiteList`, `Wildcard`
 - `Boolean`, `Integer`, `FloatValidator`, `Numeric`, `Range`
 - `Domain`, `Host`, `Hostname`, `IP`, `URL`
-- `HexColor`, `JSON`, `Phone`, `Text`
+- `HexColor`, `Identifier`, `JSON`, `Phone`, `Text`
 - `JSON\ObjectValidator`, `JSON\ArrayValidator` – JSON shape checks that accept encoded strings
 
 ### Validating JSON shape
