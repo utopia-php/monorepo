@@ -235,41 +235,156 @@ final class KeyValue
     }
 
     /**
-     * Watch a key (or wildcard pattern) for live put/delete updates.
+     * Watch a key (or wildcard pattern) for updates.
      *
      * The returned subscription must be pumped by the connection
      * (e.g. `$conn->wait()`), and unsubscribed when no longer needed.
      *
+     * With no options, only new updates are delivered (the historical
+     * default). Options change what is delivered:
+     *  - includeHistory: every stored revision is delivered first, then live updates.
+     *  - updatesOnly: only updates from now on (equivalent to the default).
+     *  - ignoreDeletes: DEL/PURGE marker entries are not passed to `$callback`.
+     *  - metaOnly: entries carry headers/metadata only, with an empty value.
+     *
+     * When `$onInitDone` is provided it is invoked exactly once, right after the
+     * initial/historical set has been fully delivered and before any live update.
+     * If there is no history to replay it fires immediately. Every `$callback`
+     * invocation after `$onInitDone` is a live update.
+     *
      * @param callable(KeyValueEntry): void $callback
+     * @param callable(): void|null         $onInitDone
      */
-    public function watch(string $keyPattern, callable $callback): Subscription
-    {
+    public function watch(
+        string $keyPattern,
+        callable $callback,
+        ?KeyValueWatchOptions $options = null,
+        ?callable $onInitDone = null,
+    ): Subscription {
+        $options ??= new KeyValueWatchOptions(updatesOnly: true);
+
         $stream = "KV_{$this->bucket}";
         $filter = "\$KV.{$this->bucket}.{$keyPattern}";
         $deliverSubject = $this->conn->newInbox();
 
-        $payload = json_encode([
-            'stream_name' => $stream,
-            'config' => [
-                'deliver_subject' => $deliverSubject,
-                'deliver_policy' => 'new',
-                'ack_policy' => 'none',
-                'filter_subject' => $filter,
-                'inactive_threshold' => 30 * 1_000_000_000,
-            ],
-        ], JSON_THROW_ON_ERROR);
+        $deliverPolicy = match (true) {
+            $options->includeHistory => DeliverPolicy::All->value,
+            $options->updatesOnly => DeliverPolicy::New->value,
+            default => DeliverPolicy::LastPerSubject->value,
+        };
 
-        $response = $this->conn->request("\$JS.API.CONSUMER.CREATE.{$stream}", $payload);
+        $config = [
+            'deliver_subject' => $deliverSubject,
+            'deliver_policy' => $deliverPolicy,
+            'ack_policy' => 'none',
+            'filter_subject' => $filter,
+            'inactive_threshold' => 30 * 1_000_000_000,
+        ];
+        if ($options->metaOnly) {
+            $config['headers_only'] = true;
+        }
+
+        $response = $this->conn->request("\$JS.API.CONSUMER.CREATE.{$stream}", json_encode([
+            'stream_name' => $stream,
+            'config' => $config,
+        ], JSON_THROW_ON_ERROR));
         $data = json_decode($response->data, true, 512, JSON_THROW_ON_ERROR);
         JetStream::checkError($data);
 
-        return $this->conn->subscribe($deliverSubject, function (Message $msg) use ($callback): void {
+        $numPending = (int) ($data['num_pending'] ?? 0);
+        $delivered = 0;
+        $initSignaled = false;
+
+        $sub = $this->conn->subscribe($deliverSubject, function (Message $msg) use ($callback, $options, $onInitDone, $numPending, &$delivered, &$initSignaled): void {
             // Ignore JetStream idle heartbeats / flow control (100 status).
             if ($msg->headers instanceof Headers && $msg->headers->getStatus() !== '') {
                 return;
             }
-            $callback($this->entryFromMessage($msg));
+
+            $delivered++;
+            $entry = $this->entryFromMessage($msg);
+
+            $isMarker = $entry->operation === KeyValueOperation::Delete
+                || $entry->operation === KeyValueOperation::Purge;
+            if (!$options->ignoreDeletes || !$isMarker) {
+                $callback($entry);
+            }
+
+            if (!$initSignaled && $delivered >= $numPending) {
+                $initSignaled = true;
+                if ($onInitDone !== null) {
+                    $onInitDone();
+                }
+            }
         });
+
+        if ($numPending === 0 && !$initSignaled) {
+            $initSignaled = true;
+            if ($onInitDone !== null) {
+                $onInitDone();
+            }
+        }
+
+        return $sub;
+    }
+
+    /**
+     * Remove DEL/PURGE tombstone markers: for every key whose latest entry is a
+     * delete/purge marker, purge that subject.
+     *
+     * @param float|null $threshold When set, only markers older than this many
+     *                              seconds are removed; newer markers are kept.
+     *                              Null removes all delete markers.
+     * @return int Number of keys whose tombstones were removed.
+     */
+    public function purgeDeletes(?float $threshold = null): int
+    {
+        $purged = 0;
+        $now = microtime(true);
+
+        foreach ($this->keys() as $key) {
+            $subject = "\$KV.{$this->bucket}.{$key}";
+
+            try {
+                $msg = $this->conn->request("\$JS.API.DIRECT.GET.KV_{$this->bucket}", json_encode([
+                    'last_by_subj' => $subject,
+                ], JSON_THROW_ON_ERROR));
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if (!$msg->headers instanceof Headers) {
+                continue;
+            }
+
+            $op = $msg->headers->get('KV-Operation');
+            if ($op !== 'DEL' && $op !== 'PURGE') {
+                continue;
+            }
+
+            // keep=1 retains a not-yet-expired marker; keep=0 removes the subject entirely.
+            $keep = 0;
+            if ($threshold !== null) {
+                $ts = $msg->headers->get('Nats-Time-Stamp');
+                $created = $ts !== null ? strtotime($ts) : false;
+                if ($created !== false && ($now - $created) < $threshold) {
+                    $keep = 1;
+                }
+            }
+
+            $response = $this->conn->request("\$JS.API.STREAM.PURGE.KV_{$this->bucket}", json_encode([
+                'filter' => $subject,
+                'keep' => $keep,
+            ], JSON_THROW_ON_ERROR));
+            $result = json_decode($response->data, true, 512, JSON_THROW_ON_ERROR);
+            JetStream::checkError($result);
+
+            if ($keep === 0) {
+                $purged++;
+            }
+        }
+
+        return $purged;
     }
 
     public function getBucket(): string

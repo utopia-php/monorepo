@@ -12,6 +12,8 @@ use Utopia\NATS\JetStream\ConsumerConfig;
 use Utopia\NATS\JetStream\DeliverPolicy;
 use Utopia\NATS\JetStream\JetStream;
 use Utopia\NATS\JetStream\StreamInfo;
+use Utopia\NATS\Message;
+use Utopia\NATS\Subscription;
 
 final class ObjectStore
 {
@@ -108,6 +110,16 @@ final class ObjectStore
             throw new \RuntimeException("Object not found: {$name}");
         }
 
+        // A link transparently resolves to its target's bytes (same bucket). A
+        // bucket link has no target object, so it cannot be read as an object.
+        if ($meta->link instanceof ObjectLink) {
+            if ($meta->link->name === null || $meta->link->name === '') {
+                throw new ObjectStoreException("cannot get a bucket link: {$name}");
+            }
+
+            return $this->get($meta->link->name);
+        }
+
         $data = '';
         if ($meta->chunks > 0) {
             $stream = "OBJ_{$this->bucket}";
@@ -153,8 +165,8 @@ final class ObjectStore
 
     public function delete(string $name): void
     {
-        $meta = $this->readMeta($name);
-        if (!$meta instanceof ObjectMeta) {
+        [$meta, $expectedSeq] = $this->readMetaWithSeq($name);
+        if (!$meta instanceof ObjectMeta || $meta->deleted) {
             return;
         }
 
@@ -162,7 +174,22 @@ final class ObjectStore
             $this->purgeChunks($meta->nuid);
         }
 
-        $this->js->purgeStream("OBJ_{$this->bucket}", $this->metaSubject($name));
+        // Write a deletion marker (tombstone) rather than purging the meta subject,
+        // so watchers observe the delete and get()/list() still treat it as gone.
+        // The rollup header collapses the subject to this single record.
+        $tombstone = new ObjectMeta(
+            name: $meta->name,
+            bucket: $meta->bucket,
+            nuid: '',
+            size: 0,
+            chunks: 0,
+            digest: '',
+            description: $meta->description,
+            modified: gmdate('Y-m-d\TH:i:s\Z'),
+            deleted: true,
+        );
+
+        $this->publishMeta($tombstone, $expectedSeq);
     }
 
     /**
@@ -215,9 +242,180 @@ final class ObjectStore
         return $this->js->getStreamInfo("OBJ_{$this->bucket}");
     }
 
+    /**
+     * Watch the bucket for object meta updates (puts and deletes), delivering an
+     * ObjectMeta to the callback for each change.
+     *
+     * Backed by an ephemeral push consumer on the meta subject created via the raw
+     * JetStream API. The returned subscription must be pumped by the connection
+     * (e.g. `$conn->wait()` / `$conn->processMessage()`) and unsubscribed when done.
+     *
+     * @param callable(ObjectMeta): void $callback
+     * @param bool                       $includeHistory deliver the current meta of every object first
+     */
+    public function watch(callable $callback, bool $includeHistory = false): Subscription
+    {
+        $stream = "OBJ_{$this->bucket}";
+        $filter = "\$O.{$this->bucket}.M.>";
+        $deliverSubject = $this->conn->newInbox();
+
+        $payload = json_encode([
+            'stream_name' => $stream,
+            'config' => [
+                'deliver_subject' => $deliverSubject,
+                'deliver_policy' => $includeHistory ? 'last_per_subject' : 'new',
+                'ack_policy' => 'none',
+                'filter_subject' => $filter,
+                'inactive_threshold' => 30 * 1_000_000_000,
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $response = $this->conn->request("\$JS.API.CONSUMER.CREATE.{$stream}", $payload);
+        $data = json_decode($response->data, true, 512, JSON_THROW_ON_ERROR);
+        JetStream::checkError($data);
+
+        return $this->conn->subscribe($deliverSubject, function (Message $msg) use ($callback): void {
+            // Ignore JetStream idle heartbeats / flow control (status messages).
+            if ($msg->headers instanceof Headers && $msg->headers->getStatus() !== '') {
+                return;
+            }
+
+            $decoded = json_decode($msg->data, true, 512, JSON_THROW_ON_ERROR);
+            if (!\is_array($decoded)) {
+                return;
+            }
+
+            $callback(ObjectMeta::fromArray($decoded));
+        });
+    }
+
+    /**
+     * Create a link under $linkName pointing to another object in this bucket.
+     * get($linkName) then transparently resolves to the target's bytes.
+     */
+    public function addLink(string $linkName, string $targetObjectName): ObjectMeta
+    {
+        return $this->writeLink($linkName, new ObjectLink($this->bucket, $targetObjectName));
+    }
+
+    /**
+     * Create a link under $linkName pointing to an entire bucket. A bucket link
+     * cannot be read via get(); doing so throws.
+     */
+    public function addBucketLink(string $linkName, string $targetBucket): ObjectMeta
+    {
+        return $this->writeLink($linkName, new ObjectLink($targetBucket));
+    }
+
+    /**
+     * Update mutable meta fields, preserving the stored bytes (nuid/size/chunks/digest).
+     *
+     * @param array<string, string>|null $metadata
+     */
+    public function updateMeta(string $name, ?string $description = null, ?array $metadata = null): ObjectMeta
+    {
+        [$previous, $expectedSeq] = $this->readMetaWithSeq($name);
+        if (!$previous instanceof ObjectMeta || $previous->deleted) {
+            throw new \RuntimeException("Object not found: {$name}");
+        }
+
+        $meta = new ObjectMeta(
+            name: $previous->name,
+            bucket: $previous->bucket,
+            nuid: $previous->nuid,
+            size: $previous->size,
+            chunks: $previous->chunks,
+            digest: $previous->digest,
+            description: $description ?? $previous->description,
+            modified: gmdate('Y-m-d\TH:i:s\Z'),
+            metadata: $metadata ?? $previous->metadata,
+            link: $previous->link,
+        );
+
+        $this->publishMeta($meta, $expectedSeq);
+
+        return $meta;
+    }
+
+    /**
+     * Seal the bucket, making it permanently read-only by updating the backing
+     * stream config. After sealing, the server rejects put()/delete().
+     */
+    public function seal(): void
+    {
+        $stream = "OBJ_{$this->bucket}";
+
+        $infoResponse = $this->conn->request("\$JS.API.STREAM.INFO.{$stream}");
+        $info = json_decode($infoResponse->data, true, 512, JSON_THROW_ON_ERROR);
+        JetStream::checkError($info);
+
+        $config = $info['config'] ?? [];
+        if (!\is_array($config)) {
+            throw new ObjectStoreException("cannot read stream config for bucket: {$this->bucket}");
+        }
+        // Empty JSON objects in the info response (e.g. consumer_limits) decode to
+        // empty PHP arrays and would re-encode as [] — which the API rejects as
+        // invalid JSON for a struct field. Drop them; the server re-applies defaults.
+        $config = array_filter($config, static fn(mixed $v): bool => $v !== []);
+        $config['sealed'] = true;
+
+        $updateResponse = $this->conn->request(
+            "\$JS.API.STREAM.UPDATE.{$stream}",
+            json_encode($config, JSON_THROW_ON_ERROR),
+        );
+        $updated = json_decode($updateResponse->data, true, 512, JSON_THROW_ON_ERROR);
+        JetStream::checkError($updated);
+    }
+
     public function getBucket(): string
     {
         return $this->bucket;
+    }
+
+    private function writeLink(string $linkName, ObjectLink $link): ObjectMeta
+    {
+        [$previous, $expectedSeq] = $this->readMetaWithSeq($linkName);
+
+        $meta = new ObjectMeta(
+            name: $linkName,
+            bucket: $this->bucket,
+            nuid: '',
+            size: 0,
+            chunks: 0,
+            digest: '',
+            modified: gmdate('Y-m-d\TH:i:s\Z'),
+            link: $link,
+        );
+
+        $this->publishMeta($meta, $expectedSeq);
+
+        // Reclaim chunks left behind if this name previously held a real object.
+        if ($previous instanceof ObjectMeta && $previous->nuid !== '') {
+            $this->purgeChunks($previous->nuid);
+        }
+
+        return $meta;
+    }
+
+    /**
+     * Publish a meta record with a rolling-up header under the optimistic-concurrency
+     * guard: the publish only succeeds if the meta subject is still at $expectedSeq.
+     */
+    private function publishMeta(ObjectMeta $meta, int $expectedSeq): void
+    {
+        $headers = new Headers();
+        $headers->set('Nats-Rollup', 'sub');
+
+        try {
+            $this->js->publish(
+                $this->metaSubject($meta->name),
+                json_encode($meta->toArray(), JSON_THROW_ON_ERROR),
+                $headers,
+                expectedLastSubjectSeq: $expectedSeq,
+            );
+        } catch (\Throwable $e) {
+            throw new ObjectStoreException("conflicting concurrent write for object: {$meta->name}", $e->getCode(), previous: $e);
+        }
     }
 
     private function readMeta(string $name): ?ObjectMeta

@@ -63,6 +63,8 @@ final class ConnectionOptions
         public readonly ?\Closure $onError = null,
         // Fired with the Subscription when it exceeds its pending limits.
         public readonly ?\Closure $onSlowConsumer = null,
+        // Fired when the server signals lame-duck mode (async INFO with "ldm": true).
+        public readonly ?\Closure $onLameDuck = null,
         // Transport: fn(string $scheme): Transport. Defaults to the stream-based
         // Tcp/Tls transports; inject to use a coroutine-native transport (e.g. Swoole).
         public readonly ?\Closure $transportFactory = null,

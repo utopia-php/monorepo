@@ -18,11 +18,15 @@ final class Endpoint
     /** @var callable(\Utopia\NATS\Message): string */
     public $handler;
 
+    /**
+     * @param array<string, string> $metadata
+     */
     public function __construct(
         public readonly string $name,
         public readonly string $subject,
         callable $handler,
         public readonly string $queueGroup = 'q',
+        public readonly array $metadata = [],
     ) {
         $this->handler = $handler;
     }
@@ -36,7 +40,7 @@ final class Endpoint
             'name' => $this->name,
             'subject' => $this->subject,
             'queue_group' => $this->queueGroup,
-            'metadata' => new \stdClass(),
+            'metadata' => $this->metadata === [] ? new \stdClass() : $this->metadata,
         ];
     }
 
@@ -53,6 +57,7 @@ final class Endpoint
             'name' => $this->name,
             'subject' => $this->subject,
             'queue_group' => $this->queueGroup,
+            'metadata' => $this->metadata === [] ? new \stdClass() : $this->metadata,
             'num_requests' => $this->numRequests,
             'num_errors' => $this->numErrors,
             'last_error' => $this->lastError ?? '',

@@ -29,11 +29,15 @@ final class Service
 
     private bool $running = false;
 
+    /**
+     * @param array<string, string> $metadata
+     */
     public function __construct(
         private readonly Connection $conn,
         private readonly string $name,
         private readonly string $version,
         private readonly string $description = '',
+        private readonly array $metadata = [],
     ) {
         $this->id = strtoupper(bin2hex(random_bytes(11)));
         $this->started = gmdate('Y-m-d\TH:i:s\Z');
@@ -44,16 +48,50 @@ final class Service
      * Message and returns the reply payload as a string.
      *
      * @param callable(Message): string $handler
+     * @param array<string, string> $metadata
      */
-    public function addEndpoint(string $name, string $subject, callable $handler): self
+    public function addEndpoint(
+        string $name,
+        string $subject,
+        callable $handler,
+        ?string $queueGroup = null,
+        array $metadata = [],
+    ): self {
+        $this->registerEndpoint($name, $subject, $handler, $queueGroup, $metadata);
+
+        return $this;
+    }
+
+    /**
+     * Create an endpoint group with a subject prefix and optional default
+     * queue group inherited by its endpoints and nested groups.
+     */
+    public function addGroup(string $name, ?string $queueGroup = null): Group
     {
-        $this->endpoints[$name] = new Endpoint($name, $subject, $handler);
+        return new Group($this, $name, $queueGroup);
+    }
+
+    /**
+     * Register an endpoint on the service. Used by both the bare
+     * addEndpoint and the group handles.
+     *
+     * @param callable(Message): string $handler
+     * @param array<string, string> $metadata
+     *
+     * @internal
+     */
+    public function registerEndpoint(
+        string $name,
+        string $subject,
+        callable $handler,
+        ?string $queueGroup = null,
+        array $metadata = [],
+    ): void {
+        $this->endpoints[$name] = new Endpoint($name, $subject, $handler, $queueGroup ?? 'q', $metadata);
 
         if ($this->running) {
             $this->subscribeEndpoint($this->endpoints[$name]);
         }
-
-        return $this;
     }
 
     /**
@@ -139,9 +177,10 @@ final class Service
             $endpoint->lastError = $e->getMessage();
 
             if ($msg->replyTo !== null) {
+                $code = $e instanceof ServiceException ? $e->getErrorCode() : '500';
                 $headers = new Headers();
                 $headers->set('Nats-Service-Error', $e->getMessage());
-                $headers->set('Nats-Service-Error-Code', '500');
+                $headers->set('Nats-Service-Error-Code', $code);
                 $this->conn->publish($msg->replyTo, '', headers: $headers);
             }
         }
@@ -172,7 +211,7 @@ final class Service
             'name' => $this->name,
             'id' => $this->id,
             'version' => $this->version,
-            'metadata' => new \stdClass(),
+            'metadata' => $this->metadataObject(),
         ]);
     }
 
@@ -184,7 +223,7 @@ final class Service
             'id' => $this->id,
             'version' => $this->version,
             'description' => $this->description,
-            'metadata' => new \stdClass(),
+            'metadata' => $this->metadataObject(),
             'endpoints' => array_map(fn(Endpoint $e): array => $e->info(), array_values($this->endpoints)),
         ]);
     }
@@ -197,9 +236,19 @@ final class Service
             'id' => $this->id,
             'version' => $this->version,
             'started' => $this->started,
-            'metadata' => new \stdClass(),
+            'metadata' => $this->metadataObject(),
             'endpoints' => array_map(fn(Endpoint $e): array => $e->stats(), array_values($this->endpoints)),
         ]);
+    }
+
+    /**
+     * Encode service metadata as a JSON object (empty stays {} not []).
+     *
+     * @return array<string, string>|\stdClass
+     */
+    private function metadataObject(): array|\stdClass
+    {
+        return $this->metadata === [] ? new \stdClass() : $this->metadata;
     }
 
     /**

@@ -137,6 +137,30 @@ final class JetStream
     }
 
     /**
+     * List consumers of a stream as typed ConsumerInfo objects, following the
+     * API's offset/total paging until every consumer has been retrieved.
+     *
+     * @return list<ConsumerInfo>
+     */
+    public function getConsumers(string $stream): array
+    {
+        $consumers = [];
+        $offset = 0;
+
+        do {
+            $data = $this->apiRequest("CONSUMER.LIST.{$stream}", ['offset' => $offset]);
+            $page = $data['consumers'] ?? [];
+            foreach ($page as $entry) {
+                $consumers[] = ConsumerInfo::fromArray($entry);
+            }
+            $total = $data['total'] ?? \count($consumers);
+            $offset = \count($consumers);
+        } while ($page !== [] && $offset < $total);
+
+        return $consumers;
+    }
+
+    /**
      * Create a push consumer and deliver its messages to the callback.
      *
      * If the config has no deliver subject, an inbox is generated. The callback
@@ -189,7 +213,15 @@ final class JetStream
 
     // --- Publishing ---
 
-    public function publish(string $subject, string $data = '', ?Headers $headers = null, ?string $msgId = null, ?string $expectedLastMsgId = null, ?int $expectedLastSeq = null, ?int $expectedLastSubjectSeq = null, ?string $expectedStream = null): PubAck
+    /**
+     * @param int|string|null $ttl Per-message TTL (ADR-43). An int is interpreted as
+     *                             seconds; a string is passed through as a duration
+     *                             (e.g. "1s", "never"). Sets the Nats-TTL header.
+     * @param int $retryOnNoResponders Number of extra attempts if the publish is met
+     *                                 with no responders / 503 (ADR-22). 0 keeps the
+     *                                 default single-attempt behavior.
+     */
+    public function publish(string $subject, string $data = '', ?Headers $headers = null, ?string $msgId = null, ?string $expectedLastMsgId = null, ?int $expectedLastSeq = null, ?int $expectedLastSubjectSeq = null, ?string $expectedStream = null, int|string|null $ttl = null, int $retryOnNoResponders = 0): PubAck
     {
         $headers ??= new Headers();
 
@@ -208,9 +240,25 @@ final class JetStream
         if ($expectedStream !== null) {
             $headers->set('Nats-Expected-Stream', $expectedStream);
         }
+        if ($ttl !== null) {
+            $headers->set('Nats-TTL', \is_int($ttl) ? "{$ttl}s" : $ttl);
+        }
 
         $useHeaders = \count($headers) > 0 ? $headers : null;
-        $response = $this->conn->request($subject, $data, headers: $useHeaders);
+
+        $attempt = 0;
+        while (true) {
+            try {
+                $response = $this->conn->request($subject, $data, headers: $useHeaders);
+                break;
+            } catch (\Utopia\NATS\Exception\NatsException $e) {
+                if ($attempt >= $retryOnNoResponders || $e->getMessage() !== 'No responders for request') {
+                    throw $e;
+                }
+                $attempt++;
+                usleep(50_000 * $attempt);
+            }
+        }
 
         $responseData = json_decode($response->data, true, 512, JSON_THROW_ON_ERROR);
         self::checkError($responseData);
@@ -239,11 +287,25 @@ final class JetStream
         $this->deleteStream("KV_{$bucket}");
     }
 
+    // --- Object Store ---
+
+    public function getObjectStore(string $bucket): \Utopia\NATS\ObjectStore\ObjectStore
+    {
+        // Verify the object-store stream exists.
+        $this->getStreamInfo("OBJ_{$bucket}");
+        return new \Utopia\NATS\ObjectStore\ObjectStore($this->conn, $this, $bucket);
+    }
+
+    public function deleteObjectStore(string $bucket): void
+    {
+        $this->deleteStream("OBJ_{$bucket}");
+    }
+
     // --- Account Info ---
 
-    public function accountInfo(): array
+    public function accountInfo(): AccountInfo
     {
-        return $this->apiRequest('INFO');
+        return AccountInfo::fromArray($this->apiRequest('INFO'));
     }
 
     // --- Internal ---

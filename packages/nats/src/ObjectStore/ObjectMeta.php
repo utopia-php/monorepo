@@ -6,6 +6,9 @@ namespace Utopia\NATS\ObjectStore;
 
 final class ObjectMeta
 {
+    /**
+     * @param array<string, string>|null $metadata
+     */
     public function __construct(
         public readonly string $name,
         public readonly string $bucket,
@@ -16,6 +19,8 @@ final class ObjectMeta
         public readonly ?string $description = null,
         public readonly ?string $modified = null,
         public readonly bool $deleted = false,
+        public readonly ?array $metadata = null,
+        public readonly ?ObjectLink $link = null,
     ) {}
 
     /**
@@ -41,6 +46,12 @@ final class ObjectMeta
         if ($this->deleted) {
             $data['deleted'] = true;
         }
+        if ($this->metadata !== null && $this->metadata !== []) {
+            $data['metadata'] = $this->metadata;
+        }
+        if ($this->link instanceof ObjectLink) {
+            $data['options'] = ['link' => $this->link->toArray()];
+        }
 
         return $data;
     }
@@ -50,6 +61,16 @@ final class ObjectMeta
      */
     public static function fromArray(array $data): self
     {
+        $metadata = null;
+        if (isset($data['metadata']) && \is_array($data['metadata'])) {
+            $metadata = array_map(static fn(mixed $v): string => (string) $v, $data['metadata']);
+        }
+
+        $link = null;
+        if (isset($data['options']['link']) && \is_array($data['options']['link'])) {
+            $link = ObjectLink::fromArray($data['options']['link']);
+        }
+
         return new self(
             name: (string) ($data['name'] ?? ''),
             bucket: (string) ($data['bucket'] ?? ''),
@@ -60,6 +81,8 @@ final class ObjectMeta
             description: isset($data['description']) ? (string) $data['description'] : null,
             modified: isset($data['mtime']) ? (string) $data['mtime'] : null,
             deleted: (bool) ($data['deleted'] ?? false),
+            metadata: $metadata,
+            link: $link,
         );
     }
 }

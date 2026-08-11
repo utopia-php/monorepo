@@ -23,6 +23,7 @@ use Utopia\NATS\Protocol\Writer;
 use Utopia\NATS\Transport\TcpTransport;
 use Utopia\NATS\Transport\TlsTransport;
 use Utopia\NATS\Transport\Transport;
+use Utopia\NATS\Transport\WebSocketTransport;
 
 final class Connection
 {
@@ -59,6 +60,7 @@ final class Connection
     // Reconnection
     /** @var list<string> */
     private array $serverPool = [];
+    private string $currentServer = '';
     /** @var list<string> */
     private array $pendingBuffer = [];
     private int $pendingBufferBytes = 0;
@@ -197,6 +199,63 @@ final class Connection
         }
 
         return $msg;
+    }
+
+    /**
+     * Scatter-gather request: publish once and collect every reply until a stop
+     * condition is met (ADR-47). A 503 "no responders" reply means zero
+     * responders and yields an empty list.
+     *
+     * @param array{max?: int, timeout?: float, stall?: float} $opts
+     *   max     stop after this many replies
+     *   timeout overall deadline in seconds (defaults to the request timeout)
+     *   stall   stop when no new reply arrives within this many seconds
+     * @return list<Message>
+     */
+    public function requestMany(string $subject, string $data = '', array $opts = []): array
+    {
+        $this->ensureConnected();
+
+        $max = $opts['max'] ?? null;
+        $timeout = $opts['timeout'] ?? $this->options->requestTimeout;
+        $stall = $opts['stall'] ?? null;
+
+        // Dedicated inbox subscription so replies never touch the mux inbox used
+        // by the single-reply request().
+        $inbox = Inbox::create($this->options->inboxPrefix);
+        $sub = $this->subscribe($inbox);
+        $this->publish($subject, $data, $inbox);
+
+        $deadline = microtime(true) + $timeout;
+        $messages = [];
+
+        while ($max === null || \count($messages) < $max) {
+            $remaining = $deadline - microtime(true);
+            if ($remaining <= 0) {
+                break;
+            }
+
+            // A stall window caps how long we wait for the next reply; whichever
+            // of stall/overall-deadline is sooner bounds this iteration.
+            $wait = $stall !== null ? min($remaining, $stall) : $remaining;
+
+            $msg = $sub->nextMessage($wait);
+            if (!$msg instanceof Message) {
+                // Overall deadline or stall window elapsed with no new reply.
+                break;
+            }
+
+            // 503 no-responders: zero responders, return whatever we have (none).
+            if ($msg->headers instanceof Headers && $msg->headers->getStatus() === '503') {
+                break;
+            }
+
+            $messages[] = $msg;
+        }
+
+        $this->unsubscribe($sub);
+
+        return $messages;
     }
 
     public function newInbox(): string
@@ -403,6 +462,8 @@ final class Connection
         // Create transport
         if ($this->options->transportFactory instanceof \Closure) {
             $this->transport = ($this->options->transportFactory)($scheme);
+        } elseif ($scheme === 'ws' || $scheme === 'wss') {
+            $this->transport = new WebSocketTransport($scheme === 'wss', $this->tlsOptions());
         } elseif ($scheme === 'tls' || $this->options->tls) {
             $this->transport = new TlsTransport($this->tlsOptions());
         } else {
@@ -469,6 +530,7 @@ final class Connection
         }
 
         $this->lastPingTime = microtime(true);
+        $this->currentServer = $url;
     }
 
     private function buildConnectPayload(): array
@@ -577,25 +639,69 @@ final class Connection
             ($this->options->onError)(new NatsException($message));
         }
 
-        if (stripos($message, 'permissions violation') !== false) {
-            throw new PermissionException($message);
-        }
-        if (stripos($message, 'authorization') !== false || stripos($message, 'authentication') !== false) {
-            throw new AuthenticationException($message);
-        }
-        if (stripos($message, 'maximum payload') !== false) {
-            throw new MaxPayloadException($message);
-        }
+        throw self::mapServerError($message);
+    }
 
-        throw new ProtocolException("Server error: {$message}");
+    /**
+     * Map a server -ERR string to a typed exception (ADR-7). Pure so the mapping
+     * can be unit tested without a live connection.
+     */
+    public static function mapServerError(string $message): NatsException
+    {
+        $lower = strtolower($message);
+
+        return match (true) {
+            str_contains($lower, 'permissions violation') => new PermissionException($message),
+            str_contains($lower, 'authorization violation'),
+            str_contains($lower, 'authentication expired'),
+            str_contains($lower, 'authorization'),
+            str_contains($lower, 'authentication') => new AuthenticationException($message),
+            str_contains($lower, 'maximum payload') => new MaxPayloadException($message),
+            default => new ProtocolException("Server error: {$message}"),
+        };
     }
 
     private function handleInfo(mixed $data): null
     {
         if (\is_array($data)) {
             $this->serverInfo = ServerInfo::fromArray($data);
+
+            // Async INFO may advertise additional cluster members; fold any new
+            // ones into the pool so failover has somewhere to go.
+            foreach ($this->serverInfo->connectUrls as $connectUrl) {
+                $normalized = $this->normalizeUrl($connectUrl);
+                if (!\in_array($normalized, $this->serverPool, true)) {
+                    $this->serverPool[] = $normalized;
+                }
+            }
+
+            // Lame-duck mode (ADR-5): the server is draining and will close the
+            // connection. Notify the caller and move to a different server if we
+            // know of one.
+            if (($data['ldm'] ?? false) === true) {
+                $this->handleLameDuck();
+            }
         }
         return null;
+    }
+
+    private function handleLameDuck(): void
+    {
+        if ($this->options->onLameDuck instanceof \Closure) {
+            ($this->options->onLameDuck)();
+        }
+
+        $others = array_values(array_filter(
+            $this->serverPool,
+            fn(string $url): bool => $url !== $this->currentServer,
+        ));
+
+        // Only proactively reconnect when a different server is available;
+        // otherwise ride out the current connection until it is closed.
+        if ($others !== [] && $this->options->allowReconnect) {
+            $this->serverPool = [...$others, $this->currentServer];
+            $this->attemptReconnect();
+        }
     }
 
     private function checkPings(): void

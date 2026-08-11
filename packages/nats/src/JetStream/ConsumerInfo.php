@@ -6,6 +6,9 @@ namespace Utopia\NATS\JetStream;
 
 final class ConsumerInfo
 {
+    /**
+     * @param array<string, string>|null $metadata Consumer metadata (ADR-33)
+     */
     public function __construct(
         public readonly string $streamName,
         public readonly string $name,
@@ -19,14 +22,17 @@ final class ConsumerInfo
         public readonly SequenceInfo $ackFloor,
         public readonly bool $pushBound = false,
         public readonly ?string $cluster = null,
+        public readonly ?array $metadata = null,
     ) {}
 
     public static function fromArray(array $data): self
     {
+        $config = ConsumerConfig::fromArray($data['config'] ?? []);
+
         return new self(
             streamName: $data['stream_name'] ?? '',
             name: $data['name'] ?? '',
-            config: ConsumerConfig::fromArray($data['config'] ?? []),
+            config: $config,
             created: $data['created'] ?? '',
             numAckPending: $data['num_ack_pending'] ?? 0,
             numRedelivered: $data['num_redelivered'] ?? 0,
@@ -36,6 +42,7 @@ final class ConsumerInfo
             ackFloor: SequenceInfo::fromArray($data['ack_floor'] ?? []),
             pushBound: $data['push_bound'] ?? false,
             cluster: isset($data['cluster']['name']) ? (string) $data['cluster']['name'] : null,
+            metadata: $config->metadata,
         );
     }
 }

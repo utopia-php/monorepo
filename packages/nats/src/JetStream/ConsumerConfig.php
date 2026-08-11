@@ -11,6 +11,7 @@ final class ConsumerConfig
      * @param float|null $inactiveThreshold Inactive threshold in seconds
      * @param float|null $idleHeartbeat Idle heartbeat interval in seconds (push consumers)
      * @param list<string>|null $filterSubjects
+     * @param array<string, string>|null $metadata Arbitrary key-value metadata (ADR-33)
      */
     public function __construct(
         public readonly ?string $name = null,
@@ -36,6 +37,7 @@ final class ConsumerConfig
         public readonly ?string $deliverGroup = null,
         public readonly bool $flowControl = false,
         public readonly ?float $idleHeartbeat = null,
+        public readonly ?array $metadata = null,
     ) {}
 
     public function toArray(): array
@@ -106,6 +108,9 @@ final class ConsumerConfig
         if ($this->idleHeartbeat !== null) {
             $data['idle_heartbeat'] = StreamConfig::secondsToNanos($this->idleHeartbeat);
         }
+        if ($this->metadata !== null) {
+            $data['metadata'] = $this->metadata;
+        }
 
         return $data;
     }
@@ -136,6 +141,7 @@ final class ConsumerConfig
             deliverGroup: $data['deliver_group'] ?? null,
             flowControl: $data['flow_control'] ?? false,
             idleHeartbeat: isset($data['idle_heartbeat']) ? StreamConfig::nanosToSeconds($data['idle_heartbeat']) : null,
+            metadata: $data['metadata'] ?? null,
         );
     }
 }
