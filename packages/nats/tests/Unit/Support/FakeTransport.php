@@ -26,9 +26,7 @@ final class FakeTransport implements Transport
     private bool $connected = false;
 
     /** @param array<string, mixed> $info Fields merged into the served INFO. */
-    public function __construct(private readonly array $info = [])
-    {
-    }
+    public function __construct(private readonly array $info = []) {}
 
     public function connect(string $host, int $port, float $timeout): void
     {

@@ -29,8 +29,7 @@ final class SwooleTransport implements Transport
     public function __construct(
         private readonly bool $secure = false,
         private readonly array $tlsOptions = [],
-    ) {
-    }
+    ) {}
 
     public function connect(string $host, int $port, float $timeout): void
     {
@@ -71,23 +70,23 @@ final class SwooleTransport implements Transport
             $this->fill($timeout);
         }
 
-        $chunk = \substr($this->buffer, 0, $maxBytes);
-        $this->buffer = \substr($this->buffer, \strlen($chunk));
+        $chunk = substr($this->buffer, 0, $maxBytes);
+        $this->buffer = substr($this->buffer, \strlen($chunk));
 
         return $chunk;
     }
 
     public function readLine(?float $timeout = null): string
     {
-        $deadline = $timeout !== null ? \microtime(true) + $timeout : null;
+        $deadline = $timeout !== null ? microtime(true) + $timeout : null;
 
-        while (($pos = \strpos($this->buffer, "\n")) === false) {
-            $remaining = $deadline !== null ? \max(0.0, $deadline - \microtime(true)) : null;
+        while (($pos = strpos($this->buffer, "\n")) === false) {
+            $remaining = $deadline !== null ? max(0.0, $deadline - microtime(true)) : null;
             $this->fill($remaining);
         }
 
-        $line = \substr($this->buffer, 0, $pos + 1);
-        $this->buffer = \substr($this->buffer, $pos + 1);
+        $line = substr($this->buffer, 0, $pos + 1);
+        $this->buffer = substr($this->buffer, $pos + 1);
 
         return $line;
     }

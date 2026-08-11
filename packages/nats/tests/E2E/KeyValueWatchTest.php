@@ -6,11 +6,11 @@ namespace Utopia\NATS\Tests\E2E;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\NATS\Connection;
+use Utopia\NATS\Exception\KeyValueException;
 use Utopia\NATS\JetStream\JetStream;
 use Utopia\NATS\KeyValue\KeyValue;
 use Utopia\NATS\KeyValue\KeyValueConfig;
 use Utopia\NATS\KeyValue\KeyValueOperation;
-use Utopia\NATS\Exception\KeyValueException;
 
 final class KeyValueWatchTest extends TestCase
 {

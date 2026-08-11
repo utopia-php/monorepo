@@ -42,7 +42,5 @@ final class PartialWriteStream
         return true;
     }
 
-    public function stream_close(): void
-    {
-    }
+    public function stream_close(): void {}
 }

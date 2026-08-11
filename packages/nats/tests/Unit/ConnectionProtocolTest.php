@@ -22,7 +22,7 @@ final class ConnectionProtocolTest extends TestCase
     {
         $args = array_merge([
             'servers' => 'nats://127.0.0.1:4222',
-            'transportFactory' => fn (string $scheme): FakeTransport => $fake,
+            'transportFactory' => fn(string $scheme): FakeTransport => $fake,
         ], $extra);
 
         return Connection::connect(new ConnectionOptions(...$args));

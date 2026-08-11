@@ -20,7 +20,7 @@ final class ConnectionTlsAndAuthTest extends TestCase
     {
         $args = array_merge([
             'servers' => 'nats://127.0.0.1:4222',
-            'transportFactory' => fn (string $scheme): FakeTransport => $fake,
+            'transportFactory' => fn(string $scheme): FakeTransport => $fake,
         ], $extra);
 
         return Connection::connect(new ConnectionOptions(...$args));
@@ -92,7 +92,7 @@ final class ConnectionTlsAndAuthTest extends TestCase
     {
         $fake = new FakeTransport();
         $conn = $this->connect($fake, [
-            'jwtProvider' => fn (): string => 'my.jwt.token',
+            'jwtProvider' => fn(): string => 'my.jwt.token',
         ]);
 
         $this->assertSame('my.jwt.token', $fake->connectPayload()['jwt']);
