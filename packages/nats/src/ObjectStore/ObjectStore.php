@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Utopia\NATS\ObjectStore;
 
 use Utopia\NATS\Connection;
+use Utopia\NATS\Exception\ObjectStoreException;
 use Utopia\NATS\Headers;
 use Utopia\NATS\JetStream\AckPolicy;
 use Utopia\NATS\JetStream\ConsumerConfig;
@@ -37,7 +38,7 @@ final class ObjectStore
      */
     public function put(string $name, string $data): ObjectMeta
     {
-        $previous = $this->readMeta($name);
+        [$previous, $previousSeq] = $this->readMetaWithSeq($name);
 
         $nuid = strtoupper(bin2hex(random_bytes(12)));
         $chunkSubject = "\$O.{$this->bucket}.C.{$nuid}";
@@ -59,15 +60,27 @@ final class ObjectStore
             modified: gmdate('Y-m-d\TH:i:s\Z'),
         );
 
+        // Optimistic concurrency: the meta publish only succeeds if the meta subject's
+        // last sequence still matches what we read (0 means "must not exist yet"). If a
+        // concurrent or stale writer already advanced it, JetStream rejects the publish,
+        // we purge only the chunks THIS put wrote (never the previous NUID), and surface a
+        // clear conflict. This replaces the former last-writer-wins behaviour that could
+        // orphan the loser's chunks.
         $headers = new Headers();
         $headers->set('Nats-Rollup', 'sub');
-        $this->js->publish($this->metaSubject($name), json_encode($meta->toArray(), JSON_THROW_ON_ERROR), $headers);
+        try {
+            $this->js->publish(
+                $this->metaSubject($name),
+                json_encode($meta->toArray(), JSON_THROW_ON_ERROR),
+                $headers,
+                expectedLastSubjectSeq: $previousSeq,
+            );
+        } catch (\Throwable $e) {
+            $this->purgeChunks($nuid);
+            throw new ObjectStoreException("conflicting concurrent write for object: {$name}", $e->getCode(), previous: $e);
+        }
 
         // Reclaim chunks left behind by a prior version of this object.
-        // ponytail: last-writer-wins, matching the reference object store — two concurrent
-        // put()s of the same name can orphan the loser's chunks. Add optimistic concurrency
-        // (publish meta with expected-last-subject-seq, purge own chunks on conflict) if
-        // concurrent overwrites of the same object become a real workload.
         if ($previous instanceof ObjectMeta && $previous->nuid !== '' && $previous->nuid !== $nuid) {
             $this->purgeChunks($previous->nuid);
         }
@@ -199,26 +212,38 @@ final class ObjectStore
 
     private function readMeta(string $name): ?ObjectMeta
     {
+        return $this->readMetaWithSeq($name)[0];
+    }
+
+    /**
+     * Read the latest meta record for an object along with its stream sequence.
+     * The sequence is 0 when no meta record exists, which callers use as the
+     * expected-last-subject-sequence for an optimistic first write.
+     *
+     * @return array{0: ?ObjectMeta, 1: int}
+     */
+    private function readMetaWithSeq(string $name): array
+    {
         try {
             $response = $this->conn->request(
                 "\$JS.API.STREAM.MSG.GET.OBJ_{$this->bucket}",
                 json_encode(['last_by_subj' => $this->metaSubject($name)], JSON_THROW_ON_ERROR),
             );
         } catch (\Throwable) {
-            return null;
+            return [null, 0];
         }
 
         $data = json_decode($response->data, true, 512, JSON_THROW_ON_ERROR);
         if (isset($data['error']) || !isset($data['message']['data'])) {
-            return null;
+            return [null, 0];
         }
 
         $decoded = json_decode((string) base64_decode((string) $data['message']['data'], true), true, 512, JSON_THROW_ON_ERROR);
         if (!\is_array($decoded)) {
-            return null;
+            return [null, 0];
         }
 
-        return ObjectMeta::fromArray($decoded);
+        return [ObjectMeta::fromArray($decoded), (int) ($data['message']['seq'] ?? 0)];
     }
 
     private function purgeChunks(string $nuid): void
