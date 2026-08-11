@@ -58,11 +58,6 @@ final class JetStreamParityTest extends TestCase
         return $name;
     }
 
-    private function serverSupportsMsgTtl(): bool
-    {
-        return version_compare($this->conn->getServerInfo()->version, '2.11.0', '>=');
-    }
-
     public function testStreamMetadataRepublishAndSubjectTransform(): void
     {
         $id = uniqid();
@@ -231,22 +226,17 @@ final class JetStreamParityTest extends TestCase
         $this->assertInstanceOf(\Utopia\NATS\Headers::class, $stored->headers);
         $this->assertSame('2s', $stored->headers->get('Nats-TTL'));
 
-        if ($this->serverSupportsMsgTtl()) {
-            // On a TTL-capable server the message must actually expire.
-            $expired = false;
-            $deadline = microtime(true) + 6.0;
-            while (microtime(true) < $deadline) {
-                if ($this->js->getStreamInfo($name)->state->messages === 0) {
-                    $expired = true;
-                    break;
-                }
-                usleep(200_000);
+        // The message must actually expire (server is NATS 2.11+, per docker-compose).
+        $expired = false;
+        $deadline = microtime(true) + 6.0;
+        while (microtime(true) < $deadline) {
+            if ($this->js->getStreamInfo($name)->state->messages === 0) {
+                $expired = true;
+                break;
             }
-            $this->assertTrue($expired, 'message with TTL must expire');
-        } else {
-            // 2.10 ignores TTL: the message is retained but the header round-trips.
-            $this->assertSame(1, $this->js->getStreamInfo($name)->state->messages);
+            usleep(200_000);
         }
+        $this->assertTrue($expired, 'message with TTL must expire');
     }
 
     public function testAccountInfoReturnsTypedObject(): void
