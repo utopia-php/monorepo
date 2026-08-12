@@ -139,6 +139,26 @@ final class Distributed implements Lock
     }
 
     /**
+     * Continue operating on an acquired lease through this lock's Redis
+     * connection. This does not acquire the key; ownership-sensitive operations
+     * still compare the adopted token against the value Redis currently holds.
+     */
+    public function adopt(string $token): self
+    {
+        if ($token === '') {
+            throw new \InvalidArgumentException('Token must not be empty');
+        }
+
+        if ($this->token !== null) {
+            throw new \LogicException('Cannot replace the token of a distributed lock');
+        }
+
+        $this->token = $token;
+
+        return $this;
+    }
+
+    /**
      * The value the last successful acquisition wrote to the key, or null before
      * one and after {@see release()}.
      *

@@ -121,6 +121,52 @@ final class DistributedTest extends TestCase
         $lock->release();
     }
 
+    public function testAdoptedTokenRefreshesThroughAnotherConnection(): void
+    {
+        $holder = new Distributed($this->redis, $this->key, 5);
+        $this->assertTrue($holder->tryAcquire());
+        $token = $holder->token();
+        $this->assertNotNull($token);
+
+        $redis = new Redis();
+        $this->assertTrue($redis->connect(
+            getenv('REDIS_HOST') ?: 'redis',
+            (int) (getenv('REDIS_PORT') ?: 6379),
+            1.0,
+        ));
+
+        $adopted = (new Distributed($redis, $this->key, 30))->adopt($token);
+
+        $this->assertSame($token, $adopted->token());
+        $this->assertTrue($adopted->isHeld());
+        $this->assertTrue($adopted->refresh());
+        $this->assertGreaterThan(5, $this->redis->ttl($this->key));
+
+        $holder->release();
+        $redis->close();
+    }
+
+    public function testAdoptRefusesAnEmptyToken(): void
+    {
+        $lock = new Distributed($this->redis, $this->key, 30);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $lock->adopt('');
+    }
+
+    public function testAdoptDoesNotReplaceAnAcquiredToken(): void
+    {
+        $lock = new Distributed($this->redis, $this->key, 30);
+        $this->assertTrue($lock->tryAcquire());
+
+        try {
+            $this->expectException(\LogicException::class);
+            $lock->adopt('replacement');
+        } finally {
+            $lock->release();
+        }
+    }
+
     public function testTokenIsTheValueOnTheKeyAndIsClearedOnRelease(): void
     {
         $lock = new Distributed($this->redis, $this->key, 30);
