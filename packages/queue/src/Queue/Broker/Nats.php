@@ -95,10 +95,11 @@ class Nats implements Publisher, Consumer
     public function receive(Queue $queue, int $timeout): ?Message
     {
         $this->ensure($queue);
+        $key = $this->identity($queue);
 
         // Priority first (no_wait poll), then the normal queue for up to $timeout.
-        $jsMessage = $this->fetchOne($this->consumers[$queue->name]['priority'], 0.25, true)
-            ?? $this->fetchOne($this->consumers[$queue->name]['normal'], (float) $timeout, false);
+        $jsMessage = $this->fetchOne($this->consumers[$key]['priority'], 0.25, true)
+            ?? $this->fetchOne($this->consumers[$key]['normal'], (float) $timeout, false);
 
         if (!$jsMessage instanceof JetStreamMessage) {
             return null;
@@ -144,6 +145,14 @@ class Nats implements Publisher, Consumer
         $jsMessage->nak();
     }
 
+    /**
+     * Re-drive dead-lettered messages back onto the work queue, up to $limit.
+     *
+     * $maxAttempts and $newerThan exist only for signature compatibility with
+     * Broker\Redis::retry() (cloud calls it with them); they are not applied here.
+     * In the JetStream model attempts are capped server-side by maxDeliver before a
+     * message reaches the dead stream, so there is nothing left to gate on re-drive.
+     */
     public function retry(Queue $queue, ?int $limit = null, ?int $maxAttempts = null, ?int $newerThan = null): void
     {
         $this->ensure($queue);
@@ -186,8 +195,10 @@ class Nats implements Publisher, Consumer
             return $this->js()->getStreamInfo($this->deadStream($queue))->state->messages;
         }
 
-        return $this->consumers[$queue->name]['normal']->info(true)->numPending
-            + $this->consumers[$queue->name]['priority']->info(true)->numPending;
+        $key = $this->identity($queue);
+
+        return $this->consumers[$key]['normal']->info(true)->numPending
+            + $this->consumers[$key]['priority']->info(true)->numPending;
     }
 
     public function close(): void
@@ -210,7 +221,8 @@ class Nats implements Publisher, Consumer
     /** Idempotently provision the work + dead streams and the durable consumers. */
     private function ensure(Queue $queue): void
     {
-        if (isset($this->provisioned[$queue->name])) {
+        $key = $this->identity($queue);
+        if (isset($this->provisioned[$key])) {
             return;
         }
 
@@ -233,7 +245,7 @@ class Nats implements Publisher, Consumer
             replicas: $this->replicas,
         ));
 
-        $this->consumers[$queue->name] = [
+        $this->consumers[$key] = [
             'normal' => $this->js()->createConsumer($this->workStream($queue), new ConsumerConfig(
                 durableName: 'worker',
                 ackPolicy: AckPolicy::Explicit,
@@ -250,14 +262,21 @@ class Nats implements Publisher, Consumer
             )),
         ];
 
-        $this->provisioned[$queue->name] = true;
+        $this->provisioned[$key] = true;
+    }
+
+    /** Logical queue identity (namespace + name); used for cache keys and stream naming. */
+    private function identity(Queue $queue): string
+    {
+        return $queue->namespace . '.' . $queue->name;
     }
 
     private function workStream(Queue $queue): string
     {
-        // Namespace is part of the stream name so same-named queues in different
-        // namespaces never collide on one stream.
-        return 'QUEUE_' . $this->sanitize("{$queue->namespace}_{$queue->name}");
+        // A readable sanitized prefix plus a hash of the full identity: the hash keeps
+        // distinct queues from colliding once sanitize() replaces characters — e.g.
+        // "a.b" vs "a_b", or the same name across two namespaces.
+        return 'QUEUE_' . $this->sanitize("{$queue->namespace}_{$queue->name}") . '_' . substr(sha1($this->identity($queue)), 0, 10);
     }
 
     private function deadStream(Queue $queue): string
