@@ -218,4 +218,27 @@ final class NatsBrokerTest extends TestCase
         // AckWait redelivery reclaims stranded jobs, so reap() has nothing to do.
         $this->assertSame(0, $this->broker->reap($this->queue));
     }
+
+    public function testCrashLoopedMessageIsTerminallyDeadLettered(): void
+    {
+        // A worker that crashes every delivery (never commit/reject) is redelivered by
+        // AckWait until maxDeliver, after which JetStream emits the max-deliveries
+        // advisory and the broker moves the stuck message to the dead stream.
+        $url = getenv('NATS_URL') ?: 'nats://127.0.0.1:14225';
+        $broker = new Nats(Connection::connect($url), ackWait: 1.0, maxDeliver: 2);
+        $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
+
+        $broker->enqueue($queue, ['poison' => true]);
+
+        $this->assertInstanceOf(Message::class, $broker->receive($queue, 2)); // delivery 1
+        sleep(2);                                                              // > ackWait
+        $this->assertInstanceOf(Message::class, $broker->receive($queue, 2)); // delivery 2 == maxDeliver
+        sleep(2);                                                              // advisory fires
+
+        $broker->receive($queue, 1);                                          // pump: read the advisory
+        $this->assertSame(1, $broker->getQueueSize($queue, true), 'stuck message moved to the dead stream');
+        $this->assertSame(0, $broker->getQueueSize($queue), 'work queue empty after terminal dead-letter');
+
+        $broker->close();
+    }
 }

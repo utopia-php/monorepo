@@ -39,6 +39,9 @@ class Nats implements Publisher, Consumer
     /** @var array<string, JetStreamMessage> in-flight messages keyed by pid, for commit/reject */
     private array $inFlight = [];
 
+    /** @var array<string, \Utopia\NATS\Subscription> max-deliveries advisory subscription per queue */
+    private array $advisories = [];
+
     private ?NatsConnection $connection = null;
     private ?JetStream $js = null;
 
@@ -96,6 +99,7 @@ class Nats implements Publisher, Consumer
     {
         $this->ensure($queue);
         $key = $this->identity($queue);
+        $this->drainDeadLetters($queue, $key);
 
         // Priority first (no_wait poll), then the normal queue for up to $timeout.
         $jsMessage = $this->fetchOne($this->consumers[$key]['priority'], 0.25, true)
@@ -190,12 +194,12 @@ class Nats implements Publisher, Consumer
     public function getQueueSize(Queue $queue, bool $failedJobs = false): int
     {
         $this->ensure($queue);
+        $key = $this->identity($queue);
+        $this->drainDeadLetters($queue, $key);
 
         if ($failedJobs) {
             return $this->js()->getStreamInfo($this->deadStream($queue))->state->messages;
         }
-
-        $key = $this->identity($queue);
 
         return $this->consumers[$key]['normal']->info(true)->numPending
             + $this->consumers[$key]['priority']->info(true)->numPending;
@@ -262,7 +266,42 @@ class Nats implements Publisher, Consumer
             )),
         ];
 
+        // Best-effort terminal dead-lettering for the crash-loop case: a worker that
+        // dies (never reject()s) is redelivered by AckWait until maxDeliver, after which
+        // JetStream stops delivering and emits this advisory. We drain it in receive()/
+        // getQueueSize() and move the stuck message to the dead stream. Caveat: core
+        // advisories are ephemeral, so a message that exhausts while no broker is
+        // subscribed stays as pending backlog (still visible) rather than dead-lettered.
+        $this->advisories[$key] = $this->connection()->subscribe(
+            "\$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.{$this->workStream($queue)}.*",
+        );
+
         $this->provisioned[$key] = true;
+    }
+
+    /** Move messages that exhausted maxDeliver (per the advisory) onto the dead stream. */
+    private function drainDeadLetters(Queue $queue, string $key): void
+    {
+        $advisory = $this->advisories[$key] ?? null;
+        if (!$advisory instanceof \Utopia\NATS\Subscription) {
+            return;
+        }
+
+        while (($event = $advisory->nextMessage(0.0)) instanceof \Utopia\NATS\Message) {
+            $decoded = json_decode($event->data, true);
+            $seq = \is_array($decoded) ? ($decoded['stream_seq'] ?? null) : null;
+            if (!\is_int($seq)) {
+                continue;
+            }
+
+            try {
+                $stored = $this->js()->getMessage($this->workStream($queue), $seq);
+                $this->js()->publish($this->deadSubject($queue), $stored->data);
+                $this->js()->deleteMessage($this->workStream($queue), $seq);
+            } catch (\Throwable) {
+                // Already acked/deleted or raced away — nothing to reclaim.
+            }
+        }
     }
 
     /** Logical queue identity (namespace + name); used for cache keys and stream naming. */
