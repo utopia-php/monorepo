@@ -17,6 +17,7 @@
         <testsuite name="e2e">
             <file>./tests/Queue/E2E/Adapter/NatsBrokerTest.php</file>
             <file>./tests/Queue/E2E/Adapter/NatsServerTest.php</file>
+            <file>./tests/Queue/E2E/Adapter/NatsPoolTest.php</file>
             <file>./tests/Queue/E2E/Adapter/KedaTest.php</file>
             <file>./tests/Queue/E2E/Adapter/PoolTest.php</file>
             <file>./tests/Queue/E2E/Adapter/SwooleTest.php</file>
