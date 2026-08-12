@@ -291,7 +291,10 @@ class Nats implements Publisher, Consumer
 
     private function prioritySubject(Queue $queue): string
     {
-        return "{$queue->namespace}.queue.{$queue->name}.priority";
+        // A distinct leading segment (like the dead subject) rather than a ".priority"
+        // suffix, so the queue name stays the tail: otherwise queue "b"'s priority
+        // subject would equal queue "b.priority"'s normal subject.
+        return "{$queue->namespace}.priority.{$queue->name}";
     }
 
     private function deadSubject(Queue $queue): string
