@@ -109,4 +109,114 @@ final class NatsBrokerTest extends TestCase
         $this->assertSame('doomed', $recovered->getPayload()['task']);
         $this->broker->commit($this->queue, $recovered);
     }
+
+    public function testUncommittedMessageIsRedeliveredAfterAckWait(): void
+    {
+        // A worker that receives but never commits (crash/OOM) must not lose the
+        // message: JetStream redelivers it after AckWait — the reap() replacement.
+        $this->broker->enqueue($this->queue, ['task' => 'survivor']);
+
+        $first = $this->broker->receive($this->queue, 2);
+        $this->assertInstanceOf(Message::class, $first);
+        $this->assertSame(0, $first->getAttempts());
+
+        // Never commit; wait past ackWait (2s).
+        sleep(3);
+
+        $redelivered = $this->broker->receive($this->queue, 3);
+        $this->assertInstanceOf(Message::class, $redelivered);
+        $this->assertSame('survivor', $redelivered->getPayload()['task']);
+        $this->assertSame(1, $redelivered->getAttempts());
+        $this->broker->commit($this->queue, $redelivered);
+    }
+
+    public function testReceiveReturnsNullOnEmptyQueue(): void
+    {
+        $this->assertNull($this->broker->receive($this->queue, 1));
+    }
+
+    public function testSeparateQueuesAreIsolated(): void
+    {
+        $other = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
+
+        $this->broker->enqueue($this->queue, ['q' => 'mine']);
+        $this->assertNull($this->broker->receive($other, 1), 'a message in one queue is invisible to another');
+        $this->assertSame(1, $this->broker->getQueueSize($this->queue));
+
+        $mine = $this->broker->receive($this->queue, 2);
+        $this->assertInstanceOf(Message::class, $mine);
+        $this->broker->commit($this->queue, $mine);
+    }
+
+    public function testCompetingConsumersEachGetAMessageOnce(): void
+    {
+        // WorkQueue retention: every message is delivered to exactly one consumer.
+        $other = new Nats(Connection::connect(getenv('NATS_URL') ?: 'nats://127.0.0.1:14225'), ackWait: 2.0, maxDeliver: 5);
+
+        for ($i = 0; $i < 6; $i++) {
+            $this->broker->enqueue($this->queue, ['n' => $i]);
+        }
+
+        $seen = [];
+        for ($i = 0; $i < 6; $i++) {
+            $consumer = ($i % 2 === 0) ? $this->broker : $other;
+            $message = $consumer->receive($this->queue, 3);
+            $this->assertInstanceOf(Message::class, $message);
+            $seen[] = $message->getPayload()['n'];
+            $consumer->commit($this->queue, $message);
+        }
+        $other->close();
+
+        sort($seen);
+        $this->assertSame([0, 1, 2, 3, 4, 5], $seen, 'each message delivered exactly once across two consumers');
+    }
+
+    public function testMessagesSurviveClientReconnect(): void
+    {
+        // Durability: unlike the ephemeral Dragonfly store, JetStream persists jobs
+        // across a client close/reconnect.
+        $url = getenv('NATS_URL') ?: 'nats://127.0.0.1:14225';
+
+        $first = new Nats(Connection::connect($url));
+        $first->enqueue($this->queue, ['keep' => true]);
+        $first->close();
+
+        $second = new Nats(Connection::connect($url));
+        $this->assertSame(1, $second->getQueueSize($this->queue), 'message persisted across reconnect');
+        $survivor = $second->receive($this->queue, 2);
+        $this->assertInstanceOf(Message::class, $survivor);
+        $this->assertTrue($survivor->getPayload()['keep']);
+        $second->commit($this->queue, $survivor);
+        $second->close();
+    }
+
+    public function testDottedQueueNameIsSanitisedToAValidStream(): void
+    {
+        // Queue names may contain dots (e.g. per-shard names); stream names may not.
+        $dotted = new Queue('v1-database.shard.main');
+        $this->broker->enqueue($dotted, ['ok' => 1]);
+
+        $message = $this->broker->receive($dotted, 2);
+        $this->assertInstanceOf(Message::class, $message);
+        $this->assertSame(1, $message->getPayload()['ok']);
+        $this->broker->commit($dotted, $message);
+    }
+
+    public function testJobTtlExpiresUnackedMessages(): void
+    {
+        // jobTtl maps to the stream's MaxAge: an unconsumed message expires.
+        $ttlQueue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8), 'utopia-queue', 2);
+
+        $this->broker->enqueue($ttlQueue, ['ephemeral' => true]);
+        $this->assertSame(1, $this->broker->getQueueSize($ttlQueue));
+
+        sleep(3);
+        $this->assertSame(0, $this->broker->getQueueSize($ttlQueue), 'message expired after MaxAge');
+    }
+
+    public function testReapIsANoOp(): void
+    {
+        // AckWait redelivery reclaims stranded jobs, so reap() has nothing to do.
+        $this->assertSame(0, $this->broker->reap($this->queue));
+    }
 }
