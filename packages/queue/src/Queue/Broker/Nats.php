@@ -307,9 +307,10 @@ class Nats implements Publisher, Consumer
     /** Logical queue identity (namespace + name); used for cache keys and stream naming. */
     private function identity(Queue $queue): string
     {
-        // JSON-encode the two fields so a dot in either can't create an ambiguous join
-        // — namespace "a.b" + name "c" must not equal namespace "a" + name "b.c".
-        return (string) json_encode([$queue->namespace, $queue->name]);
+        // Length-prefix the namespace so a delimiter in either field can't create an
+        // ambiguous join (ns "a.b"+name "c" vs "a"+"b.c"). Byte-safe: unlike json_encode
+        // it never fails on invalid UTF-8 (which would collapse to an empty identity).
+        return \strlen($queue->namespace) . ':' . $queue->namespace . ':' . $queue->name;
     }
 
     private function workStream(Queue $queue): string
