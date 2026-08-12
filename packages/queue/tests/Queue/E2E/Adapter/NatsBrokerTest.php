@@ -16,7 +16,6 @@ use Utopia\Queue\Queue;
  */
 final class NatsBrokerTest extends TestCase
 {
-    private Connection $connection;
     private Nats $broker;
     private Queue $queue;
 
@@ -32,9 +31,9 @@ final class NatsBrokerTest extends TestCase
         }
         fclose($probe);
 
-        $this->connection = Connection::connect($url);
+        $connection = Connection::connect($url);
         // Short ackWait + low maxDeliver so the redelivery/dead-letter paths are fast.
-        $this->broker = new Nats($this->connection, ackWait: 2.0, maxDeliver: 3);
+        $this->broker = new Nats($connection, ackWait: 2.0, maxDeliver: 3);
         $this->queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
     }
 
@@ -132,7 +131,7 @@ final class NatsBrokerTest extends TestCase
 
     public function testReceiveReturnsNullOnEmptyQueue(): void
     {
-        $this->assertNull($this->broker->receive($this->queue, 1));
+        $this->assertNotInstanceOf(Message::class, $this->broker->receive($this->queue, 1));
     }
 
     public function testSeparateQueuesAreIsolated(): void
@@ -140,7 +139,7 @@ final class NatsBrokerTest extends TestCase
         $other = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
 
         $this->broker->enqueue($this->queue, ['q' => 'mine']);
-        $this->assertNull($this->broker->receive($other, 1), 'a message in one queue is invisible to another');
+        $this->assertNotInstanceOf(Message::class, $this->broker->receive($other, 1), 'a message in one queue is invisible to another');
         $this->assertSame(1, $this->broker->getQueueSize($this->queue));
 
         $mine = $this->broker->receive($this->queue, 2);

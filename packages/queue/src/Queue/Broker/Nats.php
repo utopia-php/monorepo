@@ -42,9 +42,6 @@ class Nats implements Publisher, Consumer
     private ?NatsConnection $connection = null;
     private ?JetStream $js = null;
 
-    /** @var NatsConnection|(\Closure(): NatsConnection) */
-    private $source;
-
     /**
      * A NATS Connection is single-owner (one socket, one shared read pump), so it is
      * NOT safe to share across concurrent coroutines. Pass a Closure factory rather
@@ -53,16 +50,14 @@ class Nats implements Publisher, Consumer
      * connection (e.g. Swoole adapter with maxCoroutines: 1) or lease one connection
      * per coroutine from a pool.
      *
-     * @param NatsConnection|(\Closure(): NatsConnection) $connection
+     * @param NatsConnection|(\Closure(): NatsConnection) $source
      */
     public function __construct(
-        NatsConnection|\Closure $connection,
+        private readonly NatsConnection|\Closure $source,
         private readonly float $ackWait = 30.0,
         private readonly int $maxDeliver = 5,
         private readonly int $replicas = 1,
-    ) {
-        $this->source = $connection;
-    }
+    ) {}
 
     private function connection(): NatsConnection
     {
@@ -108,7 +103,7 @@ class Nats implements Publisher, Consumer
         $data = json_decode($jsMessage->getData(), true);
         $this->inFlight[$data['pid']] = $jsMessage;
 
-        return (new Message($data))
+        return new Message($data)
             // JetStream counts deliveries from 1; expose it as the Redis-style attempt count.
             ->setAttempts(max(0, $jsMessage->metadata()->numDelivered - 1));
     }
@@ -192,7 +187,7 @@ class Nats implements Publisher, Consumer
 
     public function close(): void
     {
-        if ($this->connection !== null) {
+        if ($this->connection instanceof NatsConnection) {
             $this->connection->close();
         }
     }
