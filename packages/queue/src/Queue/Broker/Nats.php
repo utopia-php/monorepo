@@ -315,10 +315,11 @@ class Nats implements Publisher, Consumer
 
     private function workStream(Queue $queue): string
     {
-        // Readable sanitized prefix + a hex-encoded identity suffix. bin2hex is injective
-        // (a truncated hash can collide; sanitize() alone is lossy), so distinct queues
-        // always get distinct stream names.
-        return 'QUEUE_' . $this->sanitize("{$queue->namespace}_{$queue->name}") . '_' . bin2hex($this->identity($queue));
+        // Fixed width so the name can never exceed JetStream's 255-byte limit: a bounded
+        // readable prefix plus a full sha256 of the identity. 256 bits makes a collision
+        // infeasible (unlike the earlier 40-bit truncation), while an unbounded injective
+        // encoding (bin2hex) would blow the length limit for long queue names.
+        return 'QUEUE_' . substr($this->sanitize("{$queue->namespace}_{$queue->name}"), 0, 40) . '_' . hash('sha256', $this->identity($queue));
     }
 
     private function deadStream(Queue $queue): string
@@ -331,12 +332,12 @@ class Nats implements Publisher, Consumer
      * hash, and a category tail. Raw namespace/name are NOT interpolated — they can
      * contain dots (even the literal "queue"/"priority"/"dead"), so building subjects
      * from them is ambiguous (e.g. ns "a" + name "b.queue.c" vs ns "a.queue.b" + name
-     * "c" both yield "a.queue.b.queue.c"). A hex-encoded identity is a single dot-free,
-     * injective token, so distinct queues never share a subject.
+     * "c" both yield "a.queue.b.queue.c"). A sha256 of the identity is a single dot-free,
+     * fixed-width token, so distinct queues never share a subject.
      */
     private function subjectBase(Queue $queue): string
     {
-        return 'Q.' . bin2hex($this->identity($queue));
+        return 'Q.' . hash('sha256', $this->identity($queue));
     }
 
     private function workSubject(Queue $queue): string
