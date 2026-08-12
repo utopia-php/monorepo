@@ -39,15 +39,39 @@ class Nats implements Publisher, Consumer
     /** @var array<string, JetStreamMessage> in-flight messages keyed by pid, for commit/reject */
     private array $inFlight = [];
 
-    private readonly JetStream $js;
+    private ?NatsConnection $connection = null;
+    private ?JetStream $js = null;
 
+    /** @var NatsConnection|(\Closure(): NatsConnection) */
+    private $source;
+
+    /**
+     * A NATS Connection is single-owner (one socket, one shared read pump), so it is
+     * NOT safe to share across concurrent coroutines. Pass a Closure factory rather
+     * than a live Connection when the consumer forks or reconnects per worker (each
+     * worker resolves its own connection), and run at most one message at a time per
+     * connection (e.g. Swoole adapter with maxCoroutines: 1) or lease one connection
+     * per coroutine from a pool.
+     *
+     * @param NatsConnection|(\Closure(): NatsConnection) $connection
+     */
     public function __construct(
-        private readonly NatsConnection $connection,
+        NatsConnection|\Closure $connection,
         private readonly float $ackWait = 30.0,
         private readonly int $maxDeliver = 5,
         private readonly int $replicas = 1,
     ) {
-        $this->js = $connection->jetStream();
+        $this->source = $connection;
+    }
+
+    private function connection(): NatsConnection
+    {
+        return $this->connection ??= $this->source instanceof \Closure ? ($this->source)() : $this->source;
+    }
+
+    private function js(): JetStream
+    {
+        return $this->js ??= $this->connection()->jetStream();
     }
 
     public function enqueue(Queue $queue, array $payload, bool $priority = false): bool
@@ -63,7 +87,7 @@ class Nats implements Publisher, Consumer
         ];
 
         $subject = $priority ? $this->prioritySubject($queue) : $this->workSubject($queue);
-        $this->js->publish($subject, (string) json_encode($message));
+        $this->js()->publish($subject, (string) json_encode($message));
 
         return true;
     }
@@ -110,7 +134,7 @@ class Nats implements Publisher, Consumer
 
         if ($jsMessage->metadata()->numDelivered >= $this->maxDeliver) {
             // Exhausted: park on the dead stream and drop it from the work stream.
-            $this->js->publish($this->deadSubject($queue), $jsMessage->getData());
+            $this->js()->publish($this->deadSubject($queue), $jsMessage->getData());
             $jsMessage->term('max deliveries exceeded');
 
             return;
@@ -124,7 +148,7 @@ class Nats implements Publisher, Consumer
     {
         $this->ensure($queue);
 
-        $consumer = $this->js->createConsumer($this->deadStream($queue), new ConsumerConfig(
+        $consumer = $this->js()->createConsumer($this->deadStream($queue), new ConsumerConfig(
             durableName: 'retry',
             ackPolicy: AckPolicy::Explicit,
             ackWait: $this->ackWait,
@@ -138,7 +162,7 @@ class Nats implements Publisher, Consumer
                 break;
             }
             // Re-drive onto the work queue, then remove it from the dead stream.
-            $this->js->publish($this->workSubject($queue), $jsMessage->getData());
+            $this->js()->publish($this->workSubject($queue), $jsMessage->getData());
             $jsMessage->ackSync();
             $remaining--;
         }
@@ -159,7 +183,7 @@ class Nats implements Publisher, Consumer
         $this->ensure($queue);
 
         if ($failedJobs) {
-            return $this->js->getStreamInfo($this->deadStream($queue))->state->messages;
+            return $this->js()->getStreamInfo($this->deadStream($queue))->state->messages;
         }
 
         return $this->consumers[$queue->name]['normal']->info(true)->numPending
@@ -168,7 +192,9 @@ class Nats implements Publisher, Consumer
 
     public function close(): void
     {
-        $this->connection->close();
+        if ($this->connection !== null) {
+            $this->connection->close();
+        }
     }
 
     /** Fetch a single message, or null on timeout / empty. */
@@ -190,7 +216,7 @@ class Nats implements Publisher, Consumer
 
         $maxAge = $queue->jobTtl > 0 ? (float) $queue->jobTtl : null;
 
-        $this->js->createOrUpdateStream(new StreamConfig(
+        $this->js()->createOrUpdateStream(new StreamConfig(
             name: $this->workStream($queue),
             subjects: [$this->workSubject($queue), $this->prioritySubject($queue)],
             retention: RetentionPolicy::WorkQueue,
@@ -199,7 +225,7 @@ class Nats implements Publisher, Consumer
             replicas: $this->replicas,
         ));
 
-        $this->js->createOrUpdateStream(new StreamConfig(
+        $this->js()->createOrUpdateStream(new StreamConfig(
             name: $this->deadStream($queue),
             subjects: [$this->deadSubject($queue)],
             retention: RetentionPolicy::WorkQueue,
@@ -208,14 +234,14 @@ class Nats implements Publisher, Consumer
         ));
 
         $this->consumers[$queue->name] = [
-            'normal' => $this->js->createConsumer($this->workStream($queue), new ConsumerConfig(
+            'normal' => $this->js()->createConsumer($this->workStream($queue), new ConsumerConfig(
                 durableName: 'worker',
                 ackPolicy: AckPolicy::Explicit,
                 ackWait: $this->ackWait,
                 maxDeliver: $this->maxDeliver,
                 filterSubject: $this->workSubject($queue),
             )),
-            'priority' => $this->js->createConsumer($this->workStream($queue), new ConsumerConfig(
+            'priority' => $this->js()->createConsumer($this->workStream($queue), new ConsumerConfig(
                 durableName: 'worker_priority',
                 ackPolicy: AckPolicy::Explicit,
                 ackWait: $this->ackWait,
