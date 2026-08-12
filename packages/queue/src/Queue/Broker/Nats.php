@@ -325,22 +325,32 @@ class Nats implements Publisher, Consumer
         return $this->workStream($queue) . '_DEAD';
     }
 
+    /**
+     * Collision-free subject namespace for a queue: a fixed leading token, an identity
+     * hash, and a category tail. Raw namespace/name are NOT interpolated — they can
+     * contain dots (even the literal "queue"/"priority"/"dead"), so building subjects
+     * from them is ambiguous (e.g. ns "a" + name "b.queue.c" vs ns "a.queue.b" + name
+     * "c" both yield "a.queue.b.queue.c"). The hash of the JSON identity is a single
+     * dot-free token, so distinct queues never share a subject.
+     */
+    private function subjectBase(Queue $queue): string
+    {
+        return 'Q.' . substr(sha1($this->identity($queue)), 0, 24);
+    }
+
     private function workSubject(Queue $queue): string
     {
-        return "{$queue->namespace}.queue.{$queue->name}";
+        return $this->subjectBase($queue) . '.normal';
     }
 
     private function prioritySubject(Queue $queue): string
     {
-        // A distinct leading segment (like the dead subject) rather than a ".priority"
-        // suffix, so the queue name stays the tail: otherwise queue "b"'s priority
-        // subject would equal queue "b.priority"'s normal subject.
-        return "{$queue->namespace}.priority.{$queue->name}";
+        return $this->subjectBase($queue) . '.priority';
     }
 
     private function deadSubject(Queue $queue): string
     {
-        return "{$queue->namespace}.dead.{$queue->name}";
+        return $this->subjectBase($queue) . '.dead';
     }
 
     /** Stream names allow only A-Z a-z 0-9 _ - (no dots), unlike subject/queue names. */
