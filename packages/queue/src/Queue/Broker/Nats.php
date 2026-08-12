@@ -50,6 +50,11 @@ class Nats implements Publisher, Consumer
      * connection (e.g. Swoole adapter with maxCoroutines: 1) or lease one connection
      * per coroutine from a pool.
      *
+     * commit()/reject() correlate the JetStream acknowledgement to a message through an
+     * in-instance map keyed by pid, so a message must be committed/rejected on the SAME
+     * instance that received it: use one consumer instance (Broker\Pool is for the
+     * publisher side).
+     *
      * @param NatsConnection|(\Closure(): NatsConnection) $source
      */
     public function __construct(
@@ -250,12 +255,14 @@ class Nats implements Publisher, Consumer
 
     private function workStream(Queue $queue): string
     {
-        return 'QUEUE_' . $this->sanitize($queue->name);
+        // Namespace is part of the stream name so same-named queues in different
+        // namespaces never collide on one stream.
+        return 'QUEUE_' . $this->sanitize("{$queue->namespace}_{$queue->name}");
     }
 
     private function deadStream(Queue $queue): string
     {
-        return 'QUEUE_' . $this->sanitize($queue->name) . '_DEAD';
+        return $this->workStream($queue) . '_DEAD';
     }
 
     private function workSubject(Queue $queue): string
