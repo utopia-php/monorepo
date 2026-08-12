@@ -315,10 +315,10 @@ class Nats implements Publisher, Consumer
 
     private function workStream(Queue $queue): string
     {
-        // A readable sanitized prefix plus a hash of the full identity: the hash keeps
-        // distinct queues from colliding once sanitize() replaces characters — e.g.
-        // "a.b" vs "a_b", or the same name across two namespaces.
-        return 'QUEUE_' . $this->sanitize("{$queue->namespace}_{$queue->name}") . '_' . substr(sha1($this->identity($queue)), 0, 10);
+        // Readable sanitized prefix + a hex-encoded identity suffix. bin2hex is injective
+        // (a truncated hash can collide; sanitize() alone is lossy), so distinct queues
+        // always get distinct stream names.
+        return 'QUEUE_' . $this->sanitize("{$queue->namespace}_{$queue->name}") . '_' . bin2hex($this->identity($queue));
     }
 
     private function deadStream(Queue $queue): string
@@ -331,12 +331,12 @@ class Nats implements Publisher, Consumer
      * hash, and a category tail. Raw namespace/name are NOT interpolated — they can
      * contain dots (even the literal "queue"/"priority"/"dead"), so building subjects
      * from them is ambiguous (e.g. ns "a" + name "b.queue.c" vs ns "a.queue.b" + name
-     * "c" both yield "a.queue.b.queue.c"). The hash of the JSON identity is a single
-     * dot-free token, so distinct queues never share a subject.
+     * "c" both yield "a.queue.b.queue.c"). A hex-encoded identity is a single dot-free,
+     * injective token, so distinct queues never share a subject.
      */
     private function subjectBase(Queue $queue): string
     {
-        return 'Q.' . substr(sha1($this->identity($queue)), 0, 24);
+        return 'Q.' . bin2hex($this->identity($queue));
     }
 
     private function workSubject(Queue $queue): string
