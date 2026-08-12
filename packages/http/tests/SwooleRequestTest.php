@@ -14,23 +14,21 @@ use Utopia\Http\Adapter\Swoole\Request;
 final class SwooleRequestTest extends TestCase
 {
     /**
-     * @return array<string, array{0: string, 1: string}>
+     * @return \Iterator<string, array{string, string}>
      */
-    public static function bodies(): array
+    public static function bodies(): \Iterator
     {
-        return [
-            'bare empty object' => ['{"data":{}}', '{"data":{}}'],
-            'nested empty object' => ['{"data":{"inner":{}}}', '{"data":{"inner":{}}}'],
-            'empty object beside a value' => ['{"data":{"a":{},"b":1}}', '{"data":{"a":{},"b":1}}'],
-            'empty object two levels down' => ['{"data":{"l1":{"l2":{}}}}', '{"data":{"l1":{"l2":{}}}}'],
-            'empty object inside a list' => ['{"data":{"arr":[{},{"x":1}]}}', '{"data":{"arr":[{},{"x":1}]}}'],
-            'populated object' => ['{"data":{"a":1}}', '{"data":{"a":1}}'],
-            'empty object as the only param' => ['{"data":{},"other":{}}', '{"data":{},"other":{}}'],
-            'braces inside a string literal' => ['{"data":{"note":"braces {} in text"}}', '{"data":{"note":"braces {} in text"}}'],
-            'whitespace inside the empty object' => ['{"data":{"a":{ }}}', '{"data":{"a":{}}}'],
-            'newline inside the empty object' => ["{\"data\":{\"a\":{\n}}}", '{"data":{"a":{}}}'],
-            'empty list stays a list' => ['{"data":{"a":[]}}', '{"data":{"a":[]}}'],
-        ];
+        yield 'bare empty object' => ['{"data":{}}', '{"data":{}}'];
+        yield 'nested empty object' => ['{"data":{"inner":{}}}', '{"data":{"inner":{}}}'];
+        yield 'empty object beside a value' => ['{"data":{"a":{},"b":1}}', '{"data":{"a":{},"b":1}}'];
+        yield 'empty object two levels down' => ['{"data":{"l1":{"l2":{}}}}', '{"data":{"l1":{"l2":{}}}}'];
+        yield 'empty object inside a list' => ['{"data":{"arr":[{},{"x":1}]}}', '{"data":{"arr":[{},{"x":1}]}}'];
+        yield 'populated object' => ['{"data":{"a":1}}', '{"data":{"a":1}}'];
+        yield 'empty object as the only param' => ['{"data":{},"other":{}}', '{"data":{},"other":{}}'];
+        yield 'braces inside a string literal' => ['{"data":{"note":"braces {} in text"}}', '{"data":{"note":"braces {} in text"}}'];
+        yield 'whitespace inside the empty object' => ['{"data":{"a":{ }}}', '{"data":{"a":{}}}'];
+        yield 'newline inside the empty object' => ["{\"data\":{\"a\":{\n}}}", '{"data":{"a":{}}}'];
+        yield 'empty list stays a list' => ['{"data":{"a":[]}}', '{"data":{"a":[]}}'];
     }
 
     /**
