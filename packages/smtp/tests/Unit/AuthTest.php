@@ -21,25 +21,23 @@ final class AuthTest extends TestCase
         $login = new Login('jane', 'secret');
 
         $this->assertNull($login->initial());
-        $this->assertSame('jane', $login->respond('Username:'));
-        $this->assertSame('secret', $login->respond('Password:'));
+        $this->assertSame('jane', $login->respond('Username:', 0));
+        $this->assertSame('secret', $login->respond('Password:', 1));
     }
 
-    public function testLoginForgetsTheLastExchange(): void
+    public function testLoginCarriesNothingBetweenExchanges(): void
     {
+        // An authenticator outlives the connection it was built for and is
+        // reused after a reconnect. Reading the step rather than counting means
+        // there is nothing left over to answer the next first prompt with.
         $login = new Login('jane', 'secret');
 
-        $login->initial();
-        $login->respond('Username:');
-        $login->respond('Password:');
+        // Two exchanges on one authenticator, which is what a reconnect does.
+        $first = [$login->respond('Username:', 0), $login->respond('Password:', 1)];
+        $second = [$login->respond('Username:', 0), $login->respond('Password:', 1)];
 
-        // An authenticator outlives the connection it was built for. Without a
-        // reset, the reconnect answers the first prompt with the password and
-        // perfectly good credentials fail.
-        $login->initial();
-
-        $this->assertSame('jane', $login->respond('Username:'));
-        $this->assertSame('secret', $login->respond('Password:'));
+        $this->assertSame(['jane', 'secret'], $first);
+        $this->assertSame($first, $second);
     }
 
     public function testXOAuth2CarriesABearerToken(): void
@@ -54,6 +52,6 @@ final class AuthTest extends TestCase
     {
         // A challenge here is the server explaining the refusal. Answering with
         // nothing closes the exchange so the failure surfaces as one.
-        $this->assertSame('', (new XOAuth2('jane@example.test', 'token'))->respond('{"status":"401"}'));
+        $this->assertSame('', (new XOAuth2('jane@example.test', 'token'))->respond('{"status":"401"}', 0));
     }
 }

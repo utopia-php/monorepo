@@ -12,7 +12,7 @@ final class CapabilitiesTest extends TestCase
 {
     private function parse(string ...$lines): Capabilities
     {
-        return Capabilities::fromReply(new Reply(250, ['mail.example.test', ...$lines]));
+        return Capabilities::fromReply(new Reply(250, array_values(['mail.example.test', ...$lines])));
     }
 
     public function testIgnoresTheGreetingLine(): void

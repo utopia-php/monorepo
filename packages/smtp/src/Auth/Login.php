@@ -8,14 +8,12 @@ namespace Utopia\SMTP\Auth;
  * The undocumented mechanism every server implements anyway: username, then
  * password, each in answer to a prompt whose wording nobody agrees on.
  */
-class Login implements Authenticator
+final readonly class Login implements Authenticator
 {
-    private bool $sentUsername = false;
-
     public function __construct(
-        private readonly string $username,
+        private string $username,
         #[\SensitiveParameter]
-        private readonly string $password,
+        private string $password,
     ) {}
 
     public function mechanism(): string
@@ -25,23 +23,13 @@ class Login implements Authenticator
 
     public function initial(): ?string
     {
-        // Called once at the start of every exchange, which is where a mechanism
-        // that counts challenges gets to forget the last one. Without this, an
-        // authenticator reused across a reconnect answers the first prompt with
-        // the password.
-        $this->sentUsername = false;
-
         return null;
     }
 
-    public function respond(string $challenge): string
+    public function respond(string $challenge, int $step): string
     {
-        if ($this->sentUsername) {
-            return $this->password;
-        }
-
-        $this->sentUsername = true;
-
-        return $this->username;
+        // The prompts are base64 and their wording is not standardised, so the
+        // order is the only thing worth trusting.
+        return $step === 0 ? $this->username : $this->password;
     }
 }

@@ -11,7 +11,7 @@ use Utopia\SMTP\Tls;
  * Streams. Under Swoole's runtime hook these yield the scheduler like any other
  * hooked stream, so this transport is not limited to blocking contexts.
  */
-class Native implements Transport
+final class Native implements Transport
 {
     /** @var resource|null */
     private $stream;
@@ -38,7 +38,7 @@ class Native implements Transport
         );
 
         if ($stream === false) {
-            throw new ConnectionException("Cannot reach {$this->host}:{$this->port}: {$error}", $code);
+            throw new ConnectionException("Cannot reach {$this->host}:{$this->port}: {$error}", $code ?? 0);
         }
 
         $this->stream = $stream;
@@ -48,6 +48,10 @@ class Native implements Transport
 
     public function read(int $length, float $timeout): string
     {
+        if ($length < 1) {
+            throw new ConnectionException('A read needs a positive length');
+        }
+
         $stream = $this->stream();
         $this->timeout($timeout);
 

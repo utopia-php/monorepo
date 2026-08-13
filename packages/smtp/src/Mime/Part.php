@@ -12,7 +12,7 @@ use Utopia\SMTP\Exception;
  * One node of the MIME tree: either content, an attachment, or a boundary with
  * children under it.
  */
-class Part
+final readonly class Part
 {
     /** Enough input for a hundred base64 lines per read. */
     private const BLOCK = Encoding::CHUNK * 100;
@@ -22,11 +22,11 @@ class Part
      * @param  list<Part>  $parts
      */
     private function __construct(
-        private readonly array $headers,
-        private readonly ?string $content = null,
-        private readonly ?Attachment $attachment = null,
-        private readonly array $parts = [],
-        private readonly string $boundary = '',
+        private array $headers,
+        private ?string $content = null,
+        private ?Attachment $attachment = null,
+        private array $parts = [],
+        private string $boundary = '',
     ) {}
 
     public static function text(string $type, string $content): self
@@ -62,7 +62,7 @@ class Part
 
         return new self(
             ['Content-Type' => "multipart/{$subtype}; boundary=\"{$boundary}\""],
-            parts: $parts,
+            parts: array_values($parts),
             boundary: $boundary,
         );
     }

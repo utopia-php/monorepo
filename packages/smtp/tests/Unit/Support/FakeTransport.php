@@ -91,7 +91,7 @@ class FakeTransport implements Transport
             throw new ConnectionException('Handshake failed');
         }
 
-        $this->handshakes++;
+        ++$this->handshakes;
         $this->tls = true;
         $this->reply(...$this->afterHandshake);
     }

@@ -20,15 +20,17 @@ interface Authenticator
      * Null when the mechanism has to wait for the server to speak first.
      *
      * Returned decoded; the client applies base64.
-     *
-     * Called exactly once at the start of every exchange, so a mechanism that
-     * carries state between challenges resets it here. An authenticator outlives
-     * the connection it was built for, and is reused after a reconnect.
      */
     public function initial(): ?string;
 
     /**
      * Answer a server challenge, decoded in and decoded out.
+     *
+     * An authenticator outlives the connection it was built for and is reused
+     * after a reconnect, so a mechanism with more than one step reads $step
+     * rather than counting for itself. Nothing here may hold state.
+     *
+     * @param  int  $step  Which challenge this is, counting from zero.
      */
-    public function respond(string $challenge): string;
+    public function respond(string $challenge, int $step): string;
 }

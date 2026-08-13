@@ -14,7 +14,7 @@ use Utopia\SMTP\Transport\Transport;
  * One instance is one connection. Reusing connections is what
  * utopia-php/pools is for, so there is no keep-alive setting here.
  */
-class Client
+final class Client
 {
     private const int CHUNK = 8192;
 
@@ -63,6 +63,7 @@ class Client
 
         $accepted = [];
         $rejected = [];
+        $refusal = null;
 
         foreach ($envelope->recipients as $recipient) {
             try {
@@ -71,16 +72,14 @@ class Client
             } catch (TransactionException $exception) {
                 // Partial refusal is normal and the message still reaches the rest.
                 $rejected[$recipient] = $exception->reply;
+                $refusal ??= $exception->reply;
             }
         }
 
-        if ($accepted === []) {
+        if ($refusal instanceof \Utopia\SMTP\Reply && $accepted === []) {
             $this->reset();
 
-            throw new TransactionException(
-                $rejected[array_key_first($rejected)],
-                'Every recipient was refused',
-            );
+            throw new TransactionException($refusal, 'Every recipient was refused');
         }
 
         $this->command('DATA', [354]);
@@ -245,14 +244,14 @@ class Client
         try {
             $reply = $this->command($command, [235, 334]);
 
-            for ($challenges = 0; $reply->code === 334; $challenges++) {
+            for ($challenges = 0; $reply->code === 334; ++$challenges) {
                 if ($challenges >= self::MAX_CHALLENGES) {
                     throw new AuthenticationException('The server kept challenging');
                 }
 
                 $challenge = base64_decode($reply->text(), true);
                 $reply = $this->command(
-                    base64_encode($authenticator->respond($challenge === false ? '' : $challenge)),
+                    base64_encode($authenticator->respond($challenge === false ? '' : $challenge, $challenges)),
                     [235, 334],
                 );
             }

@@ -11,12 +11,12 @@ namespace Utopia\SMTP;
  * anything learned before the handshake is forgotten, since none of it was
  * authenticated.
  */
-class Capabilities
+final readonly class Capabilities
 {
     /**
      * @param  array<string, list<string>>  $keywords
      */
-    private function __construct(private readonly array $keywords) {}
+    private function __construct(private array $keywords) {}
 
     public static function none(): self
     {

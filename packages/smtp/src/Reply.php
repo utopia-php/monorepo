@@ -8,16 +8,16 @@ namespace Utopia\SMTP;
  * One server response: a three digit code, the text of each line, and the
  * enhanced status code of RFC 3463 when the server advertises RFC 2034.
  */
-class Reply implements \Stringable
+final readonly class Reply implements \Stringable
 {
-    public readonly ?string $status;
+    public ?string $status;
 
     /**
      * @param  list<string>  $lines  Line text, with the code and separator stripped.
      */
     public function __construct(
-        public readonly int $code,
-        public readonly array $lines,
+        public int $code,
+        public array $lines,
     ) {
         $this->status = preg_match('/^([245]\.\d{1,3}\.\d{1,3})(?: |$)/', $lines[0] ?? '', $matches) === 1
             ? $matches[1]

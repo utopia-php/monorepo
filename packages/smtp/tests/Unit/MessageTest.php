@@ -14,6 +14,7 @@ final class MessageTest extends TestCase
 {
     /**
      * @param  list<Attachment>  $attachments
+     * @param  list<Address>  $bcc
      * @param  array<string, string>  $headers
      */
     private function message(

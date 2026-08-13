@@ -10,7 +10,7 @@ namespace Utopia\SMTP;
  * A blind recipient belongs here and nowhere else: Envelope::fromMessage puts
  * it in RCPT TO, and the renderer leaves it out of the headers.
  */
-class Envelope
+final readonly class Envelope
 {
     /**
      * @param  string  $sender  The reverse-path. Empty for a bounce.
@@ -19,9 +19,9 @@ class Envelope
      *                      message whose headers still need it.
      */
     public function __construct(
-        public readonly string $sender,
-        public readonly array $recipients,
-        private readonly bool $utf8 = false,
+        public string $sender,
+        public array $recipients,
+        private bool $utf8 = false,
     ) {
         if ($recipients === []) {
             throw new Exception('An envelope needs at least one recipient');

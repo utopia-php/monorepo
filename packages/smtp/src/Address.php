@@ -9,7 +9,7 @@ use Utopia\SMTP\Mime\Encoding;
 /**
  * A mailbox: an address with an optional display name.
  */
-class Address implements \Stringable
+final readonly class Address implements \Stringable
 {
     /** RFC 5321 section 4.5.3.1.1. */
     private const int MAX_LOCAL = 64;
@@ -18,8 +18,8 @@ class Address implements \Stringable
     private const int MAX_DOMAIN = 255;
 
     public function __construct(
-        public readonly string $email,
-        public readonly string $name = '',
+        public string $email,
+        public string $name = '',
     ) {
         if (preg_match('/[\r\n\x00]/', $email . $name) === 1) {
             throw new Exception('An address must not span lines');

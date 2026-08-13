@@ -11,7 +11,7 @@ use Utopia\SMTP\Mime\Part;
  * An RFC 5322 message, with the MIME structure chosen from what was set rather
  * than picked by the caller.
  */
-class Message implements \Stringable
+final readonly class Message implements \Stringable
 {
     /** Headers the message owns, which a caller must not set by hand. */
     private const array RESERVED = [
@@ -20,11 +20,11 @@ class Message implements \Stringable
         'content-type', 'content-transfer-encoding',
     ];
 
-    public readonly \DateTimeImmutable $date;
+    public \DateTimeImmutable $date;
 
-    public readonly string $messageId;
+    public string $messageId;
 
-    private readonly Part $root;
+    private Part $root;
 
     /**
      * @param  list<Address>  $to
@@ -35,16 +35,16 @@ class Message implements \Stringable
      * @param  array<string, string>  $headers
      */
     public function __construct(
-        public readonly Address $from,
-        public readonly array $to,
-        public readonly string $subject,
-        public readonly ?string $text = null,
-        public readonly ?string $html = null,
-        public readonly array $cc = [],
-        public readonly array $bcc = [],
-        public readonly array $replyTo = [],
+        public Address $from,
+        public array $to,
+        public string $subject,
+        public ?string $text = null,
+        public ?string $html = null,
+        public array $cc = [],
+        public array $bcc = [],
+        public array $replyTo = [],
         array $attachments = [],
-        public readonly array $headers = [],
+        public array $headers = [],
         ?\DateTimeImmutable $date = null,
         ?string $messageId = null,
     ) {

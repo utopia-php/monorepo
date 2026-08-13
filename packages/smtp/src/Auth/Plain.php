@@ -7,12 +7,12 @@ namespace Utopia\SMTP\Auth;
 /**
  * RFC 4616, carried by RFC 4954. One round trip, and safe once TLS is up.
  */
-class Plain implements Authenticator
+final readonly class Plain implements Authenticator
 {
     public function __construct(
-        private readonly string $username,
+        private string $username,
         #[\SensitiveParameter]
-        private readonly string $password,
+        private string $password,
     ) {}
 
     public function mechanism(): string
@@ -25,7 +25,7 @@ class Plain implements Authenticator
         return "\0{$this->username}\0{$this->password}";
     }
 
-    public function respond(string $challenge): string
+    public function respond(string $challenge, int $step): string
     {
         return $this->initial();
     }

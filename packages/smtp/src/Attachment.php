@@ -8,16 +8,16 @@ namespace Utopia\SMTP;
  * A file to carry along, either held in memory or read from disk when the
  * message is written.
  */
-class Attachment
+final readonly class Attachment
 {
     private const string FALLBACK_TYPE = 'application/octet-stream';
 
     private function __construct(
-        public readonly string $name,
-        public readonly string $type,
-        public readonly ?string $content,
-        public readonly ?string $path,
-        public readonly ?string $cid = null,
+        public string $name,
+        public string $type,
+        public ?string $content,
+        public ?string $path,
+        public ?string $cid = null,
     ) {
         if (preg_match('/[\r\n\x00]/', $name . $type . ($cid)) === 1) {
             throw new Exception('An attachment name, type or identifier must not span lines');

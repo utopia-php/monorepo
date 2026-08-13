@@ -142,9 +142,11 @@ interface Authenticator
 {
     public function mechanism(): string;                  // 'PLAIN'
     public function initial(): ?string;                   // AUTH <mechanism> <initial-response>
-    public function respond(string $challenge): string;
+    public function respond(string $challenge, int $step): string;
 }
 ```
+
+The step is passed in rather than counted, so no mechanism holds state. `LOGIN` needs two answers in order, and an authenticator outlives the connection it was built for — an instance that counted for itself would answer the first prompt of a reconnect with the password.
 
 Shipping `Auth\Plain`, `Auth\Login` and `Auth\XOAuth2`. `CRAM-MD5` is left out: it is weaker than `PLAIN` over TLS, and the interface is open for anyone who needs it.
 
@@ -217,7 +219,7 @@ Encoding decisions are made for the caller: quoted-printable for text parts, bas
 
 **`SMTPUTF8` for a header that needs it.** `Reply-To` is a header and never a path, so a non-ASCII one appears in no `RCPT TO` — which is why the envelope carries a `utf8` flag rather than deriving the answer from its paths alone. Missing it means a conforming server refuses the message.
 
-**A stateful authenticator reused after a reconnect.** `LOGIN` counts challenges, and an authenticator outlives the connection it was built for. `initial()` is specified to be called once per exchange so a mechanism has somewhere to forget the last one; without that reset, good credentials fail on the second connection.
+**A stateful authenticator reused after a reconnect.** `LOGIN` needs two answers in order, and an authenticator outlives the connection it was built for. Rather than resetting a counter, the client passes the step, which makes the failure unrepresentable — and lets every mechanism be a `final readonly class`.
 
 ## Testing
 

@@ -32,7 +32,8 @@ final class ClientTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->api('DELETE', '/api/v1/messages');
+        // Answers with an empty body, so it is not read as an object.
+        $this->get('DELETE', '/api/v1/messages');
     }
 
     /**
@@ -64,27 +65,56 @@ final class ClientTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function api(string $method, string $path): array
     {
         $decoded = json_decode($this->get($method, $path), true);
 
-        return \is_array($decoded) ? $decoded : [];
+        $this->assertIsArray($decoded, "Mailpit answered {$path} with something other than an object");
+
+        return $decoded;
+    }
+
+    /**
+     * A field the API promises is a string.
+     *
+     * @param  array<mixed>  $message
+     */
+    private function field(array $message, string $key): string
+    {
+        $this->assertArrayHasKey($key, $message);
+        $this->assertIsString($message[$key]);
+
+        return $message[$key];
+    }
+
+    /**
+     * A field the API promises is a list.
+     *
+     * @param  array<mixed>  $message
+     * @return array<mixed>
+     */
+    private function listOf(array $message, string $key): array
+    {
+        $this->assertArrayHasKey($key, $message);
+        $this->assertIsArray($message[$key]);
+
+        return $message[$key];
     }
 
     private function id(): string
     {
-        $messages = $this->api('GET', '/api/v1/messages')['messages'] ?? [];
+        $messages = $this->listOf($this->api('GET', '/api/v1/messages'), 'messages');
 
-        $this->assertIsArray($messages);
         $this->assertCount(1, $messages, 'expected exactly one delivered message');
+        $this->assertIsArray($messages[0]);
 
-        return (string) $messages[0]['ID'];
+        return $this->field($messages[0], 'ID');
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function delivered(): array
     {
@@ -116,8 +146,8 @@ final class ClientTest extends TestCase
         $this->assertSame(['john@example.test'], $result->accepted);
 
         $delivered = $this->delivered();
-        $this->assertSame('Hello from Utopia', $delivered['Subject']);
-        $this->assertStringContainsString('Plain body', (string) $delivered['Text']);
+        $this->assertSame('Hello from Utopia', $this->field($delivered, 'Subject'));
+        $this->assertStringContainsString('Plain body', $this->field($delivered, 'Text'));
     }
 
     public function testAdvertisesTheExtensionsWeRelyOn(): void
@@ -153,7 +183,7 @@ final class ClientTest extends TestCase
 
         $client->close();
 
-        $this->assertSame('Plaintext', $this->delivered()['Subject']);
+        $this->assertSame('Plaintext', $this->field($this->delivered(), 'Subject'));
     }
 
     public function testLoginMechanismAlsoAuthenticates(): void
@@ -174,7 +204,7 @@ final class ClientTest extends TestCase
 
         $client->close();
 
-        $this->assertSame('Login', $this->delivered()['Subject']);
+        $this->assertSame('Login', $this->field($this->delivered(), 'Subject'));
     }
 
     public function testRefusesBadCredentials(): void
@@ -212,8 +242,8 @@ final class ClientTest extends TestCase
         );
 
         $delivered = $this->delivered();
-        $this->assertCount(1, $delivered['To']);
-        $this->assertCount(1, $delivered['Cc']);
+        $this->assertCount(1, $this->listOf($delivered, 'To'));
+        $this->assertCount(1, $this->listOf($delivered, 'Cc'));
 
         // All three were delivered, but the blind one reached the server only
         // through RCPT TO. Mailpit records that by prepending its own Bcc,
@@ -243,9 +273,12 @@ final class ClientTest extends TestCase
         $client->close();
 
         $delivered = $this->delivered();
-        $this->assertCount(1, $delivered['Attachments']);
-        $this->assertSame('notes.txt', $delivered['Attachments'][0]['FileName']);
-        $this->assertStringContainsString('See attached', (string) $delivered['HTML']);
+        $attachments = $this->listOf($delivered, 'Attachments');
+
+        $this->assertCount(1, $attachments);
+        $this->assertIsArray($attachments[0]);
+        $this->assertSame('notes.txt', $this->field($attachments[0], 'FileName'));
+        $this->assertStringContainsString('See attached', $this->field($delivered, 'HTML'));
     }
 
     public function testStuffsADotThatWouldOtherwiseEndTheMessage(): void
@@ -263,7 +296,7 @@ final class ClientTest extends TestCase
 
         // Without stuffing the server would have stopped reading at the dot and
         // the second half would be gone.
-        $this->assertStringContainsString('after', (string) $this->delivered()['Text']);
+        $this->assertStringContainsString('after', $this->field($this->delivered(), 'Text'));
     }
 
     public function testReportsARefusedRecipientWithoutLosingTheRest(): void
@@ -282,7 +315,7 @@ final class ClientTest extends TestCase
         $this->assertSame(['john@example.test'], $result->accepted);
         $this->assertArrayHasKey('blocked@example.invalid', $result->rejected);
         $this->assertTrue($result->rejected['blocked@example.invalid']->isPermanent());
-        $this->assertSame('Partial', $this->delivered()['Subject']);
+        $this->assertSame('Partial', $this->field($this->delivered(), 'Subject'));
     }
 
     public function testSurfacesARefusalAsATransactionFailure(): void

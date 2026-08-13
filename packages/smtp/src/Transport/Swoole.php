@@ -14,7 +14,7 @@ use Utopia\SMTP\Tls;
  *
  * Requires ext-swoole, which the package only suggests.
  */
-class Swoole implements Transport
+final class Swoole implements Transport
 {
     private ?Client $client = null;
 
@@ -35,10 +35,7 @@ class Swoole implements Transport
         $client->set($this->settings($timeout));
 
         if (! $client->connect($this->host, $this->port, $timeout)) {
-            throw new ConnectionException(
-                "Cannot reach {$this->host}:{$this->port}: [{$client->errCode}] {$client->errMsg}",
-                $client->errCode,
-            );
+            throw new ConnectionException("Cannot reach {$this->host}:{$this->port}: " . $this->error($client));
         }
 
         $this->client = $client;
@@ -48,15 +45,19 @@ class Swoole implements Transport
 
     public function read(int $length, float $timeout): string
     {
+        if ($length < 1) {
+            throw new ConnectionException('A read needs a positive length');
+        }
+
         if ($this->buffer === '') {
             $client = $this->client();
             $data = $client->recv($timeout);
 
-            if ($data === false || $data === '') {
+            if (! \is_string($data) || $data === '') {
                 throw new ConnectionException(
                     $client->errCode === SOCKET_ETIMEDOUT
                         ? 'Timed out waiting for the server'
-                        : "The server closed the connection: [{$client->errCode}] {$client->errMsg}",
+                        : 'The server closed the connection: ' . $this->error($client),
                 );
             }
 
@@ -76,8 +77,8 @@ class Swoole implements Transport
         for ($written = 0; $written < \strlen($data);) {
             $sent = $client->send(substr($data, $written));
 
-            if ($sent === false || $sent === 0) {
-                throw new ConnectionException("Failed writing to the server: [{$client->errCode}] {$client->errMsg}");
+            if (! \is_int($sent) || $sent < 1) {
+                throw new ConnectionException('Failed writing to the server: ' . $this->error($client));
             }
 
             $written += $sent;
@@ -89,9 +90,7 @@ class Swoole implements Transport
         $client = $this->client();
 
         if (! $client->enableSSL()) {
-            throw new ConnectionException(
-                "STARTTLS handshake with {$this->host} failed: [{$client->errCode}] {$client->errMsg}",
-            );
+            throw new ConnectionException("STARTTLS handshake with {$this->host} failed: " . $this->error($client));
         }
 
         $this->tls = true;
@@ -104,7 +103,7 @@ class Swoole implements Transport
 
     public function close(): void
     {
-        if ($this->client instanceof \Swoole\Coroutine\Client) {
+        if ($this->client instanceof Client) {
             $this->client->close();
             $this->client = null;
             $this->tls = false;
@@ -135,9 +134,25 @@ class Swoole implements Transport
         return $settings;
     }
 
+    /**
+     * The extension declares errCode and errMsg untyped, so neither can be
+     * dropped into a message without being looked at first.
+     */
+    private function error(Client $client): string
+    {
+        $code = $client->errCode;
+        $message = $client->errMsg;
+
+        return \sprintf(
+            '[%d] %s',
+            \is_int($code) ? $code : 0,
+            \is_string($message) && $message !== '' ? $message : 'no reason given',
+        );
+    }
+
     private function client(): Client
     {
-        if (!$this->client instanceof \Swoole\Coroutine\Client) {
+        if (!$this->client instanceof Client) {
             throw new ConnectionException('The transport is not connected');
         }
 
