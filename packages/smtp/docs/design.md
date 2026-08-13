@@ -122,7 +122,7 @@ interface Transport
     public function connect(float $timeout, bool $tls): void;   // $tls: wrap immediately
     public function read(int $length, float $timeout): string;
     public function write(string $data, float $timeout): void;
-    public function startTls(): void;                           // upgrade in place
+    public function startTls(float $timeout): void;             // upgrade in place
     public function isTls(): bool;
     public function close(): void;
 }
@@ -216,4 +216,6 @@ Encoding decisions are made for the caller: quoted-printable for text parts, bas
 
 The unit tier drives a scripted in-memory `Transport`: no sockets, no containers, full coverage of the reply grammar, capability parsing, the encryption policy matrix, authentication exchanges and message rendering.
 
-The end-to-end tier runs against Mailpit in compose, which speaks real SMTP with STARTTLS and authentication and exposes a read-back API for asserting what arrived. Host ports are offset by the usual convention.
+The end-to-end tier runs against Mailpit in compose, which speaks real SMTP with STARTTLS and authentication and exposes a read-back API for asserting what arrived. Submission is on host port 11026 and the API on 18026. The server presents a committed self-signed pair from `tests/fixtures/certs`, so the handshake needs no package manager or network inside the container, and `MP_SMTP_ALLOWED_RECIPIENTS` gives the suite an address the server genuinely refuses, which is what makes partial acceptance testable against real replies.
+
+Two things the end-to-end tier turned up that a double would not have. Mailpit annotates a stored message with its own `Bcc`, `Return-Path` and `Received` fields, so an assertion that no blind recipient reaches the headers has to be made about the bytes we wrote rather than the bytes the server kept. And it advertises `SIZE 0`, which exercises the rule that a declared zero means no fixed maximum.

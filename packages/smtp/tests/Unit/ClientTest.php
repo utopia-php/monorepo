@@ -1,0 +1,394 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Utopia\SMTP\Tests\Unit;
+
+use PHPUnit\Framework\TestCase;
+use Utopia\SMTP\Auth\Login;
+use Utopia\SMTP\Auth\Plain;
+use Utopia\SMTP\AuthenticationException;
+use Utopia\SMTP\Client;
+use Utopia\SMTP\ConnectionException;
+use Utopia\SMTP\Encryption;
+use Utopia\SMTP\Envelope;
+use Utopia\SMTP\Exception;
+use Utopia\SMTP\ProtocolException;
+use Utopia\SMTP\Tests\Unit\Support\FakeTransport;
+use Utopia\SMTP\TransactionException;
+
+final class ClientTest extends TestCase
+{
+    /**
+     * The greeting and a plain EHLO, followed by whatever the test adds.
+     *
+     * @param  list<string>  $replies
+     */
+    private function transport(array $replies = [], string ...$capabilities): FakeTransport
+    {
+        // The greeting opens an EHLO reply; the keywords follow it.
+        $ehlo = ['mail.example.test', ...$capabilities];
+        $last = array_pop($ehlo);
+
+        $lines = ['220 mail.example.test ESMTP'];
+
+        foreach ($ehlo as $line) {
+            $lines[] = "250-{$line}";
+        }
+
+        $lines[] = "250 {$last}";
+
+        return new FakeTransport([...$lines, ...$replies]);
+    }
+
+    /**
+     * A full accepted transaction.
+     *
+     * @return list<string>
+     */
+    private function transaction(string $final = '250 2.0.0 Ok: queued as ABC123'): array
+    {
+        return ['250 2.1.0 Sender ok', '250 2.1.5 Recipient ok', '354 End data with <CR><LF>.<CR><LF>', $final];
+    }
+
+    private function envelope(): Envelope
+    {
+        return new Envelope('jane@example.test', ['john@example.test']);
+    }
+
+    public function testWalksTheTransaction(): void
+    {
+        $transport = $this->transport($this->transaction());
+        $client = new Client($transport, 'relay.example.test', encryption: Encryption::None);
+
+        $result = $client->sendRaw($this->envelope(), "Subject: Hi\r\n\r\nBody");
+
+        $this->assertSame([
+            'EHLO relay.example.test',
+            'MAIL FROM:<jane@example.test>',
+            'RCPT TO:<john@example.test>',
+            'DATA',
+            'Subject: Hi',
+            'Body',
+            '.',
+        ], $transport->commands());
+
+        $this->assertSame(['john@example.test'], $result->accepted);
+        $this->assertSame([], $result->rejected);
+        $this->assertTrue($result->isComplete());
+    }
+
+    public function testReadsTheQueueIdentifier(): void
+    {
+        $transport = $this->transport($this->transaction());
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $this->assertSame('ABC123', $client->sendRaw($this->envelope(), 'Body')->messageId);
+    }
+
+    public function testSurvivesAServerThatOffersNoIdentifier(): void
+    {
+        $transport = $this->transport($this->transaction('250 Ok'));
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $this->assertSame('', $client->sendRaw($this->envelope(), 'Body')->messageId);
+    }
+
+    public function testFallsBackToHeloWhenEhloIsRefused(): void
+    {
+        $transport = new FakeTransport([
+            '220 mail.example.test',
+            '500 Command not recognised',
+            '250 mail.example.test',
+            ...$this->transaction(),
+        ]);
+        $client = new Client($transport, 'relay.example.test', encryption: Encryption::None);
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $this->assertSame(['EHLO relay.example.test', 'HELO relay.example.test'], \array_slice($transport->commands(), 0, 2));
+    }
+
+    public function testKeepsSendingWhenOnlySomeRecipientsAreRefused(): void
+    {
+        $transport = $this->transport([
+            '250 Sender ok',
+            '250 Recipient ok',
+            '550 5.1.1 No such user',
+            '354 Go ahead',
+            '250 Ok: queued as ABC123',
+        ]);
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $result = $client->sendRaw(
+            new Envelope('jane@example.test', ['john@example.test', 'ghost@example.test']),
+            'Body',
+        );
+
+        $this->assertSame(['john@example.test'], $result->accepted);
+        $this->assertSame(['ghost@example.test'], array_keys($result->rejected));
+        $this->assertTrue($result->rejected['ghost@example.test']->isPermanent());
+        $this->assertFalse($result->isComplete());
+    }
+
+    public function testAcceptsTheForwardingRepliesOfRfc5321(): void
+    {
+        $transport = $this->transport(['250 Sender ok', '251 User not local; will forward', '354 Go ahead', '250 Ok']);
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $this->assertSame(['john@example.test'], $client->sendRaw($this->envelope(), 'Body')->accepted);
+    }
+
+    public function testGivesUpWhenEveryRecipientIsRefused(): void
+    {
+        $transport = $this->transport(['250 Sender ok', '450 4.2.1 Mailbox busy', '250 Reset ok']);
+        $client = new Client($transport, encryption: Encryption::None);
+
+        try {
+            $client->sendRaw($this->envelope(), 'Body');
+            $this->fail('Expected the send to fail');
+        } catch (TransactionException $exception) {
+            $this->assertTrue($exception->isTransient());
+            $this->assertSame('4.2.1', $exception->reply->status);
+        }
+
+        $this->assertContains('RSET', $transport->commands());
+    }
+
+    public function testUpgradesWhenTheServerOffersStartTls(): void
+    {
+        $transport = $this->transport(['220 Ready to start TLS', '250 mail.example.test', ...$this->transaction()], 'STARTTLS');
+        $client = new Client($transport, 'relay.example.test');
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $this->assertSame(1, $transport->handshakes);
+        $this->assertTrue($transport->isTls());
+
+        // RFC 3207 section 4.2: EHLO is reissued and the old capabilities dropped.
+        $commands = $transport->commands();
+        $this->assertSame('EHLO relay.example.test', $commands[0]);
+        $this->assertSame('STARTTLS', $commands[1]);
+        $this->assertSame('EHLO relay.example.test', $commands[2]);
+    }
+
+    public function testStaysPlaintextWhenTheServerDoesNotOfferStartTls(): void
+    {
+        $transport = $this->transport($this->transaction());
+        $client = new Client($transport);
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $this->assertSame(0, $transport->handshakes);
+    }
+
+    public function testRefusesToContinueWhenStartTlsIsRequiredAndMissing(): void
+    {
+        $client = new Client($this->transport(), encryption: Encryption::StartTls);
+
+        $this->expectException(ConnectionException::class);
+
+        $client->sendRaw($this->envelope(), 'Body');
+    }
+
+    public function testConnectsWrappedWhenTlsIsImplicit(): void
+    {
+        $transport = $this->transport($this->transaction());
+        $client = new Client($transport, encryption: Encryption::Implicit);
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $this->assertTrue($transport->isTls());
+        $this->assertSame(0, $transport->handshakes, 'implicit TLS needs no upgrade');
+    }
+
+    public function testDropsAnythingBufferedBeforeTheHandshake(): void
+    {
+        // A greedy transport hands the injected line over along with the 220, so
+        // it is sitting unread in the client's buffer when the handshake finishes.
+        // Reusing it would mean trusting bytes that arrived in the clear.
+        $transport = new FakeTransport(
+            [
+                '220 mail.example.test ESMTP',
+                '250-mail.example.test',
+                '250 STARTTLS',
+                '220 Ready to start TLS',
+                '250 2.7.0 Injected before the handshake',
+            ],
+            greedy: true,
+            afterHandshake: [
+                '250-mail.example.test',
+                '250 SIZE 100',
+                ...$this->transaction(),
+            ],
+        );
+        $client = new Client($transport);
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $this->assertSame(1, $transport->handshakes);
+
+        // The capabilities came from the reply read after the handshake, not
+        // from the line injected before it.
+        $this->assertSame(100, $client->capabilities()->maxSize());
+    }
+
+    public function testAuthenticatesWithAnInitialResponse(): void
+    {
+        $transport = $this->transport(['235 2.7.0 Authenticated', ...$this->transaction()], 'AUTH PLAIN LOGIN');
+        $client = new Client($transport, authenticators: [new Plain('jane', 'secret')], encryption: Encryption::None);
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $this->assertContains('AUTH PLAIN ' . base64_encode("\0jane\0secret"), $transport->commands());
+    }
+
+    public function testAuthenticatesThroughChallenges(): void
+    {
+        $transport = $this->transport([
+            '334 ' . base64_encode('Username:'),
+            '334 ' . base64_encode('Password:'),
+            '235 2.7.0 Authenticated',
+            ...$this->transaction(),
+        ], 'AUTH LOGIN');
+        $client = new Client($transport, authenticators: [new Login('jane', 'secret')], encryption: Encryption::None);
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $commands = $transport->commands();
+        $this->assertContains('AUTH LOGIN', $commands);
+        $this->assertContains(base64_encode('jane'), $commands);
+        $this->assertContains(base64_encode('secret'), $commands);
+    }
+
+    public function testPicksTheFirstMechanismTheServerShares(): void
+    {
+        $transport = $this->transport(['235 Authenticated', ...$this->transaction()], 'AUTH LOGIN');
+        $client = new Client(
+            $transport,
+            authenticators: [new Plain('jane', 'secret'), new Login('jane', 'secret')],
+            encryption: Encryption::None,
+        );
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $this->assertContains('AUTH LOGIN', $transport->commands());
+    }
+
+    public function testFailsWhenNoMechanismIsShared(): void
+    {
+        $client = new Client(
+            $this->transport([], 'AUTH GSSAPI'),
+            authenticators: [new Plain('jane', 'secret')],
+            encryption: Encryption::None,
+        );
+
+        $this->expectException(AuthenticationException::class);
+
+        $client->sendRaw($this->envelope(), 'Body');
+    }
+
+    public function testFailsWhenCredentialsAreRefused(): void
+    {
+        $client = new Client(
+            $this->transport(['535 5.7.8 Authentication credentials invalid'], 'AUTH PLAIN'),
+            authenticators: [new Plain('jane', 'wrong')],
+            encryption: Encryption::None,
+        );
+
+        $this->expectException(AuthenticationException::class);
+
+        $client->sendRaw($this->envelope(), 'Body');
+    }
+
+    public function testDeclaresTheSizeWhenTheServerAsksForIt(): void
+    {
+        $transport = $this->transport($this->transaction(), 'SIZE 1000');
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $this->assertContains('MAIL FROM:<jane@example.test> SIZE=4', $transport->commands());
+    }
+
+    public function testRefusesAMessageOverTheServerLimit(): void
+    {
+        $client = new Client($this->transport([], 'SIZE 10'), encryption: Encryption::None);
+
+        $this->expectException(Exception::class);
+
+        $client->sendRaw($this->envelope(), str_repeat('x', 11));
+    }
+
+    public function testDeclaresSmtpUtf8ForAnInternationalPath(): void
+    {
+        $transport = $this->transport($this->transaction(), 'SMTPUTF8');
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $client->sendRaw(new Envelope('jäne@example.test', ['john@example.test']), 'Body');
+
+        $this->assertContains('MAIL FROM:<jäne@example.test> SMTPUTF8', $transport->commands());
+    }
+
+    public function testRefusesAnInternationalPathTheServerCannotCarry(): void
+    {
+        $client = new Client($this->transport(), encryption: Encryption::None);
+
+        $this->expectException(Exception::class);
+
+        $client->sendRaw(new Envelope('jäne@example.test', ['john@example.test']), 'Body');
+    }
+
+    public function testQuitsOnClose(): void
+    {
+        $transport = $this->transport([...$this->transaction(), '221 2.0.0 Bye']);
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $client->sendRaw($this->envelope(), 'Body');
+        $client->close();
+
+        $this->assertContains('QUIT', $transport->commands());
+        $this->assertTrue($transport->closed);
+    }
+
+    public function testClosesWithoutGreetingWhenNothingWasSent(): void
+    {
+        $transport = $this->transport();
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $client->close();
+
+        $this->assertSame([], $transport->commands());
+        $this->assertTrue($transport->closed);
+    }
+
+    public function testRejectsACommandThatSpansLines(): void
+    {
+        $client = new Client($this->transport(), encryption: Encryption::None);
+
+        $this->expectException(Exception::class);
+
+        $client->command("NOOP\r\nRCPT TO:<eve@example.test>", [250]);
+    }
+
+    public function testRejectsAReplyThatIsNotAReply(): void
+    {
+        $client = new Client(new FakeTransport(['hello there']), encryption: Encryption::None);
+
+        $this->expectException(ProtocolException::class);
+
+        $client->sendRaw($this->envelope(), 'Body');
+    }
+
+    public function testReadsAContinuedReply(): void
+    {
+        $transport = $this->transport($this->transaction(), 'PIPELINING', 'SIZE 100', '8BITMIME');
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $capabilities = $client->capabilities();
+
+        $this->assertTrue($capabilities->has('PIPELINING'));
+        $this->assertTrue($capabilities->has('8BITMIME'));
+        $this->assertSame(100, $capabilities->maxSize());
+    }
+}
