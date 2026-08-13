@@ -84,7 +84,9 @@ final class Native implements Transport
             $sent = @fwrite($stream, substr($data, $written));
 
             if ($sent === false || $sent === 0) {
-                throw new ConnectionException('Failed writing to the server');
+                throw stream_get_meta_data($stream)['timed_out']
+                    ? new TimeoutException('Timed out writing to the server')
+                    : new ConnectionException('Failed writing to the server');
             }
 
             $written += $sent;
@@ -98,10 +100,12 @@ final class Native implements Transport
 
         // STREAM_CRYPTO_METHOD_TLS_CLIENT means "TLS 1.0 or better" here, not
         // "TLS 1.0", so this does not pin the handshake to an obsolete version.
-        $started = @stream_socket_enable_crypto($stream, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        $secured = @stream_socket_enable_crypto($stream, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
 
-        if ($started !== true) {
-            throw new ConnectionException("STARTTLS handshake with {$this->host} failed");
+        if ($secured !== true) {
+            throw stream_get_meta_data($stream)['timed_out']
+                ? new TimeoutException("STARTTLS handshake with {$this->host} timed out")
+                : new ConnectionException("STARTTLS handshake with {$this->host} failed");
         }
 
         $this->tls = true;

@@ -219,6 +219,27 @@ final class SwooleTest extends TestCase
         });
     }
 
+    public function testAWriteBudgetReachesTheClient(): void
+    {
+        // send() takes no deadline argument, so the only place a write budget
+        // can land is the client's own settings. Asking the client is the only
+        // way to know it was not quietly dropped.
+        $this->coroutine(function (): void {
+            $transport = $this->connect();
+            $transport->write("NOOP\r\n", 7.5);
+
+            $client = (new \ReflectionProperty(Swoole::class, 'client'))->getValue($transport);
+            $this->assertInstanceOf(\Swoole\Coroutine\Client::class, $client);
+
+            $settings = $client->setting;
+            $this->assertIsArray($settings);
+            $this->assertArrayHasKey('write_timeout', $settings);
+            $this->assertEqualsWithDelta(7.5, $settings['write_timeout'], PHP_FLOAT_EPSILON);
+
+            $transport->close();
+        });
+    }
+
     public function testRefusesToVerifyACertificateAgainstAnAddress(): void
     {
         // X509_check_host() reads the DNS entries of a certificate, not the

@@ -25,6 +25,9 @@ final class Swoole implements Transport
     /** Bytes taken off the socket but not yet handed out. */
     private string $buffer = '';
 
+    /** The deadline currently configured for sends, which is not a per-call argument here. */
+    private ?float $writeTimeout = null;
+
     public function __construct(
         private readonly string $host,
         private readonly int $port,
@@ -52,6 +55,7 @@ final class Swoole implements Transport
         $this->client = $client;
         $this->tls = $tls;
         $this->buffer = '';
+        $this->writeTimeout = null;
     }
 
     public function read(int $length, float $timeout): string
@@ -87,11 +91,24 @@ final class Swoole implements Transport
     {
         $client = $this->client();
 
+        // send() takes no deadline of its own, so the one asked for here has to
+        // be configured on the client first. Left alone it would keep whatever
+        // connect was given, and a write budget would quietly mean nothing.
+        if ($this->writeTimeout !== $timeout) {
+            $client->set(['write_timeout' => $timeout]);
+            $this->writeTimeout = $timeout;
+        }
+
         for ($written = 0; $written < \strlen($data);) {
+            $started = microtime(true);
             $sent = $client->send(substr($data, $written));
 
             if (! \is_int($sent) || $sent < 1) {
-                throw new ConnectionException('Failed writing to the server: ' . $this->error($client));
+                $reason = 'Failed writing to the server: ' . $this->error($client);
+
+                throw microtime(true) - $started >= $timeout
+                    ? new TimeoutException($reason)
+                    : new ConnectionException($reason);
             }
 
             $written += $sent;
@@ -104,8 +121,17 @@ final class Swoole implements Transport
 
         $client = $this->client();
 
+        // enableSSL blocks until the handshake is done and takes no deadline
+        // either, so the same applies.
+        $client->set(['connect_timeout' => $timeout]);
+        $started = microtime(true);
+
         if (! $client->enableSSL()) {
-            throw new ConnectionException("STARTTLS handshake with {$this->host} failed: " . $this->error($client));
+            $reason = "STARTTLS handshake with {$this->host} failed: " . $this->error($client);
+
+            throw microtime(true) - $started >= $timeout
+                ? new TimeoutException($reason)
+                : new ConnectionException($reason);
         }
 
         $this->tls = true;
@@ -123,6 +149,7 @@ final class Swoole implements Transport
             $this->client = null;
             $this->tls = false;
             $this->buffer = '';
+            $this->writeTimeout = null;
         }
     }
 
@@ -133,6 +160,7 @@ final class Swoole implements Transport
     {
         $settings = [
             'timeout' => $timeout,
+            'connect_timeout' => $timeout,
             'ssl_verify_peer' => $this->options->verify !== Verification::None,
             'ssl_allow_self_signed' => $this->options->verify !== Verification::Full,
             'ssl_host_name' => $this->options->peerName ?? $this->host,

@@ -49,6 +49,24 @@ final class TimeoutsTest extends TestCase
         new Timeouts(read: -1.0);
     }
 
+    public function testRefusesAWaitWithNoEnd(): void
+    {
+        // INF is greater than zero, so asking whether the number is positive
+        // lets it through and the socket waits for ever.
+        $this->expectException(InvalidArgumentException::class);
+
+        new Timeouts(read: INF);
+    }
+
+    public function testRefusesANumberThatIsNotOne(): void
+    {
+        // NAN fails every comparison, including the one that was meant to
+        // catch it, and reaches the socket as a deadline of nothing.
+        $this->expectException(InvalidArgumentException::class);
+
+        new Timeouts(write: NAN);
+    }
+
     public function testTheClientAsksForEachWaitByName(): void
     {
         $transport = new class extends FakeTransport {

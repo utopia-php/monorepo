@@ -215,7 +215,7 @@ use Utopia\SMTP\Timeouts;
 new Client($transport, timeouts: new Timeouts(connect: 5.0, read: 60.0, write: 30.0));
 ```
 
-The defaults are ten seconds to connect and thirty to read or write. Each applies per operation rather than per session, so a large message is bounded by its own size and not by a single deadline for the whole exchange.
+The defaults are ten seconds to connect and thirty to read or write. Each applies per operation rather than per session, so a large message is bounded by its own size and not by a single deadline for the whole exchange. A handshake counts as connecting.
 
 A host that is down should be given up on quickly, while the reply after the final dot can take as long as the server needs to scan the message — RFC 5321 section 4.5.3.2 asks for ten minutes there. The specification wants six separate minimums; three knobs is the useful part of that, and the deviation is deliberate.
 

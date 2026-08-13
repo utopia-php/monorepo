@@ -30,8 +30,16 @@ class Timeouts
         public readonly float $write = 30.0,
     ) {
         foreach (['connect' => $connect, 'read' => $read, 'write' => $write] as $name => $seconds) {
-            if ($seconds <= 0) {
-                throw new \InvalidArgumentException("The {$name} timeout must be greater than zero, got {$seconds}");
+            // NAN fails every comparison and INF passes them all, so neither is
+            // caught by asking whether the number is positive.
+            if (! is_finite($seconds) || $seconds <= 0) {
+                // var_export rather than interpolation: coercing NAN to a
+                // string is itself a warning.
+                throw new \InvalidArgumentException(\sprintf(
+                    'The %s timeout must be a finite number greater than zero, got %s',
+                    $name,
+                    var_export($seconds, true),
+                ));
             }
         }
     }
