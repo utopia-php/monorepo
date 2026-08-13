@@ -6,7 +6,7 @@ namespace Utopia\SMTP\Tests\Unit\Transport;
 
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
-use Utopia\SMTP\ConnectionException;
+use Utopia\SMTP\Exception\ConnectionException;
 use Utopia\SMTP\Tls;
 use Utopia\SMTP\Transport\Swoole;
 use Utopia\SMTP\Verification;
@@ -179,7 +179,7 @@ final class SwooleTest extends TestCase
         $this->coroutine(function (): void {
             $transport = $this->connect();
 
-            $this->expectException(ConnectionException::class);
+            $this->expectException(\InvalidArgumentException::class);
 
             $transport->read(0, 2.0);
         });
@@ -188,7 +188,7 @@ final class SwooleTest extends TestCase
     public function testReadingBeforeConnectingFails(): void
     {
         $this->coroutine(function (): void {
-            $this->expectException(ConnectionException::class);
+            $this->expectException(\LogicException::class);
 
             (new Swoole('127.0.0.1', 1))->read(8192, 2.0);
         });
@@ -200,7 +200,7 @@ final class SwooleTest extends TestCase
             $transport = $this->connect();
             $transport->close();
 
-            $this->expectException(ConnectionException::class);
+            $this->expectException(\LogicException::class);
 
             $transport->read(8192, 2.0);
         });

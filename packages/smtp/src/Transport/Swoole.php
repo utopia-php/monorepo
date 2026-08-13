@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Utopia\SMTP\Transport;
 
 use Swoole\Coroutine\Client;
-use Utopia\SMTP\ConnectionException;
+use Utopia\SMTP\Exception\ConnectionException;
+use Utopia\SMTP\Exception\TimeoutException;
 use Utopia\SMTP\Tls;
 use Utopia\SMTP\Verification;
 
@@ -38,9 +39,14 @@ final class Swoole implements Transport
 
         $client = new Client(SWOOLE_SOCK_TCP | ($tls ? SWOOLE_SSL : 0));
         $client->set($this->settings($timeout));
+        $started = microtime(true);
 
         if (! $client->connect($this->host, $this->port, $timeout)) {
-            throw new ConnectionException("Cannot reach {$this->host}:{$this->port}: " . $this->error($client));
+            $reason = "Cannot reach {$this->host}:{$this->port}: " . $this->error($client);
+
+            throw microtime(true) - $started >= $timeout
+                ? new TimeoutException($reason)
+                : new ConnectionException($reason);
         }
 
         $this->client = $client;
@@ -51,19 +57,21 @@ final class Swoole implements Transport
     public function read(int $length, float $timeout): string
     {
         if ($length < 1) {
-            throw new ConnectionException('A read needs a positive length');
+            throw new \InvalidArgumentException('A read needs a positive length');
         }
 
         if ($this->buffer === '') {
             $client = $this->client();
+            $started = microtime(true);
             $data = $client->recv($timeout);
 
             if (! \is_string($data) || $data === '') {
-                throw new ConnectionException(
-                    $client->errCode === SOCKET_ETIMEDOUT
-                        ? 'Timed out waiting for the server'
-                        : 'The server closed the connection: ' . $this->error($client),
-                );
+                // SOCKET_ETIMEDOUT would say this outright, but it comes from
+                // ext-sockets, which this package does not require and Swoole
+                // does not provide. The clock is ours either way.
+                throw microtime(true) - $started >= $timeout
+                    ? new TimeoutException('Timed out waiting for the server')
+                    : new ConnectionException('The server closed the connection: ' . $this->error($client));
             }
 
             $this->buffer = $data;
@@ -180,8 +188,8 @@ final class Swoole implements Transport
 
     private function client(): Client
     {
-        if (!$this->client instanceof Client) {
-            throw new ConnectionException('The transport is not connected');
+        if (! $this->client instanceof Client) {
+            throw new \LogicException('The transport is not connected');
         }
 
         return $this->client;

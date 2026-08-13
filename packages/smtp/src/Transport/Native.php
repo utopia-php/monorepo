@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Utopia\SMTP\Transport;
 
-use Utopia\SMTP\ConnectionException;
+use Utopia\SMTP\Exception\ConnectionException;
+use Utopia\SMTP\Exception\TimeoutException;
 use Utopia\SMTP\Tls;
 use Utopia\SMTP\Verification;
 
@@ -28,6 +29,7 @@ final class Native implements Transport
     public function connect(float $timeout, bool $tls): void
     {
         $context = stream_context_create(['ssl' => $this->ssl()]);
+        $started = microtime(true);
 
         $stream = @stream_socket_client(
             ($tls ? 'ssl' : 'tcp') . "://{$this->host}:{$this->port}",
@@ -39,7 +41,13 @@ final class Native implements Transport
         );
 
         if ($stream === false) {
-            throw new ConnectionException("Cannot reach {$this->host}:{$this->port}: {$error}", $code ?? 0);
+            $reason = "Cannot reach {$this->host}:{$this->port}: {$error}";
+
+            // Which errno means "timed out" differs by platform, and reading the
+            // message is worse. We set the deadline, so we can tell by the clock.
+            throw microtime(true) - $started >= $timeout
+                ? new TimeoutException($reason, $code ?? 0)
+                : new ConnectionException($reason, $code ?? 0);
         }
 
         $this->stream = $stream;
@@ -50,7 +58,7 @@ final class Native implements Transport
     public function read(int $length, float $timeout): string
     {
         if ($length < 1) {
-            throw new ConnectionException('A read needs a positive length');
+            throw new \InvalidArgumentException('A read needs a positive length');
         }
 
         $stream = $this->stream();
@@ -59,11 +67,9 @@ final class Native implements Transport
         $data = @fread($stream, $length);
 
         if ($data === false || $data === '') {
-            throw new ConnectionException(
-                stream_get_meta_data($stream)['timed_out']
-                    ? 'Timed out waiting for the server'
-                    : 'The server closed the connection',
-            );
+            throw stream_get_meta_data($stream)['timed_out']
+                ? new TimeoutException('Timed out waiting for the server')
+                : new ConnectionException('The server closed the connection');
         }
 
         return $data;
@@ -154,7 +160,7 @@ final class Native implements Transport
     private function stream()
     {
         if ($this->stream === null) {
-            throw new ConnectionException('The transport is not connected');
+            throw new \LogicException('The transport is not connected');
         }
 
         return $this->stream;
