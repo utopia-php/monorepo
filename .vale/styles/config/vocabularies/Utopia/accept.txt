@@ -32,6 +32,7 @@ Bcrypt
 binlog
 BlackBerry
 bool
+[Bb]oolean(?:s)?
 CI
 cicd
 ClaudeBot
@@ -124,6 +125,7 @@ PATCH
 PerplexityBot
 PHP
 PHPass
+PHPMailer
 phpredis
 PHPStan
 PHPUnit
@@ -163,6 +165,7 @@ stacktrace(?:s)?
 stderr
 superglobals
 Swoole
+Symfony
 Swoole Table
 teardown
 Telesign
