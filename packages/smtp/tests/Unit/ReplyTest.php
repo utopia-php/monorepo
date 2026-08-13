@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Utopia\SMTP\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Utopia\SMTP\Outcome;
+use Utopia\SMTP\ProtocolException;
 use Utopia\SMTP\Reply;
 
 final class ReplyTest extends TestCase
@@ -26,10 +28,23 @@ final class ReplyTest extends TestCase
 
     public function testClassifiesByRange(): void
     {
-        $this->assertTrue((new Reply(250, ['Ok']))->isPositive());
-        $this->assertTrue((new Reply(451, ['Try later']))->isTransient());
-        $this->assertTrue((new Reply(550, ['No such user']))->isPermanent());
-        $this->assertFalse((new Reply(451, ['Try later']))->isPermanent());
+        $this->assertSame(Outcome::Success, (new Reply(250, ['Ok']))->outcome);
+        $this->assertSame(Outcome::Transient, (new Reply(451, ['Try later']))->outcome);
+        $this->assertSame(Outcome::Permanent, (new Reply(550, ['No such user']))->outcome);
+    }
+
+    public function testNamesTheIntermediateReply(): void
+    {
+        // 354 is not a success and not a failure. Three booleans had no word
+        // for it and reported false to all of them.
+        $this->assertSame(Outcome::Intermediate, (new Reply(354, ['Go ahead']))->outcome);
+    }
+
+    public function testRejectsACodeThatIsNotAReply(): void
+    {
+        $this->expectException(ProtocolException::class);
+
+        new Reply(600, ['Not a class RFC 5321 defines']);
     }
 
     public function testJoinsContinuationLines(): void

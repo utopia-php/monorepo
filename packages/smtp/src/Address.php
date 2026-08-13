@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Utopia\SMTP;
 
 use Utopia\SMTP\Mime\Encoding;
+use Utopia\SMTP\Mime\Header;
 
 /**
  * A mailbox: an address with an optional display name.
@@ -62,6 +63,6 @@ final readonly class Address implements \Stringable
             return "<{$this->email}>";
         }
 
-        return Encoding::phrase($this->name) . " <{$this->email}>";
+        return Header::phrase($this->name) . " <{$this->email}>";
     }
 }

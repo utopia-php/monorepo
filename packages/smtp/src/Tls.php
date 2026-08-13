@@ -15,7 +15,7 @@ final readonly class Tls
      * @param  string|null  $caFile  A certificate authority bundle, when the system store is not the right answer.
      */
     public function __construct(
-        public bool $verifyPeer = true,
+        public Verification $verify = Verification::Full,
         public ?string $peerName = null,
         public ?string $caFile = null,
         public ?string $ciphers = null,

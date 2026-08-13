@@ -17,11 +17,11 @@ class TransactionException extends Exception
 
     public function isTransient(): bool
     {
-        return $this->reply->isTransient();
+        return $this->reply->outcome === Outcome::Transient;
     }
 
     public function isPermanent(): bool
     {
-        return $this->reply->isPermanent();
+        return $this->reply->outcome === Outcome::Permanent;
     }
 }

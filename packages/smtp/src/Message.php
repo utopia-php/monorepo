@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\SMTP;
 
-use Utopia\SMTP\Mime\Encoding;
+use Utopia\SMTP\Mime\Header;
 use Utopia\SMTP\Mime\Part;
 
 /**
@@ -108,7 +108,7 @@ final readonly class Message implements \Stringable
             'To' => $this->list($this->to),
             'Cc' => $this->list($this->cc),
             'Reply-To' => $this->list($this->replyTo),
-            'Subject' => Encoding::unstructured($this->subject),
+            'Subject' => $this->subject,
             'Message-ID' => "<{$this->messageId}>",
             'MIME-Version' => '1.0',
             ...$this->headers,
@@ -118,7 +118,7 @@ final readonly class Message implements \Stringable
 
         foreach ($fields as $name => $value) {
             if ($value !== '') {
-                $head .= "{$name}: {$value}\r\n";
+                $head .= Header::line($name, $value);
             }
         }
 

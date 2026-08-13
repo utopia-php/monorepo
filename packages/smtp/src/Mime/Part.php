@@ -75,7 +75,7 @@ final readonly class Part
         $head = '';
 
         foreach ($this->headers as $name => $value) {
-            $head .= "{$name}: {$value}\r\n";
+            $head .= Header::line($name, $value);
         }
 
         return $head . "\r\n";

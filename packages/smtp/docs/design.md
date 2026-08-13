@@ -72,8 +72,7 @@ final class Reply
     public readonly ?string $status;           // '2.1.5', when ENHANCEDSTATUSCODES is advertised
     public readonly string $text;
 
-    public function isTransient(): bool;       // 4yz — retry later
-    public function isPermanent(): bool;       // 5yz — never retry
+    public readonly Outcome $outcome;          // Success | Intermediate | Transient | Permanent
 }
 
 final class Result
@@ -201,6 +200,16 @@ final class Attachment
 
 Encoding decisions are made for the caller: quoted-printable for text parts, base64 for attachments, RFC 2047 encoded words for headers that are not pure ASCII. A non-ASCII local part in any address needs the `SMTPUTF8` extension, and is refused when the server does not advertise it.
 
+## What the interface audit changed
+
+Three findings, all of them the same shape: a type that could name states it did not have, or could not name states it did.
+
+`Reply` carried `isPositive()`, `isTransient()` and `isPermanent()`. Three booleans span eight combinations for a set of four, and `354` — the reply every `DATA` depends on — answered false to all three. RFC 5321 section 4.2.1 already names the four classes, so `Outcome` does too.
+
+`Tls` carried a `verifyPeer` boolean that switched off the issuer check and the hostname check together. They are separate questions: a private authority is a reason to stop trusting the chain, not a reason to stop caring who answered. `Verification` splits them, and the end-to-end suite now runs on `SelfSigned` rather than throwing away a check it could keep.
+
+`Mime\Encoding` was seven static one-liners wrapping built-ins — an interface as large as its implementation, with the composition left to callers. That shallowness was hiding two real defects: nothing folded header lines, so thirty recipients produced a 1482 octet `To` field against a 998 octet limit, and nothing split encoded words, so an accented subject produced a 200 character word against a limit of 75. `Mime\Header` owns the whole question instead — encode, split, fold — and `Message` no longer knows that encoding exists.
+
 ## Deliberate omissions
 
 **Pipelining** (RFC 2920) saves a round trip per recipient, but it moves error attribution from "the reply to this command" to "the third reply in this group". The reply reader is shaped so replies can be read in batch later; the first version waits.
@@ -219,7 +228,7 @@ Encoding decisions are made for the caller: quoted-printable for text parts, bas
 
 **`SMTPUTF8` for a header that needs it.** `Reply-To` is a header and never a path, so a non-ASCII one appears in no `RCPT TO` — which is why the envelope carries a `utf8` flag rather than deriving the answer from its paths alone. Missing it means a conforming server refuses the message.
 
-**A stateful authenticator reused after a reconnect.** `LOGIN` needs two answers in order, and an authenticator outlives the connection it was built for. Rather than resetting a counter, the client passes the step, which makes the failure unrepresentable — and lets every mechanism be a `final readonly class`.
+**A stateful authenticator reused after a reconnect.** `LOGIN` needs two answers in order, and an authenticator outlives the connection it was built for. Rather than resetting a counter, the client passes the step, which makes the failure impossible to express — and lets every mechanism be a `final readonly class`.
 
 ## Testing
 

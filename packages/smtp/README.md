@@ -86,6 +86,15 @@ try {
 }
 ```
 
+Every `Reply` carries an `Outcome`, which is the four reply classes of RFC 5321 section 4.2.1 rather than a set of booleans:
+
+| Case | Codes | Means |
+| --- | --- | --- |
+| `Success` | 2yz | The command worked. |
+| `Intermediate` | 3yz | Understood, and the server wants more — the `354` before message data. |
+| `Transient` | 4yz | Failed, but the same command may work later. |
+| `Permanent` | 5yz | Failed, and sending it again changes nothing. |
+
 The other failures are `ConnectionException` for the socket, `ProtocolException` for a reply that makes no sense, and `AuthenticationException` for credentials. All extend `Utopia\SMTP\Exception`.
 
 ## Encryption
@@ -105,13 +114,23 @@ new Client($transport, encryption: Encryption::StartTls);
 
 After an upgrade the client reissues `EHLO` and discards everything the server said beforehand, per RFC 3207 section 4.2.
 
-Certificate checking lives on the transport:
+Certificate checking lives on the transport. Who signed it and who presented it are separate questions, so refusing to ask the first is not a reason to skip the second:
 
 ```php
 use Utopia\SMTP\Tls;
+use Utopia\SMTP\Verification;
 
 new Native('smtp.example.com', 587, new Tls(caFile: '/etc/ssl/certs/ca.pem'));
+
+// A private authority or a test rig: any issuer, but still the host we dialled.
+new Native('smtp.internal', 587, new Tls(verify: Verification::SelfSigned));
 ```
+
+| Case | Issuer | Hostname |
+| --- | --- | --- |
+| `Full` | Trusted chain required. The default. | Checked. |
+| `SelfSigned` | Any. | Checked. |
+| `None` | Any. | Not checked. |
 
 ## Authentication
 
@@ -155,6 +174,8 @@ new Message(
 ```
 
 Attachments added by path are read while the message is written, so a large file is never held in memory twice. Encoding is decided for you: quoted-printable for text, base64 for attachments, RFC 2047 encoded words for headers outside ASCII.
+
+Header fields are folded to the 78 octet line length of RFC 5322, and encoded words are split on character boundaries so none passes the 75 the specification allows it. A long recipient list or a subject full of accents therefore stays within the limits a server enforces.
 
 ## Transports
 

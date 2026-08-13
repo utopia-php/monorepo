@@ -15,6 +15,7 @@ use Utopia\SMTP\Encryption;
 use Utopia\SMTP\Envelope;
 use Utopia\SMTP\Exception;
 use Utopia\SMTP\Message;
+use Utopia\SMTP\Outcome;
 use Utopia\SMTP\ProtocolException;
 use Utopia\SMTP\Tests\Unit\Support\FakeTransport;
 use Utopia\SMTP\TransactionException;
@@ -129,7 +130,7 @@ final class ClientTest extends TestCase
 
         $this->assertSame(['john@example.test'], $result->accepted);
         $this->assertSame(['ghost@example.test'], array_keys($result->rejected));
-        $this->assertTrue($result->rejected['ghost@example.test']->isPermanent());
+        $this->assertSame(Outcome::Permanent, $result->rejected['ghost@example.test']->outcome);
         $this->assertFalse($result->isComplete());
     }
 

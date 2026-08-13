@@ -363,11 +363,14 @@ final class Client
 
         $wanted = implode(' or ', array_map(\strval(...), $expect));
 
-        if ($reply->isTransient() || $reply->isPermanent()) {
-            throw new TransactionException($reply, "Expected {$wanted}, the server said: {$reply}");
-        }
-
-        throw new ProtocolException("Expected {$wanted}, the server said: {$reply}");
+        // A refusal is the server's answer; anything else is it misbehaving.
+        throw match ($reply->outcome) {
+            Outcome::Transient, Outcome::Permanent => new TransactionException(
+                $reply,
+                "Expected {$wanted}, the server said: {$reply}",
+            ),
+            default => new ProtocolException("Expected {$wanted}, the server said: {$reply}"),
+        };
     }
 
     private function reply(): Reply

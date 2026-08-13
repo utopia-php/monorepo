@@ -14,9 +14,11 @@ use Utopia\SMTP\Client;
 use Utopia\SMTP\Encryption;
 use Utopia\SMTP\Envelope;
 use Utopia\SMTP\Message;
+use Utopia\SMTP\Outcome;
 use Utopia\SMTP\Tls;
 use Utopia\SMTP\TransactionException;
 use Utopia\SMTP\Transport\Native;
+use Utopia\SMTP\Verification;
 
 /**
  * Against a real server, which is the only way to find out whether the bytes
@@ -37,15 +39,16 @@ final class ClientTest extends TestCase
     }
 
     /**
-     * The server presents the self-signed pair in tests/fixtures/certs, which
-     * no trust store knows about, so verification is off here and only here.
+     * The server presents the self-signed pair in tests/fixtures/certs. No
+     * trust store knows the issuer, but the certificate does name the host we
+     * dial, so that half is still checked.
      */
     private function client(Encryption $encryption = Encryption::StartTls, string ...$credentials): Client
     {
         $authenticators = $credentials === [] ? [] : [new Plain(...$credentials)];
 
         return new Client(
-            new Native(self::HOST, self::PORT, new Tls(verifyPeer: false)),
+            new Native(self::HOST, self::PORT, new Tls(verify: Verification::SelfSigned)),
             'tests.example.test',
             $authenticators,
             $encryption,
@@ -189,7 +192,7 @@ final class ClientTest extends TestCase
     public function testLoginMechanismAlsoAuthenticates(): void
     {
         $client = new Client(
-            new Native(self::HOST, self::PORT, new Tls(verifyPeer: false)),
+            new Native(self::HOST, self::PORT, new Tls(verify: Verification::SelfSigned)),
             'tests.example.test',
             [new Login('jane', 'secret')],
             Encryption::StartTls,
@@ -314,7 +317,7 @@ final class ClientTest extends TestCase
 
         $this->assertSame(['john@example.test'], $result->accepted);
         $this->assertArrayHasKey('blocked@example.invalid', $result->rejected);
-        $this->assertTrue($result->rejected['blocked@example.invalid']->isPermanent());
+        $this->assertSame(Outcome::Permanent, $result->rejected['blocked@example.invalid']->outcome);
         $this->assertSame('Partial', $this->field($this->delivered(), 'Subject'));
     }
 

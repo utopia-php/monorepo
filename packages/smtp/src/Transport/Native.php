@@ -6,6 +6,7 @@ namespace Utopia\SMTP\Transport;
 
 use Utopia\SMTP\ConnectionException;
 use Utopia\SMTP\Tls;
+use Utopia\SMTP\Verification;
 
 /**
  * Streams. Under Swoole's runtime hook these yield the scheduler like any other
@@ -120,8 +121,11 @@ final class Native implements Transport
     private function ssl(): array
     {
         $options = [
-            'verify_peer' => $this->options->verifyPeer,
-            'verify_peer_name' => $this->options->verifyPeer,
+            // An unknown issuer and the wrong hostname are different failures,
+            // so SelfSigned forgives the first while still catching the second.
+            'verify_peer' => $this->options->verify !== Verification::None,
+            'verify_peer_name' => $this->options->verify !== Verification::None,
+            'allow_self_signed' => $this->options->verify !== Verification::Full,
             'peer_name' => $this->options->peerName ?? $this->host,
             'SNI_enabled' => true,
         ];

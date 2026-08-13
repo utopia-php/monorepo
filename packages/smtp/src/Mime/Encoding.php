@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Utopia\SMTP\Mime;
 
 /**
- * The encodings a message needs, chosen for the caller rather than configured
- * by them: quoted-printable for text, base64 for attachments, and the encoded
- * words of RFC 2047 for headers that are not plain ASCII.
+ * Body encodings, chosen for the caller rather than configured by them:
+ * quoted-printable for text and base64 for attachments. Header text is
+ * Header's business.
  */
 class Encoding
 {
@@ -17,26 +17,6 @@ class Encoding
     public static function isAscii(string $value): bool
     {
         return preg_match('/^[\x00-\x7F]*$/', $value) === 1;
-    }
-
-    /**
-     * A display name, as it appears before an angle address.
-     */
-    public static function phrase(string $value): string
-    {
-        if (! self::isAscii($value)) {
-            return self::encodedWord($value);
-        }
-
-        return '"' . addcslashes($value, '"\\') . '"';
-    }
-
-    /**
-     * The value of a free-form header such as Subject.
-     */
-    public static function unstructured(string $value): string
-    {
-        return self::isAscii($value) ? $value : self::encodedWord($value);
     }
 
     public static function quotedPrintable(string $value): string
@@ -60,14 +40,5 @@ class Encoding
     public static function boundary(): string
     {
         return '=_' . bin2hex(random_bytes(16));
-    }
-
-    /**
-     * RFC 2047. Base64 throughout: it costs a third more than quoted-printable
-     * on Latin text and half as much on everything else.
-     */
-    private static function encodedWord(string $value): string
-    {
-        return '=?UTF-8?B?' . base64_encode($value) . '?=';
     }
 }

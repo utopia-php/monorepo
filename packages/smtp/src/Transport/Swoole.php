@@ -7,6 +7,7 @@ namespace Utopia\SMTP\Transport;
 use Swoole\Coroutine\Client;
 use Utopia\SMTP\ConnectionException;
 use Utopia\SMTP\Tls;
+use Utopia\SMTP\Verification;
 
 /**
  * Coroutine-native. recv() and send() yield the scheduler on their own, so this
@@ -118,8 +119,8 @@ final class Swoole implements Transport
     {
         $settings = [
             'timeout' => $timeout,
-            'ssl_verify_peer' => $this->options->verifyPeer,
-            'ssl_allow_self_signed' => ! $this->options->verifyPeer,
+            'ssl_verify_peer' => $this->options->verify !== Verification::None,
+            'ssl_allow_self_signed' => $this->options->verify !== Verification::Full,
             'ssl_host_name' => $this->options->peerName ?? $this->host,
         ];
 
