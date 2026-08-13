@@ -3,6 +3,8 @@
 [Cc]ron
 [Dd]ev
 [Ii]mplementor(?:s)?
+[Ii]njectable
+[Ii]terable(?:s)?
 [Mm]onorepo(?:'s)?
 [Mm]ultipart(?:s)?
 [Mm]utex
@@ -106,6 +108,7 @@ Lua
 macOS
 Mailchimp
 Mailgun
+Mailpit
 Mailjet
 Matomo(?:'s)?
 memoized
