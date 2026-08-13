@@ -36,7 +36,9 @@ final class EmailTest extends Base
 
         $lastEmail = $this->getLastEmail();
 
-        $this->assertResponse($response);
+        // One To, one Cc and one Bcc: three recipients accepted, which is what
+        // the SMTP adapter has always reported and the mock now agrees with.
+        $this->assertResponse($response, deliveredTo: 3);
         $this->assertEquals($to, $lastEmail['to'][0]['address']);
         $this->assertEquals($fromEmail, $lastEmail['from'][0]['address']);
         $this->assertEquals($fromName, $lastEmail['from'][0]['name']);

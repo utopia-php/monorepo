@@ -70,6 +70,7 @@ graph TD
     http --> system
     messaging --> client
     messaging --> pools
+    messaging --> smtp
     messaging --> telemetry
     platform --> cli
     platform --> http
@@ -92,7 +93,6 @@ graph TD
     image
     nats
     replication
-    smtp
     user-agent
 ```
 <!-- /graph -->

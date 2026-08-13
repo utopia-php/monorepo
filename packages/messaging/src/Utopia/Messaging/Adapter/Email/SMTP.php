@@ -2,14 +2,27 @@
 
 namespace Utopia\Messaging\Adapter\Email;
 
-use PHPMailer\PHPMailer\PHPMailer;
 use Utopia\Messaging\Adapter\Email as EmailAdapter;
 use Utopia\Messaging\Messages\Email as EmailMessage;
+use Utopia\Messaging\Messages\Email\Attachment as EmailAttachment;
 use Utopia\Messaging\Response;
+use Utopia\SMTP\Address;
+use Utopia\SMTP\Attachment;
+use Utopia\SMTP\Auth\Login;
+use Utopia\SMTP\Auth\Plain;
+use Utopia\SMTP\Client;
+use Utopia\SMTP\Encryption;
+use Utopia\SMTP\Exception\SmtpException;
+use Utopia\SMTP\Exception\TransactionException;
+use Utopia\SMTP\Message as SmtpMessage;
+use Utopia\SMTP\Timeouts;
+use Utopia\SMTP\Transport\Native;
 
 class SMTP extends EmailAdapter
 {
     protected const NAME = 'SMTP';
+
+    private ?Client $client = null;
 
     /**
      * @param string $host SMTP hosts. Either a single hostname or multiple semicolon-delimited hostnames. You can also specify a different port for each host by using this format: [hostname:port] (e.g. "smtp1.example.com:25;smtp2.example.com"). You can also specify encryption type, for example: (e.g. "tls://smtp1.example.com:587;ssl://smtp2.example.com:465"). Hosts will be tried in order.
@@ -41,8 +54,6 @@ class SMTP extends EmailAdapter
         }
     }
 
-    private ?PHPMailer $mail = null;
-
     public function getName(): string
     {
         return static::NAME;
@@ -59,133 +70,275 @@ class SMTP extends EmailAdapter
     protected function process(EmailMessage $message): array
     {
         $response = new Response($this->getType());
+        $recipients = $this->recipients($message);
 
-        if ($this->keepAlive && $this->mail instanceof \PHPMailer\PHPMailer\PHPMailer) {
-            $mail = $this->mail;
-            $mail->clearAllRecipients();
-            $mail->clearReplyTos();
-            $mail->clearAttachments();
-        } else {
-            $mail = new PHPMailer();
-            $mail->isSMTP();
-            $mail->Host = $this->host;
-            $mail->Port = $this->port;
-            $mail->SMTPAuth = $this->username !== '' && $this->username !== '0' && ($this->password !== '' && $this->password !== '0');
-            $mail->Username = $this->username;
-            $mail->Password = $this->password;
-            $mail->SMTPSecure = $this->smtpSecure;
-            $mail->SMTPAutoTLS = $this->smtpAutoTLS;
-            $mail->Timeout = $this->timeout;
-            $mail->SMTPKeepAlive = $this->keepAlive;
-
-            if ($this->keepAlive) {
-                $this->mail = $mail;
-            }
-        }
-
-        $mail->XMailer = $this->xMailer;
-        $mail->CharSet = 'UTF-8';
-        $mail->getSMTPInstance()->Timelimit = $this->timelimit;
-        $mail->Subject = $message->getSubject();
-        $mail->Body = $message->getContent();
-        $mail->setFrom($message->getFromEmail(), $message->getFromName());
-        $mail->addReplyTo($message->getReplyToEmail(), $message->getReplyToName());
-        $mail->isHTML($message->isHtml());
-
-        // Strip tags misses style tags, so we use regex to remove them
-        $mail->AltBody = preg_replace('/<style\b[^>]*>(.*?)<\/style>/is', '', $mail->Body);
-        $mail->AltBody = strip_tags($mail->AltBody);
-        $mail->AltBody = trim($mail->AltBody);
-
-        foreach ($message->getTo() as $to) {
-            $mail->addAddress($to['email'], $to['name'] ?? '');
-        }
-
-        if (!\in_array($message->getCC(), [null, []], true)) {
-            foreach ($message->getCC() as $cc) {
-                $mail->addCC($cc['email'], $cc['name'] ?? '');
-            }
-        }
-
-        if (!\in_array($message->getBCC(), [null, []], true)) {
-            foreach ($message->getBCC() as $bcc) {
-                $mail->addBCC($bcc['email'], $bcc['name'] ?? '');
-            }
-        }
-
-        if (!\in_array($message->getAttachments(), [null, []], true)) {
-            $size = 0;
-
-            foreach ($message->getAttachments() as $attachment) {
-                if ($attachment->getContent() !== null) {
-                    $size += \strlen($attachment->getContent());
-                } else {
-                    $fileSize = filesize($attachment->getPath());
-                    if ($fileSize === false) {
-                        throw new \Exception('Failed to read attachment file: ' . $attachment->getPath());
-                    }
-                    $size += $fileSize;
-                }
+        try {
+            $client = $this->client();
+        } catch (SmtpException $exception) {
+            foreach ($recipients as $email) {
+                $response->addResult($email, $exception->getMessage());
             }
 
-            if ($size > self::MAX_ATTACHMENT_BYTES) {
-                throw new \Exception('Attachments size exceeds the maximum allowed size of 25MB');
+            return $response->toArray();
+        }
+
+        try {
+            $result = $client->send($this->build($message));
+
+            // A server may refuse some recipients and accept others, and the
+            // message still reaches the rest. Each address gets its own answer
+            // rather than every address getting the same one.
+            $response->setDeliveredTo(\count($result->accepted));
+
+            foreach ($result->accepted as $email) {
+                $response->addResult($email);
             }
 
-            foreach ($message->getAttachments() as $attachment) {
-                if ($attachment->getContent() !== null) {
-                    $mail->addStringAttachment(
-                        string: $attachment->getContent(),
-                        filename: $attachment->getName(),
-                        encoding: PHPMailer::ENCODING_BASE64,
-                        type: $attachment->getType(),
-                    );
-                } else {
-                    $data = file_get_contents($attachment->getPath());
-                    if ($data === false) {
-                        throw new \Exception('Failed to read attachment file: ' . $attachment->getPath());
-                    }
-                    $mail->addStringAttachment(
-                        string: $data,
-                        filename: $attachment->getName(),
-                        encoding: PHPMailer::ENCODING_BASE64,
-                        type: $attachment->getType(),
-                    );
-                }
+            foreach ($result->rejected as $email => $reply) {
+                $response->addResult($email, (string) $reply);
             }
-        }
-
-        $sent = $mail->send();
-
-        if ($sent) {
-            $totalDelivered = \count($message->getTo()) + \count($message->getCC() ?: []) + \count($message->getBCC() ?: []);
-            $response->setDeliveredTo($totalDelivered);
-        }
-
-        foreach ($message->getTo() as $to) {
-            $error = empty($mail->ErrorInfo)
-                ? 'Unknown error'
-                : $mail->ErrorInfo;
-
-            $response->addResult($to['email'], $sent ? '' : $error);
-        }
-
-        foreach ($message->getCC() ?? [] as $cc) {
-            $error = empty($mail->ErrorInfo)
-                ? 'Unknown error'
-                : $mail->ErrorInfo;
-
-            $response->addResult($cc['email'], $sent ? '' : $error);
-        }
-
-        foreach ($message->getBCC() ?? [] as $bcc) {
-            $error = empty($mail->ErrorInfo)
-                ? 'Unknown error'
-                : $mail->ErrorInfo;
-
-            $response->addResult($bcc['email'], $sent ? '' : $error);
+        } catch (TransactionException $exception) {
+            foreach ($recipients as $email) {
+                $response->addResult($email, (string) $exception->reply);
+            }
+        } catch (SmtpException $exception) {
+            foreach ($recipients as $email) {
+                $response->addResult($email, $exception->getMessage());
+            }
+        } finally {
+            if (!$this->keepAlive) {
+                $client->close();
+                $this->client = null;
+            }
         }
 
         return $response->toArray();
+    }
+
+    /**
+     * Close a connection held open between sends. Doing nothing is safe.
+     */
+    public function disconnect(): void
+    {
+        $this->client?->close();
+        $this->client = null;
+    }
+
+    /**
+     * The first host that answers, tried in the order they were given.
+     */
+    private function client(): Client
+    {
+        if ($this->client instanceof Client) {
+            return $this->client;
+        }
+
+        $timeouts = new Timeouts(
+            connect: (float) $this->timeout,
+            read: (float) $this->timelimit,
+            write: (float) $this->timelimit,
+        );
+
+        $failures = [];
+
+        foreach ($this->hosts() as [$host, $port, $encryption]) {
+            $client = new Client(
+                new Native($host, $port),
+                gethostname() ?: 'localhost',
+                $this->authenticators(),
+                $encryption,
+                $timeouts,
+            );
+
+            try {
+                // Nothing is dialled until a session is needed, so asking what
+                // the server offers is what settles whether this host answers.
+                $client->capabilities();
+            } catch (SmtpException $exception) {
+                $failures[] = "{$host}:{$port} ({$exception->getMessage()})";
+
+                continue;
+            }
+
+            if ($this->keepAlive) {
+                $this->client = $client;
+            }
+
+            return $client;
+        }
+
+        throw new \Utopia\SMTP\Exception\ConnectionException(
+            'No SMTP host answered: ' . implode('; ', $failures),
+        );
+    }
+
+    /**
+     * The host string, which may name several servers with their own port and
+     * encryption, as a list of somewhere to try.
+     *
+     * @return list<array{string, int, Encryption}>
+     */
+    private function hosts(): array
+    {
+        $hosts = [];
+
+        foreach (explode(';', $this->host) as $entry) {
+            $entry = trim($entry);
+
+            if ($entry === '') {
+                continue;
+            }
+
+            $encryption = $this->encryption();
+
+            if (preg_match('#^(ssl|tls)://#i', $entry, $matches) === 1) {
+                $encryption = strtolower($matches[1]) === 'ssl' ? Encryption::Implicit : Encryption::StartTls;
+                $entry = substr($entry, \strlen($matches[0]));
+            }
+
+            $port = $this->port;
+
+            if (preg_match('/^(.*):(\d+)$/', $entry, $matches) === 1) {
+                $entry = $matches[1];
+                $port = (int) $matches[2];
+            }
+
+            $hosts[] = [$entry, $port, $encryption];
+        }
+
+        return $hosts === [] ? [[$this->host, $this->port, $this->encryption()]] : $hosts;
+    }
+
+    /**
+     * The prefix says what to do, and without one the AutoTLS flag decides
+     * whether an offered upgrade is taken.
+     */
+    private function encryption(): Encryption
+    {
+        return match ($this->smtpSecure) {
+            'ssl' => Encryption::Implicit,
+            'tls' => Encryption::StartTls,
+            default => $this->smtpAutoTLS ? Encryption::Opportunistic : Encryption::None,
+        };
+    }
+
+    /**
+     * @return list<Plain|Login>
+     */
+    private function authenticators(): array
+    {
+        if ($this->username === '' || $this->password === '') {
+            return [];
+        }
+
+        return [new Plain($this->username, $this->password), new Login($this->username, $this->password)];
+    }
+
+    /**
+     * Every address the envelope will carry, which is what a per-recipient
+     * result is keyed by.
+     *
+     * @return list<string>
+     */
+    private function recipients(EmailMessage $message): array
+    {
+        $recipients = [];
+
+        foreach ([...$message->getTo(), ...($message->getCC() ?? []), ...($message->getBCC() ?? [])] as $recipient) {
+            $recipients[$recipient['email']] = true;
+        }
+
+        return array_keys($recipients);
+    }
+
+    private function build(EmailMessage $message): SmtpMessage
+    {
+        $headers = [];
+
+        if ($this->xMailer !== '') {
+            $headers['X-Mailer'] = $this->xMailer;
+        }
+
+        $text = $message->getContent();
+
+        if ($message->isHtml()) {
+            // Stripping tags leaves the contents of a style block behind, so
+            // those go first.
+            $text = preg_replace('/<style\b[^>]*>(.*?)<\/style>/is', '', $message->getContent()) ?? '';
+            $text = trim(strip_tags($text));
+        }
+
+        return new SmtpMessage(
+            from: new Address($message->getFromEmail(), $message->getFromName()),
+            to: $this->addresses($message->getTo()),
+            subject: $message->getSubject(),
+            text: $text,
+            html: $message->isHtml() ? $message->getContent() : null,
+            cc: $this->addresses($message->getCC() ?? []),
+            bcc: $this->addresses($message->getBCC() ?? []),
+            replyTo: $message->getReplyToEmail() === ''
+                ? []
+                : [new Address($message->getReplyToEmail(), $message->getReplyToName())],
+            attachments: $this->attachments($message),
+            headers: $headers,
+        );
+    }
+
+    /**
+     * @param  array<array<string, string>>  $recipients
+     * @return list<Address>
+     */
+    private function addresses(array $recipients): array
+    {
+        return array_values(array_map(
+            static fn(array $recipient): Address => new Address($recipient['email'], $recipient['name'] ?? ''),
+            $recipients,
+        ));
+    }
+
+    /**
+     * @return list<Attachment>
+     */
+    private function attachments(EmailMessage $message): array
+    {
+        $attachments = $message->getAttachments() ?? [];
+
+        if ($attachments === []) {
+            return [];
+        }
+
+        $size = 0;
+
+        foreach ($attachments as $attachment) {
+            $size += $this->size($attachment);
+        }
+
+        if ($size > self::MAX_ATTACHMENT_BYTES) {
+            throw new \Exception('Attachments size exceeds the maximum allowed size of 25MB');
+        }
+
+        return array_values(array_map(
+            static fn(EmailAttachment $attachment): Attachment => $attachment->getContent() === null
+                // Read while the message is written, so a large file is never
+                // held in memory twice.
+                ? Attachment::fromPath($attachment->getPath(), $attachment->getName(), $attachment->getType())
+                : Attachment::fromString($attachment->getContent(), $attachment->getName(), $attachment->getType()),
+            $attachments,
+        ));
+    }
+
+    private function size(EmailAttachment $attachment): int
+    {
+        if ($attachment->getContent() !== null) {
+            return \strlen($attachment->getContent());
+        }
+
+        $size = filesize($attachment->getPath());
+
+        if ($size === false) {
+            throw new \Exception('Failed to read attachment file: ' . $attachment->getPath());
+        }
+
+        return $size;
     }
 }
