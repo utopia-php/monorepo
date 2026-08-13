@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\SMTP\Tests\E2E;
 
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use Utopia\SMTP\Address;
 use Utopia\SMTP\Auth\Login;
 use Utopia\SMTP\Auth\Plain;
@@ -82,6 +83,35 @@ final class ClientTest extends Server
         $client->close();
 
         $this->assertSame('Implicit', $this->field($this->delivered(self::IMPLICIT_API), 'Subject'));
+    }
+
+    #[RequiresPhpExtension('swoole')]
+    public function testUpgradesAndDeliversOverTheCoroutineTransport(): void
+    {
+        // Swoole performs the STARTTLS upgrade with enableSSL rather than
+        // stream_socket_enable_crypto. Only a real handshake settles whether
+        // the two transports keep the same promise.
+        $this->coroutine(function (): void {
+            $client = $this->coroutineClient();
+            $client->send($this->message('Coroutine'));
+            $client->close();
+        });
+
+        $this->assertSame('Coroutine', $this->field($this->delivered(), 'Subject'));
+    }
+
+    #[RequiresPhpExtension('swoole')]
+    public function testDeliversOverImplicitTlsOnTheCoroutineTransport(): void
+    {
+        // The other path through the same transport: encrypted from the socket
+        // up, with no upgrade to perform.
+        $this->coroutine(function (): void {
+            $client = $this->coroutineClient(Encryption::Implicit, self::IMPLICIT_PORT);
+            $client->send($this->message('Coroutine implicit'));
+            $client->close();
+        });
+
+        $this->assertSame('Coroutine implicit', $this->field($this->delivered(self::IMPLICIT_API), 'Subject'));
     }
 
     public function testLoginMechanismAlsoAuthenticates(): void

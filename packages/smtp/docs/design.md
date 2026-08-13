@@ -130,6 +130,8 @@ interface Transport
 
 `Transport\Native` is `stream_socket_client` plus `stream_socket_enable_crypto`. `Transport\Swoole` is `Swoole\Coroutine\Client`, whose `enableSSL()` performs exactly the same post-connect upgrade. Both take a shared `Tls` value object holding peer verification, a certificate authority file and the name to check against, so the two do not drift apart.
 
+They do drift in one place, and running them against the same server is what found it. Swoole checks the name with `X509_check_host()`, which reads only the DNS entries of a certificate, while the stream transport checks the address entries too. An IP literal therefore fails verification under Swoole whatever the certificate says. Nothing in PHP can change that, so the transport refuses the combination up front with an explanation rather than letting the handshake fail with `SSL verify failed` and nothing else. The end-to-end suite names the certificate rather than the address for that transport.
+
 Transports move bytes and nothing else. Line assembly and the reply grammar live in the client, in one place, so a scripted in-memory `Transport` is all the unit tests need.
 
 ## Authentication

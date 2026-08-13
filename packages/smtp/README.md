@@ -181,7 +181,9 @@ Header fields are folded to the 78 octet line length of RFC 5322, and encoded wo
 
 `Transport\Native` uses streams and is the default choice. Under Swoole's runtime hook it yields the scheduler like any other hooked stream.
 
-`Transport\Swoole` is coroutine-native and yields whether or not the hook is on, which matters where the hook for streams is switched off. It needs `ext-swoole`.
+`Transport\Swoole` is coroutine-native and yields whether or not the hook is on, which matters where the hook for streams is switched off. It needs `ext-swoole`, and it must be built inside a coroutine.
+
+One difference is worth knowing before choosing it. Swoole checks a certificate name with `X509_check_host()`, which reads the DNS entries and not the address ones, so dialling an IP literal cannot pass verification however the certificate is written. The stream transport checks both. Give `Tls` a `peerName` the certificate carries, or ask for `Verification::None`; the transport says as much rather than letting the handshake fail with nothing to go on.
 
 A `Client` is one connection. Pooling belongs to [`utopia-php/pools`](https://github.com/utopia-php/pools), so there is no keep-alive setting here.
 

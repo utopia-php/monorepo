@@ -32,6 +32,10 @@ final class Swoole implements Transport
 
     public function connect(float $timeout, bool $tls): void
     {
+        if ($tls) {
+            $this->checkable();
+        }
+
         $client = new Client(SWOOLE_SOCK_TCP | ($tls ? SWOOLE_SSL : 0));
         $client->set($this->settings($timeout));
 
@@ -88,6 +92,8 @@ final class Swoole implements Transport
 
     public function startTls(float $timeout): void
     {
+        $this->checkable();
+
         $client = $this->client();
 
         if (! $client->enableSSL()) {
@@ -133,6 +139,27 @@ final class Swoole implements Transport
         }
 
         return $settings;
+    }
+
+    /**
+     * Swoole checks the name with X509_check_host(), which reads the DNS entries
+     * of a certificate and not the address ones. Dialling an IP literal cannot
+     * pass however the certificate is written — the stream transport checks
+     * both — so saying so beats a handshake that fails with "SSL verify failed"
+     * and nothing else.
+     */
+    private function checkable(): void
+    {
+        $name = $this->options->peerName ?? $this->host;
+
+        if ($this->options->verify === Verification::None || filter_var($name, FILTER_VALIDATE_IP) === false) {
+            return;
+        }
+
+        throw new ConnectionException(
+            "This transport cannot check a certificate against the address {$name}. Give Tls a "
+            . 'peerName the certificate carries, or ask for Verification::None.',
+        );
     }
 
     /**

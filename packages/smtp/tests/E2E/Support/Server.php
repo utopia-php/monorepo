@@ -11,6 +11,7 @@ use Utopia\SMTP\Client;
 use Utopia\SMTP\Encryption;
 use Utopia\SMTP\Tls;
 use Utopia\SMTP\Transport\Native;
+use Utopia\SMTP\Transport\Swoole as SwooleTransport;
 use Utopia\SMTP\Verification;
 
 /**
@@ -57,6 +58,43 @@ abstract class Server extends TestCase
             $authenticators === [] ? [new Plain('jane', 'secret')] : $authenticators,
             $encryption,
         );
+    }
+
+    /**
+     * The same client over the coroutine transport, which is the only way to
+     * reach Swoole's own handshake rather than the stream one.
+     */
+    protected function coroutineClient(Encryption $encryption = Encryption::StartTls, int $port = self::PORT): Client
+    {
+        return new Client(
+            // The coroutine transport matches DNS names only, and the servers
+            // answer on an address, so it is told which name to expect.
+            new SwooleTransport(self::HOST, $port, new Tls(verify: Verification::SelfSigned, peerName: 'localhost')),
+            'tests.example.test',
+            [new Plain('jane', 'secret')],
+            $encryption,
+        );
+    }
+
+    /**
+     * Run a body inside a scheduler, carrying any failure back out. Left to
+     * escape the coroutine, an assertion becomes a fatal instead of a result.
+     */
+    protected function coroutine(callable $body): void
+    {
+        $failure = null;
+
+        \Swoole\Coroutine\run(static function () use ($body, &$failure): void {
+            try {
+                $body();
+            } catch (\Throwable $thrown) {
+                $failure = $thrown;
+            }
+        });
+
+        if ($failure instanceof \Throwable) {
+            throw $failure;
+        }
     }
 
     protected function get(string $method, string $path, string $api = self::API): string
