@@ -92,6 +92,7 @@ graph TD
     image
     nats
     replication
+    smtp
     user-agent
 ```
 <!-- /graph -->
