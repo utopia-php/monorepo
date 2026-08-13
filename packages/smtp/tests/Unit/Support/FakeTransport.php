@@ -32,12 +32,15 @@ class FakeTransport implements Transport
      *                        handshake — would.
      * @param  list<string>  $afterHandshake  Queued once TLS is up, since a real
      *                                        server says nothing more until then.
+     * @param  string|null  $failWriting  Fail the write that carries this text,
+     *                                    to model a connection dropping mid-send.
      */
     public function __construct(
         array $replies = [],
         private readonly bool $failHandshake = false,
         private readonly bool $greedy = false,
         private readonly array $afterHandshake = [],
+        private readonly ?string $failWriting = null,
     ) {
         $this->reply(...$replies);
     }
@@ -75,6 +78,10 @@ class FakeTransport implements Transport
 
     public function write(string $data, float $timeout): void
     {
+        if ($this->failWriting !== null && str_contains($data, $this->failWriting)) {
+            throw new ConnectionException('The connection dropped mid-write');
+        }
+
         $this->written .= $data;
     }
 

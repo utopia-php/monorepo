@@ -20,6 +20,10 @@ interface Authenticator
      * Null when the mechanism has to wait for the server to speak first.
      *
      * Returned decoded; the client applies base64.
+     *
+     * Called exactly once at the start of every exchange, so a mechanism that
+     * carries state between challenges resets it here. An authenticator outlives
+     * the connection it was built for, and is reused after a reconnect.
      */
     public function initial(): ?string;
 

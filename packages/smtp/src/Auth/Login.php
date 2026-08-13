@@ -25,6 +25,12 @@ class Login implements Authenticator
 
     public function initial(): ?string
     {
+        // Called once at the start of every exchange, which is where a mechanism
+        // that counts challenges gets to forget the last one. Without this, an
+        // authenticator reused across a reconnect answers the first prompt with
+        // the password.
+        $this->sentUsername = false;
+
         return null;
     }
 

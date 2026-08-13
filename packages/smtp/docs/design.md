@@ -19,6 +19,7 @@ final class Envelope
     public function __construct(
         public readonly string $sender,        // reverse-path; '' for a bounce
         public readonly array $recipients,     // forward-paths
+        private readonly bool $utf8 = false,   // headers need SMTPUTF8 anyway
     ) {}
 
     public static function fromMessage(Message $message): self;   // to + cc + bcc
@@ -211,6 +212,12 @@ Encoding decisions are made for the caller: quoted-printable for text parts, bas
 **Dot-stuffing across chunk boundaries.** When the content is an iterable, a chunk ending in `\r\n` followed by a chunk opening with `.` has to be stuffed as though it were one string. Getting this wrong truncates the message at that point, and only for messages large enough to split there.
 
 **`Bcc` never reaching the headers.** `Envelope::fromMessage()` puts blind recipients in `RCPT TO`, and the renderer must leave them out. The failure discloses the recipient list to everyone who received it.
+
+**A connection dropped part way through `DATA`.** The terminating dot never arrives, so the server is still reading message data with no way to be told otherwise. The connection has to be discarded rather than returned to the pool, or the next `MAIL FROM` is written as the body of this message. A refusal *after* the dot is the opposite case and the connection survives it.
+
+**`SMTPUTF8` for a header that needs it.** `Reply-To` is a header and never a path, so a non-ASCII one appears in no `RCPT TO` — which is why the envelope carries a `utf8` flag rather than deriving the answer from its paths alone. Missing it means a conforming server refuses the message.
+
+**A stateful authenticator reused after a reconnect.** `LOGIN` counts challenges, and an authenticator outlives the connection it was built for. `initial()` is specified to be called once per exchange so a mechanism has somewhere to forget the last one; without that reset, good credentials fail on the second connection.
 
 ## Testing
 

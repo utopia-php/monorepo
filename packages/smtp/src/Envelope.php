@@ -15,10 +15,13 @@ class Envelope
     /**
      * @param  string  $sender  The reverse-path. Empty for a bounce.
      * @param  list<string>  $recipients  Forward-paths.
+     * @param  bool  $utf8  Ask for SMTPUTF8 even when every path is ASCII, for a
+     *                      message whose headers still need it.
      */
     public function __construct(
         public readonly string $sender,
         public readonly array $recipients,
+        private readonly bool $utf8 = false,
     ) {
         if ($recipients === []) {
             throw new Exception('An envelope needs at least one recipient');
@@ -39,14 +42,20 @@ class Envelope
             $recipients[$address->email] = true;
         }
 
-        return new self($message->from->email, array_keys($recipients));
+        // Reply-To is a header and never a path, so a non-ASCII one shows up
+        // nowhere in this list — but it still needs the extension to be sent.
+        return new self($message->from->email, array_keys($recipients), $message->isInternational());
     }
 
     /**
-     * Whether any path needs the SMTPUTF8 extension of RFC 6531.
+     * Whether this transaction needs the SMTPUTF8 extension of RFC 6531.
      */
     public function isInternational(): bool
     {
+        if ($this->utf8) {
+            return true;
+        }
+
         foreach ([$this->sender, ...$this->recipients] as $path) {
             if (preg_match('/^[\x00-\x7F]*$/', $path) !== 1) {
                 return true;

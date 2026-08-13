@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Utopia\SMTP\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Utopia\SMTP\Address;
 use Utopia\SMTP\Auth\Login;
 use Utopia\SMTP\Auth\Plain;
 use Utopia\SMTP\AuthenticationException;
@@ -13,6 +14,7 @@ use Utopia\SMTP\ConnectionException;
 use Utopia\SMTP\Encryption;
 use Utopia\SMTP\Envelope;
 use Utopia\SMTP\Exception;
+use Utopia\SMTP\Message;
 use Utopia\SMTP\ProtocolException;
 use Utopia\SMTP\Tests\Unit\Support\FakeTransport;
 use Utopia\SMTP\TransactionException;
@@ -330,6 +332,40 @@ final class ClientTest extends TestCase
         $this->assertContains('MAIL FROM:<jäne@example.test> SMTPUTF8', $transport->commands());
     }
 
+    public function testDeclaresSmtpUtf8ForAMessageWhoseHeadersNeedIt(): void
+    {
+        // Every path here is ASCII. Only the Reply-To needs UTF-8, and it is a
+        // header, so it appears in no RCPT TO — but the extension is still what
+        // lets the server accept it.
+        $transport = $this->transport($this->transaction(), 'SMTPUTF8');
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $client->send(new Message(
+            from: new Address('jane@example.test'),
+            to: [new Address('john@example.test')],
+            subject: 'Hello',
+            text: 'Body',
+            replyTo: [new Address('jäne@example.test')],
+        ));
+
+        $this->assertContains('MAIL FROM:<jane@example.test> SMTPUTF8', $transport->commands());
+    }
+
+    public function testRefusesAMessageWhoseHeadersTheServerCannotCarry(): void
+    {
+        $client = new Client($this->transport(), encryption: Encryption::None);
+
+        $this->expectException(Exception::class);
+
+        $client->send(new Message(
+            from: new Address('jane@example.test'),
+            to: [new Address('john@example.test')],
+            subject: 'Hello',
+            text: 'Body',
+            replyTo: [new Address('jäne@example.test')],
+        ));
+    }
+
     public function testRefusesAnInternationalPathTheServerCannotCarry(): void
     {
         $client = new Client($this->transport(), encryption: Encryption::None);
@@ -337,6 +373,53 @@ final class ClientTest extends TestCase
         $this->expectException(Exception::class);
 
         $client->sendRaw(new Envelope('jäne@example.test', ['john@example.test']), 'Body');
+    }
+
+    public function testThrowsAwayAConnectionInterruptedDuringData(): void
+    {
+        // The terminating dot never reaches the server, so it is still reading
+        // message data. Keeping the connection would send the next MAIL FROM as
+        // content of this message.
+        $transport = new FakeTransport(
+            [
+                '220 mail.example.test',
+                '250 mail.example.test',
+                '250 Sender ok',
+                '250 Recipient ok',
+                '354 Go ahead',
+            ],
+            failWriting: 'BOOM',
+        );
+        $client = new Client($transport, encryption: Encryption::None);
+
+        try {
+            $client->sendRaw($this->envelope(), 'a message that goes BOOM part way through');
+            $this->fail('Expected the send to fail');
+        } catch (ConnectionException) {
+            // expected
+        }
+
+        $this->assertTrue($transport->closed, 'the transport should have been dropped');
+        $this->assertNotContains('QUIT', $transport->commands(), 'there is no point saying goodbye mid-DATA');
+    }
+
+    public function testKeepsTheConnectionWhenTheServerRefusesTheData(): void
+    {
+        // A refusal after the dot is clean: the server is back in command state.
+        $transport = $this->transport([...$this->transaction('552 5.3.4 Message too big'), '221 Bye']);
+        $client = new Client($transport, encryption: Encryption::None);
+
+        try {
+            $client->sendRaw($this->envelope(), 'Body');
+            $this->fail('Expected the send to fail');
+        } catch (TransactionException $exception) {
+            $this->assertTrue($exception->isPermanent());
+        }
+
+        $this->assertFalse($transport->closed);
+
+        $client->close();
+        $this->assertContains('QUIT', $transport->commands());
     }
 
     public function testQuitsOnClose(): void

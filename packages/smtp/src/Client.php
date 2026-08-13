@@ -85,10 +85,21 @@ class Client
 
         $this->command('DATA', [354]);
 
-        foreach ($this->stuff(\is_string($content) ? [$content] : $content) as $chunk) {
-            $this->transport->write($chunk, $this->timeout);
+        try {
+            foreach ($this->stuff(\is_string($content) ? [$content] : $content) as $chunk) {
+                $this->transport->write($chunk, $this->timeout);
+            }
+        } catch (\Throwable $exception) {
+            // The terminating dot never went out, so the server is still reading
+            // message data and there is no longer any way to tell it otherwise.
+            // Reusing this connection would send the next MAIL FROM as content.
+            $this->discard();
+
+            throw $exception;
         }
 
+        // A refusal here is clean: the server has read the dot and is back in
+        // command state, so the connection survives to carry the next message.
         return new Result($this->messageId($this->expect([250])), $accepted, $rejected);
     }
 
@@ -135,6 +146,15 @@ class Client
             }
         }
 
+        $this->discard();
+    }
+
+    /**
+     * Drop the connection without the courtesy of a QUIT, for when the session
+     * is past saving.
+     */
+    private function discard(): void
+    {
         $this->transport->close();
         $this->ready = false;
         $this->buffer = '';
