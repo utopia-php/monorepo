@@ -30,6 +30,18 @@ use Utopia\Queue\Queue;
  */
 class Nats implements Publisher, Consumer
 {
+    // Wire-level identifiers (stream/subject naming, durable consumers, advisories).
+    private const string STREAM_PREFIX = 'QUEUE_';
+    private const string DEAD_STREAM_SUFFIX = '_DEAD';
+    private const string SUBJECT_PREFIX = 'Q.';
+    private const string SUBJECT_NORMAL = 'normal';
+    private const string SUBJECT_PRIORITY = 'priority';
+    private const string SUBJECT_DEAD = 'dead';
+    private const string CONSUMER_NORMAL = 'worker';
+    private const string CONSUMER_PRIORITY = 'worker_priority';
+    private const string CONSUMER_RETRY = 'retry';
+    private const string ADVISORY_MAX_DELIVERIES = '$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES';
+
     /** @var array<string, bool> queues whose streams/consumers have been provisioned */
     private array $provisioned = [];
 
@@ -162,7 +174,7 @@ class Nats implements Publisher, Consumer
         $this->ensure($queue);
 
         $consumer = $this->js()->createConsumer($this->deadStream($queue), new ConsumerConfig(
-            durableName: 'retry',
+            durableName: self::CONSUMER_RETRY,
             ackPolicy: AckPolicy::Explicit,
             ackWait: $this->ackWait,
             filterSubject: $this->deadSubject($queue),
@@ -251,14 +263,14 @@ class Nats implements Publisher, Consumer
 
         $this->consumers[$key] = [
             'normal' => $this->js()->createConsumer($this->workStream($queue), new ConsumerConfig(
-                durableName: 'worker',
+                durableName: self::CONSUMER_NORMAL,
                 ackPolicy: AckPolicy::Explicit,
                 ackWait: $this->ackWait,
                 maxDeliver: $this->maxDeliver,
                 filterSubject: $this->workSubject($queue),
             )),
             'priority' => $this->js()->createConsumer($this->workStream($queue), new ConsumerConfig(
-                durableName: 'worker_priority',
+                durableName: self::CONSUMER_PRIORITY,
                 ackPolicy: AckPolicy::Explicit,
                 ackWait: $this->ackWait,
                 maxDeliver: $this->maxDeliver,
@@ -273,7 +285,7 @@ class Nats implements Publisher, Consumer
         // advisories are ephemeral, so a message that exhausts while no broker is
         // subscribed stays as pending backlog (still visible) rather than dead-lettered.
         $this->advisories[$key] = $this->connection()->subscribe(
-            "\$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.{$this->workStream($queue)}.*",
+            self::ADVISORY_MAX_DELIVERIES . ".{$this->workStream($queue)}.*",
         );
 
         $this->provisioned[$key] = true;
@@ -319,12 +331,12 @@ class Nats implements Publisher, Consumer
         // readable prefix plus a full sha256 of the identity. 256 bits makes a collision
         // infeasible (unlike the earlier 40-bit truncation), while an unbounded injective
         // encoding (bin2hex) would blow the length limit for long queue names.
-        return 'QUEUE_' . substr($this->sanitize("{$queue->namespace}_{$queue->name}"), 0, 40) . '_' . hash('sha256', $this->identity($queue));
+        return self::STREAM_PREFIX . substr($this->sanitize("{$queue->namespace}_{$queue->name}"), 0, 40) . '_' . hash('sha256', $this->identity($queue));
     }
 
     private function deadStream(Queue $queue): string
     {
-        return $this->workStream($queue) . '_DEAD';
+        return $this->workStream($queue) . self::DEAD_STREAM_SUFFIX;
     }
 
     /**
@@ -337,22 +349,22 @@ class Nats implements Publisher, Consumer
      */
     private function subjectBase(Queue $queue): string
     {
-        return 'Q.' . hash('sha256', $this->identity($queue));
+        return self::SUBJECT_PREFIX . hash('sha256', $this->identity($queue));
     }
 
     private function workSubject(Queue $queue): string
     {
-        return $this->subjectBase($queue) . '.normal';
+        return $this->subjectBase($queue) . '.' . self::SUBJECT_NORMAL;
     }
 
     private function prioritySubject(Queue $queue): string
     {
-        return $this->subjectBase($queue) . '.priority';
+        return $this->subjectBase($queue) . '.' . self::SUBJECT_PRIORITY;
     }
 
     private function deadSubject(Queue $queue): string
     {
-        return $this->subjectBase($queue) . '.dead';
+        return $this->subjectBase($queue) . '.' . self::SUBJECT_DEAD;
     }
 
     /** Stream names allow only A-Z a-z 0-9 _ - (no dots), unlike subject/queue names. */
