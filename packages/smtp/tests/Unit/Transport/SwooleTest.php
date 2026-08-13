@@ -209,14 +209,13 @@ final class SwooleTest extends TestCase
     public function testConnectingToNobodyFails(): void
     {
         $this->coroutine(function (): void {
-            // Take a port, then give it up, so nothing is listening on it.
-            $port = $this->listen();
-            fclose($this->server());
-            $this->server = null;
-
             $this->expectException(ConnectionException::class);
 
-            (new Swoole('127.0.0.1', $port))->connect(2.0, false);
+            // Port 1 rather than an ephemeral one nobody happens to hold: on
+            // Linux loopback, connecting to a free port inside the ephemeral
+            // range can pair with the source port the kernel just handed us and
+            // succeed against itself.
+            (new Swoole('127.0.0.1', 1))->connect(2.0, false);
         });
     }
 

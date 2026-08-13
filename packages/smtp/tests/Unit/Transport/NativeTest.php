@@ -151,19 +151,13 @@ final class NativeTest extends TestCase
 
     public function testConnectingToNobodyFails(): void
     {
-        // Take a port, then give it up, so nothing is listening on it.
-        $server = stream_socket_server('tcp://127.0.0.1:0', $code, $error);
-        $this->assertIsResource($server);
-
-        $address = stream_socket_get_name($server, false);
-        $this->assertIsString($address);
-
-        $port = (int) substr($address, (int) strrpos($address, ':') + 1);
-        fclose($server);
-
         $this->expectException(ConnectionException::class);
 
-        (new Native('127.0.0.1', $port))->connect(2.0, false);
+        // Port 1 rather than an ephemeral one nobody happens to hold: on Linux
+        // loopback, connecting to a free port inside the ephemeral range can
+        // pair with the source port the kernel just handed us and succeed
+        // against itself.
+        (new Native('127.0.0.1', 1))->connect(2.0, false);
     }
 
     public function testAPlainConnectionDoesNotClaimToBeEncrypted(): void
