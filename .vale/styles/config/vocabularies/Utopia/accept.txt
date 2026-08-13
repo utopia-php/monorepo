@@ -3,6 +3,8 @@
 [Cc]ron
 [Dd]ev
 [Ii]mplementor(?:s)?
+[Ii]njectable
+[Ii]terable(?:s)?
 [Mm]onorepo(?:'s)?
 [Mm]ultipart(?:s)?
 [Mm]utex
@@ -32,6 +34,7 @@ Bcrypt
 binlog
 BlackBerry
 bool
+[Bb]oolean(?:s)?
 CI
 cicd
 ClaudeBot
@@ -105,6 +108,7 @@ Lua
 macOS
 Mailchimp
 Mailgun
+Mailpit
 Mailjet
 Matomo(?:'s)?
 memoized
@@ -124,6 +128,7 @@ PATCH
 PerplexityBot
 PHP
 PHPass
+PHPMailer
 phpredis
 PHPStan
 PHPUnit
@@ -163,6 +168,7 @@ stacktrace(?:s)?
 stderr
 superglobals
 Swoole
+Symfony
 Swoole Table
 teardown
 Telesign
