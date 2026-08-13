@@ -284,6 +284,24 @@ final class SMTPTest extends Base
         $this->assertStringContainsString('127.0.0.1:1', (string) $response['results'][0]['error']);
     }
 
+    public function testTreatsTheLegacyZeroCredentialAsAbsent(): void
+    {
+        // The adapter this replaces disabled authentication for a literal "0",
+        // an artefact of empty(). A server with no AUTH refuses the command, so
+        // sending at all proves none was attempted.
+        $sender = new SMTP(host: '127.0.0.1', port: 11025, username: '0', password: '0');
+
+        $response = $sender->send(new Email(
+            to: ['tester@localhost.test'],
+            subject: 'Zero credentials',
+            content: 'Test Content',
+            fromName: 'Test Sender',
+            fromEmail: 'sender@localhost.test',
+        ));
+
+        $this->assertResponse($response);
+    }
+
     public function testTriesEveryHostItWasGiven(): void
     {
         // The first host answers nothing; the list is walked in order until one

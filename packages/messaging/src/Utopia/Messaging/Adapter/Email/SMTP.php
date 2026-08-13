@@ -25,7 +25,7 @@ class SMTP extends EmailAdapter
     private ?Client $client = null;
 
     /**
-     * @param string $host SMTP hosts. Either a single hostname or multiple semicolon-delimited hostnames. You can also specify a different port for each host by using this format: [hostname:port] (e.g. "smtp1.example.com:25;smtp2.example.com"). You can also specify encryption type, for example: (e.g. "tls://smtp1.example.com:587;ssl://smtp2.example.com:465"). Hosts will be tried in order.
+     * @param string $host SMTP hosts. Either a single hostname or multiple semicolon-delimited hostnames. A port may follow a hostname after a colon (e.g. "smtp1.example.com:25;smtp2.example.com"), and an address literal is bracketed to keep its own colons apart from it (e.g. "[::1]:587"). An encryption prefix may lead each entry (e.g. "tls://smtp1.example.com:587;ssl://smtp2.example.com:465"). Hosts are tried in order.
      * @param int $port The default SMTP server port.
      * @param string $username Authentication username.
      * @param string $password Authentication password.
@@ -198,7 +198,10 @@ class SMTP extends EmailAdapter
 
             $port = $this->port;
 
-            if (preg_match('/^(.*):(\d+)$/', $entry, $matches) === 1) {
+            // An address literal is mostly colons, so only a bracketed one or a
+            // name carrying none may be followed by a port. PHPMailer's own
+            // pattern reads "::1" as the host ":" on port 1.
+            if (preg_match('/^(\[[^\]]+\]|[^:]+):(\d+)$/', $entry, $matches) === 1) {
                 $entry = $matches[1];
                 $port = (int) $matches[2];
             }
@@ -227,7 +230,9 @@ class SMTP extends EmailAdapter
      */
     private function authenticators(): array
     {
-        if ($this->username === '' || $this->password === '') {
+        // The adapter this replaces treated a literal "0" as no credential,
+        // an artefact of empty() that some configuration still relies on.
+        if (\in_array($this->username, ['', '0'], true) || \in_array($this->password, ['', '0'], true)) {
             return [];
         }
 
