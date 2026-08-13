@@ -224,7 +224,9 @@ Three findings, all of them the same shape: a type that could name states it did
 
 **`Bcc` never reaching the headers.** `Envelope::fromMessage()` puts blind recipients in `RCPT TO`, and the renderer must leave them out. The failure discloses the recipient list to everyone who received it.
 
-**A connection dropped part way through `DATA`.** The terminating dot never arrives, so the server is still reading message data with no way to be told otherwise. The connection has to be discarded rather than returned to the pool, or the next `MAIL FROM` is written as the body of this message. A refusal *after* the dot is the opposite case and the connection survives it.
+**A connection dropped part way through `DATA`.** The terminating dot never arrives, so the server is still reading message data with no way to be told otherwise. The connection has to be discarded rather than returned to the pool, or the next `MAIL FROM` is written as the body of this message.
+
+**A connection that dies or desynchronises on the reply to the dot.** The narrower reading — that anything after the terminating dot is recoverable — is wrong. A `4yz` or `5yz` there is an answer, and the session continues. A socket that failed, or a reply that cannot be parsed, is not: the stream is dead or no longer aligned with the protocol, and every reply after it would answer the wrong command. The rule is therefore about the kind of failure, not where it happened, so it lives in one place that every command goes through.
 
 **`SMTPUTF8` for a header that needs it.** `Reply-To` is a header and never a path, so a non-ASCII one appears in no `RCPT TO` — which is why the envelope carries a `utf8` flag rather than deriving the answer from its paths alone. Missing it means a conforming server refuses the message.
 

@@ -404,6 +404,66 @@ final class ClientTest extends TestCase
         $this->assertNotContains('QUIT', $transport->commands(), 'there is no point saying goodbye mid-DATA');
     }
 
+    public function testThrowsAwayAConnectionThatDiesOnTheFinalReply(): void
+    {
+        // The dot went out, but the server never answered. We cannot know
+        // whether it took the message, and the stream is finished either way.
+        $transport = $this->transport(['250 Sender ok', '250 Recipient ok', '354 Go ahead']);
+        $client = new Client($transport, encryption: Encryption::None);
+
+        try {
+            $client->sendRaw($this->envelope(), 'Body');
+            $this->fail('Expected the send to fail');
+        } catch (ConnectionException) {
+            // expected
+        }
+
+        $this->assertTrue($transport->closed, 'the transport should have been dropped');
+    }
+
+    public function testThrowsAwayAConnectionLeftOutOfStep(): void
+    {
+        // A final reply we cannot parse means the stream is no longer aligned
+        // with the protocol. Reading the next reply would read the rest of this
+        // one, and every reply after would answer the wrong command.
+        $transport = $this->transport([...$this->transaction(), '250 Ok']);
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $transport->reply('garbage with no code');
+
+        try {
+            $client->sendRaw($this->envelope(), 'Body');
+            $this->fail('Expected the send to fail');
+        } catch (ProtocolException) {
+            // expected
+        }
+
+        $this->assertTrue($transport->closed);
+    }
+
+    public function testReconnectsAfterTheConnectionWasDropped(): void
+    {
+        $transport = $this->transport(['250 Sender ok', '250 Recipient ok', '354 Go ahead']);
+        $client = new Client($transport, encryption: Encryption::None);
+
+        try {
+            $client->sendRaw($this->envelope(), 'Body');
+        } catch (ConnectionException) {
+            // expected
+        }
+
+        // A fresh session, so the greeting and EHLO are read again rather than
+        // MAIL FROM being sent onto a dead socket.
+        $transport->reply('220 mail.example.test ESMTP', '250 mail.example.test', ...$this->transaction());
+
+        $client->sendRaw($this->envelope(), 'Body');
+
+        $commands = $transport->commands();
+        $this->assertCount(2, array_filter($commands, static fn(string $line): bool => str_starts_with($line, 'EHLO')));
+    }
+
     public function testKeepsTheConnectionWhenTheServerRefusesTheData(): void
     {
         // A refusal after the dot is clean: the server is back in command state.
@@ -421,6 +481,48 @@ final class ClientTest extends TestCase
 
         $client->close();
         $this->assertContains('QUIT', $transport->commands());
+    }
+
+    public function testReadsTheQueueIdentifierInItsOtherShapes(): void
+    {
+        foreach ([
+            '250 2.0.0 Ok: queued as ABC123' => 'ABC123',
+            '250 Message accepted id=1r8xyz-0002Ab-Hu' => '1r8xyz-0002Ab-Hu',
+            '250 Ok 0123456789abcdef' => '0123456789abcdef',
+            '250 Message accepted' => '',
+        ] as $reply => $expected) {
+            $client = new Client($this->transport($this->transaction($reply)), encryption: Encryption::None);
+
+            $this->assertSame($expected, $client->sendRaw($this->envelope(), 'Body')->messageId, $reply);
+        }
+    }
+
+    public function testNoopKeepsTheSessionAlive(): void
+    {
+        $transport = $this->transport(['250 2.0.0 Ok']);
+        $client = new Client($transport, encryption: Encryption::None);
+
+        $client->capabilities();
+        $client->noop();
+
+        $this->assertContains('NOOP', $transport->commands());
+    }
+
+    public function testGivesUpOnAMechanismThatKeepsChallenging(): void
+    {
+        // A server answering every response with another challenge is not going
+        // to authenticate us, and the exchange must not run forever.
+        $challenges = array_fill(0, 40, '334 ' . base64_encode('Again:'));
+
+        $client = new Client(
+            $this->transport($challenges, 'AUTH LOGIN'),
+            authenticators: [new Login('jane', 'secret')],
+            encryption: Encryption::None,
+        );
+
+        $this->expectException(AuthenticationException::class);
+
+        $client->sendRaw($this->envelope(), 'Body');
     }
 
     public function testQuitsOnClose(): void

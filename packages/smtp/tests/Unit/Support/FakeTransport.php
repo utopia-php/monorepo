@@ -34,6 +34,8 @@ class FakeTransport implements Transport
      *                                        server says nothing more until then.
      * @param  string|null  $failWriting  Fail the write that carries this text,
      *                                    to model a connection dropping mid-send.
+     * @param  int  $chunk  Never hand over more than this many bytes at once, for
+     *                      a server whose reply arrives in pieces.
      */
     public function __construct(
         array $replies = [],
@@ -41,6 +43,7 @@ class FakeTransport implements Transport
         private readonly bool $greedy = false,
         private readonly array $afterHandshake = [],
         private readonly ?string $failWriting = null,
+        private readonly int $chunk = PHP_INT_MAX,
     ) {
         $this->reply(...$replies);
     }
@@ -69,6 +72,7 @@ class FakeTransport implements Transport
 
         $end = strpos($this->pending, "\r\n");
         $take = $this->greedy || $end === false ? $length : min($length, $end + 2);
+        $take = min($take, $this->chunk);
 
         $chunk = substr($this->pending, 0, $take);
         $this->pending = substr($this->pending, \strlen($chunk));

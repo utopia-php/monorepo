@@ -97,9 +97,10 @@ final class Client
             throw $exception;
         }
 
-        // A refusal here is clean: the server has read the dot and is back in
-        // command state, so the connection survives to carry the next message.
-        return new Result($this->messageId($this->expect([250])), $accepted, $rejected);
+        // A refusal here is clean -- the server read the dot and is back in
+        // command state -- so only a transaction failure keeps the connection.
+        // exchange() decides that; a dead or desynchronised stream does not.
+        return new Result($this->messageId($this->exchange([250])), $accepted, $rejected);
     }
 
     public function capabilities(): Capabilities
@@ -120,9 +121,36 @@ final class Client
             throw new Exception('A command must not span lines');
         }
 
-        $this->transport->write($command . "\r\n", $this->timeout);
+        return $this->exchange(
+            \is_array($expect) ? $expect : [$expect],
+            $command . "\r\n",
+        );
+    }
 
-        return $this->expect(\is_array($expect) ? $expect : [$expect]);
+    /**
+     * Write, then read one reply, keeping the connection only when the server
+     * gave an answer.
+     *
+     * A 4yz or 5yz is an answer: the session continues and the caller decides.
+     * A socket that failed, or a reply that cannot be parsed, means the stream
+     * is dead or out of step with us — and a client that stayed ready would
+     * send its next MAIL FROM into that.
+     *
+     * @param  list<int>  $expect
+     */
+    private function exchange(array $expect, string $write = ''): Reply
+    {
+        try {
+            if ($write !== '') {
+                $this->transport->write($write, $this->timeout);
+            }
+
+            return $this->expect($expect);
+        } catch (ConnectionException|ProtocolException $exception) {
+            $this->discard();
+
+            throw $exception;
+        }
     }
 
     public function noop(): void
@@ -167,7 +195,7 @@ final class Client
         }
 
         $this->transport->connect($this->timeout, $this->encryption === Encryption::Implicit);
-        $this->expect([220]);
+        $this->exchange([220]);
         $this->hello();
         $this->secure();
         $this->authenticate();
