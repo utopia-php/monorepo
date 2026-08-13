@@ -4,145 +4,37 @@ declare(strict_types=1);
 
 namespace Utopia\SMTP\Tests\E2E;
 
-use PHPUnit\Framework\TestCase;
 use Utopia\SMTP\Address;
-use Utopia\SMTP\Attachment;
 use Utopia\SMTP\Auth\Login;
 use Utopia\SMTP\Auth\Plain;
 use Utopia\SMTP\AuthenticationException;
-use Utopia\SMTP\Client;
 use Utopia\SMTP\Encryption;
 use Utopia\SMTP\Envelope;
 use Utopia\SMTP\Message;
 use Utopia\SMTP\Outcome;
-use Utopia\SMTP\Tls;
+use Utopia\SMTP\Tests\E2E\Support\Server;
 use Utopia\SMTP\TransactionException;
-use Utopia\SMTP\Transport\Native;
-use Utopia\SMTP\Verification;
 
 /**
- * Against a real server, which is the only way to find out whether the bytes
- * this library writes are the bytes a server expects to read.
+ * The session: encryption, authentication, recipients and connection reuse,
+ * against a server that answers for itself.
  */
-final class ClientTest extends TestCase
+final class ClientTest extends Server
 {
-    private const string HOST = '127.0.0.1';
-
-    private const int PORT = 11026;
-
-    private const string API = 'http://127.0.0.1:18026';
-
-    protected function setUp(): void
+    private function message(string $subject = 'Hello'): Message
     {
-        // Answers with an empty body, so it is not read as an object.
-        $this->get('DELETE', '/api/v1/messages');
-    }
-
-    /**
-     * The server presents the self-signed pair in tests/fixtures/certs. No
-     * trust store knows the issuer, but the certificate does name the host we
-     * dial, so that half is still checked.
-     */
-    private function client(Encryption $encryption = Encryption::StartTls, string ...$credentials): Client
-    {
-        $authenticators = $credentials === [] ? [] : [new Plain(...$credentials)];
-
-        return new Client(
-            new Native(self::HOST, self::PORT, new Tls(verify: Verification::SelfSigned)),
-            'tests.example.test',
-            $authenticators,
-            $encryption,
+        return new Message(
+            from: new Address('jane@example.test', 'Jane Doe'),
+            to: [new Address('john@example.test')],
+            subject: $subject,
+            text: 'Plain body',
         );
-    }
-
-    private function get(string $method, string $path): string
-    {
-        $context = stream_context_create(['http' => ['method' => $method, 'ignore_errors' => true]]);
-        $body = file_get_contents(self::API . $path, false, $context);
-
-        if ($body === false) {
-            $this->fail("Mailpit did not answer {$method} {$path}");
-        }
-
-        return $body;
-    }
-
-    /**
-     * @return array<mixed>
-     */
-    private function api(string $method, string $path): array
-    {
-        $decoded = json_decode($this->get($method, $path), true);
-
-        $this->assertIsArray($decoded, "Mailpit answered {$path} with something other than an object");
-
-        return $decoded;
-    }
-
-    /**
-     * A field the API promises is a string.
-     *
-     * @param  array<mixed>  $message
-     */
-    private function field(array $message, string $key): string
-    {
-        $this->assertArrayHasKey($key, $message);
-        $this->assertIsString($message[$key]);
-
-        return $message[$key];
-    }
-
-    /**
-     * A field the API promises is a list.
-     *
-     * @param  array<mixed>  $message
-     * @return array<mixed>
-     */
-    private function listOf(array $message, string $key): array
-    {
-        $this->assertArrayHasKey($key, $message);
-        $this->assertIsArray($message[$key]);
-
-        return $message[$key];
-    }
-
-    private function id(): string
-    {
-        $messages = $this->listOf($this->api('GET', '/api/v1/messages'), 'messages');
-
-        $this->assertCount(1, $messages, 'expected exactly one delivered message');
-        $this->assertIsArray($messages[0]);
-
-        return $this->field($messages[0], 'ID');
-    }
-
-    /**
-     * @return array<mixed>
-     */
-    private function delivered(): array
-    {
-        return $this->api('GET', '/api/v1/message/' . $this->id());
-    }
-
-    /**
-     * The bytes as they arrived, before the server interprets them.
-     */
-    private function source(): string
-    {
-        return $this->get('GET', '/api/v1/message/' . $this->id() . '/raw');
     }
 
     public function testUpgradesThroughStartTlsAndDelivers(): void
     {
-        $client = $this->client(Encryption::StartTls, 'jane', 'secret');
-
-        $result = $client->send(new Message(
-            from: new Address('jane@example.test', 'Jane Doe'),
-            to: [new Address('john@example.test')],
-            subject: 'Hello from Utopia',
-            text: 'Plain body',
-        ));
-
+        $client = $this->client();
+        $result = $client->send($this->message('Hello from Utopia'));
         $client->close();
 
         $this->assertTrue($result->isComplete());
@@ -155,7 +47,7 @@ final class ClientTest extends TestCase
 
     public function testAdvertisesTheExtensionsWeRelyOn(): void
     {
-        $client = $this->client(Encryption::StartTls, 'jane', 'secret');
+        $client = $this->client();
         $capabilities = $client->capabilities();
 
         $this->assertTrue($capabilities->has('AUTH'));
@@ -175,36 +67,27 @@ final class ClientTest extends TestCase
 
     public function testSendsWithoutEncryptionWhenAsked(): void
     {
-        $client = $this->client(Encryption::None, 'jane', 'secret');
-
-        $client->send(new Message(
-            from: new Address('jane@example.test'),
-            to: [new Address('john@example.test')],
-            subject: 'Plaintext',
-            text: 'Body',
-        ));
-
+        $client = $this->client(Encryption::None);
+        $client->send($this->message('Plaintext'));
         $client->close();
 
         $this->assertSame('Plaintext', $this->field($this->delivered(), 'Subject'));
     }
 
+    public function testDeliversOverImplicitTls(): void
+    {
+        // No upgrade to make: the greeting itself arrives encrypted.
+        $client = $this->client(Encryption::Implicit, port: self::IMPLICIT_PORT);
+        $client->send($this->message('Implicit'));
+        $client->close();
+
+        $this->assertSame('Implicit', $this->field($this->delivered(self::IMPLICIT_API), 'Subject'));
+    }
+
     public function testLoginMechanismAlsoAuthenticates(): void
     {
-        $client = new Client(
-            new Native(self::HOST, self::PORT, new Tls(verify: Verification::SelfSigned)),
-            'tests.example.test',
-            [new Login('jane', 'secret')],
-            Encryption::StartTls,
-        );
-
-        $client->send(new Message(
-            from: new Address('jane@example.test'),
-            to: [new Address('john@example.test')],
-            subject: 'Login',
-            text: 'Body',
-        ));
-
+        $client = $this->client(authenticators: [new Login('jane', 'secret')]);
+        $client->send($this->message('Login'));
         $client->close();
 
         $this->assertSame('Login', $this->field($this->delivered(), 'Subject'));
@@ -212,21 +95,45 @@ final class ClientTest extends TestCase
 
     public function testRefusesBadCredentials(): void
     {
-        $client = $this->client(Encryption::StartTls, 'jane', 'wrong');
+        $client = $this->client(authenticators: [new Plain('jane', 'wrong')]);
 
         $this->expectException(AuthenticationException::class);
 
-        $client->send(new Message(
-            from: new Address('jane@example.test'),
-            to: [new Address('john@example.test')],
-            subject: 'Nope',
-            text: 'Body',
-        ));
+        $client->send($this->message());
+    }
+
+    public function testCarriesSeveralMessagesOnOneConnection(): void
+    {
+        $client = $this->client();
+
+        foreach (['First', 'Second', 'Third'] as $subject) {
+            $client->send($this->message($subject));
+        }
+
+        $client->close();
+
+        $this->assertCount(3, $this->messages());
+    }
+
+    public function testStartsAFreshSessionAfterClosing(): void
+    {
+        // One authenticator, two connections. A mechanism that remembered where
+        // it got to in the first exchange would answer the wrong prompt in the
+        // second, and good credentials would be refused.
+        $client = $this->client(authenticators: [new Login('jane', 'secret')]);
+
+        $client->send($this->message('Before'));
+        $client->close();
+
+        $client->send($this->message('After'));
+        $client->close();
+
+        $this->assertCount(2, $this->messages());
     }
 
     public function testDeliversToEveryRecipientIncludingBlindOnes(): void
     {
-        $client = $this->client(Encryption::StartTls, 'jane', 'secret');
+        $client = $this->client();
 
         $result = $client->send(new Message(
             from: new Address('jane@example.test'),
@@ -260,51 +167,9 @@ final class ClientTest extends TestCase
         $this->assertStringNotContainsString('Bcc', $ours);
     }
 
-    public function testCarriesAnAttachmentThroughIntact(): void
+    public function testReportsAPermanentlyRefusedRecipientWithoutLosingTheRest(): void
     {
-        $client = $this->client(Encryption::StartTls, 'jane', 'secret');
-
-        $client->send(new Message(
-            from: new Address('jane@example.test'),
-            to: [new Address('john@example.test')],
-            subject: 'With a file',
-            text: 'See attached',
-            html: '<p>See attached</p>',
-            attachments: [Attachment::fromString('the file body', 'notes.txt', 'text/plain')],
-        ));
-
-        $client->close();
-
-        $delivered = $this->delivered();
-        $attachments = $this->listOf($delivered, 'Attachments');
-
-        $this->assertCount(1, $attachments);
-        $this->assertIsArray($attachments[0]);
-        $this->assertSame('notes.txt', $this->field($attachments[0], 'FileName'));
-        $this->assertStringContainsString('See attached', $this->field($delivered, 'HTML'));
-    }
-
-    public function testStuffsADotThatWouldOtherwiseEndTheMessage(): void
-    {
-        $client = $this->client(Encryption::StartTls, 'jane', 'secret');
-
-        $client->send(new Message(
-            from: new Address('jane@example.test'),
-            to: [new Address('john@example.test')],
-            subject: 'Transparency',
-            text: "before\r\n.\r\nafter",
-        ));
-
-        $client->close();
-
-        // Without stuffing the server would have stopped reading at the dot and
-        // the second half would be gone.
-        $this->assertStringContainsString('after', $this->field($this->delivered(), 'Text'));
-    }
-
-    public function testReportsARefusedRecipientWithoutLosingTheRest(): void
-    {
-        $client = $this->client(Encryption::StartTls, 'jane', 'secret');
+        $client = $this->client();
 
         // The server is configured to allow @example.test and nothing else, so
         // the second recipient draws a real refusal mid-transaction.
@@ -321,9 +186,33 @@ final class ClientTest extends TestCase
         $this->assertSame('Partial', $this->field($this->delivered(), 'Subject'));
     }
 
+    public function testReportsATransientlyRefusedRecipientAsWorthRetrying(): void
+    {
+        // The second server takes two recipients a message, so the third draws
+        // a 4yz. This is the case the Result shape exists for: two people have
+        // the message and the third is worth trying again later.
+        $client = $this->client(Encryption::Implicit, port: self::IMPLICIT_PORT);
+
+        $result = $client->sendRaw(
+            new Envelope('jane@example.test', ['one@example.test', 'two@example.test', 'three@example.test']),
+            "Subject: Crowded\r\n\r\nBody\r\n",
+        );
+
+        $client->close();
+
+        $this->assertSame(['one@example.test', 'two@example.test'], $result->accepted);
+        $this->assertArrayHasKey('three@example.test', $result->rejected);
+
+        $refusal = $result->rejected['three@example.test'];
+        $this->assertSame(Outcome::Transient, $refusal->outcome);
+        $this->assertSame('4.5.3', $refusal->status);
+
+        $this->assertSame('Crowded', $this->field($this->delivered(self::IMPLICIT_API), 'Subject'));
+    }
+
     public function testSurfacesARefusalAsATransactionFailure(): void
     {
-        $client = $this->client(Encryption::StartTls, 'jane', 'secret');
+        $client = $this->client();
 
         try {
             $client->sendRaw(new Envelope('jane@example.test', ['blocked@example.invalid']), "Subject: X\r\n\r\nBody\r\n");
@@ -334,5 +223,46 @@ final class ClientTest extends TestCase
         }
 
         $client->close();
+    }
+
+    public function testStuffsADotThatWouldOtherwiseEndTheMessage(): void
+    {
+        $client = $this->client();
+
+        $client->send(new Message(
+            from: new Address('jane@example.test'),
+            to: [new Address('john@example.test')],
+            subject: 'Transparency',
+            text: "before\r\n.\r\nafter",
+        ));
+
+        $client->close();
+
+        // Without stuffing the server would have stopped reading at the dot and
+        // the second half would be gone.
+        $this->assertStringContainsString('after', $this->field($this->delivered(), 'Text'));
+    }
+
+    public function testTheEnvelopeSenderIsNotTheFromHeader(): void
+    {
+        $client = $this->client();
+
+        $client->sendRaw(
+            new Envelope('bounces@example.test', ['john@example.test']),
+            (string) new Message(
+                from: new Address('jane@example.test', 'Jane Doe'),
+                to: [new Address('john@example.test')],
+                subject: 'Split',
+                text: 'Body',
+            ),
+        );
+
+        $client->close();
+
+        $delivered = $this->delivered();
+
+        // Where a bounce goes and who the reader sees are different answers.
+        $this->assertSame('bounces@example.test', $this->field($delivered, 'ReturnPath'));
+        $this->assertSame('jane@example.test', $this->field($this->listOf($delivered, 'From'), 'Address'));
     }
 }
