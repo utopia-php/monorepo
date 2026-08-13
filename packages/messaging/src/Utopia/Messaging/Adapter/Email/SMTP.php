@@ -4,10 +4,7 @@ namespace Utopia\Messaging\Adapter\Email;
 
 use Utopia\Messaging\Adapter\Email as EmailAdapter;
 use Utopia\Messaging\Messages\Email as EmailMessage;
-use Utopia\Messaging\Messages\Email\Attachment as EmailAttachment;
 use Utopia\Messaging\Response;
-use Utopia\SMTP\Address;
-use Utopia\SMTP\Attachment;
 use Utopia\SMTP\Auth\Login;
 use Utopia\SMTP\Auth\Plain;
 use Utopia\SMTP\Client;
@@ -264,86 +261,16 @@ class SMTP extends EmailAdapter
             $headers['X-Mailer'] = $this->xMailer;
         }
 
-        $text = $message->getContent();
-
-        if ($message->isHtml()) {
-            // Stripping tags leaves the contents of a style block behind, so
-            // those go first.
-            $text = preg_replace('/<style\b[^>]*>(.*?)<\/style>/is', '', $message->getContent()) ?? '';
-            $text = trim(strip_tags($text));
-        }
-
-        return new SmtpMessage(
-            from: new Address($message->getFromEmail(), $message->getFromName()),
-            to: $this->addresses($message->getTo()),
-            subject: $message->getSubject(),
-            text: $text,
-            html: $message->isHtml() ? $message->getContent() : null,
-            cc: $this->addresses($message->getCC() ?? []),
-            bcc: $this->addresses($message->getBCC() ?? []),
-            replyTo: $message->getReplyToEmail() === ''
-                ? []
-                : [new Address($message->getReplyToEmail(), $message->getReplyToName())],
-            attachments: $this->attachments($message),
-            headers: $headers,
-        );
-    }
-
-    /**
-     * @param  array<array<string, string>>  $recipients
-     * @return list<Address>
-     */
-    private function addresses(array $recipients): array
-    {
-        return array_values(array_map(
-            static fn(array $recipient): Address => new Address($recipient['email'], $recipient['name'] ?? ''),
-            $recipients,
-        ));
-    }
-
-    /**
-     * @return list<Attachment>
-     */
-    private function attachments(EmailMessage $message): array
-    {
-        $attachments = $message->getAttachments() ?? [];
-
-        if ($attachments === []) {
-            return [];
-        }
-
-        $size = 0;
-
-        foreach ($attachments as $attachment) {
-            $size += $this->size($attachment);
-        }
-
-        if ($size > self::MAX_ATTACHMENT_BYTES) {
+        if (Mime::size($message) > self::MAX_ATTACHMENT_BYTES) {
             throw new \Exception('Attachments size exceeds the maximum allowed size of 25MB');
         }
 
-        return array_values(array_map(
-            static fn(EmailAttachment $attachment): Attachment => $attachment->getContent() === null
-                // Read while the message is written, so a large file is never
-                // held in memory twice.
-                ? Attachment::fromPath($attachment->getPath(), $attachment->getName(), $attachment->getType())
-                : Attachment::fromString($attachment->getContent(), $attachment->getName(), $attachment->getType()),
-            $attachments,
-        ));
-    }
-
-    private function size(EmailAttachment $attachment): int
-    {
-        if ($attachment->getContent() !== null) {
-            return \strlen($attachment->getContent());
-        }
-
-        $size = filesize($attachment->getPath());
-
-        if ($size === false) {
-            throw new \Exception('Failed to read attachment file: ' . $attachment->getPath());
-        }
-
-        return $size;
+        return Mime::message(
+            $message,
+            $message->getTo(),
+            $message->getCC() ?? [],
+            $message->getBCC() ?? [],
+            $headers,
+        );
     }
 }

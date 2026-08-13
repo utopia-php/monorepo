@@ -2,7 +2,6 @@
 
 namespace Utopia\Messaging\Adapter\Email;
 
-use PHPMailer\PHPMailer\PHPMailer;
 use Utopia\Messaging\Adapter\Email as EmailAdapter;
 use Utopia\Messaging\Messages\Email as EmailMessage;
 use Utopia\Messaging\Response;
@@ -419,8 +418,7 @@ class SES extends EmailAdapter
     }
 
     /**
-     * Build a raw RFC 5322 MIME message (with attachments) for a single
-     * recipient using PHPMailer's pre-send assembly.
+     * Build a raw RFC 5322 MIME message, with attachments, for one recipient.
      *
      * @param  array<string, string>  $to
      *
@@ -428,52 +426,11 @@ class SES extends EmailAdapter
      */
     private function buildMime(EmailMessage $message, array $to): string
     {
-        $mail = new PHPMailer(true);
-        $mail->CharSet = 'UTF-8';
-        $mail->Subject = $message->getSubject();
-        $mail->Body = $message->getContent();
-        $mail->setFrom($message->getFromEmail(), $message->getFromName());
-        $mail->addReplyTo($message->getReplyToEmail(), $message->getReplyToName());
-        $mail->isHTML($message->isHtml());
-
-        if ($message->isHtml()) {
-            $alt = preg_replace('/<style\b[^>]*>(.*?)<\/style>/is', '', $message->getContent());
-            $mail->AltBody = trim(strip_tags($alt ?? ''));
-        }
-
-        $mail->addAddress($to['email'], $to['name'] ?? '');
-
-        foreach ($message->getCC() ?? [] as $cc) {
-            $mail->addCC($cc['email'], $cc['name'] ?? '');
-        }
-
-        foreach ($message->getBCC() ?? [] as $bcc) {
-            $mail->addBCC($bcc['email'], $bcc['name'] ?? '');
-        }
-
-        foreach ($message->getAttachments() ?? [] as $attachment) {
-            $content = $attachment->getContent();
-            if ($content === null) {
-                $data = file_get_contents($attachment->getPath());
-                if ($data === false) {
-                    throw new \Exception('Failed to read attachment file: ' . $attachment->getPath());
-                }
-                $content = $data;
-            }
-
-            $mail->addStringAttachment(
-                string: $content,
-                filename: $attachment->getName(),
-                encoding: PHPMailer::ENCODING_BASE64,
-                type: $attachment->getType(),
-            );
-        }
-
-        if (! $mail->preSend()) {
-            throw new \Exception('Failed to build MIME message: ' . $mail->ErrorInfo);
-        }
-
-        return $mail->getSentMIMEMessage();
+        // One copy per recipient, so the To header names only this one. Blind
+        // recipients are not passed: SES takes its destinations from the
+        // request rather than from the message, and a Bcc header would
+        // disclose them to everyone who received it.
+        return (string) Mime::message($message, [$to], $message->getCC() ?? []);
     }
 
     /**
@@ -483,21 +440,7 @@ class SES extends EmailAdapter
      */
     private function assertAttachmentSize(EmailMessage $message): void
     {
-        $size = 0;
-
-        foreach ($message->getAttachments() ?? [] as $attachment) {
-            if ($attachment->getContent() !== null) {
-                $size += \strlen($attachment->getContent());
-            } else {
-                $fileSize = filesize($attachment->getPath());
-                if ($fileSize === false) {
-                    throw new \Exception('Failed to read attachment file: ' . $attachment->getPath());
-                }
-                $size += $fileSize;
-            }
-        }
-
-        if ($size > self::MAX_ATTACHMENT_BYTES) {
+        if (Mime::size($message) > self::MAX_ATTACHMENT_BYTES) {
             throw new \Exception('Total attachment size exceeds ' . self::MAX_ATTACHMENT_BYTES . ' bytes');
         }
     }
