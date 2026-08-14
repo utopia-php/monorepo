@@ -39,6 +39,27 @@ final class TextTest extends TestCase
         $this->assertFalse($validator->isValid('h'));
     }
 
+    public function testCanRequireNonBlankText(): void
+    {
+        $validator = new Text(20, min: 0);
+        $this->assertTrue($validator->isValid(''));
+        $this->assertTrue($validator->isValid(" \t\n"));
+        $this->assertTrue($validator->isValid("\u{00A0}"));
+        $this->assertTrue($validator->isValid("\u{200D}"));
+
+        $validator = new Text(20, min: 0, requireNonBlank: true);
+        $this->assertFalse($validator->isValid(''));
+        $this->assertFalse($validator->isValid(" \t\n"));
+        $this->assertFalse($validator->isValid("\u{00A0}"));
+        $this->assertFalse($validator->isValid("\u{200D}"));
+        $this->assertTrue($validator->isValid('My App'));
+        $this->assertTrue($validator->isValid('  My App  '));
+        $this->assertSame(
+            'Value must be a valid string and no longer than 20 chars and not be blank',
+            $validator->getDescription(),
+        );
+    }
+
     public function testCanValidateTextWithAllowList(): void
     {
         // Test lowercase alphabet
