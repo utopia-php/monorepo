@@ -31,9 +31,9 @@ use Utopia\Queue\Queue;
 class Nats implements Publisher, Consumer
 {
     // Wire-level identifiers (stream/subject naming, durable consumers, advisories).
-    private const string STREAM_PREFIX = 'QUEUE_';
+    private const string STREAM_PREFIX = 'Q_';
     private const string DEAD_STREAM_SUFFIX = '_DEAD';
-    private const string SUBJECT_PREFIX = 'Q.';
+    private const string SUBJECT_PREFIX = 'q';
     private const string SUBJECT_NORMAL = 'normal';
     private const string SUBJECT_PRIORITY = 'priority';
     private const string SUBJECT_DEAD = 'dead';
@@ -44,6 +44,9 @@ class Nats implements Publisher, Consumer
 
     /** @var array<string, bool> queues whose streams/consumers have been provisioned */
     private array $provisioned = [];
+
+    /** @var array<string, string> stream name => the identity that first claimed it (collision guard) */
+    private array $claimed = [];
 
     /** @var array<string, array{normal: NatsConsumer, priority: NatsConsumer}> */
     private array $consumers = [];
@@ -242,6 +245,16 @@ class Nats implements Publisher, Consumer
             return;
         }
 
+        // Names drop the namespace (isolation is per-account/cluster), so two queues
+        // that sanitize to the same stream would silently share it. Fail loud instead:
+        // the first identity claims the stream name; a different claimant is rejected.
+        $stream = $this->workStream($queue);
+        $owner = $this->claimed[$stream] ?? null;
+        if ($owner !== null && $owner !== $key) {
+            throw new \RuntimeException("NATS stream name collision on \"{$stream}\": queue identities \"{$owner}\" and \"{$key}\" both map to it; rename one queue.");
+        }
+        $this->claimed[$stream] = $key;
+
         $maxAge = $queue->jobTtl > 0 ? (float) $queue->jobTtl : null;
 
         $this->js()->createOrUpdateStream(new StreamConfig(
@@ -327,11 +340,11 @@ class Nats implements Publisher, Consumer
 
     private function workStream(Queue $queue): string
     {
-        // Fixed width so the name can never exceed JetStream's 255-byte limit: a bounded
-        // readable prefix plus a full sha256 of the identity. 256 bits makes a collision
-        // infeasible (unlike the earlier 40-bit truncation), while an unbounded injective
-        // encoding (bin2hex) would blow the length limit for long queue names.
-        return self::STREAM_PREFIX . substr($this->sanitize("{$queue->namespace}_{$queue->name}"), 0, 40) . '_' . hash('sha256', $this->identity($queue));
+        // NATS-idiomatic: a short uppercase category prefix (mirrors JetStream's own
+        // KV_/OBJ_ streams) plus the queue name, e.g. Q_AUDITS. The namespace is not
+        // folded in -- isolation is per-account/cluster -- and ensure() guards the rare
+        // case of two names sanitizing to the same stream.
+        return self::STREAM_PREFIX . $this->streamToken($queue->name);
     }
 
     private function deadStream(Queue $queue): string
@@ -340,16 +353,15 @@ class Nats implements Publisher, Consumer
     }
 
     /**
-     * Collision-free subject namespace for a queue: a fixed leading token, an identity
-     * hash, and a category tail. Raw namespace/name are NOT interpolated — they can
-     * contain dots (even the literal "queue"/"priority"/"dead"), so building subjects
-     * from them is ambiguous (e.g. ns "a" + name "b.queue.c" vs ns "a.queue.b" + name
-     * "c" both yield "a.queue.b.queue.c"). A sha256 of the identity is a single dot-free,
-     * fixed-width token, so distinct queues never share a subject.
+     * Subject namespace for a queue: a fixed root token plus the queue name as a single
+     * dot-free token, e.g. q.audits — the class tail (.normal/.priority/.dead) is appended
+     * by the callers below. subjectToken() collapses any dot in the name to '_' so the name
+     * can never split into extra subject tokens, and ensure() rejects two names that
+     * collapse to the same subject. Subscribe q.> to observe all queue traffic.
      */
     private function subjectBase(Queue $queue): string
     {
-        return self::SUBJECT_PREFIX . hash('sha256', $this->identity($queue));
+        return self::SUBJECT_PREFIX . '.' . $this->subjectToken($queue->name);
     }
 
     private function workSubject(Queue $queue): string
@@ -367,9 +379,16 @@ class Nats implements Publisher, Consumer
         return $this->subjectBase($queue) . '.' . self::SUBJECT_DEAD;
     }
 
-    /** Stream names allow only A-Z a-z 0-9 _ - (no dots), unlike subject/queue names. */
-    private function sanitize(string $name): string
+    /** Stream names are uppercase and forbid dots; anything outside A-Z 0-9 _ - maps to '_'. */
+    private function streamToken(string $name): string
     {
-        return (string) preg_replace('/[^A-Za-z0-9_-]/', '_', $name);
+        return strtoupper((string) preg_replace('/[^A-Za-z0-9_-]/', '_', $name));
+    }
+
+    /** A single lowercase subject token; dots (token separators) and any other
+     *  character outside a-z 0-9 _ - collapse to '_'. */
+    private function subjectToken(string $name): string
+    {
+        return strtolower((string) preg_replace('/[^A-Za-z0-9_-]/', '_', $name));
     }
 }

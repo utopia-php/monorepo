@@ -201,6 +201,32 @@ final class NatsBrokerTest extends TestCase
         $this->broker->commit($dotted, $message);
     }
 
+    public function testUsesIdiomaticStreamAndSubjectNames(): void
+    {
+        // Q_<UPPER-NAME> stream (mirrors NATS's own KV_/OBJ_) + q.<lower-name>.<class>
+        // subjects; the namespace is not folded in.
+        $name = 'audits-' . substr(md5(uniqid('', true)), 0, 6);
+        $this->broker->enqueue(new Queue($name), ['ok' => 1]);
+
+        $js = Connection::connect(getenv('NATS_URL') ?: 'nats://127.0.0.1:14225')->jetStream();
+        $info = $js->getStreamInfo('Q_' . strtoupper($name));
+        $this->assertSame('Q_' . strtoupper($name), $info->config->name);
+        $this->assertContains('q.' . strtolower($name) . '.normal', $info->config->subjects);
+        $this->assertContains('q.' . strtolower($name) . '.priority', $info->config->subjects);
+    }
+
+    public function testCollidingQueueNamesFailLoud(): void
+    {
+        // Dropping the namespace means two names that sanitise to the same stream would
+        // silently share it; the guard turns that into a loud error instead. "c.<s>" and
+        // "c_<s>" both map to stream Q_C_<S>.
+        $suffix = substr(md5(uniqid('', true)), 0, 6);
+        $this->broker->enqueue(new Queue("c.{$suffix}"), ['ok' => 1]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->broker->enqueue(new Queue("c_{$suffix}"), ['ok' => 1]);
+    }
+
     public function testJobTtlExpiresUnackedMessages(): void
     {
         // jobTtl maps to the stream's MaxAge: an unconsumed message expires.
