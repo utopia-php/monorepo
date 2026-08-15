@@ -141,13 +141,27 @@ $server->error()->inject('error')->action(function ($error) {
 $server->start();
 ```
 
-Publishers are unchanged: enqueue to each queue by name (`new Client('v1-functions', $connection)`, etc.).
+Publishers are unchanged: enqueue to each queue by name (`$publisher->enqueue(new Queue('v1-functions'), $payload)`, etc.).
 
 With [`utopia-php/platform`](https://github.com/utopia-php/platform), pass `workers` and `jobs` (`queue` / `maxCoroutines` per action) into `Platform::init(Service::TYPE_WORKER, …)`.
 
+## Benchmarks
+
+Requires `ext-swoole`. Compares single-queue vs multi-queue on the current tree, then (unless skipped) the same single-queue workload on `origin/main` via a git worktree. Also checks retained memory across repeated drain cycles.
+
+```bash
+composer bench
+# Current only:
+BENCH_SKIP_BASELINE=1 composer bench
+# Tune size / sensitivity:
+BENCH_MESSAGES=5000 BENCH_CONCURRENCY=8 BENCH_QUEUES=4 BENCH_ROUNDS=20 composer bench
+```
+
+`multi-fair` keeps the same total coroutine slots as single (`concurrency / queues` per loop). `multi-isolated` gives each loop the full concurrency cap. A run fails if post-GC memory grows more than `BENCH_MEMORY_LIMIT_BYTES` (default 2 MiB).
+
 ## System requirements
 
-Utopia Framework requires PHP 8.0 or later. We recommend using the latest PHP version whenever possible.
+Utopia Queue requires PHP 8.5 or later and recommends the latest PHP version whenever possible.
 
 ## Copyright and license
 
