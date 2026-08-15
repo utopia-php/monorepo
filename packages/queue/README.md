@@ -40,6 +40,8 @@ if ($connection->ping()) {
 $adapter = new Queue\Adapter\Swoole($connection, 12, 'my-queue');
 $server = new Queue\Server($adapter);
 
+// job() with no arguments binds to the adapter's queue ('my-queue')
+// and uses the adapter's worker count (12) as concurrency.
 $server
     ->job()
     ->inject('message')
@@ -99,22 +101,62 @@ Each queue is a WorkQueue-retention stream (a message is removed once acknowledg
 
 ## Multiple queues in one process
 
-`Server::job()` accepts an optional queue name and per-queue `maxCoroutines` (default `1`). Register more than one job and the Swoole adapter runs an independent consume loop per queue so caps stay isolated — a databases loop at `1` cannot share a pool with functions at `8`.
+The getting-started example runs **one** queue: the name and concurrency come from the adapter (`new Swoole($connection, 12, 'my-queue')`), and a bare `job()` handles that queue.
+
+To run **several** queues in the same process, call `job($queue, $maxCoroutines)` once per queue. Each call registers its own handler and its own concurrency cap. With more than one job registered, the Swoole adapter starts a separate consume loop per queue, so the caps do not share a pool — `v1-functions` can run 8 jobs at once while `database_db_main` stays at 1.
 
 ```php
-$server->job('v1-functions', 8)
-    ->inject('message')
-    ->action(function (Message $message) { /* ... */ });
+use Utopia\Queue;
+use Utopia\Queue\Consumer;
+use Utopia\Queue\Message;
 
-$server->job('database_db_main', 1)
-    ->inject('message')
-    ->action(function (Message $message) { /* ... */ });
+// Fresh consumer per loop: blocking receive must not share a connection
+// across queues/coroutines. Share a lock-guarded connection for acks if needed.
+$createConsumer = static function (): Consumer {
+    return new Queue\Broker\Redis(
+        receive: new Queue\Connection\Redis('redis'),
+        commands: new Queue\Connection\Redis('redis'),
+    );
+};
 
-// Blocking receives must not share a connection across coroutines.
+$adapter = new Queue\Adapter\Swoole($createConsumer(), workerNum: 1, queue: 'v1-functions');
+$server = new Queue\Server($adapter);
+
+// Same API as a bare job(), but the queue name and concurrency are explicit.
+// The adapter workerNum is unused here — each job() sets its own cap.
+$server
+    ->job('v1-functions', 8)
+    ->inject('message')
+    ->action(function (Message $message) {
+        // Handle a functions job
+    });
+
+$server
+    ->job('database_db_main', 1)
+    ->inject('message')
+    ->action(function (Message $message) {
+        // Handle a databases job
+    });
+
 $server->consumer(fn (string $queue): Consumer => $createConsumer());
+
+$server->error()->inject('error')->action(function ($error) {
+    echo $error->getMessage() . PHP_EOL;
+});
+
+$server->start();
 ```
 
-`Platform::init(Service::TYPE_WORKER, …)` mirrors this: pass `workers` (`['all']` or a list) and `jobs` keyed by action name with `queue` / `maxCoroutines`. The single-name `workerName` path is unchanged.
+| | Single queue | Multiple queues |
+| --- | --- | --- |
+| Queue name | Adapter constructor (`'my-queue'`) | First argument to each `job('…')` |
+| Concurrency | Adapter worker / coroutine settings | Second argument to each `job('…', n)` (default `1`) |
+| Handlers | One bare `job()` | One `job($queue, $n)` per queue |
+| Receive connection | Adapter's consumer | `consumer()` factory — one consumer per queue |
+
+Publishers are unchanged: enqueue to each queue by name (`new Client('v1-functions', $connection)`, etc.).
+
+With [`utopia-php/platform`](https://github.com/utopia-php/platform), the same shape is `Platform::init(Service::TYPE_WORKER, …)` with `workers` (`['all']` or a list) and `jobs` keyed by action name (`queue` / `maxCoroutines`). A single `workerName` still registers one queue, as before.
 
 ## System requirements
 
