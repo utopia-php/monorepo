@@ -1,3 +1,4 @@
 /vendor/
 .phpunit*
-.ideabenchmark/.worktree-baseline/
+.idea
+benchmark/.worktree-baseline/
