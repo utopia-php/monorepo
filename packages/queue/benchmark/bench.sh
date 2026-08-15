@@ -32,7 +32,16 @@ if [ "$BENCH_SKIP_BASELINE" = "1" ]; then
 fi
 
 if ! git -C "$REPO" rev-parse --verify "$BENCH_BASELINE_REF" >/dev/null 2>&1; then
-  echo "==> baseline ref $BENCH_BASELINE_REF not found; fetch or set BENCH_BASELINE_REF" >&2
+  echo "==> fetching $BENCH_BASELINE_REF"
+  if [[ "$BENCH_BASELINE_REF" == origin/* ]]; then
+    git -C "$REPO" fetch --no-tags --depth=1 origin "${BENCH_BASELINE_REF#origin/}:${BENCH_BASELINE_REF}" || true
+  else
+    git -C "$REPO" fetch --no-tags --depth=1 origin "$BENCH_BASELINE_REF" || true
+  fi
+fi
+
+if ! git -C "$REPO" rev-parse --verify "$BENCH_BASELINE_REF" >/dev/null 2>&1; then
+  echo "==> baseline ref $BENCH_BASELINE_REF not found; set BENCH_BASELINE_REF or fetch it" >&2
   echo "==> continuing without baseline"
   exit "$STATUS"
 fi
