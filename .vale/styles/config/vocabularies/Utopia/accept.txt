@@ -196,6 +196,7 @@ Vivaldi
 Vonage
 Wasabi
 watchOS
+worktree(?:s)?
 webOS
 WebView
 Wget
