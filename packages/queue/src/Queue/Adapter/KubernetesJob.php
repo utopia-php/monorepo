@@ -104,8 +104,13 @@ class KubernetesJob extends Adapter
      * than blocking forever like the long-running adapters.
      */
     #[\Override]
-    public function consume(callable $messageCallback, callable $successCallback, callable $errorCallback): void
-    {
+    public function consume(
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+        ?array $queues = null,
+    ): void {
+        unset($queues);
         $this->stopped = false;
 
         $swoole = \extension_loaded('swoole');

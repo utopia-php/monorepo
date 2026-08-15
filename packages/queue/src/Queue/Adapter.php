@@ -49,27 +49,46 @@ abstract class Adapter
      * @param callable(Message): void $successCallback
      * @param callable(?Message, \Throwable): void $errorCallback Receives null when
      *        the failure was in obtaining a message rather than handling one.
+     * @param array<int, array{queue: Queue, maxCoroutines: int, consumer?: Consumer}>|null $queues
+     *        When null, consumes `$this->queue`. Sequential adapters run multiple
+     *        specs one after another; Swoole runs independent loops.
      */
-    public function consume(callable $messageCallback, callable $successCallback, callable $errorCallback): void
-    {
-        $this->consumeQueue(
-            $this->queue,
-            1,
-            $messageCallback,
-            $successCallback,
-            $errorCallback,
-        );
+    public function consume(
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+        ?array $queues = null,
+    ): void {
+        $this->stopped = false;
+        $queues ??= [
+            [
+                'queue' => $this->queue,
+                'maxCoroutines' => 1,
+                'consumer' => $this->consumer,
+            ],
+        ];
+
+        foreach ($queues as $spec) {
+            $this->run(
+                $spec['queue'],
+                $spec['maxCoroutines'],
+                $messageCallback,
+                $successCallback,
+                $errorCallback,
+                $spec['consumer'] ?? null,
+            );
+        }
     }
 
     /**
-     * Consume one queue. `$maxCoroutines` is accepted for adapter parity; the
+     * One-queue loop. `$maxCoroutines` is accepted for adapter parity; the
      * sequential fallback processes one message at a time (effective cap 1).
      *
      * @param callable(Message): void $messageCallback
      * @param callable(Message): void $successCallback
      * @param callable(?Message, \Throwable): void $errorCallback
      */
-    public function consumeQueue(
+    protected function run(
         Queue $queue,
         int $maxCoroutines,
         callable $messageCallback,
@@ -77,7 +96,6 @@ abstract class Adapter
         callable $errorCallback,
         ?Consumer $consumer = null,
     ): void {
-        $this->stopped = false;
         unset($maxCoroutines);
 
         while (!$this->isStopped()) {
@@ -89,33 +107,6 @@ abstract class Adapter
 
             $this->context = new Container($this->resources());
             $this->process($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
-        }
-    }
-
-    /**
-     * Consume many queues. Sequential adapters run them one after another
-     * (not concurrent); Swoole overrides this with independent loops.
-     *
-     * @param array<int, array{queue: Queue, maxCoroutines: int, consumer?: Consumer}> $queues
-     * @param callable(Message): void $messageCallback
-     * @param callable(Message): void $successCallback
-     * @param callable(?Message, \Throwable): void $errorCallback
-     */
-    public function consumeMany(
-        array $queues,
-        callable $messageCallback,
-        callable $successCallback,
-        callable $errorCallback,
-    ): void {
-        foreach ($queues as $spec) {
-            $this->consumeQueue(
-                $spec['queue'],
-                $spec['maxCoroutines'],
-                $messageCallback,
-                $successCallback,
-                $errorCallback,
-                $spec['consumer'] ?? null,
-            );
         }
     }
 

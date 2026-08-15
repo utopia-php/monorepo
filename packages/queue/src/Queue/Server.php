@@ -31,12 +31,12 @@ class Server
      *
      * @var array<string, int>
      */
-    protected array $jobCoroutines = [];
+    protected array $coroutines = [];
 
     /**
      * @var (callable(string): Consumer)|null
      */
-    protected $consumerFactory = null;
+    protected $consumer = null;
 
     /**
      * Hooks that will run when error occur
@@ -99,7 +99,7 @@ class Server
         $queue ??= $this->adapter->queue->name;
         $this->job = $job;
         $this->jobs[$queue] = $job;
-        $this->jobCoroutines[$queue] = max(1, $maxCoroutines);
+        $this->coroutines[$queue] = max(1, $maxCoroutines);
 
         return $job;
     }
@@ -111,9 +111,9 @@ class Server
      *
      * @param callable(string): Consumer $factory
      */
-    public function setConsumerFactory(callable $factory): self
+    public function consumer(callable $factory): self
     {
-        $this->consumerFactory = $factory(...);
+        $this->consumer = $factory(...);
 
         return $this;
     }
@@ -121,14 +121,14 @@ class Server
     /**
      * @return array<string, Job>
      */
-    public function getJobs(): array
+    public function jobs(): array
     {
         return $this->jobs;
     }
 
-    public function getJobCoroutines(string $queue): int
+    public function coroutines(string $queue): int
     {
-        return $this->jobCoroutines[$queue] ?? 1;
+        return $this->coroutines[$queue] ?? 1;
     }
 
     protected function jobFor(Message $message): Job
@@ -407,13 +407,13 @@ class Server
                     foreach ($this->jobs as $queueName => $job) {
                         $queues[] = [
                             'queue' => new Queue($queueName, $this->adapter->queue->namespace),
-                            'maxCoroutines' => $this->jobCoroutines[$queueName] ?? 1,
-                            'consumer' => \is_callable($this->consumerFactory)
-                                ? ($this->consumerFactory)($queueName)
+                            'maxCoroutines' => $this->coroutines[$queueName] ?? 1,
+                            'consumer' => \is_callable($this->consumer)
+                                ? ($this->consumer)($queueName)
                                 : $this->adapter->consumer,
                         ];
                     }
-                    $this->adapter->consumeMany($queues, $messageCallback, $successCallback, $errorCallback);
+                    $this->adapter->consume($messageCallback, $successCallback, $errorCallback, $queues);
                 } else {
                     $this->adapter->consume($messageCallback, $successCallback, $errorCallback);
                 }

@@ -257,8 +257,13 @@ final class ServerTelemetryAdapter extends Adapter
 
     /** Drain every message the consumer offers, then return (bounded for tests). */
     #[\Override]
-    public function consume(callable $messageCallback, callable $successCallback, callable $errorCallback): void
-    {
+    public function consume(
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+        ?array $queues = null,
+    ): void {
+        unset($queues);
         while (($message = $this->consumer->receive($this->queue, 0)) instanceof \Utopia\Queue\Message) {
             $this->context = new Container($this->resources());
             $this->process($message, $messageCallback, $successCallback, $errorCallback);

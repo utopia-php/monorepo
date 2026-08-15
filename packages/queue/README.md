@@ -111,10 +111,10 @@ $server->job('database_db_main', 1)
     ->action(function (Message $message) { /* ... */ });
 
 // Blocking receives must not share a connection across coroutines.
-$server->setConsumerFactory(fn (string $queue): Consumer => $createConsumer());
+$server->consumer(fn (string $queue): Consumer => $createConsumer());
 ```
 
-`Platform::init(Service::TYPE_WORKER, …)` mirrors this: pass `workerNames` (`['all']` or a list) and `workerJobs` keyed by action name with `queue` / `maxCoroutines`. The single-name `workerName` path is unchanged.
+`Platform::init(Service::TYPE_WORKER, …)` mirrors this: pass `workers` (`['all']` or a list) and `jobs` keyed by action name with `queue` / `maxCoroutines`. The single-name `workerName` path is unchanged.
 
 ## System requirements
 

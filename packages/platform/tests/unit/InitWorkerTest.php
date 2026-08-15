@@ -25,16 +25,16 @@ final class InitWorkerTest extends TestCase
 
         $platform->init(Service::TYPE_WORKER, [
             'workerName' => 'all',
-            'workerNames' => ['all'],
-            'workerJobs' => [
+            'workers' => ['all'],
+            'jobs' => [
                 'databases' => ['queue' => 'database_db_main', 'maxCoroutines' => 1],
                 'functions' => ['queue' => 'v1-functions', 'maxCoroutines' => 8],
             ],
         ]);
 
-        $this->assertCount(2, $server->getJobs());
-        $this->assertSame(1, $server->getJobCoroutines('database_db_main'));
-        $this->assertSame(8, $server->getJobCoroutines('v1-functions'));
+        $this->assertCount(2, $server->jobs());
+        $this->assertSame(1, $server->coroutines('database_db_main'));
+        $this->assertSame(8, $server->coroutines('v1-functions'));
     }
 
     public function testSingleWorkerNamePathStillRegistersOneJob(): void
@@ -45,14 +45,14 @@ final class InitWorkerTest extends TestCase
 
         $platform->init(Service::TYPE_WORKER, [
             'workerName' => 'functions',
-            'workerJobs' => [
+            'jobs' => [
                 'functions' => ['queue' => 'v1-functions', 'maxCoroutines' => 8],
             ],
         ]);
 
-        $this->assertCount(1, $server->getJobs());
-        $this->assertSame(8, $server->getJobCoroutines('v1-functions'));
-        $this->assertSame(1, $server->getJobCoroutines('database_db_main'));
+        $this->assertCount(1, $server->jobs());
+        $this->assertSame(8, $server->coroutines('v1-functions'));
+        $this->assertSame(1, $server->coroutines('database_db_main'));
     }
 
     private function platform(): Platform

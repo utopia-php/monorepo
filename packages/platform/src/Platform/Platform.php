@@ -176,9 +176,8 @@ abstract class Platform
      * Init worker Services
      *
      * Single-queue: `init(TYPE_WORKER, ['workerName' => 'functions'])`.
-     * Combined: pass `workerNames` (`['all']` or a list) and `workerJobs`
-     * keyed by action name with that queue's `queue` / `maxCoroutines`
-     * (default 1).
+     * Combined: pass `workers` (`['all']` or a list) and `jobs` keyed by
+     * action name with that queue's `queue` / `maxCoroutines` (default 1).
      *
      * @param array<int|string, Service> $services
      * @param array<string, mixed> $params
@@ -186,14 +185,14 @@ abstract class Platform
     protected function initWorker(array $services, ?string $workerName, array $params = []): void
     {
         $worker = $this->worker;
-        $names = $params['workerNames'] ?? [];
+        $names = $params['workers'] ?? [];
         if ($names === [] && $workerName !== null && $workerName !== '') {
             $names = [$workerName];
         }
         $names = array_map(static fn ($name): string => strtolower((string) $name), $names);
         $all = $names === [] || in_array('all', $names, true);
         /** @var array<string, array{queue?: ?string, maxCoroutines?: int}> $jobs */
-        $jobs = $params['workerJobs'] ?? [];
+        $jobs = $params['jobs'] ?? [];
 
         foreach ($services as $service) {
             foreach ($service->getActions() as $key => $action) {

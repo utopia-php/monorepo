@@ -24,9 +24,9 @@ final class ServerJobsTest extends TestCase
         $this->assertInstanceOf(Job::class, $functions);
         $this->assertInstanceOf(Job::class, $databases);
         $this->assertNotSame($functions, $databases);
-        $this->assertSame(8, $server->getJobCoroutines('v1-functions'));
-        $this->assertSame(1, $server->getJobCoroutines('database_db_main'));
-        $this->assertCount(2, $server->getJobs());
+        $this->assertSame(8, $server->coroutines('v1-functions'));
+        $this->assertSame(1, $server->coroutines('database_db_main'));
+        $this->assertCount(2, $server->jobs());
     }
 
     public function testOmittedCoroutineCapDefaultsToOne(): void
@@ -35,14 +35,17 @@ final class ServerJobsTest extends TestCase
 
         $server->job('v1-mails');
 
-        $this->assertSame(1, $server->getJobCoroutines('v1-mails'));
+        $this->assertSame(1, $server->coroutines('v1-mails'));
     }
 
-    public function testConsumeManyKeepsPerQueueCaps(): void
+    public function testConsumeKeepsPerQueueCaps(): void
     {
         $adapter = new RecordingAdapter();
 
-        $adapter->consumeMany(
+        $adapter->consume(
+            static fn () => null,
+            static fn () => null,
+            static fn () => null,
             [
                 [
                     'queue' => new Queue('database_db_main'),
@@ -53,9 +56,6 @@ final class ServerJobsTest extends TestCase
                     'maxCoroutines' => 8,
                 ],
             ],
-            static fn () => null,
-            static fn () => null,
-            static fn () => null,
         );
 
         $this->assertSame(
@@ -67,7 +67,7 @@ final class ServerJobsTest extends TestCase
         );
     }
 
-    public function testStartWithMultipleJobsUsesConsumeMany(): void
+    public function testStartWithMultipleJobsUsesConsume(): void
     {
         $adapter = new RecordingAdapter('v1-functions');
         $server = new Server($adapter);
@@ -147,7 +147,7 @@ final class RecordingAdapter extends Adapter
         return $this;
     }
 
-    public function consumeQueue(
+    protected function run(
         Queue $queue,
         int $maxCoroutines,
         callable $messageCallback,
