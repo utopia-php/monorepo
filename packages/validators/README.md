@@ -45,7 +45,10 @@ For advanced flows combine validators with `Multiple`, `AnyOf`, `AllOf`, `NoneOf
 - `ArrayList`, `Assoc`, `Nullable`, `WhiteList`, `Wildcard`
 - `Boolean`, `Integer`, `FloatValidator`, `Numeric`, `Range`
 - `Domain`, `Host`, `Hostname`, `IP`, `URL`
-- `HexColor`, `Identifier`, `JSON`, `Phone`, `Text`
+- `HexColor`, `Identifier`, `JSON`, `Phone`, `CallingCode`, `Text`
+
+`Phone` accepts E.164 values. Pass `knownCallingCode: true` to also require a
+listed ITU-T calling code (`CallingCode::fromPhoneNumber()`).
 - `JSON\ObjectValidator`, `JSON\ArrayValidator` – JSON shape checks that accept encoded strings
 
 ### Validating JSON shape

@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/token"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "access_token": "ya29-access",
+      "refresh_token": "ya29-refresh",
+      "expires_in": 3600,
+      "token_type": "Bearer"
+    }
+  }
+}

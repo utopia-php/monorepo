@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/v1/oauth2/console/userinfo"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "sub": "user-console",
+      "email": "owner@appwrite.io",
+      "email_verified": true,
+      "name": "Console Owner"
+    }
+  }
+}

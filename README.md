@@ -48,6 +48,7 @@ Arrows point at dependencies (`platform --> http` means platform requires http).
 ```mermaid
 graph TD
     audit --> validators
+    auth --> validators
     cache --> circuit-breaker
     cache --> pools
     cache --> telemetry
@@ -89,7 +90,6 @@ graph TD
     storage --> validators
     storage --> client
     storage --> psr7
-    auth
     image
     nats
     replication

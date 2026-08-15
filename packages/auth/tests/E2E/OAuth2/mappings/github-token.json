@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/login/oauth/access_token"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "access_token": "gho-access",
+      "refresh_token": "gho-refresh",
+      "expires_in": 3600,
+      "scope": "user:email",
+      "token_type": "bearer"
+    }
+  }
+}

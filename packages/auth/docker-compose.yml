@@ -1,17 +1,12 @@
 services:
-  tests:
-    container_name: tests
-    image: auth-dev
-    build:
-      context: .
+  wiremock:
+    image: wiremock/wiremock:3.13.1
+    ports:
+      - '18080:8080'
     volumes:
-      - ./src:/usr/src/code/src
-      - ./tests:/usr/src/code/tests
-      - ./phpunit.xml:/usr/src/code/phpunit.xml
-    environment:
-      - TESTING=true
-    networks:
-      - utopia
-
-networks:
-  utopia: 
+      - ./tests/E2E/OAuth2/mappings:/home/wiremock/mappings:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'bash -c "echo >/dev/tcp/127.0.0.1/8080"']
+      interval: 2s
+      timeout: 3s
+      retries: 30

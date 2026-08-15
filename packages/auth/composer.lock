@@ -4,21 +4,64 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "18a4382eda0fd2a91a230095ed81e299",
-    "packages": [],
+    "content-hash": "79a5820ac25ad99490fb140ca25bfc93",
+    "packages": [
+        {
+            "name": "utopia-php/validators",
+            "version": "0.5.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/utopia-php/validators.git",
+                "reference": "ea6c1ad13019c8a088866cf422c232928de5a25e"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/utopia-php/validators/zipball/ea6c1ad13019c8a088866cf422c232928de5a25e",
+                "reference": "ea6c1ad13019c8a088866cf422c232928de5a25e",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Utopia\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "A lightweight collection of reusable validators for Utopia projects",
+            "keywords": [
+                "php",
+                "utopia",
+                "validation",
+                "validator"
+            ],
+            "support": {
+                "issues": "https://github.com/utopia-php/validators/issues",
+                "source": "https://github.com/utopia-php/validators/tree/0.5.0"
+            },
+            "time": "2026-08-14T05:12:07+00:00"
+        }
+    ],
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
         "php": ">=8.3",
+        "ext-curl": "*",
         "ext-hash": "*",
+        "ext-json": "*",
         "ext-openssl": "*",
         "ext-scrypt": "*",
         "ext-sodium": "*"
     },
-    "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
 }

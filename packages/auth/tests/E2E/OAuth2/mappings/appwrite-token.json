@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/oauth2/console/token"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "access_token": "aw-access",
+      "refresh_token": "aw-refresh",
+      "expires_in": 3600,
+      "token_type": "Bearer"
+    }
+  }
+}

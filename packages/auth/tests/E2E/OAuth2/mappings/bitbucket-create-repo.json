@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/2.0/repositories/.*/.*"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "uuid": "repo-1",
+      "slug": "demo",
+      "full_name": "workspace/demo",
+      "is_private": true
+    }
+  }
+}

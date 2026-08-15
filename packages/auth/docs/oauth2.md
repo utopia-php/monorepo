@@ -1,9 +1,8 @@
 # OAuth2 and OpenID Connect
 
 Utopia Auth includes small value objects and token issuers for OAuth2 and
-OpenID Connect authorization servers. The token issuers mint signed JWTs, while
-the OAuth2 helpers parse request parameters at the protocol boundary so
-application code can work with typed values.
+OpenID Connect authorization servers, plus relying-party client adapters that
+speak a provider's authorization-code flow.
 
 ## OAuth2 access tokens (RFC 9068)
 
@@ -295,3 +294,33 @@ use Utopia\Auth\Verifiers\Symmetric;
 $claims = (new Symmetric($secret, issuer: $issuer, audience: 'https://example.com/token'))
     ->verify($refreshToken);
 ```
+
+## OAuth2 client adapters
+
+`Utopia\Auth\OAuth2\Provider` is a relying-party client: build a login URL,
+exchange an authorization code, refresh tokens, and read the user id, email,
+and name. Concrete adapters live under `Utopia\Auth\OAuth2\Providers`.
+
+```php
+<?php
+
+use Utopia\Auth\OAuth2\Providers\Github;
+
+$github = new Github(
+    'client-id',
+    'client-secret',
+    'https://example.com/callback',
+);
+
+header('Location: ' . $github->getLoginURL());
+```
+
+Inject `HttpClient` to swap transport (tests and WireMock). Providers that
+require PKCE (Etsy, Kick, X, Appwrite) also take `stateEncryptionKey` so the
+code verifier can be stored in `state` without being readable in the redirect
+URL.
+
+GitHub, GitLab, Gitea, and Bitbucket expose `createRepository()` and
+`getUserSlug()` for VCS installs. The Appwrite adapter talks to
+`https://cloud.appwrite.io/v1/oauth2/console` by default.
+

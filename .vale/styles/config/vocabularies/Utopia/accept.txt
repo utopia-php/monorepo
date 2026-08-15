@@ -117,11 +117,19 @@ namespace(?:s)?
 NATS
 Nintendo
 OAuth
+OAuth2
 OIDC
+PKCE
+WireMock
+GitHub
+GitLab
+Gitea
+Bitbucket
+E.164
 OkHttp
 OpenID
 OpenID Connect
-OTLP
+OTP
 Packagist
 parentless
 PATCH

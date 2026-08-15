@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/user/emails"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": [
+      {
+        "email": "octocat@example.com",
+        "primary": true,
+        "verified": true
+      }
+    ]
+  }
+}

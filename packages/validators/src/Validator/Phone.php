@@ -13,7 +13,11 @@ use Utopia\Validator;
  */
 class Phone extends Validator
 {
-    public function __construct(protected bool $allowEmpty = false, protected bool $normalize = false) {}
+    public function __construct(
+        protected bool $allowEmpty = false,
+        protected bool $normalize = false,
+        protected bool $knownCallingCode = false,
+    ) {}
 
     /**
      * Recover E.164 phone numbers from URL/path transport damage.
@@ -86,6 +90,14 @@ class Phone extends Validator
             $value = self::normalize($value);
         }
 
-        return preg_match('/^\+[1-9]\d{6,14}$/', $value) === 1;
+        if (preg_match('/^\+[1-9]\d{6,14}$/', $value) !== 1) {
+            return false;
+        }
+
+        if ($this->knownCallingCode && CallingCode::fromPhoneNumber($value) === null) {
+            return false;
+        }
+
+        return true;
     }
 }
