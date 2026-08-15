@@ -14,18 +14,31 @@ abstract class Adapter
      */
     protected const int RECEIVE_BACKOFF = 1;
 
-    public Queue $queue;
+    public ?Queue $queue = null;
     protected ?Container $context = null;
     protected bool $stopped = false;
 
     public function __construct(
         public Consumer $consumer,
         public int $workerNum,
-        string $queue,
+        ?string $queue = null,
         public string $namespace = 'utopia-queue',
         protected Container $resources = new Container(),
     ) {
-        $this->queue = new Queue($queue, $namespace);
+        // Queue name is optional: Server::job() is the source of truth for what
+        // to consume. A constructor queue is only a default for bare job().
+        $this->queue = ($queue !== null && $queue !== '')
+            ? new Queue($queue, $namespace)
+            : null;
+    }
+
+    /**
+     * Default per-queue concurrency when Server::job() omits maxCoroutines.
+     * Swoole overrides this with its constructor maxCoroutines.
+     */
+    public function coroutines(): int
+    {
+        return 1;
     }
 
     /**
@@ -62,8 +75,8 @@ abstract class Adapter
         $this->stopped = false;
         $queues ??= [
             [
-                'queue' => $this->queue,
-                'maxCoroutines' => 1,
+                'queue' => $this->queue ?? throw new \LogicException('Adapter has no default queue; pass $queues or set one in the constructor'),
+                'maxCoroutines' => $this->coroutines(),
                 'consumer' => $this->consumer,
             ],
         ];
@@ -122,7 +135,7 @@ abstract class Adapter
      */
     protected function nextMessage(callable $errorCallback, ?Queue $queue = null, ?Consumer $consumer = null): ?Message
     {
-        $queue ??= $this->queue;
+        $queue ??= $this->queue ?? throw new \LogicException('Queue is required');
         $consumer ??= $this->consumer;
 
         try {
@@ -154,7 +167,7 @@ abstract class Adapter
         ?Queue $queue = null,
         ?Consumer $consumer = null,
     ): void {
-        $queue ??= $this->queue;
+        $queue ??= $this->queue ?? throw new \LogicException('Queue is required');
         $consumer ??= $this->consumer;
 
         try {

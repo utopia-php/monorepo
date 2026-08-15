@@ -87,19 +87,23 @@ class Server
     }
 
     /**
-     * Register a job for a queue. When more than one queue is registered, each
-     * runs an independent consume loop with its own `$maxCoroutines` cap.
+     * Register a job for a queue. Each registered queue runs its own consume
+     * loop with its own concurrency cap — jobs are the source of truth for
+     * what to consume; the adapter queue is only a default for bare job().
      *
-     * Omitting `$queue` uses the adapter's configured queue name. Omitting
-     * `$maxCoroutines` defaults to 1 — never a shared pool across queues.
+     * Omitting `$queue` uses the adapter's default queue (required in that
+     * case). Omitting `$maxCoroutines` inherits the adapter's coroutines().
      */
-    public function job(?string $queue = null, int $maxCoroutines = 1): Job
+    public function job(?string $queue = null, ?int $maxCoroutines = null): Job
     {
         $job = new Job();
-        $queue ??= $this->adapter->queue->name;
+        $queue ??= $this->adapter->queue?->name;
+        if ($queue === null || $queue === '') {
+            throw new Exception('Queue name is required when the adapter has no default queue');
+        }
         $this->job = $job;
         $this->jobs[$queue] = $job;
-        $this->coroutines[$queue] = max(1, $maxCoroutines);
+        $this->coroutines[$queue] = max(1, $maxCoroutines ?? $this->adapter->coroutines());
 
         return $job;
     }
@@ -225,10 +229,10 @@ class Server
 
             $queues = $this->jobs !== []
                 ? array_keys($this->jobs)
-                : [$this->adapter->queue->name];
+                : array_filter([$this->adapter->queue?->name]);
 
             foreach ($queues as $queueName) {
-                $queue = new Queue($queueName, $this->adapter->queue->namespace);
+                $queue = new Queue($queueName, $this->adapter->namespace);
 
                 try {
                     $size = $this->adapter->consumer->getQueueSize($queue);
@@ -397,16 +401,16 @@ class Server
                     }
                 };
 
-                // Multiple queues need independent loops and caps. A single
-                // registered job still uses consume() so adapters that only
-                // override that method (e.g. KubernetesJob's drain-until-empty)
-                // keep their semantics; align the adapter's maxCoroutines with
-                // the job when constructing the Server.
-                if (\count($this->jobs) > 1) {
+                // Registered jobs own queue identity and concurrency. Always
+                // pass them to consume() so a single job('x', 8) is not ignored
+                // in favour of the adapter constructor. Adapters that only
+                // honour their constructor queue (e.g. KubernetesJob) keep that
+                // behaviour by ignoring $queues.
+                if ($this->jobs !== []) {
                     $queues = [];
                     foreach (array_keys($this->jobs) as $queueName) {
                         $queues[] = [
-                            'queue' => new Queue($queueName, $this->adapter->queue->namespace),
+                            'queue' => new Queue($queueName, $this->adapter->namespace),
                             'maxCoroutines' => $this->coroutines[$queueName] ?? 1,
                             'consumer' => \is_callable($this->consumer)
                                 ? ($this->consumer)($queueName)

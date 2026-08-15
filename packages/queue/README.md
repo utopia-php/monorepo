@@ -40,8 +40,7 @@ if ($connection->ping()) {
 $adapter = new Queue\Adapter\Swoole($connection, 12, 'my-queue');
 $server = new Queue\Server($adapter);
 
-// job() with no arguments binds to the adapter's queue ('my-queue')
-// and uses the adapter's worker count (12) as concurrency.
+// Bare job() inherits the adapter's queue ('my-queue') and maxCoroutines.
 $server
     ->job()
     ->inject('message')
@@ -101,9 +100,9 @@ Each queue is a WorkQueue-retention stream (a message is removed once acknowledg
 
 ## Multiple queues in one process
 
-The getting-started example runs **one** queue: the name and concurrency come from the adapter (`new Swoole($connection, 12, 'my-queue')`), and a bare `job()` handles that queue.
+The getting-started example runs **one** queue. The adapter holds the default name (`'my-queue'`) and concurrency (`maxCoroutines`); a bare `job()` inherits both.
 
-To run **several** queues in the same process, call `job($queue, $maxCoroutines)` once per queue. Each call registers its own handler and its own concurrency cap. With more than one job registered, the Swoole adapter starts a separate consume loop per queue, so the caps do not share a pool — `v1-functions` can run 8 jobs at once while `database_db_main` stays at 1.
+To run **several** queues in the same process, leave the adapter without a default queue and call `job($queue, $maxCoroutines)` once per queue. Each call is the source of truth for that queue's name, handler, and concurrency. The Swoole adapter starts a separate consume loop per job so the caps stay isolated — `v1-functions` at 8 does not share a pool with `database_db_main` at 1.
 
 ```php
 use Utopia\Queue;
@@ -119,11 +118,10 @@ $createConsumer = static function (): Consumer {
     );
 };
 
-$adapter = new Queue\Adapter\Swoole($createConsumer(), workerNum: 1, queue: 'v1-functions');
+// No queue on the adapter — job() owns what to consume.
+$adapter = new Queue\Adapter\Swoole($createConsumer(), workerNum: 1);
 $server = new Queue\Server($adapter);
 
-// Same API as a bare job(), but the queue name and concurrency are explicit.
-// The adapter workerNum is unused here — each job() sets its own cap.
 $server
     ->job('v1-functions', 8)
     ->inject('message')
@@ -149,8 +147,8 @@ $server->start();
 
 | | Single queue | Multiple queues |
 | --- | --- | --- |
-| Queue name | Adapter constructor (`'my-queue'`) | First argument to each `job('…')` |
-| Concurrency | Adapter worker / coroutine settings | Second argument to each `job('…', n)` (default `1`) |
+| Queue name | Adapter default; bare `job()` inherits it | Each `job('…')` |
+| Concurrency | Adapter `maxCoroutines`; bare `job()` inherits it | Each `job('…', n)` |
 | Handlers | One bare `job()` | One `job($queue, $n)` per queue |
 | Receive connection | Adapter's consumer | `consumer()` factory — one consumer per queue |
 

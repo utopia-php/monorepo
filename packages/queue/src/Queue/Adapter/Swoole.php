@@ -32,13 +32,19 @@ class Swoole extends Adapter
     public function __construct(
         Consumer $consumer,
         int $workerNum,
-        string $queue,
+        ?string $queue = null,
         string $namespace = 'utopia-queue',
         int $maxCoroutines = 1,
         Container $resources = new Container(),
     ) {
         parent::__construct($consumer, $workerNum, $queue, $namespace, $resources);
         $this->maxCoroutines = max(1, $maxCoroutines);
+    }
+
+    #[\Override]
+    public function coroutines(): int
+    {
+        return $this->maxCoroutines;
     }
 
     public function start(): self
@@ -106,7 +112,7 @@ class Swoole extends Adapter
         $this->stopped = false;
         $queues ??= [
             [
-                'queue' => $this->queue,
+                'queue' => $this->queue ?? throw new \LogicException('Adapter has no default queue; pass $queues or set one in the constructor'),
                 'maxCoroutines' => $this->maxCoroutines,
                 'consumer' => $this->consumer,
             ],

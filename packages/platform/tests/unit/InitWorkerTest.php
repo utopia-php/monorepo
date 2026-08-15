@@ -20,7 +20,7 @@ final class InitWorkerTest extends TestCase
     public function testCombinedWorkersKeepIndependentCoroutineCaps(): void
     {
         $platform = $this->platform();
-        $server = new Server(new RecordingAdapter());
+        $server = new Server(new RecordingAdapter(queue: null));
         $platform->setWorker($server);
 
         $platform->init(Service::TYPE_WORKER, [
@@ -103,7 +103,7 @@ final class FakeConsumer implements Consumer
 
 final class RecordingAdapter extends Adapter
 {
-    public function __construct(string $queue = 'v1-functions')
+    public function __construct(?string $queue = 'v1-functions')
     {
         parent::__construct(new FakeConsumer(), 1, $queue);
     }

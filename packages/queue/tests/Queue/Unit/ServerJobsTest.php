@@ -29,13 +29,32 @@ final class ServerJobsTest extends TestCase
         $this->assertCount(2, $server->jobs());
     }
 
-    public function testOmittedCoroutineCapDefaultsToOne(): void
+    public function testOmittedCoroutineCapInheritsAdapter(): void
     {
-        $server = new Server(new RecordingAdapter('v1-mails'));
+        $server = new Server(new RecordingAdapter(queue: 'v1-mails', coroutines: 5));
 
         $server->job('v1-mails');
 
-        $this->assertSame(1, $server->coroutines('v1-mails'));
+        $this->assertSame(5, $server->coroutines('v1-mails'));
+    }
+
+    public function testBareJobRequiresAdapterDefaultQueue(): void
+    {
+        $server = new Server(new RecordingAdapter(queue: null));
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Queue name is required');
+
+        $server->job();
+    }
+
+    public function testBareJobInheritsAdapterQueue(): void
+    {
+        $server = new Server(new RecordingAdapter(queue: 'v1-mails'));
+
+        $server->job();
+
+        $this->assertArrayHasKey('v1-mails', $server->jobs());
     }
 
     public function testConsumeKeepsPerQueueCaps(): void
@@ -67,9 +86,25 @@ final class ServerJobsTest extends TestCase
         );
     }
 
+    public function testStartDrivesConsumeFromJobsEvenForOneQueue(): void
+    {
+        $adapter = new RecordingAdapter(queue: null);
+        $server = new Server($adapter);
+        $server->job('v1-functions', 8);
+
+        $server->start();
+
+        $this->assertSame(
+            [
+                ['queue' => 'v1-functions', 'maxCoroutines' => 8],
+            ],
+            $adapter->consumed,
+        );
+    }
+
     public function testStartWithMultipleJobsUsesConsume(): void
     {
-        $adapter = new RecordingAdapter('v1-functions');
+        $adapter = new RecordingAdapter(queue: null);
         $server = new Server($adapter);
         $server->job('database_db_main', 1);
         $server->job('v1-functions', 8);
@@ -110,9 +145,18 @@ final class RecordingAdapter extends Adapter
     /** @var callable[] */
     private array $onWorkerStart = [];
 
-    public function __construct(string $queue = 'v1-functions')
+    private readonly int $defaultCoroutines;
+
+    public function __construct(?string $queue = 'v1-functions', int $coroutines = 1)
     {
         parent::__construct(new FakeConsumer(), 1, $queue);
+        $this->defaultCoroutines = max(1, $coroutines);
+    }
+
+    #[\Override]
+    public function coroutines(): int
+    {
+        return $this->defaultCoroutines;
     }
 
     public function start(): self

@@ -224,7 +224,9 @@ abstract class Platform
                         $config = $jobs[$name] ?? [];
                         $hook = $worker->job(
                             $config['queue'] ?? null,
-                            max(1, (int) ($config['maxCoroutines'] ?? 1)),
+                            \array_key_exists('maxCoroutines', $config)
+                                ? max(1, (int) $config['maxCoroutines'])
+                                : null,
                         );
                         break;
                 }

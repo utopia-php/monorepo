@@ -126,7 +126,10 @@ class KubernetesJob extends Adapter
 
         try {
             while (!$this->isStopped()) {
-                $message = $this->consumer->receive($this->queue, static::RECEIVE_TIMEOUT);
+                $message = $this->consumer->receive(
+                    $this->queue ?? throw new \LogicException('KubernetesJob requires a queue in the adapter constructor'),
+                    static::RECEIVE_TIMEOUT,
+                );
 
                 if (!$message instanceof Message) {
                     break;

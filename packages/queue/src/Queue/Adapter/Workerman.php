@@ -14,7 +14,7 @@ class Workerman extends Adapter
     public function __construct(
         Consumer $consumer,
         int $workerNum,
-        string $queue,
+        ?string $queue = null,
         string $namespace = 'utopia-queue',
         Container $resources = new Container(),
     ) {
