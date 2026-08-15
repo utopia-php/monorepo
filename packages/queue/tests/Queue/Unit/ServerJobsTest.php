@@ -184,7 +184,7 @@ final class RecordingAdapter extends Adapter
         callable $messageCallback,
         callable $successCallback,
         callable $errorCallback,
-        ?Consumer $consumer = null,
+        Consumer $consumer,
     ): void {
         $this->consumed[] = [
             'queue' => $queue->name,

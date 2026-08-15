@@ -20,7 +20,7 @@ use Utopia\Queue\Queue;
 require dirname(__DIR__) . '/vendor/autoload.php';
 require __DIR__ . '/InMemoryConnection.php';
 
-if (!\extension_loaded('swoole')) {
+if (!extension_loaded('swoole')) {
     fwrite(STDERR, "ext-swoole is required for the queue benchmark\n");
     exit(1);
 }
@@ -48,11 +48,11 @@ $runOnce = static function () use ($messages, $concurrency, $queueName, $namespa
 
     $processed = 0;
     $peak = memory_get_usage(true);
+    $adapter = new Swoole($broker, 1, $queueName, $namespace, maxCoroutines: $concurrency);
+
     $started = hrtime(true);
 
-    \Swoole\Coroutine\run(function () use ($broker, $queueName, $namespace, $concurrency, $messages, &$processed, &$peak): void {
-        $adapter = new Swoole($broker, 1, $queueName, $namespace, maxCoroutines: $concurrency);
-
+    \Swoole\Coroutine\run(function () use ($adapter, $messages, &$processed, &$peak): void {
         $adapter->consume(
             static function () use (&$processed, &$peak, $adapter, $messages): void {
                 hash('xxh3', (string) $processed);
@@ -97,13 +97,13 @@ for ($i = 0; $i < $rounds; $i++) {
     $memorySamples[] = memory_get_usage(true);
 }
 
-$half = max(1, (int) floor(\count($memorySamples) / 2));
+$half = max(1, (int) floor(count($memorySamples) / 2));
 $startWindow = array_slice($memorySamples, 0, $half);
 $endWindow = array_slice($memorySamples, -$half);
-$memoryStart = (int) round(array_sum($startWindow) / \count($startWindow));
-$memoryEnd = (int) round(array_sum($endWindow) / \count($endWindow));
+$memoryStart = (int) round(array_sum($startWindow) / count($startWindow));
+$memoryEnd = (int) round(array_sum($endWindow) / count($endWindow));
 $growth = $memoryEnd - $memoryStart;
-$avgSeconds = array_sum($samples) / \count($samples);
+$avgSeconds = array_sum($samples) / count($samples);
 $mps = $messages / max($avgSeconds, 1e-9);
 $leak = $growth > $memoryLimit;
 
@@ -140,12 +140,12 @@ $report = "| Scenario | msg/s | avg s | peak RSS | mem growth | leak |\n"
 echo "### queue (baseline)\n\n{$report}\n";
 
 $reportPath = getenv('BENCH_REPORT');
-if (\is_string($reportPath) && $reportPath !== '') {
+if (is_string($reportPath) && $reportPath !== '') {
     file_put_contents($reportPath, "### queue (baseline)\n\n{$report}\n", FILE_APPEND);
 }
 
 $jsonPath = getenv('BENCH_JSON');
-if (\is_string($jsonPath) && $jsonPath !== '') {
+if (is_string($jsonPath) && $jsonPath !== '') {
     file_put_contents($jsonPath, json_encode([
         'ref' => 'baseline',
         'baseline' => $baselineRef,

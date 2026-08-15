@@ -117,7 +117,8 @@ final class ConsumerResilienceTest extends TestCase
             public function drain(Queue $queue, callable $messageCallback, callable $errorCallback): void
             {
                 $message = $this->consumer->receive($queue, 0);
-                $this->process($message, $messageCallback, fn(): null => null, $errorCallback, $queue);
+                $this->queue = $queue;
+                $this->process($message, $messageCallback, fn(): null => null, $errorCallback);
             }
 
             #[\Override]

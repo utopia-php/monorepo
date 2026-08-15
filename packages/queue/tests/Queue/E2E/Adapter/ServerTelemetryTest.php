@@ -264,9 +264,10 @@ final class ServerTelemetryAdapter extends Adapter
     ): void {
         foreach ($queues as $spec) {
             $queue = $spec['queue'];
+            $this->queue = $queue;
             while (($message = $this->consumer->receive($queue, 0)) instanceof Message) {
                 $this->context = new Container($this->resources());
-                $this->process($message, $messageCallback, $successCallback, $errorCallback, $queue);
+                $this->process($message, $messageCallback, $successCallback, $errorCallback);
             }
         }
     }

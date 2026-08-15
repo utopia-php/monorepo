@@ -14,6 +14,14 @@ abstract class Adapter
      */
     protected const int RECEIVE_BACKOFF = 1;
 
+    /**
+     * Active queue for the sequential / single-loop hot path. Concurrent
+     * multi-queue loops pass Queue explicitly via {@see nextMessageFrom()} /
+     * {@see processFrom()} so they do not race this property. Bound by
+     * consume() / run() before the first receive.
+     */
+    public Queue $queue;
+
     protected ?Container $context = null;
     protected bool $stopped = false;
 
@@ -73,7 +81,7 @@ abstract class Adapter
                 $messageCallback,
                 $successCallback,
                 $errorCallback,
-                $spec['consumer'] ?? null,
+                $spec['consumer'] ?? $this->consumer,
             );
         }
     }
@@ -81,6 +89,9 @@ abstract class Adapter
     /**
      * One-queue loop. `$maxCoroutines` is accepted for adapter parity; the
      * sequential fallback processes one message at a time (effective cap 1).
+     *
+     * Binds `$this->queue` / `$this->consumer` for the duration so the hot
+     * path matches pre-multi-queue (no per-message queue/consumer args).
      *
      * @param callable(Message): void $messageCallback
      * @param callable(Message): void $successCallback
@@ -92,19 +103,27 @@ abstract class Adapter
         callable $messageCallback,
         callable $successCallback,
         callable $errorCallback,
-        ?Consumer $consumer = null,
+        Consumer $consumer,
     ): void {
         unset($maxCoroutines);
 
-        while (!$this->isStopped()) {
-            $message = $this->nextMessage($errorCallback, $queue, $consumer);
+        $previousConsumer = $this->consumer;
+        $this->queue = $queue;
+        $this->consumer = $consumer;
 
-            if (!$message instanceof Message) {
-                continue;
+        try {
+            while (!$this->isStopped()) {
+                $message = $this->nextMessage($errorCallback);
+
+                if (!$message instanceof Message) {
+                    continue;
+                }
+
+                $this->context = new Container($this->resources());
+                $this->process($message, $messageCallback, $successCallback, $errorCallback);
             }
-
-            $this->context = new Container($this->resources());
-            $this->process($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
+        } finally {
+            $this->consumer = $previousConsumer;
         }
     }
 
@@ -118,14 +137,35 @@ abstract class Adapter
      *
      * @param callable(?Message, \Throwable): void $errorCallback
      */
-    protected function nextMessage(callable $errorCallback, Queue $queue, ?Consumer $consumer = null): ?Message
+    protected function nextMessage(callable $errorCallback): ?Message
     {
-        $consumer ??= $this->consumer;
+        try {
+            return $this->consumer->receive($this->queue, static::RECEIVE_TIMEOUT);
+        } catch (\Throwable $error) {
+            // A reporting hook that throws must not cost the worker either.
+            try {
+                $errorCallback(null, $error);
+            } catch (\Throwable $reportFailure) {
+                $this->reportUnreported($error, $reportFailure);
+            }
 
+            sleep(static::RECEIVE_BACKOFF);
+
+            return null;
+        }
+    }
+
+    /**
+     * Concurrent multi-queue variant: queue/consumer are explicit so loops do
+     * not race {@see $queue} / {@see $consumer}.
+     *
+     * @param callable(?Message, \Throwable): void $errorCallback
+     */
+    protected function nextMessageFrom(callable $errorCallback, Queue $queue, Consumer $consumer): ?Message
+    {
         try {
             return $consumer->receive($queue, static::RECEIVE_TIMEOUT);
         } catch (\Throwable $error) {
-            // A reporting hook that throws must not cost the worker either.
             try {
                 $errorCallback(null, $error);
             } catch (\Throwable $reportFailure) {
@@ -148,11 +188,35 @@ abstract class Adapter
         callable $messageCallback,
         callable $successCallback,
         callable $errorCallback,
-        Queue $queue,
-        ?Consumer $consumer = null,
     ): void {
-        $consumer ??= $this->consumer;
+        try {
+            $messageCallback($message);
+            $this->consumer->commit($this->queue, $message);
+            $successCallback($message);
+        } catch (\Throwable $error) {
+            try {
+                $this->consumer->reject($this->queue, $message);
+            } catch (\Throwable) {
+            }
+            try {
+                $errorCallback($message, $error);
+            } catch (\Throwable $reportFailure) {
+                $this->reportUnreported($error, $reportFailure, $message);
+            }
+        }
+    }
 
+    /**
+     * Concurrent multi-queue variant of {@see process()}.
+     */
+    protected function processFrom(
+        Message $message,
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+        Queue $queue,
+        Consumer $consumer,
+    ): void {
         try {
             $messageCallback($message);
             $consumer->commit($queue, $message);

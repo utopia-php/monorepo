@@ -28,12 +28,11 @@ use Utopia\Queue\Adapter\Swoole;
 use Utopia\Queue\Benchmark\InMemoryConnection;
 use Utopia\Queue\Broker\Redis;
 use Utopia\Queue\Queue;
-use Utopia\Queue\Server;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 require __DIR__ . '/InMemoryConnection.php';
 
-if (!\extension_loaded('swoole')) {
+if (!extension_loaded('swoole')) {
     fwrite(STDERR, "ext-swoole is required for the queue benchmark\n");
     exit(1);
 }
@@ -54,39 +53,29 @@ $runOnce = static function (array $queues) use ($namespace): array {
     $connection = new InMemoryConnection();
     $broker = new Redis($connection, $connection);
     $total = 0;
-    $queueObjects = [];
+    $specs = [];
 
     foreach ($queues as $spec) {
         $queue = new Queue($spec['name'], $namespace);
-        $queueObjects[$spec['name']] = $queue;
         for ($i = 0; $i < $spec['count']; $i++) {
             $broker->enqueue($queue, ['n' => $i, 'q' => $spec['name']]);
         }
         $total += $spec['count'];
+        $specs[] = [
+            'queue' => $queue,
+            'maxCoroutines' => $spec['maxCoroutines'],
+            'consumer' => $broker,
+        ];
     }
+
+    // Same as baseline: build the adapter outside the timer; only consume() is timed.
+    $adapter = new Swoole($broker, 1, $namespace);
 
     $processed = 0;
     $peak = memory_get_usage(true);
     $started = hrtime(true);
 
-    \Swoole\Coroutine\run(function () use ($broker, $queues, $queueObjects, $namespace, $total, &$processed, &$peak): void {
-        $adapter = new Swoole($broker, 1, $namespace);
-        $server = new Server($adapter);
-
-        $specs = [];
-        foreach ($queues as $spec) {
-            $server->job($spec['name'], $spec['maxCoroutines']);
-            $specs[] = [
-                'queue' => $queueObjects[$spec['name']],
-                'maxCoroutines' => $server->coroutines($spec['name']),
-                'consumer' => $broker,
-            ];
-        }
-
-        if (\count($server->jobs()) !== \count($queues)) {
-            throw new RuntimeException('job() registration count mismatch');
-        }
-
+    \Swoole\Coroutine\run(function () use ($adapter, $specs, $total, &$processed, &$peak): void {
         $adapter->consume(
             static function () use (&$processed, &$peak, $adapter, $total): void {
                 hash('xxh3', (string) $processed);
@@ -149,13 +138,13 @@ $measure = static function (string $label, callable $once) use ($rounds, $warmup
         $memorySamples[] = memory_get_usage(true);
     }
 
-    $half = max(1, (int) floor(\count($memorySamples) / 2));
+    $half = max(1, (int) floor(count($memorySamples) / 2));
     $startWindow = array_slice($memorySamples, 0, $half);
     $endWindow = array_slice($memorySamples, -$half);
-    $memoryStart = (int) round(array_sum($startWindow) / \count($startWindow));
-    $memoryEnd = (int) round(array_sum($endWindow) / \count($endWindow));
+    $memoryStart = (int) round(array_sum($startWindow) / count($startWindow));
+    $memoryEnd = (int) round(array_sum($endWindow) / count($endWindow));
     $growth = $memoryEnd - $memoryStart;
-    $avgSeconds = array_sum($samples) / \count($samples);
+    $avgSeconds = array_sum($samples) / count($samples);
 
     return [
         'label' => $label,
@@ -238,12 +227,12 @@ $report .= "\n"
 echo "### queue (current)\n\n{$report}\n";
 
 $reportPath = getenv('BENCH_REPORT');
-if (\is_string($reportPath) && $reportPath !== '') {
+if (is_string($reportPath) && $reportPath !== '') {
     file_put_contents($reportPath, "### queue (current)\n\n{$report}\n", FILE_APPEND);
 }
 
 $jsonPath = getenv('BENCH_JSON');
-if (\is_string($jsonPath) && $jsonPath !== '') {
+if (is_string($jsonPath) && $jsonPath !== '') {
     file_put_contents($jsonPath, json_encode([
         'ref' => 'current',
         'config' => [

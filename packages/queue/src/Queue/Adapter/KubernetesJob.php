@@ -185,14 +185,14 @@ class KubernetesJob extends Adapter
                 $waitGroup = new WaitGroup(1);
                 Coroutine::create(function () use ($waitGroup, $message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer): void {
                     try {
-                        $this->process($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
+                        $this->processFrom($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
                     } finally {
                         $waitGroup->done();
                     }
                 });
                 $waitGroup->wait();
             } else {
-                $this->process($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
+                $this->processFrom($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
             }
         }
     }
