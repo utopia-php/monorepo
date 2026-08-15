@@ -63,14 +63,14 @@ $server
 
 $server->start();
 
-
-// Enqueue messages to the worker using the Redis adapter
-$connection = new Queue\Connection\Redis('redis', 6379);
-$client = new Queue\Client('my-queue', $connection);
-
-$client->enqueue([
+// Publish with the same broker API
+$publisher = new Queue\Broker\Redis(
+    receive: new Queue\Connection\Redis('redis'),
+    commands: new Queue\Connection\Redis('redis'),
+);
+$publisher->enqueue(new Queue\Queue('my-queue'), [
     'type' => 'test_number',
-    'value' => 123
+    'value' => 123,
 ]);
 ```
 
