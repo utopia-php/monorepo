@@ -52,17 +52,70 @@ abstract class Adapter
      */
     public function consume(callable $messageCallback, callable $successCallback, callable $errorCallback): void
     {
+        $this->consumeQueue(
+            $this->queue,
+            1,
+            $messageCallback,
+            $successCallback,
+            $errorCallback,
+        );
+    }
+
+    /**
+     * Consume one queue. `$maxCoroutines` is accepted for adapter parity; the
+     * sequential fallback processes one message at a time (effective cap 1).
+     *
+     * @param callable(Message): void $messageCallback
+     * @param callable(Message): void $successCallback
+     * @param callable(?Message, \Throwable): void $errorCallback
+     */
+    public function consumeQueue(
+        Queue $queue,
+        int $maxCoroutines,
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+        ?Consumer $consumer = null,
+    ): void {
         $this->stopped = false;
+        unset($maxCoroutines);
 
         while (!$this->isStopped()) {
-            $message = $this->nextMessage($errorCallback);
+            $message = $this->nextMessage($errorCallback, $queue, $consumer);
 
             if (!$message instanceof Message) {
                 continue;
             }
 
             $this->context = new Container($this->resources());
-            $this->process($message, $messageCallback, $successCallback, $errorCallback);
+            $this->process($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
+        }
+    }
+
+    /**
+     * Consume many queues. Sequential adapters run them one after another
+     * (not concurrent); Swoole overrides this with independent loops.
+     *
+     * @param array<int, array{queue: Queue, maxCoroutines: int, consumer?: Consumer}> $queues
+     * @param callable(Message): void $messageCallback
+     * @param callable(Message): void $successCallback
+     * @param callable(?Message, \Throwable): void $errorCallback
+     */
+    public function consumeMany(
+        array $queues,
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+    ): void {
+        foreach ($queues as $spec) {
+            $this->consumeQueue(
+                $spec['queue'],
+                $spec['maxCoroutines'],
+                $messageCallback,
+                $successCallback,
+                $errorCallback,
+                $spec['consumer'] ?? null,
+            );
         }
     }
 
@@ -76,10 +129,13 @@ abstract class Adapter
      *
      * @param callable(?Message, \Throwable): void $errorCallback
      */
-    protected function nextMessage(callable $errorCallback): ?Message
+    protected function nextMessage(callable $errorCallback, ?Queue $queue = null, ?Consumer $consumer = null): ?Message
     {
+        $queue ??= $this->queue;
+        $consumer ??= $this->consumer;
+
         try {
-            return $this->consumer->receive($this->queue, static::RECEIVE_TIMEOUT);
+            return $consumer->receive($queue, static::RECEIVE_TIMEOUT);
         } catch (\Throwable $error) {
             // A reporting hook that throws must not cost the worker either.
             try {
@@ -99,15 +155,24 @@ abstract class Adapter
      * a failing reject or callback is swallowed rather than left to escape (and
      * be lost on a coroutine).
      */
-    protected function process(Message $message, callable $messageCallback, callable $successCallback, callable $errorCallback): void
-    {
+    protected function process(
+        Message $message,
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+        ?Queue $queue = null,
+        ?Consumer $consumer = null,
+    ): void {
+        $queue ??= $this->queue;
+        $consumer ??= $this->consumer;
+
         try {
             $messageCallback($message);
-            $this->consumer->commit($this->queue, $message);
+            $consumer->commit($queue, $message);
             $successCallback($message);
         } catch (\Throwable $error) {
             try {
-                $this->consumer->reject($this->queue, $message);
+                $consumer->reject($queue, $message);
             } catch (\Throwable) {
             }
             try {

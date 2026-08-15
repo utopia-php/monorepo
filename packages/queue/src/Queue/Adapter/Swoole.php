@@ -9,6 +9,7 @@ use Swoole\Process;
 use Utopia\DI\Container;
 use Utopia\Queue\Adapter;
 use Utopia\Queue\Consumer;
+use Utopia\Queue\Queue;
 
 class Swoole extends Adapter
 {
@@ -24,6 +25,9 @@ class Swoole extends Adapter
     protected array $onWorkerStop = [];
 
     protected int $maxCoroutines;
+
+    /** @var Consumer[] */
+    protected array $queueConsumers = [];
 
     public function __construct(
         Consumer $consumer,
@@ -67,6 +71,12 @@ class Swoole extends Adapter
                 Process::signal(SIGTERM, function (): void {
                     $this->stopped = true;
                     $this->consumer->close();
+                    foreach ($this->queueConsumers as $consumer) {
+                        try {
+                            $consumer->close();
+                        } catch (\Throwable) {
+                        }
+                    }
                 });
 
                 foreach ($this->onWorkerStart as $callback) {
@@ -83,6 +93,18 @@ class Swoole extends Adapter
         $this->workers[$pid] = $process;
     }
 
+    #[\Override]
+    public function consume(callable $messageCallback, callable $successCallback, callable $errorCallback): void
+    {
+        $this->consumeQueue(
+            $this->queue,
+            $this->maxCoroutines,
+            $messageCallback,
+            $successCallback,
+            $errorCallback,
+        );
+    }
+
     /**
      * Receive on one loop, process each message on its own coroutine. The
      * channel caps concurrency at $maxCoroutines: push() blocks the loop while
@@ -95,16 +117,24 @@ class Swoole extends Adapter
      * the broker for whichever consumer frees up first.
      */
     #[\Override]
-    public function consume(callable $messageCallback, callable $successCallback, callable $errorCallback): void
-    {
+    public function consumeQueue(
+        Queue $queue,
+        int $maxCoroutines,
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+        ?Consumer $consumer = null,
+    ): void {
         $this->stopped = false;
-        $slots = new Channel($this->maxCoroutines);
+        $consumer ??= $this->consumer;
+        $this->queueConsumers[] = $consumer;
+        $slots = new Channel(max(1, $maxCoroutines));
         $waitGroup = new WaitGroup();
 
         while (!$this->isStopped()) {
             $slots->push(true);
 
-            $message = $this->nextMessage($errorCallback);
+            $message = $this->nextMessage($errorCallback, $queue, $consumer);
 
             if (!$message instanceof \Utopia\Queue\Message) {
                 $slots->pop();
@@ -113,15 +143,52 @@ class Swoole extends Adapter
 
             $waitGroup->add();
 
-            Coroutine::create(function () use ($message, $messageCallback, $successCallback, $errorCallback, $slots, $waitGroup): void {
+            Coroutine::create(function () use ($message, $messageCallback, $successCallback, $errorCallback, $slots, $waitGroup, $queue, $consumer): void {
                 try {
-                    $this->process($message, $messageCallback, $successCallback, $errorCallback);
+                    $this->process($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
                 } catch (\Throwable $error) {
                     // process() is total; net for a stray throw so it isn't lost
                     error_log('Uncaught error while processing queue message: ' . $error->getMessage());
                 } finally {
                     $waitGroup->done();
                     $slots->pop();
+                }
+            });
+        }
+
+        $waitGroup->wait();
+    }
+
+    /**
+     * Independent consume loop per queue so each cap is isolated (a databases
+     * loop at maxCoroutines=1 cannot share a pool with functions=8).
+     *
+     * @param array<int, array{queue: Queue, maxCoroutines: int, consumer?: Consumer}> $queues
+     */
+    #[\Override]
+    public function consumeMany(
+        array $queues,
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+    ): void {
+        $this->stopped = false;
+        $waitGroup = new WaitGroup();
+
+        foreach ($queues as $spec) {
+            $waitGroup->add();
+            Coroutine::create(function () use ($spec, $messageCallback, $successCallback, $errorCallback, $waitGroup): void {
+                try {
+                    $this->consumeQueue(
+                        $spec['queue'],
+                        $spec['maxCoroutines'],
+                        $messageCallback,
+                        $successCallback,
+                        $errorCallback,
+                        $spec['consumer'] ?? null,
+                    );
+                } finally {
+                    $waitGroup->done();
                 }
             });
         }
@@ -151,6 +218,13 @@ class Swoole extends Adapter
     public function stop(): self
     {
         $this->stopped = true;
+
+        foreach ($this->queueConsumers as $consumer) {
+            try {
+                $consumer->close();
+            } catch (\Throwable) {
+            }
+        }
 
         foreach (array_keys($this->workers) as $pid) {
             Process::kill($pid, SIGTERM);

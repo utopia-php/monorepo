@@ -20,6 +20,25 @@ class Server
     protected Job $job;
 
     /**
+     * Named jobs keyed by queue name.
+     *
+     * @var array<string, Job>
+     */
+    protected array $jobs = [];
+
+    /**
+     * Per-queue coroutine caps. Defaults to 1 (safe).
+     *
+     * @var array<string, int>
+     */
+    protected array $jobCoroutines = [];
+
+    /**
+     * @var (callable(string): Consumer)|null
+     */
+    protected $consumerFactory = null;
+
+    /**
      * Hooks that will run when error occur
      *
      * @var array<Hook>
@@ -63,13 +82,58 @@ class Server
      */
     public function __construct(protected Adapter $adapter)
     {
+        $this->job = new Job();
         $this->setTelemetry(new NoTelemetry());
     }
 
-    public function job(): Job
+    /**
+     * Register a job for a queue. When more than one queue is registered, each
+     * runs an independent consume loop with its own `$maxCoroutines` cap.
+     *
+     * Omitting `$queue` uses the adapter's configured queue name. Omitting
+     * `$maxCoroutines` defaults to 1 — never a shared pool across queues.
+     */
+    public function job(?string $queue = null, int $maxCoroutines = 1): Job
     {
-        $this->job = new Job();
-        return $this->job;
+        $job = new Job();
+        $queue ??= $this->adapter->queue->name;
+        $this->job = $job;
+        $this->jobs[$queue] = $job;
+        $this->jobCoroutines[$queue] = max(1, $maxCoroutines);
+
+        return $job;
+    }
+
+    /**
+     * Factory for a dedicated receive consumer per queue. Required when more
+     * than one queue is consumed so blocking receives do not share a connection
+     * across coroutines.
+     *
+     * @param callable(string): Consumer $factory
+     */
+    public function setConsumerFactory(callable $factory): self
+    {
+        $this->consumerFactory = $factory(...);
+
+        return $this;
+    }
+
+    /**
+     * @return array<string, Job>
+     */
+    public function getJobs(): array
+    {
+        return $this->jobs;
+    }
+
+    public function getJobCoroutines(string $queue): int
+    {
+        return $this->jobCoroutines[$queue] ?? 1;
+    }
+
+    protected function jobFor(Message $message): Job
+    {
+        return $this->jobs[$message->getQueue()] ?? $this->job;
     }
 
     /**
@@ -159,16 +223,24 @@ class Server
                 return;
             }
 
-            try {
-                $size = $this->adapter->consumer->getQueueSize($this->adapter->queue);
-            } catch (Throwable) {
-                return;
-            }
+            $queues = $this->jobs !== []
+                ? array_keys($this->jobs)
+                : [$this->adapter->queue->name];
 
-            $observe($size, [
-                'messaging.destination.name' => $this->adapter->queue->name,
-                'messaging.destination.namespace' => $this->adapter->queue->namespace,
-            ]);
+            foreach ($queues as $queueName) {
+                $queue = new Queue($queueName, $this->adapter->queue->namespace);
+
+                try {
+                    $size = $this->adapter->consumer->getQueueSize($queue);
+                } catch (Throwable) {
+                    continue;
+                }
+
+                $observe($size, [
+                    'messaging.destination.name' => $queue->name,
+                    'messaging.destination.namespace' => $queue->namespace,
+                ]);
+            }
         });
     }
 
@@ -223,75 +295,29 @@ class Server
                     $hook->getAction()(...$this->getArguments($this->resources(), $hook));
                 }
 
-                $this->adapter->consume(
-                    function (Message $message) {
-                        $receivedAtTimestamp = microtime(true);
-                        try {
-                            // The enqueue timestamp comes from the publisher's
-                            // clock and this from the consumer's, so on an idle
-                            // queue a few milliseconds of skew between the two
-                            // hosts yields a negative duration. Recording it
-                            // decrements a cumulative histogram sum, which every
-                            // Prometheus reader takes for a counter reset and
-                            // re-attributes the process's whole lifetime sum to
-                            // one interval — one -20ms sample paged a two-hour
-                            // queue wait on a queue that was empty throughout.
-                            $waitDuration = max(
-                                0.0,
-                                microtime(true) - $message->getTimestamp(),
-                            );
-                            $this->jobWaitTime->record($waitDuration);
+                $messageCallback = function (Message $message) {
+                    $receivedAtTimestamp = microtime(true);
+                    $job = $this->jobFor($message);
+                    try {
+                        // The enqueue timestamp comes from the publisher's
+                        // clock and this from the consumer's, so on an idle
+                        // queue a few milliseconds of skew between the two
+                        // hosts yields a negative duration. Recording it
+                        // decrements a cumulative histogram sum, which every
+                        // Prometheus reader takes for a counter reset and
+                        // re-attributes the process's whole lifetime sum to
+                        // one interval — one -20ms sample paged a two-hour
+                        // queue wait on a queue that was empty throughout.
+                        $waitDuration = max(
+                            0.0,
+                            microtime(true) - $message->getTimestamp(),
+                        );
+                        $this->jobWaitTime->record($waitDuration);
 
-                            $this->context()->set('message', fn(): \Utopia\Queue\Message => $message);
-
-                            if ($this->job->getHook()) {
-                                foreach ($this->initHooks as $hook) {
-                                    // Global init hooks
-                                    if (\in_array('*', $hook->getGroups())) {
-                                        $arguments = $this->getArguments(
-                                            $this->context(),
-                                            $hook,
-                                            $message->getPayload(),
-                                        );
-                                        $hook->getAction()(...$arguments);
-                                    }
-                                }
-                            }
-
-                            foreach ($this->job->getGroups() as $group) {
-                                foreach ($this->initHooks as $hook) {
-                                    // Group init hooks
-                                    if (\in_array($group, $hook->getGroups())) {
-                                        $arguments = $this->getArguments(
-                                            $this->context(),
-                                            $hook,
-                                            $message->getPayload(),
-                                        );
-                                        $hook->getAction()(...$arguments);
-                                    }
-                                }
-                            }
-
-                            return \call_user_func_array(
-                                $this->job->getAction(),
-                                $this->getArguments(
-                                    $this->context(),
-                                    $this->job,
-                                    $message->getPayload(),
-                                ),
-                            );
-                        } finally {
-                            $processDuration
-                                = microtime(true) - $receivedAtTimestamp;
-                            $this->processDuration->record($processDuration);
-                        }
-                    },
-                    function (Message $message): void {
                         $this->context()->set('message', fn(): \Utopia\Queue\Message => $message);
 
-                        if ($this->job->getHook()) {
-                            foreach ($this->shutdownHooks as $hook) {
-                                // Global shutdown hooks
+                        if ($job->getHook()) {
+                            foreach ($this->initHooks as $hook) {
                                 if (\in_array('*', $hook->getGroups())) {
                                     $arguments = $this->getArguments(
                                         $this->context(),
@@ -303,9 +329,8 @@ class Server
                             }
                         }
 
-                        foreach ($this->job->getGroups() as $group) {
-                            foreach ($this->shutdownHooks as $hook) {
-                                // Group shutdown hooks
+                        foreach ($job->getGroups() as $group) {
+                            foreach ($this->initHooks as $hook) {
                                 if (\in_array($group, $hook->getGroups())) {
                                     $arguments = $this->getArguments(
                                         $this->context(),
@@ -316,18 +341,82 @@ class Server
                                 }
                             }
                         }
-                    },
-                    function (?Message $message, Throwable $th): void {
-                        $this->context()->set('error', fn(): \Throwable => $th);
-                        if ($message instanceof \Utopia\Queue\Message) {
-                            $this->context()->set('message', fn(): \Utopia\Queue\Message => $message);
-                        }
 
-                        foreach ($this->errorHooks as $hook) {
-                            $hook->getAction()(...$this->getArguments($this->context(), $hook));
+                        return \call_user_func_array(
+                            $job->getAction(),
+                            $this->getArguments(
+                                $this->context(),
+                                $job,
+                                $message->getPayload(),
+                            ),
+                        );
+                    } finally {
+                        $this->processDuration->record(microtime(true) - $receivedAtTimestamp);
+                    }
+                };
+
+                $successCallback = function (Message $message): void {
+                    $job = $this->jobFor($message);
+                    $this->context()->set('message', fn(): \Utopia\Queue\Message => $message);
+
+                    if ($job->getHook()) {
+                        foreach ($this->shutdownHooks as $hook) {
+                            if (\in_array('*', $hook->getGroups())) {
+                                $arguments = $this->getArguments(
+                                    $this->context(),
+                                    $hook,
+                                    $message->getPayload(),
+                                );
+                                $hook->getAction()(...$arguments);
+                            }
                         }
-                    },
-                );
+                    }
+
+                    foreach ($job->getGroups() as $group) {
+                        foreach ($this->shutdownHooks as $hook) {
+                            if (\in_array($group, $hook->getGroups())) {
+                                $arguments = $this->getArguments(
+                                    $this->context(),
+                                    $hook,
+                                    $message->getPayload(),
+                                );
+                                $hook->getAction()(...$arguments);
+                            }
+                        }
+                    }
+                };
+
+                $errorCallback = function (?Message $message, Throwable $th): void {
+                    $this->context()->set('error', fn(): \Throwable => $th);
+                    if ($message instanceof \Utopia\Queue\Message) {
+                        $this->context()->set('message', fn(): \Utopia\Queue\Message => $message);
+                    }
+
+                    foreach ($this->errorHooks as $hook) {
+                        $hook->getAction()(...$this->getArguments($this->context(), $hook));
+                    }
+                };
+
+                // Multiple queues need independent loops and caps. A single
+                // registered job still uses consume() so adapters that only
+                // override that method (e.g. KubernetesJob's drain-until-empty)
+                // keep their semantics; align the adapter's maxCoroutines with
+                // the job when constructing the Server.
+                if (\count($this->jobs) > 1) {
+                    $queues = [];
+                    foreach ($this->jobs as $queueName => $job) {
+                        $queues[] = [
+                            'queue' => new Queue($queueName, $this->adapter->queue->namespace),
+                            'maxCoroutines' => $this->jobCoroutines[$queueName] ?? 1,
+                            'consumer' => \is_callable($this->consumerFactory)
+                                ? ($this->consumerFactory)($queueName)
+                                : $this->adapter->consumer,
+                        ];
+                    }
+                    $this->adapter->consumeMany($queues, $messageCallback, $successCallback, $errorCallback);
+                } else {
+                    $this->adapter->consume($messageCallback, $successCallback, $errorCallback);
+                }
             });
 
             $this->adapter->workerStop(function (string $workerId): void {

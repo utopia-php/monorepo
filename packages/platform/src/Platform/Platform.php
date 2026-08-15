@@ -58,7 +58,7 @@ abstract class Platform
                         $adapter = new Swoole($consumer, $workersNum, $queueName);
                         $this->worker ??= new Server($adapter);
                     }
-                    $this->initWorker($services, $workerName);
+                    $this->initWorker($services, $workerName, $params);
                     break;
                 default:
                     throw new Exception('Please provide which type of initialization you want to carry out.');
@@ -174,14 +174,34 @@ abstract class Platform
 
     /**
      * Init worker Services
+     *
+     * Single-queue: `init(TYPE_WORKER, ['workerName' => 'functions'])`.
+     * Combined: pass `workerNames` (`['all']` or a list) and `workerJobs`
+     * keyed by action name with that queue's `queue` / `maxCoroutines`
+     * (default 1).
+     *
+     * @param array<int|string, Service> $services
+     * @param array<string, mixed> $params
      */
-    protected function initWorker(array $services, string $workerName): void
+    protected function initWorker(array $services, ?string $workerName, array $params = []): void
     {
         $worker = $this->worker;
+        $names = $params['workerNames'] ?? [];
+        if ($names === [] && $workerName !== null && $workerName !== '') {
+            $names = [$workerName];
+        }
+        $names = array_map(static fn ($name): string => strtolower((string) $name), $names);
+        $all = $names === [] || in_array('all', $names, true);
+        /** @var array<string, array{queue?: ?string, maxCoroutines?: int}> $jobs */
+        $jobs = $params['workerJobs'] ?? [];
+
         foreach ($services as $service) {
             foreach ($service->getActions() as $key => $action) {
-                if ($action->getType() == Action::TYPE_DEFAULT && strtolower((string) $key) !== $workerName) {
-                    continue;
+                if ($action->getType() == Action::TYPE_DEFAULT) {
+                    $name = strtolower((string) $key);
+                    if (!$all && !in_array($name, $names, true)) {
+                        continue;
+                    }
                 }
                 switch ($action->getType()) {
                     case Action::TYPE_INIT:
@@ -201,7 +221,12 @@ abstract class Platform
                         break;
                     case Action::TYPE_DEFAULT:
                     default:
-                        $hook = $worker->job();
+                        $name = strtolower((string) $key);
+                        $config = $jobs[$name] ?? [];
+                        $hook = $worker->job(
+                            $config['queue'] ?? null,
+                            max(1, (int) ($config['maxCoroutines'] ?? 1)),
+                        );
                         break;
                 }
                 $hook

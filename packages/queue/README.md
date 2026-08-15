@@ -97,6 +97,25 @@ Each queue is a WorkQueue-retention stream (a message is removed once acknowledg
 
 > A NATS connection is single-owner. Run one message at a time per connection (the Swoole adapter with `maxCoroutines: 1`) or lease one connection per coroutine via `Broker\Pool` / `Utopia\Pools`.
 
+## Multiple queues in one process
+
+`Server::job()` accepts an optional queue name and per-queue `maxCoroutines` (default `1`). Register more than one job and the Swoole adapter runs an independent consume loop per queue so caps stay isolated — a databases loop at `1` cannot share a pool with functions at `8`.
+
+```php
+$server->job('v1-functions', 8)
+    ->inject('message')
+    ->action(function (Message $message) { /* ... */ });
+
+$server->job('database_db_main', 1)
+    ->inject('message')
+    ->action(function (Message $message) { /* ... */ });
+
+// Blocking receives must not share a connection across coroutines.
+$server->setConsumerFactory(fn (string $queue): Consumer => $createConsumer());
+```
+
+`Platform::init(Service::TYPE_WORKER, …)` mirrors this: pass `workerNames` (`['all']` or a list) and `workerJobs` keyed by action name with `queue` / `maxCoroutines`. The single-name `workerName` path is unchanged.
+
 ## System requirements
 
 Utopia Framework requires PHP 8.0 or later. We recommend using the latest PHP version whenever possible.
