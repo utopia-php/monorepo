@@ -57,20 +57,20 @@ final class InitWorkerTest extends TestCase
 
     private function platform(): Platform
     {
-        $service = new class () extends Service {
+        $service = new class extends Service {
             public function __construct()
             {
                 $this->type = Service::TYPE_WORKER;
-                $this->addAction('databases', new class () extends Action {
+                $this->addAction('databases', new class extends Action {
                     public function __construct()
                     {
-                        $this->callback(static fn () => null);
+                        $this->callback(static fn(): null => null);
                     }
                 });
-                $this->addAction('functions', new class () extends Action {
+                $this->addAction('functions', new class extends Action {
                     public function __construct()
                     {
-                        $this->callback(static fn () => null);
+                        $this->callback(static fn(): null => null);
                     }
                 });
             }
@@ -94,17 +94,11 @@ final class FakeConsumer implements Consumer
         return null;
     }
 
-    public function commit(Queue $queue, Message $message): void
-    {
-    }
+    public function commit(Queue $queue, Message $message): void {}
 
-    public function reject(Queue $queue, Message $message): void
-    {
-    }
+    public function reject(Queue $queue, Message $message): void {}
 
-    public function close(): void
-    {
-    }
+    public function close(): void {}
 }
 
 final class RecordingAdapter extends Adapter

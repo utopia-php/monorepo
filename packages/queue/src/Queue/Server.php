@@ -36,7 +36,7 @@ class Server
     /**
      * @var (callable(string): Consumer)|null
      */
-    protected $consumer = null;
+    protected $consumer;
 
     /**
      * Hooks that will run when error occur
@@ -404,7 +404,7 @@ class Server
                 // the job when constructing the Server.
                 if (\count($this->jobs) > 1) {
                     $queues = [];
-                    foreach ($this->jobs as $queueName => $job) {
+                    foreach (array_keys($this->jobs) as $queueName) {
                         $queues[] = [
                             'queue' => new Queue($queueName, $this->adapter->queue->namespace),
                             'maxCoroutines' => $this->coroutines[$queueName] ?? 1,

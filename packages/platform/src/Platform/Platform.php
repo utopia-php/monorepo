@@ -189,8 +189,8 @@ abstract class Platform
         if ($names === [] && $workerName !== null && $workerName !== '') {
             $names = [$workerName];
         }
-        $names = array_map(static fn ($name): string => strtolower((string) $name), $names);
-        $all = $names === [] || in_array('all', $names, true);
+        $names = array_map(static fn($name): string => strtolower((string) $name), $names);
+        $all = $names === [] || \in_array('all', $names, true);
         /** @var array<string, array{queue?: ?string, maxCoroutines?: int}> $jobs */
         $jobs = $params['jobs'] ?? [];
 
@@ -198,7 +198,7 @@ abstract class Platform
             foreach ($service->getActions() as $key => $action) {
                 if ($action->getType() == Action::TYPE_DEFAULT) {
                     $name = strtolower((string) $key);
-                    if (!$all && !in_array($name, $names, true)) {
+                    if (!$all && !\in_array($name, $names, true)) {
                         continue;
                     }
                 }

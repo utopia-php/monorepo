@@ -43,9 +43,9 @@ final class ServerJobsTest extends TestCase
         $adapter = new RecordingAdapter();
 
         $adapter->consume(
-            static fn () => null,
-            static fn () => null,
-            static fn () => null,
+            static fn(): null => null,
+            static fn(): null => null,
+            static fn(): null => null,
             [
                 [
                     'queue' => new Queue('database_db_main'),
@@ -93,17 +93,11 @@ final class FakeConsumer implements Consumer
         return null;
     }
 
-    public function commit(Queue $queue, Message $message): void
-    {
-    }
+    public function commit(Queue $queue, Message $message): void {}
 
-    public function reject(Queue $queue, Message $message): void
-    {
-    }
+    public function reject(Queue $queue, Message $message): void {}
 
-    public function close(): void
-    {
-    }
+    public function close(): void {}
 }
 
 final class RecordingAdapter extends Adapter
@@ -147,6 +141,7 @@ final class RecordingAdapter extends Adapter
         return $this;
     }
 
+    #[\Override]
     protected function run(
         Queue $queue,
         int $maxCoroutines,
