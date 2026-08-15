@@ -53,9 +53,8 @@ abstract class Platform
                     if (! isset($this->worker)) {
                         $consumer = $params['consumer'] ?? null;
                         $workersNum = $params['workersNum'] ?? 0;
-                        $workerName = $params['workerName'] ?? null;
-                        $queueName = $params['queueName'] ?? 'v1-' . $workerName;
-                        $adapter = new Swoole($consumer, $workersNum, $queueName);
+                        $namespace = $params['namespace'] ?? 'utopia-queue';
+                        $adapter = new Swoole($consumer, $workersNum, $namespace);
                         $this->worker ??= new Server($adapter);
                     }
                     $this->initWorker($services, $workerName, $params);
@@ -175,9 +174,10 @@ abstract class Platform
     /**
      * Init worker Services
      *
-     * Single-queue: `init(TYPE_WORKER, ['workerName' => 'functions'])`.
+     * Single-queue: `init(TYPE_WORKER, ['workerName' => 'functions', 'jobs' => [...]])`.
      * Combined: pass `workers` (`['all']` or a list) and `jobs` keyed by
      * action name with that queue's `queue` / `maxCoroutines` (default 1).
+     * Queue name and concurrency are defined only on jobs — never on the adapter.
      *
      * @param array<int|string, Service> $services
      * @param array<string, mixed> $params
@@ -222,11 +222,10 @@ abstract class Platform
                     default:
                         $name = strtolower((string) $key);
                         $config = $jobs[$name] ?? [];
+                        $queue = $config['queue'] ?? $params['queueName'] ?? ('v1-' . $name);
                         $hook = $worker->job(
-                            $config['queue'] ?? null,
-                            \array_key_exists('maxCoroutines', $config)
-                                ? max(1, (int) $config['maxCoroutines'])
-                                : null,
+                            $queue,
+                            max(1, (int) ($config['maxCoroutines'] ?? 1)),
                         );
                         break;
                 }

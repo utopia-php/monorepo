@@ -7,7 +7,9 @@ use Swoole\Coroutine\WaitGroup;
 use Swoole\Process;
 use Utopia\DI\Container;
 use Utopia\Queue\Adapter;
+use Utopia\Queue\Consumer;
 use Utopia\Queue\Message;
+use Utopia\Queue\Queue;
 
 /**
  * Run-to-completion adapter for queue workers that run as Kubernetes Jobs — for
@@ -99,19 +101,24 @@ class KubernetesJob extends Adapter
     }
 
     /**
-     * Drain the queue, then return. Processes messages until a receive() times
-     * out (the queue is empty) or stop() is called, so the Job completes rather
+     * Drain each queue until empty, then return. Processes messages until a
+     * receive() times out or stop() is called, so the Job completes rather
      * than blocking forever like the long-running adapters.
+     *
+     * @param array<int, array{queue: Queue, maxCoroutines: int, consumer?: Consumer}> $queues
      */
     #[\Override]
     public function consume(
         callable $messageCallback,
         callable $successCallback,
         callable $errorCallback,
-        ?array $queues = null,
+        array $queues,
     ): void {
-        unset($queues);
         $this->stopped = false;
+
+        if ($queues === []) {
+            throw new \LogicException('At least one queue is required');
+        }
 
         $swoole = \extension_loaded('swoole');
 
@@ -125,43 +132,67 @@ class KubernetesJob extends Adapter
         }
 
         try {
-            while (!$this->isStopped()) {
-                $message = $this->consumer->receive(
-                    $this->queue ?? throw new \LogicException('KubernetesJob requires a queue in the adapter constructor'),
-                    static::RECEIVE_TIMEOUT,
+            foreach ($queues as $spec) {
+                $this->drain(
+                    $spec['queue'],
+                    $messageCallback,
+                    $successCallback,
+                    $errorCallback,
+                    $spec['consumer'] ?? null,
+                    $swoole,
                 );
-
-                if (!$message instanceof Message) {
-                    break;
-                }
-
-                $this->context = new Container($this->resources());
-
-                // One child coroutine per message, awaited before the next
-                // receive: sequential like the rest of the drain, but each
-                // handler gets a fresh coroutine stack, exactly as the Swoole
-                // adapter's per-message coroutines provide. Running handlers
-                // inline reused the lifecycle coroutine's stack, and deeply
-                // recursive handlers overflowed it — a segfault with no PHP
-                // trace, the message stranded in the processing list.
-                if ($swoole && Coroutine::getCid() >= 0) {
-                    $waitGroup = new WaitGroup(1);
-                    Coroutine::create(function () use ($waitGroup, $message, $messageCallback, $successCallback, $errorCallback): void {
-                        try {
-                            $this->process($message, $messageCallback, $successCallback, $errorCallback);
-                        } finally {
-                            $waitGroup->done();
-                        }
-                    });
-                    $waitGroup->wait();
-                } else {
-                    $this->process($message, $messageCallback, $successCallback, $errorCallback);
-                }
             }
         } finally {
             if ($swoole) {
                 Process::signal(SIGTERM, null);
                 Process::signal(SIGINT, null);
+            }
+        }
+    }
+
+    /**
+     * @param callable(Message): void $messageCallback
+     * @param callable(Message): void $successCallback
+     * @param callable(?Message, \Throwable): void $errorCallback
+     */
+    private function drain(
+        Queue $queue,
+        callable $messageCallback,
+        callable $successCallback,
+        callable $errorCallback,
+        ?Consumer $consumer,
+        bool $swoole,
+    ): void {
+        $consumer ??= $this->consumer;
+
+        while (!$this->isStopped()) {
+            $message = $consumer->receive($queue, static::RECEIVE_TIMEOUT);
+
+            if (!$message instanceof Message) {
+                break;
+            }
+
+            $this->context = new Container($this->resources());
+
+            // One child coroutine per message, awaited before the next
+            // receive: sequential like the rest of the drain, but each
+            // handler gets a fresh coroutine stack, exactly as the Swoole
+            // adapter's per-message coroutines provide. Running handlers
+            // inline reused the lifecycle coroutine's stack, and deeply
+            // recursive handlers overflowed it — a segfault with no PHP
+            // trace, the message stranded in the processing list.
+            if ($swoole && Coroutine::getCid() >= 0) {
+                $waitGroup = new WaitGroup(1);
+                Coroutine::create(function () use ($waitGroup, $message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer): void {
+                    try {
+                        $this->process($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
+                    } finally {
+                        $waitGroup->done();
+                    }
+                });
+                $waitGroup->wait();
+            } else {
+                $this->process($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
             }
         }
     }

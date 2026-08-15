@@ -87,23 +87,19 @@ class Server
     }
 
     /**
-     * Register a job for a queue. Each registered queue runs its own consume
-     * loop with its own concurrency cap — jobs are the source of truth for
-     * what to consume; the adapter queue is only a default for bare job().
-     *
-     * Omitting `$queue` uses the adapter's default queue (required in that
-     * case). Omitting `$maxCoroutines` inherits the adapter's coroutines().
+     * Register a job for a queue. Queue name and concurrency live only here —
+     * the adapter is transport (processes, namespace, consumer).
      */
-    public function job(?string $queue = null, ?int $maxCoroutines = null): Job
+    public function job(string $queue, int $maxCoroutines = 1): Job
     {
-        $job = new Job();
-        $queue ??= $this->adapter->queue?->name;
-        if ($queue === null || $queue === '') {
-            throw new Exception('Queue name is required when the adapter has no default queue');
+        if ($queue === '') {
+            throw new Exception('Queue name is required');
         }
+
+        $job = new Job();
         $this->job = $job;
         $this->jobs[$queue] = $job;
-        $this->coroutines[$queue] = max(1, $maxCoroutines ?? $this->adapter->coroutines());
+        $this->coroutines[$queue] = max(1, $maxCoroutines);
 
         return $job;
     }
@@ -227,9 +223,7 @@ class Server
                 return;
             }
 
-            $queues = $this->jobs !== []
-                ? array_keys($this->jobs)
-                : array_filter([$this->adapter->queue?->name]);
+            $queues = array_keys($this->jobs);
 
             foreach ($queues as $queueName) {
                 $queue = new Queue($queueName, $this->adapter->namespace);
@@ -401,26 +395,23 @@ class Server
                     }
                 };
 
-                // Registered jobs own queue identity and concurrency. Always
-                // pass them to consume() so a single job('x', 8) is not ignored
-                // in favour of the adapter constructor. Adapters that only
-                // honour their constructor queue (e.g. KubernetesJob) keep that
-                // behaviour by ignoring $queues.
-                if ($this->jobs !== []) {
-                    $queues = [];
-                    foreach (array_keys($this->jobs) as $queueName) {
-                        $queues[] = [
-                            'queue' => new Queue($queueName, $this->adapter->namespace),
-                            'maxCoroutines' => $this->coroutines[$queueName] ?? 1,
-                            'consumer' => \is_callable($this->consumer)
-                                ? ($this->consumer)($queueName)
-                                : $this->adapter->consumer,
-                        ];
-                    }
-                    $this->adapter->consume($messageCallback, $successCallback, $errorCallback, $queues);
-                } else {
-                    $this->adapter->consume($messageCallback, $successCallback, $errorCallback);
+                // Jobs own queue identity and concurrency. The adapter only
+                // runs the consume loops those jobs describe.
+                if ($this->jobs === []) {
+                    throw new Exception('At least one job() must be registered before start()');
                 }
+
+                $queues = [];
+                foreach (array_keys($this->jobs) as $queueName) {
+                    $queues[] = [
+                        'queue' => new Queue($queueName, $this->adapter->namespace),
+                        'maxCoroutines' => $this->coroutines[$queueName] ?? 1,
+                        'consumer' => \is_callable($this->consumer)
+                            ? ($this->consumer)($queueName)
+                            : $this->adapter->consumer,
+                    ];
+                }
+                $this->adapter->consume($messageCallback, $successCallback, $errorCallback, $queues);
             });
 
             $this->adapter->workerStop(function (string $workerId): void {

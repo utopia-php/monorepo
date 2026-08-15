@@ -24,27 +24,16 @@ class Swoole extends Adapter
     /** @var callable[] */
     protected array $onWorkerStop = [];
 
-    protected int $maxCoroutines;
-
     /** @var Consumer[] */
     protected array $consumers = [];
 
     public function __construct(
         Consumer $consumer,
         int $workerNum,
-        ?string $queue = null,
         string $namespace = 'utopia-queue',
-        int $maxCoroutines = 1,
         Container $resources = new Container(),
     ) {
-        parent::__construct($consumer, $workerNum, $queue, $namespace, $resources);
-        $this->maxCoroutines = max(1, $maxCoroutines);
-    }
-
-    #[\Override]
-    public function coroutines(): int
-    {
-        return $this->maxCoroutines;
+        parent::__construct($consumer, $workerNum, $namespace, $resources);
     }
 
     public function start(): self
@@ -100,23 +89,20 @@ class Swoole extends Adapter
     }
 
     /**
-     * @param array<int, array{queue: Queue, maxCoroutines: int, consumer?: Consumer}>|null $queues
+     * @param array<int, array{queue: Queue, maxCoroutines: int, consumer?: Consumer}> $queues
      */
     #[\Override]
     public function consume(
         callable $messageCallback,
         callable $successCallback,
         callable $errorCallback,
-        ?array $queues = null,
+        array $queues,
     ): void {
         $this->stopped = false;
-        $queues ??= [
-            [
-                'queue' => $this->queue ?? throw new \LogicException('Adapter has no default queue; pass $queues or set one in the constructor'),
-                'maxCoroutines' => $this->maxCoroutines,
-                'consumer' => $this->consumer,
-            ],
-        ];
+
+        if ($queues === []) {
+            throw new \LogicException('At least one queue is required');
+        }
 
         if (\count($queues) === 1) {
             $spec = $queues[0];

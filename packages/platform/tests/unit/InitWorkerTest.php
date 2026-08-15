@@ -20,7 +20,7 @@ final class InitWorkerTest extends TestCase
     public function testCombinedWorkersKeepIndependentCoroutineCaps(): void
     {
         $platform = $this->platform();
-        $server = new Server(new RecordingAdapter(queue: null));
+        $server = new Server(new RecordingAdapter());
         $platform->setWorker($server);
 
         $platform->init(Service::TYPE_WORKER, [
@@ -40,7 +40,7 @@ final class InitWorkerTest extends TestCase
     public function testSingleWorkerNamePathStillRegistersOneJob(): void
     {
         $platform = $this->platform();
-        $server = new Server(new RecordingAdapter('v1-functions'));
+        $server = new Server(new RecordingAdapter());
         $platform->setWorker($server);
 
         $platform->init(Service::TYPE_WORKER, [
@@ -103,9 +103,9 @@ final class FakeConsumer implements Consumer
 
 final class RecordingAdapter extends Adapter
 {
-    public function __construct(?string $queue = 'v1-functions')
+    public function __construct(string $namespace = 'utopia-queue')
     {
-        parent::__construct(new FakeConsumer(), 1, $queue);
+        parent::__construct(new FakeConsumer(), 1, $namespace);
     }
 
     public function start(): self

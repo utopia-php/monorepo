@@ -29,32 +29,33 @@ final class ServerJobsTest extends TestCase
         $this->assertCount(2, $server->jobs());
     }
 
-    public function testOmittedCoroutineCapInheritsAdapter(): void
+    public function testOmittedCoroutineCapDefaultsToOne(): void
     {
-        $server = new Server(new RecordingAdapter(queue: 'v1-mails', coroutines: 5));
+        $server = new Server(new RecordingAdapter());
 
         $server->job('v1-mails');
 
-        $this->assertSame(5, $server->coroutines('v1-mails'));
+        $this->assertSame(1, $server->coroutines('v1-mails'));
     }
 
-    public function testBareJobRequiresAdapterDefaultQueue(): void
+    public function testEmptyQueueNameIsRejected(): void
     {
-        $server = new Server(new RecordingAdapter(queue: null));
+        $server = new Server(new RecordingAdapter());
 
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('Queue name is required');
 
-        $server->job();
+        $server->job('');
     }
 
-    public function testBareJobInheritsAdapterQueue(): void
+    public function testStartRequiresAtLeastOneJob(): void
     {
-        $server = new Server(new RecordingAdapter(queue: 'v1-mails'));
+        $server = new Server(new RecordingAdapter());
 
-        $server->job();
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('At least one job() must be registered');
 
-        $this->assertArrayHasKey('v1-mails', $server->jobs());
+        $server->start();
     }
 
     public function testConsumeKeepsPerQueueCaps(): void
@@ -86,9 +87,9 @@ final class ServerJobsTest extends TestCase
         );
     }
 
-    public function testStartDrivesConsumeFromJobsEvenForOneQueue(): void
+    public function testStartDrivesConsumeFromJobs(): void
     {
-        $adapter = new RecordingAdapter(queue: null);
+        $adapter = new RecordingAdapter();
         $server = new Server($adapter);
         $server->job('v1-functions', 8);
 
@@ -104,7 +105,7 @@ final class ServerJobsTest extends TestCase
 
     public function testStartWithMultipleJobsUsesConsume(): void
     {
-        $adapter = new RecordingAdapter(queue: null);
+        $adapter = new RecordingAdapter();
         $server = new Server($adapter);
         $server->job('database_db_main', 1);
         $server->job('v1-functions', 8);
@@ -145,18 +146,9 @@ final class RecordingAdapter extends Adapter
     /** @var callable[] */
     private array $onWorkerStart = [];
 
-    private readonly int $defaultCoroutines;
-
-    public function __construct(?string $queue = 'v1-functions', int $coroutines = 1)
+    public function __construct(string $namespace = 'utopia-queue')
     {
-        parent::__construct(new FakeConsumer(), 1, $queue);
-        $this->defaultCoroutines = max(1, $coroutines);
-    }
-
-    #[\Override]
-    public function coroutines(): int
-    {
-        return $this->defaultCoroutines;
+        parent::__construct(new FakeConsumer(), 1, $namespace);
     }
 
     public function start(): self

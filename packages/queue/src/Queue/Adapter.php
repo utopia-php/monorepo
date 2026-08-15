@@ -14,32 +14,20 @@ abstract class Adapter
      */
     protected const int RECEIVE_BACKOFF = 1;
 
-    public ?Queue $queue = null;
     protected ?Container $context = null;
     protected bool $stopped = false;
 
+    /**
+     * @param Consumer $consumer Default consumer; Server may replace per queue via consumer()
+     * @param int $workerNum Process/worker count for pool adapters (Swoole/Workerman)
+     * @param string $namespace Broker key prefix shared by every job on this adapter
+     */
     public function __construct(
         public Consumer $consumer,
         public int $workerNum,
-        ?string $queue = null,
         public string $namespace = 'utopia-queue',
         protected Container $resources = new Container(),
-    ) {
-        // Queue name is optional: Server::job() is the source of truth for what
-        // to consume. A constructor queue is only a default for bare job().
-        $this->queue = ($queue !== null && $queue !== '')
-            ? new Queue($queue, $namespace)
-            : null;
-    }
-
-    /**
-     * Default per-queue concurrency when Server::job() omits maxCoroutines.
-     * Swoole overrides this with its constructor maxCoroutines.
-     */
-    public function coroutines(): int
-    {
-        return 1;
-    }
+    ) {}
 
     /**
      * Starts the Server.
@@ -62,24 +50,21 @@ abstract class Adapter
      * @param callable(Message): void $successCallback
      * @param callable(?Message, \Throwable): void $errorCallback Receives null when
      *        the failure was in obtaining a message rather than handling one.
-     * @param array<int, array{queue: Queue, maxCoroutines: int, consumer?: Consumer}>|null $queues
-     *        When null, consumes `$this->queue`. Sequential adapters run multiple
-     *        specs one after another; Swoole runs independent loops.
+     * @param array<int, array{queue: Queue, maxCoroutines: int, consumer?: Consumer}> $queues
+     *        Queue identity and concurrency come from Server::job(); sequential
+     *        adapters run specs one after another, Swoole runs independent loops.
      */
     public function consume(
         callable $messageCallback,
         callable $successCallback,
         callable $errorCallback,
-        ?array $queues = null,
+        array $queues,
     ): void {
         $this->stopped = false;
-        $queues ??= [
-            [
-                'queue' => $this->queue ?? throw new \LogicException('Adapter has no default queue; pass $queues or set one in the constructor'),
-                'maxCoroutines' => $this->coroutines(),
-                'consumer' => $this->consumer,
-            ],
-        ];
+
+        if ($queues === []) {
+            throw new \LogicException('At least one queue is required');
+        }
 
         foreach ($queues as $spec) {
             $this->run(
@@ -133,9 +118,8 @@ abstract class Adapter
      *
      * @param callable(?Message, \Throwable): void $errorCallback
      */
-    protected function nextMessage(callable $errorCallback, ?Queue $queue = null, ?Consumer $consumer = null): ?Message
+    protected function nextMessage(callable $errorCallback, Queue $queue, ?Consumer $consumer = null): ?Message
     {
-        $queue ??= $this->queue ?? throw new \LogicException('Queue is required');
         $consumer ??= $this->consumer;
 
         try {
@@ -164,10 +148,9 @@ abstract class Adapter
         callable $messageCallback,
         callable $successCallback,
         callable $errorCallback,
-        ?Queue $queue = null,
+        Queue $queue,
         ?Consumer $consumer = null,
     ): void {
-        $queue ??= $this->queue ?? throw new \LogicException('Queue is required');
         $consumer ??= $this->consumer;
 
         try {
