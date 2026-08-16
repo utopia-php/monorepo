@@ -227,6 +227,37 @@ final class NatsBrokerTest extends TestCase
         $this->broker->enqueue(new Queue("c_{$suffix}"), ['ok' => 1]);
     }
 
+    public function testCollidingQueueNamesFailAcrossInstances(): void
+    {
+        // The guard reads the owning identity from the stream's metadata, so it holds
+        // even when the colliding queues are provisioned by *separate* broker instances
+        // (the real deployment: producer pool + worker are different processes).
+        $url = getenv('NATS_URL') ?: 'nats://127.0.0.1:14225';
+        $suffix = substr(md5(uniqid('', true)), 0, 6);
+        $a = new Nats(Connection::connect($url));
+        $b = new Nats(Connection::connect($url));
+
+        $a->enqueue(new Queue("x.{$suffix}"), ['ok' => 1]); // stamps identity on Q_X_<S>
+        try {
+            $b->enqueue(new Queue("x_{$suffix}"), ['ok' => 1]); // same stream, different identity, other instance
+            $this->fail('expected a cross-instance collision to throw');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('already belongs', $e->getMessage());
+        } finally {
+            $a->close();
+            $b->close();
+        }
+    }
+
+    public function testOverlongQueueNameFailsLoud(): void
+    {
+        // Readable names are unbounded, so a very long queue name would exceed
+        // JetStream's 255-byte stream-name limit; fail clearly rather than let the
+        // server reject the create.
+        $this->expectException(\RuntimeException::class);
+        $this->broker->enqueue(new Queue('q' . str_repeat('a', 300)), ['x' => 1]);
+    }
+
     public function testJobTtlExpiresUnackedMessages(): void
     {
         // jobTtl maps to the stream's MaxAge: an unconsumed message expires.

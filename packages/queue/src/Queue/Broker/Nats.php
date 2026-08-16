@@ -42,11 +42,13 @@ class Nats implements Publisher, Consumer
     private const string CONSUMER_RETRY = 'retry';
     private const string ADVISORY_MAX_DELIVERIES = '$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES';
 
+    // JetStream's stream-name byte limit, and the stream-metadata key that records
+    // which queue identity owns a stream (the cross-instance collision guard).
+    private const int MAX_STREAM_NAME = 255;
+    private const string METADATA_IDENTITY = 'utopia_queue_identity';
+
     /** @var array<string, bool> queues whose streams/consumers have been provisioned */
     private array $provisioned = [];
-
-    /** @var array<string, string> stream name => the identity that first claimed it (collision guard) */
-    private array $claimed = [];
 
     /** @var array<string, array{normal: NatsConsumer, priority: NatsConsumer}> */
     private array $consumers = [];
@@ -245,33 +247,29 @@ class Nats implements Publisher, Consumer
             return;
         }
 
-        // Names drop the namespace (isolation is per-account/cluster), so two queues
-        // that sanitize to the same stream would silently share it. Fail loud instead:
-        // the first identity claims the stream name; a different claimant is rejected.
-        $stream = $this->workStream($queue);
-        $owner = $this->claimed[$stream] ?? null;
-        if ($owner !== null && $owner !== $key) {
-            throw new \RuntimeException("NATS stream name collision on \"{$stream}\": queue identities \"{$owner}\" and \"{$key}\" both map to it; rename one queue.");
-        }
-        $this->claimed[$stream] = $key;
+        $this->guardStreamName($queue, $key);
 
         $maxAge = $queue->jobTtl > 0 ? (float) $queue->jobTtl : null;
 
         $this->js()->createOrUpdateStream(new StreamConfig(
             name: $this->workStream($queue),
             subjects: [$this->workSubject($queue), $this->prioritySubject($queue)],
+            description: $key,
             retention: RetentionPolicy::WorkQueue,
             maxAge: $maxAge,
             storage: StorageType::File,
             replicas: $this->replicas,
+            metadata: [self::METADATA_IDENTITY => $key],
         ));
 
         $this->js()->createOrUpdateStream(new StreamConfig(
             name: $this->deadStream($queue),
             subjects: [$this->deadSubject($queue)],
+            description: $key,
             retention: RetentionPolicy::WorkQueue,
             storage: StorageType::File,
             replicas: $this->replicas,
+            metadata: [self::METADATA_IDENTITY => $key],
         ));
 
         $this->consumers[$key] = [
@@ -302,6 +300,34 @@ class Nats implements Publisher, Consumer
         );
 
         $this->provisioned[$key] = true;
+    }
+
+    /**
+     * Reject a stream name that would overflow JetStream's limit, or that a different
+     * queue identity already owns. The owner is recorded in the stream's metadata, so
+     * the check holds against server state across broker instances and processes (not
+     * just an in-memory map): distinct queues can never silently share a stream, even
+     * when their sanitized names collide.
+     */
+    private function guardStreamName(Queue $queue, string $identity): void
+    {
+        // The dead stream (work name + suffix) is the longest, so if it fits, both do.
+        // Fixed-width names never overflow, but a long queue name can -- fail clearly
+        // rather than letting JetStream reject the create with an opaque error.
+        $longest = $this->deadStream($queue);
+        if (\strlen($longest) > self::MAX_STREAM_NAME) {
+            throw new \RuntimeException("NATS stream name \"{$longest}\" exceeds JetStream's " . self::MAX_STREAM_NAME . '-byte limit; shorten queue "' . $queue->name . '".');
+        }
+
+        $stream = $this->workStream($queue);
+        try {
+            $owner = ($this->js()->getStreamInfo($stream)->config->metadata ?? [])[self::METADATA_IDENTITY] ?? null;
+        } catch (\Throwable) {
+            $owner = null; // stream not provisioned yet
+        }
+        if ($owner !== null && $owner !== $identity) {
+            throw new \RuntimeException("NATS stream \"{$stream}\" already belongs to queue \"{$owner}\", not \"{$identity}\"; rename one queue.");
+        }
     }
 
     /** Move messages that exhausted maxDeliver (per the advisory) onto the dead stream. */
