@@ -51,7 +51,7 @@ abstract class Adapter
     ) {
         if ($consumer instanceof Consumer) {
             $this->consumer = $consumer;
-            $this->consumerFactory = static fn (string $queue): Consumer => $consumer;
+            $this->consumerFactory = static fn(string $queue): Consumer => $consumer;
             $this->sharedConsumer = true;
         } else {
             $this->consumerFactory = self::normalizeFactory($consumer);
@@ -77,7 +77,6 @@ abstract class Adapter
     }
 
     /**
-     * @param callable $factory
      * @return callable(string): Consumer
      */
     protected static function normalizeFactory(callable $factory): callable
@@ -86,7 +85,7 @@ abstract class Adapter
         $reflection = new \ReflectionFunction($closure);
 
         if ($reflection->getNumberOfRequiredParameters() === 0) {
-            return static fn (string $queue): Consumer => $factory();
+            return static fn(string $queue): Consumer => $factory();
         }
 
         return $closure;

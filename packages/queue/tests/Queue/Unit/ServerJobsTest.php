@@ -163,7 +163,7 @@ final class RecordingAdapter extends Adapter
         if ($shared) {
             parent::__construct(new FakeConsumer(), 1, $namespace);
         } else {
-            parent::__construct(static fn (string $q): Consumer => new FakeConsumer(), 1, $namespace);
+            parent::__construct(static fn(string $q): Consumer => new FakeConsumer(), 1, $namespace);
         }
     }
 
