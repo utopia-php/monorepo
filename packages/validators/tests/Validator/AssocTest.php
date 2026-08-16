@@ -25,6 +25,7 @@ final class AssocTest extends TestCase
         $this->assertTrue($this->assoc->isValid(['1' => 'a', '0' => 'b', '2' => 'c']));
         $this->assertTrue($this->assoc->isValid(['a' => 'a', 'b' => 'b', 'c' => 'c']));
         $this->assertTrue($this->assoc->isValid([]));
+        $this->assertTrue($this->assoc->isValid(new \stdClass()));
         $this->assertTrue($this->assoc->isValid(['value' => str_repeat('-', 62000)]));
         $this->assertTrue($this->assoc->isArray());
         $this->assertSame(\Utopia\Validator::TYPE_ARRAY, $this->assoc->getType());

@@ -55,6 +55,11 @@ class Assoc extends Validator
      */
     public function isValid($value): bool
     {
+        // utopia-http keeps empty JSON `{}` as stdClass so it is not collapsed to `[]`.
+        if ($value instanceof \stdClass) {
+            $value = (array) $value;
+        }
+
         if (!\is_array($value)) {
             return false;
         }
@@ -66,6 +71,12 @@ class Assoc extends Validator
             return false;
         }
 
-        return array_keys($value) !== range(0, \count($value) - 1);
+        // Empty arrays are also valid: when the body has no empty-object marker,
+        // `{}` still decodes to `[]` and cannot be distinguished from an empty list.
+        if ($value === []) {
+            return true;
+        }
+
+        return !\array_is_list($value);
     }
 }
