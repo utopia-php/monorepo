@@ -77,6 +77,6 @@ class Assoc extends Validator
             return true;
         }
 
-        return !\array_is_list($value);
+        return !array_is_list($value);
     }
 }
