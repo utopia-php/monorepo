@@ -109,6 +109,7 @@ final class ServerJobsTest extends TestCase
         $server = new Server($adapter);
         $server->job('database_db_main', 1);
         $server->job('v1-functions', 8);
+        $server->consumer(fn (string $q) => new FakeConsumer());
 
         $server->start();
 
@@ -119,6 +120,18 @@ final class ServerJobsTest extends TestCase
             ],
             $adapter->consumed,
         );
+    }
+
+    public function testStartWithMultipleJobsRequiresConsumerFactory(): void
+    {
+        $server = new Server(new RecordingAdapter());
+        $server->job('database_db_main', 1);
+        $server->job('v1-functions', 8);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Server::consumer() is required when consuming more than one queue');
+
+        $server->start();
     }
 }
 

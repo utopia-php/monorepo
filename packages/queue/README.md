@@ -131,7 +131,7 @@ $server
         // Handle a databases job
     });
 
-// Fresh consumer per loop — blocking receive must not share a connection.
+// Required: fresh consumer per loop — blocking receive must not share a connection.
 $server->consumer(fn (string $queue): Consumer => $createConsumer());
 
 $server->error()->inject('error')->action(function ($error) {

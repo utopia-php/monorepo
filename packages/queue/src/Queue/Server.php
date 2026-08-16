@@ -401,6 +401,14 @@ class Server
                     throw new Exception('At least one job() must be registered before start()');
                 }
 
+                // Concurrent receive loops must not share a Redis/NATS receive
+                // connection — protocol responses and acks would miscorrelate.
+                if (\count($this->jobs) > 1 && !\is_callable($this->consumer)) {
+                    throw new Exception(
+                        'Server::consumer() is required when consuming more than one queue — each loop needs its own receive connection',
+                    );
+                }
+
                 $queues = [];
                 foreach (array_keys($this->jobs) as $queueName) {
                     $queues[] = [
