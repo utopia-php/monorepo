@@ -43,7 +43,7 @@ class MockNumber extends Validator
             return false;
         }
 
-        $phone = new Phone(knownCallingCode: true);
+        $phone = new Phone();
         if (!$phone->isValid($value['phone'])) {
             $this->message = $phone->getDescription();
             return false;

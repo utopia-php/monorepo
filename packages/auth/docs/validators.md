@@ -55,5 +55,4 @@ $validator->isValid([
 ]);
 ```
 
-Phone numbers must be E.164 with a known calling code. That calling-code check
-lives on `Utopia\Validator\Phone` (`knownCallingCode: true`).
+Phone numbers must be E.164.
