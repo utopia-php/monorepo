@@ -19,7 +19,7 @@
 accessor(?:s)?
 ACLs?
 aiohttp
-allowlist
+allowlist(?:s)?
 API(?:s)?
 Appwrite
 Argon2
@@ -126,6 +126,7 @@ GitLab
 Gitea
 Bitbucket
 E.164
+Etsy
 OkHttp
 OpenID
 OpenID Connect

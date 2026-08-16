@@ -12,9 +12,9 @@ namespace Utopia\Validator;
 final class CallingCode
 {
     /**
-     * @var array<int, true>
+     * @var array<string, true>
      */
-    private const CODES = [
+    private const array CODES = [
         '1' => true, '7' => true, '20' => true, '27' => true, '30' => true,
         '31' => true, '32' => true, '33' => true, '34' => true, '36' => true,
         '39' => true, '40' => true, '41' => true, '43' => true, '44' => true,

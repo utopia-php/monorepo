@@ -94,10 +94,6 @@ class Phone extends Validator
             return false;
         }
 
-        if ($this->knownCallingCode && CallingCode::fromPhoneNumber($value) === null) {
-            return false;
-        }
-
-        return true;
+        return !$this->knownCallingCode || CallingCode::fromPhoneNumber($value) !== null;
     }
 }
