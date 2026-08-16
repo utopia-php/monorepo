@@ -35,13 +35,8 @@ jobs:
               RANGE="HEAD~1..HEAD"
             fi
             CHANGED=$(git diff --name-only "$RANGE" -- packages/ | cut -d/ -f2)
-            # Tooling changes affect every package. Benchmark workflow only runs
-            # composer bench — it does not change how package tests install.
-            TOOLING=$(git diff --name-only "$RANGE" \
-              | grep -E '^(bin/|\.github/|composer\.json|pint\.json)' \
-              | grep -vE '^\.github/workflows/benchmark\.yml$' \
-              || true)
-            if [ -n "$TOOLING" ]; then
+            # tooling changes affect every package
+            if git diff --name-only "$RANGE" | grep -qE '^(bin/|\.github/|composer\.json|pint\.json)'; then
               CHANGED=$(ls packages)
             fi
           fi
