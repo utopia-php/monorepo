@@ -38,7 +38,7 @@ $createConsumer = static function (): Consumer {
 
 // Adapter is transport only (process count + namespace). Queue and concurrency
 // are defined on job().
-$adapter = new Queue\Adapter\Swoole($createConsumer(), workerNum: 12);
+$adapter = new Queue\Adapter\Swoole($createConsumer, workerNum: 12);
 $server = new Queue\Server($adapter);
 
 $server
@@ -114,7 +114,7 @@ $createConsumer = static function (): Consumer {
     );
 };
 
-$adapter = new Queue\Adapter\Swoole($createConsumer(), workerNum: 1);
+$adapter = new Queue\Adapter\Swoole($createConsumer, workerNum: 1);
 $server = new Queue\Server($adapter);
 
 $server
@@ -131,8 +131,7 @@ $server
         // Handle a databases job
     });
 
-// Required: fresh consumer per loop — blocking receive must not share a connection.
-$server->consumer(fn (string $queue): Consumer => $createConsumer());
+// Each consume loop calls the factory so blocking receive does not share a connection.
 
 $server->error()->inject('error')->action(function ($error) {
     echo $error->getMessage() . PHP_EOL;

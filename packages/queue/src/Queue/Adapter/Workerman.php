@@ -12,7 +12,7 @@ class Workerman extends Adapter
     protected Worker $worker;
 
     public function __construct(
-        Consumer $consumer,
+        Consumer|callable $consumer,
         int $workerNum,
         string $namespace = 'utopia-queue',
         Container $resources = new Container(),

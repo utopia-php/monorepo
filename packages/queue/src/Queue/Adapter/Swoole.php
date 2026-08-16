@@ -29,7 +29,7 @@ class Swoole extends Adapter
     protected array $consumers = [];
 
     public function __construct(
-        Consumer $consumer,
+        Consumer|callable $consumer,
         int $workerNum,
         string $namespace = 'utopia-queue',
         Container $resources = new Container(),

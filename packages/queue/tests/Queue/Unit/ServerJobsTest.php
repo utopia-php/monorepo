@@ -109,7 +109,6 @@ final class ServerJobsTest extends TestCase
         $server = new Server($adapter);
         $server->job('database_db_main', 1);
         $server->job('v1-functions', 8);
-        $server->consumer(fn (string $q) => new FakeConsumer());
 
         $server->start();
 
@@ -122,14 +121,14 @@ final class ServerJobsTest extends TestCase
         );
     }
 
-    public function testStartWithMultipleJobsRequiresConsumerFactory(): void
+    public function testStartWithMultipleJobsRejectsSharedConsumer(): void
     {
-        $server = new Server(new RecordingAdapter());
+        $server = new Server(new RecordingAdapter(shared: true));
         $server->job('database_db_main', 1);
         $server->job('v1-functions', 8);
 
         $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Server::consumer() is required when consuming more than one queue');
+        $this->expectExceptionMessage('callable factory to the Adapter constructor');
 
         $server->start();
     }
@@ -159,9 +158,13 @@ final class RecordingAdapter extends Adapter
     /** @var callable[] */
     private array $onWorkerStart = [];
 
-    public function __construct(string $namespace = 'utopia-queue')
+    public function __construct(string $namespace = 'utopia-queue', bool $shared = false)
     {
-        parent::__construct(new FakeConsumer(), 1, $namespace);
+        if ($shared) {
+            parent::__construct(new FakeConsumer(), 1, $namespace);
+        } else {
+            parent::__construct(static fn (string $q): Consumer => new FakeConsumer(), 1, $namespace);
+        }
     }
 
     public function start(): self

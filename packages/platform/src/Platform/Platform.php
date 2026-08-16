@@ -51,14 +51,14 @@ abstract class Platform
                     $workerName = $params['workerName'] ?? null;
 
                     if (! isset($this->worker)) {
-                        $consumer = $params['consumer'] ?? null;
+                        $consumer = $params['consumerFactory'] ?? $params['consumer'] ?? null;
+                        if ($consumer === null) {
+                            throw new Exception('Worker init requires consumerFactory or consumer');
+                        }
                         $workersNum = $params['workersNum'] ?? 0;
                         $namespace = $params['namespace'] ?? 'utopia-queue';
                         $adapter = new Swoole($consumer, $workersNum, $namespace);
                         $this->worker ??= new Server($adapter);
-                        if (\is_callable($params['consumerFactory'] ?? null)) {
-                            $this->worker->consumer($params['consumerFactory']);
-                        }
                     }
                     $this->initWorker($services, $workerName, $params);
                     break;
@@ -182,9 +182,9 @@ abstract class Platform
      * action name with that queue's `queue` / `maxCoroutines` (default 1).
      * Queue name and concurrency are defined only on jobs — never on the adapter.
      *
-     * Combined workers need a fresh receive connection per loop: pass a callable
-     * `consumerFactory` in `$params`, or call `Server::consumer()` on the worker
-     * before `init()` when using `setWorker()`.
+     * Prefer passing `consumerFactory` in `$params` so the Adapter owns the
+     * factory and per-queue isolation is automatic. `Server::consumer()` remains
+     * an optional override (including when using `setWorker()`).
      *
      * @param array<int|string, Service> $services
      * @param array<string, mixed> $params

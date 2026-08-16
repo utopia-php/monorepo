@@ -25,17 +25,72 @@ abstract class Adapter
     protected ?Container $context = null;
     protected bool $stopped = false;
 
+    public Consumer $consumer;
+
     /**
-     * @param Consumer $consumer Default consumer; Server may replace per queue via consumer()
+     * @var callable(string): Consumer
+     */
+    protected $consumerFactory;
+
+    protected bool $sharedConsumer = false;
+
+    /**
+     * Prefer a callable factory so each consume loop gets its own receive
+     * connection. A bare Consumer is OK for single-queue only.
+     *
+     * @param Consumer|callable $consumer Consumer instance, `(string $queue): Consumer`,
+     *        or a zero-arg factory that returns a Consumer
      * @param int $workerNum Process/worker count for pool adapters (Swoole/Workerman)
      * @param string $namespace Broker key prefix shared by every job on this adapter
      */
     public function __construct(
-        public Consumer $consumer,
+        Consumer|callable $consumer,
         public int $workerNum,
         public string $namespace = 'utopia-queue',
         protected Container $resources = new Container(),
-    ) {}
+    ) {
+        if ($consumer instanceof Consumer) {
+            $this->consumer = $consumer;
+            $this->consumerFactory = static fn (string $queue): Consumer => $consumer;
+            $this->sharedConsumer = true;
+        } else {
+            $this->consumerFactory = self::normalizeFactory($consumer);
+            $this->consumer = ($this->consumerFactory)('');
+            $this->sharedConsumer = false;
+        }
+    }
+
+    /**
+     * Invoke the adapter's consumer factory for a queue.
+     */
+    public function createConsumer(string $queue = ''): Consumer
+    {
+        return ($this->consumerFactory)($queue);
+    }
+
+    /**
+     * True when the adapter was constructed with a bare shared Consumer.
+     */
+    public function sharesConsumer(): bool
+    {
+        return $this->sharedConsumer;
+    }
+
+    /**
+     * @param callable $factory
+     * @return callable(string): Consumer
+     */
+    protected static function normalizeFactory(callable $factory): callable
+    {
+        $closure = $factory instanceof \Closure ? $factory : \Closure::fromCallable($factory);
+        $reflection = new \ReflectionFunction($closure);
+
+        if ($reflection->getNumberOfRequiredParameters() === 0) {
+            return static fn (string $queue): Consumer => $factory();
+        }
+
+        return $closure;
+    }
 
     /**
      * Starts the Server.

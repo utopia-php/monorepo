@@ -105,9 +105,8 @@ class Server
     }
 
     /**
-     * Factory for a dedicated receive consumer per queue. Required when more
-     * than one queue is consumed so blocking receives do not share a connection
-     * across coroutines.
+     * Optional override of the adapter's consumer factory. Prefer passing the
+     * factory to the Adapter constructor; use this to replace it at runtime.
      *
      * @param callable(string): Consumer $factory
      */
@@ -403,9 +402,13 @@ class Server
 
                 // Concurrent receive loops must not share a Redis/NATS receive
                 // connection — protocol responses and acks would miscorrelate.
-                if (\count($this->jobs) > 1 && !\is_callable($this->consumer)) {
+                if (
+                    \count($this->jobs) > 1
+                    && !\is_callable($this->consumer)
+                    && $this->adapter->sharesConsumer()
+                ) {
                     throw new Exception(
-                        'Server::consumer() is required when consuming more than one queue — each loop needs its own receive connection',
+                        'Multi-queue workers must pass a callable factory to the Adapter constructor (or Server::consumer()) — a shared Consumer cannot be used across concurrent receive loops',
                     );
                 }
 
@@ -416,7 +419,7 @@ class Server
                         'maxCoroutines' => $this->coroutines[$queueName] ?? 1,
                         'consumer' => \is_callable($this->consumer)
                             ? ($this->consumer)($queueName)
-                            : $this->adapter->consumer,
+                            : $this->adapter->createConsumer($queueName),
                     ];
                 }
                 $this->adapter->consume($messageCallback, $successCallback, $errorCallback, $queues);
