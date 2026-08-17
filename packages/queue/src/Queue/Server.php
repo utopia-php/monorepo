@@ -9,7 +9,6 @@ use Utopia\Servers\Hook;
 use Utopia\Telemetry\Adapter as Telemetry;
 use Utopia\Telemetry\Adapter\None as NoTelemetry;
 use Utopia\Telemetry\Histogram;
-use Utopia\Telemetry\ObservableGauge;
 use Utopia\Validator;
 
 class Server
@@ -93,8 +92,6 @@ class Server
 
     private Histogram $jobWaitTime;
     private Histogram $processDuration;
-    private ObservableGauge $queueDepth;
-    private ObservableGauge $failedQueueDepth;
 
     /**
      * Creates an instance of a Queue server.
@@ -152,14 +149,14 @@ class Server
             ['ExplicitBucketBoundaries' => self::DURATION_BUCKETS],
         );
 
-        $this->queueDepth = $this->createDepthGauge(
+        $this->createDepthGauge(
             $telemetry,
             'messaging.queue.depth',
             'Number of pending messages in the queue.',
             failedJobs: false,
         );
 
-        $this->failedQueueDepth = $this->createDepthGauge(
+        $this->createDepthGauge(
             $telemetry,
             'messaging.queue.failed.depth',
             'Number of messages in the failed queue.',
@@ -172,7 +169,7 @@ class Server
         string $name,
         string $description,
         bool $failedJobs,
-    ): ObservableGauge {
+    ): void {
         $gauge = $telemetry->createObservableGauge($name, '{message}', $description);
 
         $gauge->observe(function (callable $observe) use ($failedJobs): void {
@@ -191,8 +188,6 @@ class Server
                 'messaging.destination.namespace' => $this->adapter->queue->namespace,
             ]);
         });
-
-        return $gauge;
     }
 
     /**
