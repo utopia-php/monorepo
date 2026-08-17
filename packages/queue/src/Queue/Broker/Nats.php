@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Utopia\Queue\Broker;
 
 use Utopia\NATS\Connection as NatsConnection;
+use Utopia\NATS\Exception\JetStreamException;
 use Utopia\NATS\JetStream\AckPolicy;
 use Utopia\NATS\JetStream\Consumer as NatsConsumer;
 use Utopia\NATS\JetStream\ConsumerConfig;
@@ -27,6 +28,11 @@ use Utopia\Queue\Queue;
  * redelivered until MaxDeliver, after which it is TERM'd and copied to a per-queue
  * dead stream. This replaces the Redis broker's hand-rolled processing/failed/dead
  * lists and its reap()/retry() sweeps (AckWait redelivery reclaims stranded jobs).
+ *
+ * Stream/subject names carry the queue name but NOT its namespace (isolation is a
+ * per-account/cluster concern), so run one queue namespace per NATS account. Two
+ * queues that map to the same stream — a duplicate name across namespaces, or names
+ * that sanitize alike — are rejected loudly by ensure() rather than silently shared.
  */
 class Nats implements Publisher, Consumer
 {
@@ -304,10 +310,12 @@ class Nats implements Publisher, Consumer
 
     /**
      * Reject a stream name that would overflow JetStream's limit, or that a different
-     * queue identity already owns. The owner is recorded in the stream's metadata, so
-     * the check holds against server state across broker instances and processes (not
-     * just an in-memory map): distinct queues can never silently share a stream, even
-     * when their sanitized names collide.
+     * queue identity already owns. The owner is recorded in the stream's metadata and
+     * checked against server state, so a collision between separate broker instances or
+     * processes is caught, not just within one instance's memory. This is a loud
+     * backstop for the run-one-namespace-per-account contract, not a concurrency lock:
+     * two colliding names provisioned at the very same instant can still both create
+     * the (identical) stream before either sees the other.
      */
     private function guardStreamName(Queue $queue, string $identity): void
     {
@@ -322,7 +330,10 @@ class Nats implements Publisher, Consumer
         $stream = $this->workStream($queue);
         try {
             $owner = ($this->js()->getStreamInfo($stream)->config->metadata ?? [])[self::METADATA_IDENTITY] ?? null;
-        } catch (\Throwable) {
+        } catch (JetStreamException $e) {
+            if ($e->apiError?->code !== 404) {
+                throw $e; // a real JetStream error, not "stream absent" -- don't mask it
+            }
             $owner = null; // stream not provisioned yet
         }
         if ($owner !== null && $owner !== $identity) {
