@@ -402,6 +402,53 @@ final class ReconcileTest extends TestCase
         );
     }
 
+    public function testASyncAfterATickDoesNotClaimThatTickSawIt(): void
+    {
+        // A driver that reconciles between tick() and commit() — the pattern
+        // the two-phase API invites — must not have the commit claim the
+        // window was selected from that newer read. The replacement below
+        // appeared after the window was chosen, so nothing in the pending
+        // tick covers it, and a successor has to know that.
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:05:00.000000'));
+        $store = new MemoryStore();
+        $set = new RowSet([new Row('a', 'v1', activeFrom: new \DateTimeImmutable('2026-08-18 03:00:00'))]);
+        $build = fn(string $token): Scheduler => new Scheduler(
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
+                make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
+            ),
+            store: $store,
+            clock: $clock,
+            interval: 60,
+            lookahead: 120,
+            lookback: 600,
+            lease: 120,
+            token: $token,
+        );
+
+        $predecessor = $build('predecessor');
+        $predecessor->reconcile();   // read at 03:05:00
+        $predecessor->tick();        // window selected here, out to 03:07:00
+
+        $clock->advance(20.0);       // 03:05:20
+        $set->rows = [new Row('a', 'v2', activeFrom: new \DateTimeImmutable('2026-08-18 03:05:20'))];
+        $predecessor->reconcile();   // read at 03:05:20 — after the window was chosen
+        $predecessor->commit();      // coverage to 03:07:00, from the 03:05:00 read
+
+        $clock->advance(130.0);      // 03:07:30 — the claim has expired
+        $successor = $build('successor');
+        $successor->reconcile();
+
+        $this->assertContains(
+            '03:06:00',
+            array_map(
+                fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'),
+                $successor->tick(),
+            ),
+            'the replacement is owed the runs inside a window that was chosen before it existed',
+        );
+    }
+
     public function testASuccessorDoesNotReplayWhatItsPredecessorAlreadyRan(): void
     {
         // Coverage runs past the last read of the source: the predecessor read

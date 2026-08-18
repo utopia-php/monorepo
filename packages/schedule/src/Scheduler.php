@@ -84,6 +84,13 @@ final class Scheduler
 
     private ?\DateTimeImmutable $pendingWindowEnd = null;
 
+    /**
+     * The source read that fed the pending tick. Committed alongside the
+     * window so the record's two halves describe the same moment: coverage,
+     * and the freshness of the view that produced it.
+     */
+    private ?\DateTimeImmutable $pendingSyncedUntil = null;
+
     /** @var array<string, string> delivered one-shots in the pending tick, id => version */
     private array $pendingOneShots = [];
 
@@ -385,6 +392,7 @@ final class Scheduler
             // watermark on first run — and never rewinds it when the clock
             // has stepped backwards past the committed edge.
             $this->pendingWindowEnd = $start;
+            $this->pendingSyncedUntil = $this->lastSyncAt;
             $this->pendingOneShots = [];
             $this->pendingCovered = [];
 
@@ -422,6 +430,7 @@ final class Scheduler
         usort($occurrences, fn(Occurrence $a, Occurrence $b): int => $a->due <=> $b->due ?: $a->id <=> $b->id);
 
         $this->pendingWindowEnd = $end;
+        $this->pendingSyncedUntil = $this->lastSyncAt;
         $this->pendingOneShots = $oneShots;
         $this->pendingCovered = $covered;
         $this->tickDuration->record(microtime(true) - $started);
@@ -456,10 +465,13 @@ final class Scheduler
             $this->token,
             (float) $this->clock->now()->format('U.u') + $this->lease,
             $this->pendingWindowEnd->format('U.u'),
-            // A tick that has not reconciled in this process must not erase
-            // what its predecessor had read, or a later cold start would
-            // have no floor to reason from.
-            $this->lastSyncAt?->format('U.u') ?? $this->store->load()?->syncedUntil,
+            // The read that fed *this* tick, not the newest one: a sync that
+            // landed after the window was selected did not contribute to it,
+            // and claiming otherwise would tell a successor that schedules
+            // this tick never saw are already covered. A tick that has not
+            // reconciled at all leaves what a predecessor recorded intact,
+            // rather than erasing the only view anyone has.
+            $this->pendingSyncedUntil?->format('U.u') ?? $this->store->load()?->syncedUntil,
         );
 
         if (!$this->store->swap($this->token, $next)) {
@@ -666,6 +678,7 @@ final class Scheduler
     private function clearPending(): void
     {
         $this->pendingWindowEnd = null;
+        $this->pendingSyncedUntil = null;
         $this->pendingOneShots = [];
         $this->pendingCovered = [];
     }
