@@ -52,6 +52,7 @@ cURL
 datetime
 Debian
 decodable
+Deduplication
 DELETE
 deserialize(?:s|d)?
 DI

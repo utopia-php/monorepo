@@ -57,13 +57,21 @@ $scheduler = new Scheduler(
     state: $redisBackedState,
 );
 
-$scheduler->run(function (Occurrence $occurrence) use ($queue): void {
-    // $occurrence->id      — the row's identity
-    // $occurrence->due     — when the run was scheduled for
-    // $occurrence->payload — whatever make() attached
-    $queue->enqueue($occurrence->id, $occurrence->payload);
+// The handler gets the tick's whole batch, oldest first, and owns how the
+// work runs: one round trip for the lot, a coroutine per schedule, or a
+// plain loop.
+$scheduler->run(function (array $occurrences) use ($queue): void {
+    foreach ($occurrences as $occurrence) {
+        // $occurrence->id      — the row's identity
+        // $occurrence->due     — when the run was scheduled for
+        // $occurrence->payload — whatever make() attached
+        // $occurrence->key()   — stable identity for deduplication
+        $queue->enqueue($occurrence->id, $occurrence->payload);
+    }
 });
 ```
+
+The scheduler decides *what runs when* and hands the batch over; it has no opinion about how the work is done. Batch it into one round trip, fan it out across coroutines, keep it serial — that is the handler's choice, because the right answer differs per workload. A handler must only return once its work has settled, since the window is committed as soon as it returns.
 
 `run()` ticks on a wall-anchored cadence: it sleeps to the next multiple of the tick interval instead of sleeping a fixed span after variable work, so the tick phase never drifts. A handler exception propagates before the tick commits, which means a supervised restart re-delivers the tick instead of losing it. Reconciliation errors go the other way — through the `onError` callback, leaving the last good view dispatching, because stale schedules beat a stopped scheduler. Call `stop()` — from the handler or a signal handler — to return after the current tick completes.
 
@@ -113,7 +121,31 @@ Leadership and the watermark share one lifecycle — the leader advances both on
 - **Failover resumes coverage.** A successor takes the watermark from the claim it inherits: occurrences missed in the handover are delivered on its first tick, oldest first, bounded by `lookback` (default 300 seconds).
 - **Commits are fenced.** A deposed leader's late commit no longer matches the stored token: nothing is written, the watermark never rewinds, and the new leader re-covers the in-flight window. A handover can duplicate a tick's occurrences; it can never lose them.
 
-Tune with the `lease` option (seconds a claim lives without a commit; must outlive at least two ticks) and `token` (the instance identity; defaults to a random one). Replica clocks must agree to within a fraction of the lease. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `list()` — and give each partition its own `State` record; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
+Tune with the `lease` option (seconds a claim lives before it must be renewed; must outlive at least two ticks) and `token` (the instance identity; defaults to a random one). A tick renews the claim before handing work over, so the lease has to exceed the time one batch takes: a slower handler loses leadership mid-dispatch, which costs a re-delivered window and shows up as `schedule.error.total{stage="lease"}` rather than passing silently. Replica clocks must agree to within a fraction of the lease. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `list()` — and give each partition its own `State` record; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
+
+## Deduplication
+
+Delivery is at-least-once, so a failover or a retried tick can hand the same run over twice. `Occurrence::key()` returns that run's stable identity — the schedule plus the moment it was due — and deriving the downstream identity from it turns a second delivery into a conflict the consumer ignores:
+
+```php
+<?php
+
+$scheduler->run(function (array $occurrences) use ($database): void {
+    foreach ($occurrences as $occurrence) {
+        try {
+            $database->createDocument('jobs', new Document([
+                '$id' => \substr(\md5($occurrence->key()), 0, 32), // deterministic
+                'scheduleId' => $occurrence->id,
+                'dueAt' => $occurrence->due->format('Y-m-d H:i:s'),
+            ]));
+        } catch (Duplicate) {
+            // already created by an earlier delivery of this same run
+        }
+    }
+});
+```
+
+That is how at-least-once transport becomes effectively-once work, and it is the same trick Kubernetes plays by naming each CronJob's Job after its scheduled minute. A consumer that instead claims the row before publishing (an `UPDATE … WHERE status = 'pending'`) gets the same property from the other direction; the scheduler stays out of the way of either.
 
 ## Delivery model
 
@@ -131,7 +163,7 @@ foreach ($scheduler->tick() as $occurrence) {
 $scheduler->commit();
 ```
 
-`tick()` confirms (or takes) leadership and selects the next window's occurrences without advancing the watermark; `commit()` advances it and renews the claim in one swap. Skip `commit()` when handling fails and the next `tick()` re-delivers — at-least-once, by construction. With the default `lookahead: 0`, occurrences are handed over after they fall due, late by at most one tick interval (default 1 second). Setting `lookahead` hands future occurrences over early — `$occurrence->due` says when they are meant to run — for callers that enqueue with precise delays, at the cost of losing occurrences committed but not yet run when a crash hits.
+`tick()` confirms (or takes) leadership and selects the next window's occurrences without advancing the watermark; `commit()` advances it and renews the claim in one swap. A retry loop keeps its leadership: `tick()` renews the claim when it is more than half spent, so retrying for longer than the lease does not hand the window to a standby mid-retry. Skip `commit()` when handling fails and the next `tick()` re-delivers — at-least-once, by construction. With the default `lookahead: 0`, occurrences are handed over after they fall due, late by at most one tick interval (default 1 second). Setting `lookahead` hands future occurrences over early — `$occurrence->due` says when they are meant to run — for callers that enqueue with precise delays, at the cost of losing occurrences committed but not yet run when a crash hits.
 
 ## Metrics
 
@@ -142,7 +174,7 @@ Pass a `utopia-php/telemetry` adapter and the scheduler records the four golden 
 | Latency | `schedule.dispatch.delay` (histogram, s) | how late each occurrence was handed to the handler |
 | Latency | `schedule.tick.duration`, `schedule.reconcile.duration` (histograms, s) | time spent selecting and syncing |
 | Traffic | `schedule.dispatch.total` (counter), `schedule.entries` (gauge) | occurrences dispatched; schedules in memory |
-| Errors | `schedule.error.total` (counter, `stage` attribute) | reconcile, make, and dispatch failures |
+| Errors | `schedule.error.total` (counter, `stage` attribute) | `reconcile`, `make` and `dispatch` failures, plus `lease` when a commit is fenced because leadership was lost mid-tick |
 | Saturation | `schedule.lag` (gauge, s) | how far the window start trails "now" — steady at about one interval; growing means the loop is falling behind |
 
 ## Testing time

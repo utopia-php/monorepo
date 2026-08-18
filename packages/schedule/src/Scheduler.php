@@ -43,13 +43,22 @@ use Utopia\Telemetry\Histogram;
  *   feed can see. Incremental syncs are an optimization between full
  *   snapshots, never the correctness mechanism.
  * - Leadership and the watermark share one claim: a commit renews the
- *   lease and advances coverage in a single compare-and-swap. Replicas
+ *   lease and advances coverage in a single compare-and-swap, and a tick
+ *   renews it up front so the lease covers the dispatch ahead. Replicas
  *   sharing a {@see State} elect one dispatcher, a standby takes over
  *   when the claim expires, and a deposed leader's late commit is
  *   fenced instead of rewriting coverage — failover trades duplicates,
- *   never losses.
+ *   never losses. Duplicates stop being work when the consumer derives
+ *   its identity from {@see Occurrence::key()}.
  *
- * One instance is one loop: drive it from a single coroutine or process.
+ * One instance is one loop: reconciliation, selection and the commit all
+ * run on the caller's stack, so the schedule map is never touched
+ * concurrently and needs no locking. Everything about *how* a tick's
+ * occurrences are processed — batching them into one round trip, fanning
+ * them out across coroutines, isolating a failure — belongs to the
+ * handler, which receives the whole batch. Two loops over one instance
+ * are not supported; two loops over one {@see State} are — that is the
+ * leader election.
  *
  * @phpstan-type Registered array{schedule: Schedule, payload: mixed, version: string, coverFrom: \DateTimeImmutable|null}
  */
@@ -114,8 +123,12 @@ final class Scheduler
      *                       early hand-off: callers receive future occurrences (`$occurrence->due`)
      *                       to schedule precisely, but a crash after commit loses them.
      * @param int $lookback ceiling, in seconds, on how far behind the watermark may start a window
-     * @param int $lease seconds a leadership claim lives without a commit renewing it; a standby
-     *                   takes over this long after the leader stops committing
+     * @param int $lease seconds a leadership claim lives before it must be renewed; a standby
+     *                   takes over this long after the leader stops ticking. A tick renews the
+     *                   claim before dispatching, so this must exceed the time one batch takes
+     *                   to hand over — a slower handler loses leadership mid-dispatch, which
+     *                   costs a re-delivered window and shows up as
+     *                   schedule.error.total{stage="lease"}
      * @param string|null $token this instance's identity in the claim; defaults to a random one
      * @param Telemetry $telemetry metric backend; the four golden signals are recorded as
      *                             schedule.dispatch.delay and schedule.tick.duration (latency),
@@ -370,7 +383,11 @@ final class Scheduler
         );
 
         if (!$this->state->swap($this->token, $next)) {
-            $this->clearPending(); // deposed mid-tick: the new leader re-covers this window
+            // Deposed mid-tick: the new leader re-covers this window, so
+            // nothing is lost — but a lease shorter than a dispatch takes
+            // would do this every tick, which is worth seeing.
+            $this->errorTotal->add(1, ['stage' => 'lease']);
+            $this->clearPending();
 
             return;
         }
@@ -405,7 +422,15 @@ final class Scheduler
      * go through onError and leave the last good view dispatching —
      * stale schedules beat a stopped scheduler.
      *
-     * @param callable(Occurrence): void $handler
+     * The handler receives the tick's whole batch, oldest first, and owns
+     * how it runs: one round trip for the lot, a coroutine per schedule,
+     * or a plain loop. It must return only once that work has settled,
+     * because the window is committed as soon as it returns. Throwing
+     * means "do not commit", so the whole batch is re-delivered next
+     * tick; to isolate one bad schedule instead, catch inside the handler
+     * and return normally.
+     *
+     * @param callable(list<Occurrence>): void $handler
      */
     public function run(callable $handler): void
     {
@@ -434,20 +459,25 @@ final class Scheduler
                     }
                 }
 
-                foreach ($this->tick() as $occurrence) {
+                $occurrences = $this->tick();
+                if ($occurrences !== []) {
+                    // One clock read for the batch: lateness is measured at
+                    // hand-over, so the metric stays about the scheduler's
+                    // own punctuality rather than the handler's duration.
+                    $handedOver = (float) $this->clock->now()->format('U.u');
+
                     try {
-                        $handler($occurrence);
+                        $handler($occurrences);
                     } catch (\Throwable $error) {
                         $this->errorTotal->add(1, ['stage' => 'dispatch']);
 
                         throw $error;
                     }
 
-                    $this->dispatchTotal->add(1);
-                    $this->dispatchDelay->record(max(
-                        0.0,
-                        (float) $this->clock->now()->format('U.u') - (float) $occurrence->due->format('U.u'),
-                    ));
+                    $this->dispatchTotal->add(\count($occurrences));
+                    foreach ($occurrences as $occurrence) {
+                        $this->dispatchDelay->record(max(0.0, $handedOver - (float) $occurrence->due->format('U.u')));
+                    }
                 }
 
                 $this->commit();
@@ -493,7 +523,22 @@ final class Scheduler
 
         if ($claim instanceof Claim) {
             if ($claim->token === $this->token) {
-                return $claim;
+                // Renew before the tick, not only at commit, so the lease
+                // covers the dispatch ahead instead of the gap since the
+                // last commit. Half a lease of slack keeps this to one
+                // extra write per lease rather than one per tick.
+                if ($claim->expiresAt - $now >= $this->lease / 2) {
+                    return $claim;
+                }
+
+                $renewed = new Claim($this->token, $now + $this->lease, $claim->windowEnd);
+                if ($this->state->swap($this->token, $renewed)) {
+                    return $renewed;
+                }
+
+                $this->clearPending();
+
+                return null; // lost the claim between load and swap
             }
 
             if ($claim->expiresAt > $now) {

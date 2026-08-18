@@ -189,8 +189,10 @@ final class SchedulerTest extends TestCase
         $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], interval: 60);
 
         $seen = [];
-        $scheduler->run(function (Occurrence $occurrence) use (&$seen, $scheduler, $clock): void {
-            $seen[] = [$occurrence->due->format('H:i:s'), $clock->now()->format('H:i:s')];
+        $scheduler->run(function (array $occurrences) use (&$seen, $scheduler, $clock): void {
+            foreach ($occurrences as $occurrence) {
+                $seen[] = [$occurrence->due->format('H:i:s'), $clock->now()->format('H:i:s')];
+            }
             if (\count($seen) === 2) {
                 $scheduler->stop();
             }
@@ -214,8 +216,10 @@ final class SchedulerTest extends TestCase
         $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], state: $state, interval: 60, token: 'standby');
 
         $delivered = [];
-        $scheduler->run(function (Occurrence $occurrence) use (&$delivered, $scheduler): void {
-            $delivered[] = $occurrence->due->format('H:i:s');
+        $scheduler->run(function (array $occurrences) use (&$delivered, $scheduler): void {
+            foreach ($occurrences as $occurrence) {
+                $delivered[] = $occurrence->due->format('H:i:s');
+            }
             $scheduler->stop();
         });
 
@@ -262,13 +266,128 @@ final class SchedulerTest extends TestCase
         $this->assertSame([], $leader->tick(), 'a deposed leader must not dispatch');
     }
 
+    public function testAFencedCommitIsCountedAsALeaseError(): void
+    {
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
+        $state = new MemoryState();
+        $telemetry = new TestTelemetry();
+
+        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'leader', telemetry: $telemetry);
+        $leader->tick();
+        $leader->commit();
+
+        $clock->advance(60.0);
+        $leader->tick(); // in flight, uncommitted
+
+        // A standby takes the expired claim, then the leader tries to commit.
+        $clock->advance(121.0);
+        $standby = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'standby');
+        $standby->tick();
+        $standby->commit();
+        $leader->commit();
+
+        /** @var list<float|int> $errors */
+        $errors = get_object_vars($telemetry->counters['schedule.error.total'])['values'];
+        $this->assertSame([1], $errors, 'losing the claim mid-tick must be visible, not silent');
+    }
+
+    public function testARetryingLoopKeepsItsClaimWhileItRetries(): void
+    {
+        // The documented retry pattern ticks without committing until the
+        // handler succeeds. Only a commit used to renew the claim, so a
+        // retry loop longer than the lease lost leadership to a standby
+        // and could then never commit — both instances re-covering the
+        // same window forever.
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
+        $state = new MemoryState();
+
+        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'leader', lease: 60);
+        $leader->tick();
+        $leader->commit(); // claim expires 03:01:30
+
+        $standby = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'standby', lease: 60);
+
+        // Two failed attempts, 40 seconds apart, neither committing.
+        foreach ([40.0, 40.0] as $backoff) {
+            $clock->advance($backoff);
+            $this->assertNotSame([], $leader->tick(), 'the retry keeps re-selecting its window');
+            $this->assertSame([], $standby->tick(), 'the claim must still be held while retrying');
+        }
+
+        // 80 seconds after the last commit — past the original lease — the
+        // retry finally succeeds and commits.
+        $leader->tick();
+        $leader->commit();
+        $this->assertSame('leader', $state->load()?->token);
+    }
+
+    public function testHandlerReceivesTheWholeTickAsOneBatch(): void
+    {
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
+        $scheduler = $this->scheduler($clock, [
+            'b' => new Cron('* * * * *'),
+            'a' => new Interval(30),
+        ], interval: 60);
+
+        $batches = [];
+        $scheduler->run(function (array $occurrences) use (&$batches, $scheduler): void {
+            $batches[] = array_map(
+                fn(Occurrence $occurrence): string => $occurrence->id . '@' . $occurrence->due->format('H:i:s'),
+                $occurrences,
+            );
+            if (\count($batches) === 2) {
+                $scheduler->stop();
+            }
+        });
+
+        // One call per tick carrying that tick's whole window, oldest
+        // first — batching, fan-out and failure isolation are all the
+        // handler's to choose. An empty window never calls the handler.
+        $this->assertSame([
+            ['a@03:00:30'],
+            ['a@03:01:00', 'b@03:01:00', 'a@03:01:30'],
+        ], $batches);
+    }
+
+    public function testOccurrenceKeyIsStableAcrossRedelivery(): void
+    {
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
+        $scheduler = $this->scheduler($clock, ['fn' => new Cron('* * * * *')]);
+        $scheduler->tick();
+        $scheduler->commit();
+
+        $clock->advance(95.0);
+
+        // An uncommitted tick is re-delivered; the key of each run must not
+        // move, or a consumer keyed on it would treat the retry as new work.
+        $first = array_map(fn(Occurrence $occurrence): string => $occurrence->key(), $scheduler->tick());
+        $again = array_map(fn(Occurrence $occurrence): string => $occurrence->key(), $scheduler->tick());
+
+        $this->assertCount(2, $first);
+        $this->assertSame($first, $again, 'a re-delivered run keeps its key');
+        $this->assertSame($first, array_unique($first), 'distinct runs need distinct keys');
+        $this->assertStringStartsWith('fn@', $first[0]);
+
+        // The key is (schedule, due moment) and nothing else: same run,
+        // same key, whatever payload it carries.
+        $due = new \DateTimeImmutable('2026-08-18 03:01:00');
+        $this->assertSame(
+            (new Occurrence('fn', $due, 'payload-a'))->key(),
+            (new Occurrence('fn', $due, 'payload-b'))->key(),
+        );
+        $this->assertNotSame(
+            (new Occurrence('fn', $due))->key(),
+            (new Occurrence('fn', $due->modify('+1 minute')))->key(),
+        );
+    }
+
     public function testGoldenSignalsAreRecorded(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
         $telemetry = new TestTelemetry();
         $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], interval: 60, telemetry: $telemetry);
 
-        $scheduler->run(function () use ($scheduler): void {
+        $scheduler->run(function (array $occurrences) use ($scheduler): void {
             $scheduler->stop();
         });
 
@@ -302,7 +421,7 @@ final class SchedulerTest extends TestCase
         $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], interval: 60, telemetry: $telemetry);
 
         try {
-            $scheduler->run(function (): never {
+            $scheduler->run(function (array $occurrences): never {
                 throw new \RuntimeException('downstream unavailable');
             });
             $this->fail('the handler failure must propagate');
@@ -350,6 +469,7 @@ final class SchedulerTest extends TestCase
         int $lookback = 300,
         ?string $token = null,
         ?TestTelemetry $telemetry = null,
+        ?int $lease = null,
     ): Scheduler {
         $rows = [];
         foreach (array_keys($schedules) as $id) {
