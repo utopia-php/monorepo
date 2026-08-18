@@ -13,7 +13,6 @@ use Utopia\Schedule\Source\Entry;
 use Utopia\Schedule\Source\Row;
 use Utopia\Schedule\State\Claim;
 use Utopia\Schedule\State\Memory as MemoryState;
-use Utopia\Schedule\Tick;
 use Utopia\Schedule\Trigger;
 use Utopia\Schedule\Trigger\At;
 use Utopia\Schedule\Trigger\Cron;
@@ -440,149 +439,6 @@ final class SchedulerTest extends TestCase
         $this->assertCount(1, $scheduler->tick());
     }
 
-    public function testEveryTickIsReportedWithATilingWindow(): void
-    {
-        $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
-        $ticks = [];
-
-        $scheduler = $this->scheduler(
-            $clock,
-            ['minutely' => new Cron('* * * * *')],
-            interval: 60,
-            onTick: function (Tick $tick) use (&$ticks): void {
-                $ticks[] = $tick;
-            },
-        );
-
-        $handled = 0;
-        $scheduler->run(function (array $occurrences) use (&$handled, $scheduler): void {
-            $handled += \count($occurrences);
-            if ($handled === 2) {
-                $scheduler->stop();
-            }
-        });
-
-        $this->assertNotEmpty($ticks);
-        $this->assertSame($handled, array_sum(array_map(fn(Tick $tick): int => $tick->count, $ticks)));
-
-        $previous = null;
-        foreach ($ticks as $tick) {
-            $this->assertTrue($tick->leader);
-            $this->assertTrue($tick->committed);
-            $this->assertInstanceOf(\DateTimeImmutable::class, $tick->windowStart);
-            $this->assertInstanceOf(\DateTimeImmutable::class, $tick->windowEnd);
-            $this->assertGreaterThanOrEqual(0.0, $tick->selectDuration);
-            $this->assertGreaterThanOrEqual(0.0, $tick->dispatchDuration);
-            $this->assertLessThanOrEqual($tick->startedAt, $tick->windowEnd, 'a window never reaches past its tick');
-
-            if ($previous instanceof Tick) {
-                // The reported windows tile exactly: what one tick closed,
-                // the next opens. This is the library's core invariant, seen
-                // from the outside.
-                $this->assertEquals($previous->windowEnd, $tick->windowStart);
-            }
-            $previous = $tick;
-        }
-
-        $this->assertSame(1, $ticks[\count($ticks) - 1]->count, 'the loop stops on a tick that dispatched');
-    }
-
-    public function testAFollowerReportsItsIdleTicks(): void
-    {
-        $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
-        $state = new MemoryState();
-        $state->swap(null, new Claim('incumbent', (float) $clock->now()->format('U') + 120.0, null));
-
-        $ticks = [];
-        $scheduler = $this->scheduler(
-            $clock,
-            ['minutely' => new Cron('* * * * *')],
-            state: $state,
-            interval: 60,
-            token: 'standby',
-            onTick: function (Tick $tick) use (&$ticks): void {
-                $ticks[] = $tick;
-            },
-        );
-
-        $scheduler->run(function (array $occurrences) use ($scheduler): void {
-            $scheduler->stop();
-        });
-
-        $followerTicks = array_values(array_filter($ticks, fn(Tick $tick): bool => !$tick->leader));
-        $leaderTicks = array_values(array_filter($ticks, fn(Tick $tick): bool => $tick->leader));
-
-        // The incumbent holds the claim for two minutes, so the standby
-        // reports its idling instead of going quiet.
-        $this->assertCount(2, $followerTicks);
-        foreach ($followerTicks as $tick) {
-            $this->assertNotInstanceOf(\DateTimeImmutable::class, $tick->windowStart, 'a follower selects no window');
-            $this->assertNotInstanceOf(\DateTimeImmutable::class, $tick->windowEnd);
-            $this->assertSame(0, $tick->count);
-            $this->assertFalse($tick->committed);
-        }
-
-        $this->assertNotEmpty($leaderTicks);
-        $this->assertSame(1, $leaderTicks[\count($leaderTicks) - 1]->count, 'the takeover goes on to dispatch');
-    }
-
-    public function testAFailedTickIsReportedAsUncommitted(): void
-    {
-        $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
-        $ticks = [];
-
-        $scheduler = $this->scheduler(
-            $clock,
-            ['minutely' => new Cron('* * * * *')],
-            interval: 60,
-            onTick: function (Tick $tick) use (&$ticks): void {
-                $ticks[] = $tick;
-            },
-        );
-
-        try {
-            $scheduler->run(function (array $occurrences): never {
-                throw new \RuntimeException('downstream unavailable');
-            });
-            $this->fail('the handler failure must propagate');
-        } catch (\RuntimeException) {
-        }
-
-        $failed = $ticks[\count($ticks) - 1];
-        $this->assertSame(1, $failed->count);
-        $this->assertFalse($failed->committed, 'a thrown handler leaves the window uncovered');
-        $this->assertTrue($failed->leader);
-    }
-
-    public function testAThrowingObserverCannotStopTheLoop(): void
-    {
-        $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
-        $telemetry = new TestTelemetry();
-
-        $scheduler = $this->scheduler(
-            $clock,
-            ['minutely' => new Cron('* * * * *')],
-            interval: 60,
-            telemetry: $telemetry,
-            onTick: function (Tick $tick): never {
-                throw new \RuntimeException('the exporter is down');
-            },
-        );
-
-        $delivered = 0;
-        $scheduler->run(function (array $occurrences) use (&$delivered, $scheduler): void {
-            $delivered += \count($occurrences);
-            $scheduler->stop();
-        });
-
-        $this->assertSame(1, $delivered, 'scheduling continues while observability fails');
-
-        /** @var list<float|int> $errors */
-        $errors = get_object_vars($telemetry->counters['schedule.error.total'])['values'];
-        $this->assertNotEmpty($errors, 'a dropped observer call is counted, not silent');
-        $this->assertSame([1], array_values(array_unique($errors)));
-    }
-
     public function testRejectsNonPositiveInterval(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -617,7 +473,6 @@ final class SchedulerTest extends TestCase
         ?string $token = null,
         ?TestTelemetry $telemetry = null,
         ?int $lease = null,
-        ?\Closure $onTick = null,
     ): Scheduler {
         $rows = [];
         foreach (array_keys($triggers) as $id) {
@@ -637,7 +492,6 @@ final class SchedulerTest extends TestCase
             lease: max(60, $interval * 4),
             token: $token,
             telemetry: $telemetry ?? new \Utopia\Telemetry\Adapter\None(),
-            onTick: $onTick,
         );
         $scheduler->reconcile();
 

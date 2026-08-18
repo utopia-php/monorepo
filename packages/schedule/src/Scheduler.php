@@ -81,8 +81,6 @@ final class Scheduler
      */
     private array $tombstones = [];
 
-    private ?\DateTimeImmutable $pendingWindowStart = null;
-
     private ?\DateTimeImmutable $pendingWindowEnd = null;
 
     /** @var array<string, string> delivered one-shots in the pending tick, id => version */
@@ -144,11 +142,6 @@ final class Scheduler
      * @param \Closure|null $onError receives reconciliation failures (a sync that throws, a row
      *                               `make` rejects) so dispatch keeps running on the last good
      *                               view; without it those failures rethrow
-     * @param \Closure|null $onTick receives a {@see Tick} after every iteration of
-     *                              {@see Scheduler::run()} — the hook for a span or a log line
-     *                              per tick. It cannot affect the loop: a throw from here is
-     *                              counted as schedule.error.total{stage="observer"} and dropped,
-     *                              because losing observability must not stop scheduling
      *
      * @throws \InvalidArgumentException on non-positive $interval, negative $lookahead/$lookback,
      *                                   or a $lease shorter than two ticks
@@ -164,7 +157,6 @@ final class Scheduler
         ?string $token = null,
         Telemetry $telemetry = new NoTelemetry(),
         private readonly ?\Closure $onError = null,
-        private readonly ?\Closure $onTick = null,
     ) {
         if ($interval < 1) {
             throw new \InvalidArgumentException('Tick interval must be at least 1 second');
@@ -324,7 +316,6 @@ final class Scheduler
             // Nothing to cover, but committing $start still initializes the
             // watermark on first run — and never rewinds it when the clock
             // has stepped backwards past the committed edge.
-            $this->pendingWindowStart = $start;
             $this->pendingWindowEnd = $start;
             $this->pendingOneShots = [];
             $this->pendingCovered = [];
@@ -362,7 +353,6 @@ final class Scheduler
 
         usort($occurrences, fn(Occurrence $a, Occurrence $b): int => $a->due <=> $b->due ?: $a->id <=> $b->id);
 
-        $this->pendingWindowStart = $start;
         $this->pendingWindowEnd = $end;
         $this->pendingOneShots = $oneShots;
         $this->pendingCovered = $covered;
@@ -385,7 +375,8 @@ final class Scheduler
      * mid-tick is left alone.
      *
      * @return bool whether the watermark advanced; false means the window
-     *              is re-covered next tick
+     *              is re-covered next tick, because the claim was lost
+     *              mid-tick or there was nothing pending
      */
     public function commit(): bool
     {
@@ -457,11 +448,7 @@ final class Scheduler
 
         try {
             while ($this->running) {
-                $iterationStart = $this->clock->now();
-                $selectStart = microtime(true);
-
                 if (!$this->elect() instanceof Claim) {
-                    $this->observe(new Tick($iterationStart, false, null, null, 0, microtime(true) - $selectStart, 0.0, false));
                     $this->clock->sleep((float) $this->interval);
                     continue;
                 }
@@ -483,48 +470,27 @@ final class Scheduler
                 }
 
                 $occurrences = $this->tick();
-                $windowStart = $this->pendingWindowStart;
-                $windowEnd = $this->pendingWindowEnd;
-                $selectDuration = microtime(true) - $selectStart;
-                $dispatchStart = microtime(true);
-                $committed = false;
+                if ($occurrences !== []) {
+                    // One clock read for the batch: lateness is measured at
+                    // hand-over, so the metric stays about the scheduler's
+                    // own punctuality rather than the handler's duration.
+                    $handedOver = (float) $this->clock->now()->format('U.u');
 
-                try {
-                    if ($occurrences !== []) {
-                        // One clock read for the batch: lateness is measured at
-                        // hand-over, so the metric stays about the scheduler's
-                        // own punctuality rather than the handler's duration.
-                        $handedOver = (float) $this->clock->now()->format('U.u');
+                    try {
+                        $handler($occurrences);
+                    } catch (\Throwable $error) {
+                        $this->errorTotal->add(1, ['stage' => 'dispatch']);
 
-                        try {
-                            $handler($occurrences);
-                        } catch (\Throwable $error) {
-                            $this->errorTotal->add(1, ['stage' => 'dispatch']);
-
-                            throw $error;
-                        }
-
-                        $this->dispatchTotal->add(\count($occurrences));
-                        foreach ($occurrences as $occurrence) {
-                            $this->dispatchDelay->record(max(0.0, $handedOver - (float) $occurrence->due->format('U.u')));
-                        }
+                        throw $error;
                     }
 
-                    $committed = $this->commit();
-                } finally {
-                    // Reported even when the handler threw, so a failing tick
-                    // is as visible as a healthy one.
-                    $this->observe(new Tick(
-                        $iterationStart,
-                        true,
-                        $windowStart,
-                        $windowEnd,
-                        \count($occurrences),
-                        $selectDuration,
-                        microtime(true) - $dispatchStart,
-                        $committed,
-                    ));
+                    $this->dispatchTotal->add(\count($occurrences));
+                    foreach ($occurrences as $occurrence) {
+                        $this->dispatchDelay->record(max(0.0, $handedOver - (float) $occurrence->due->format('U.u')));
+                    }
                 }
+
+                $this->commit();
 
                 if (!$this->running) {
                     break;
@@ -623,24 +589,9 @@ final class Scheduler
 
     private function clearPending(): void
     {
-        $this->pendingWindowStart = null;
         $this->pendingWindowEnd = null;
         $this->pendingOneShots = [];
         $this->pendingCovered = [];
-    }
-
-    private function observe(Tick $tick): void
-    {
-        if (!$this->onTick instanceof \Closure) {
-            return;
-        }
-
-        try {
-            ($this->onTick)($tick);
-        } catch (\Throwable) {
-            // An observer must never stop the loop; the counter is the report.
-            $this->errorTotal->add(1, ['stage' => 'observer']);
-        }
     }
 
     private function report(\Throwable $error, string $stage): void

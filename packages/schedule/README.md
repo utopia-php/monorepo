@@ -181,38 +181,28 @@ Pass a `utopia-php/telemetry` adapter and the scheduler records the four golden 
 
 ## Tracing
 
-Metrics say how the scheduler is behaving; the `onTick` hook says what just happened. It receives a `Tick` after every iteration — the window covered, how many runs it carried, how long selection and the handler each took, whether this instance was leading, and whether the coverage stuck — which is everything needed for a span or a log line per tick:
+Everything worth tracing happens in code you own. The handler is the natural place for a span per run — it receives the batch, and each `Occurrence` carries its schedule, due time and `key()`:
 
 ```php
 <?php
 
-use Utopia\Schedule\Scheduler;
-use Utopia\Schedule\Tick;
 use Utopia\Span\Span;
 
-$scheduler = new Scheduler(
-    source: $source,
-    state: $state,
-    onTick: function (Tick $tick): void {
-        Span::init('schedule.tick')
-            ->set('span.started_at', (float) $tick->startedAt->format('U.u'))
-            ->set('schedule.window.start', $tick->windowStart?->format('c'))
-            ->set('schedule.window.end', $tick->windowEnd?->format('c'))
-            ->set('schedule.occurrences', $tick->count)
-            ->set('schedule.select_duration', $tick->selectDuration)
-            ->set('schedule.dispatch_duration', $tick->dispatchDuration)
-            ->set('schedule.leader', $tick->leader)
-            ->set('schedule.committed', $tick->committed)
-            ->finish();
-    },
-);
+$scheduler->run(function (array $occurrences) use ($queue): void {
+    foreach ($occurrences as $occurrence) {
+        Span::init('schedule.enqueue');
+        try {
+            Span::add('schedule.id', $occurrence->id);
+            Span::add('schedule.due', $occurrence->due->format('c'));
+            $queue->enqueue($occurrence->id, $occurrence->payload);
+        } finally {
+            Span::current()?->finish();
+        }
+    }
+});
 ```
 
-Splitting `selectDuration` from `dispatchDuration` is deliberate: the first is what the scheduler itself costs and grows with the fleet, the second is the handler's and has to stay well inside both the tick interval and the lease. A tick with `committed: false` means its window will be re-covered — the handler threw, or leadership was lost mid-tick.
-
-The hook cannot break the loop. An exception thrown by the observer is counted as `schedule.error.total{stage="observer"}` and dropped, because losing observability must never stop scheduling.
-
-Everything else is already yours to instrument: the handler, `list`, `make`, `changes` and `onError` are all your closures, so a span around a publish or a source query needs nothing from this library. `commit()` also returns whether the watermark advanced, for callers driving `tick()`/`commit()` themselves.
+`list`, `make`, `changes` and `onError` are your closures too, so a span around a source query needs nothing from this library either. What happens inside the loop is reported as metrics rather than spans: selection cost as `schedule.tick.duration`, a lost claim as `schedule.error.total{stage="lease"}`, liveness as `schedule.lag` and `schedule.entries`. If you want per-tick control — a span covering the window, or a log line on an empty tick — drive `tick()`/`commit()` yourself; `commit()` returns whether the watermark advanced.
 
 ## Testing time
 
