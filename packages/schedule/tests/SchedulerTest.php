@@ -17,6 +17,7 @@ use Utopia\Schedule\Trigger;
 use Utopia\Schedule\Trigger\At;
 use Utopia\Schedule\Trigger\Cron;
 use Utopia\Schedule\Trigger\Interval;
+use Utopia\Schedule\Trigger\Shifted;
 use Utopia\Telemetry\Adapter\Test as TestTelemetry;
 
 final class SchedulerTest extends TestCase
@@ -377,27 +378,23 @@ final class SchedulerTest extends TestCase
 
     /**
      * A burst that all falls due in the same second is what makes a
-     * scheduler's own punctuality someone else's outage. The offset spreads
-     * delivery across the tick that covers it.
+     * scheduler's own punctuality someone else's outage. A source spreads it
+     * by shifting each schedule, and delivery follows the due times.
      */
-    public function testAnOffsetSpreadsOneSecondsWorthOfRunsAcrossTheTick(): void
+    public function testShiftedSchedulesSpreadAcrossTheTickTheyFallIn(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:00.000000'));
+        $offsets = ['a' => 0, 'b' => 20, 'c' => 40];
         $scheduler = new Scheduler(
             source: new SnapshotSource(
                 snapshot: fn(): array => [new Row('a', '1'), new Row('b', '1'), new Row('c', '1')],
-                make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
+                // What a caller with thousands of schedules on `* * * * *`
+                // writes: a stable position per id, so each keeps its slot.
+                make: fn(Row $row): Entry => new Entry(new Shifted(new Cron('* * * * *'), $offsets[$row->id])),
             ),
             tickSeconds: 60,
             leadSeconds: 60,
             leaseSeconds: 300,
-            // What a caller with thousands of schedules on `* * * * *` writes:
-            // a stable position per id, so the same schedule keeps its slot.
-            offset: fn(Occurrence $occurrence): int => match ($occurrence->id) {
-                'a' => 0,
-                'b' => 20,
-                default => 40,
-            },
             clock: $clock,
         );
         $scheduler->reconcile();
@@ -427,13 +424,12 @@ final class SchedulerTest extends TestCase
         $scheduler = new Scheduler(
             source: new SnapshotSource(
                 snapshot: fn(): array => [new Row('held', '1')],
-                make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
+                make: fn(Row $row): Entry => new Entry(new Shifted(new Cron('* * * * *'), 30)),
             ),
             store: $store,
             tickSeconds: 60,
             leadSeconds: 60,
             leaseSeconds: 300,
-            offset: fn(Occurrence $occurrence): int => 30,
             clock: $clock,
         );
         $scheduler->reconcile();
@@ -478,7 +474,7 @@ final class SchedulerTest extends TestCase
                 snapshot: fn(): array => $clock->now() >= $cancelledAt
                     ? [new Row('kept', '1')]
                     : [new Row('doomed', '1'), new Row('kept', '1')],
-                make: fn(Row $row): Entry => new Entry(new Cron('* * * * *'), $row->id),
+                make: fn(Row $row): Entry => new Entry(new Shifted(new Cron('* * * * *'), 30), $row->id),
             ),
             tickSeconds: 60,
             syncSeconds: 5,
@@ -486,7 +482,6 @@ final class SchedulerTest extends TestCase
             leaseSeconds: 300,
             // Both fall due in the same second and are held back, which is
             // the window the cancellation lands in.
-            offset: fn(Occurrence $occurrence): int => 30,
             clock: $clock,
         );
         $scheduler->reconcile();
@@ -530,14 +525,13 @@ final class SchedulerTest extends TestCase
         $scheduler = new Scheduler(
             source: new SnapshotSource(
                 snapshot: $snapshot,
-                make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
+                make: fn(Row $row): Entry => new Entry(new Shifted(new Cron('* * * * *'), 30)),
             ),
             store: $store,
             tickSeconds: 60,
             syncSeconds: 5,
             leadSeconds: 60,
             leaseSeconds: 300,
-            offset: fn(Occurrence $occurrence): int => 30,
             token: 'leader',
             clock: $clock,
         );

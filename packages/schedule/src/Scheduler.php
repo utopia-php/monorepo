@@ -155,10 +155,6 @@ final class Scheduler
      *                               occurrences has gone out, and losing leadership mid-delivery
      *                               costs a re-delivered window, reported as
      *                               schedule.error.total{stage="lease"}
-     * @param (\Closure(Occurrence): int)|null $offset seconds to hold a due occurrence back, given the occurrence,
-     *                                spreading a same-second burst across the tick that covers
-     *                                it. Derive it from the id so a schedule keeps its slot. An
-     *                                offset longer than the tick cadence delays the next tick
      * @param string|null $token this instance's identity in the claim; defaults to a random one
      * @param Clock $clock time source; swap for {@see Clock\Test} in tests
      * @param Telemetry $telemetry metric backend; the four golden signals are recorded as
@@ -183,7 +179,6 @@ final class Scheduler
         ?int $snapshotSeconds = null,
         ?int $recoverSeconds = null,
         ?int $leaseSeconds = null,
-        private readonly ?\Closure $offset = null,
         ?string $token = null,
         private readonly Clock $clock = new SystemClock(),
         Telemetry $telemetry = new NoTelemetry(),
@@ -531,10 +526,7 @@ final class Scheduler
         /** @var array<string, list<Occurrence>> $batches */
         $batches = [];
         foreach ($occurrences as $occurrence) {
-            $at = (float) $occurrence->due->format('U.u')
-                + ($this->offset instanceof \Closure ? max(0, ($this->offset)($occurrence)) : 0);
-
-            $batches[\sprintf('%.6F', $at)][] = $occurrence;
+            $batches[$occurrence->due->format('U.u')][] = $occurrence;
         }
 
         ksort($batches, SORT_NUMERIC);

@@ -181,6 +181,29 @@ $scheduler->run(function (array $occurrences) use ($database): void {
 
 That is how at-least-once transport becomes effectively-once work, and it is the same trick Kubernetes plays by naming each CronJob's Job after its scheduled minute. A consumer that instead claims the row before publishing (an `UPDATE … WHERE status = 'pending'`) gets the same property from the other direction; the scheduler stays out of the way of either.
 
+### Spreading a burst
+
+Schedules that share an expression share their due second: `* * * * *` across three thousand rows is three thousand publishes at :00 and nothing for the rest of the minute. Shift each schedule by an offset derived from its id and the burst spreads across the minute, with every row keeping its slot across deploys:
+
+```php
+<?php
+
+use Utopia\Schedule\Trigger\Cron;
+use Utopia\Schedule\Trigger\Shifted;
+
+public function make(Row $row): Entry
+{
+    $expression = $row->data->getAttribute('schedule');
+
+    return new Entry(
+        trigger: new Shifted(new Cron($expression), \abs(\crc32($row->id)) % 60),
+        payload: $row->data,
+    );
+}
+```
+
+The shift belongs to the schedule, not to delivery: the occurrence's `due` *is* the moment it runs, so the window that covers it covers the shifted time, the watermark commits the shifted time, and a restart neither repeats nor loses it. `Shifted` moves the window back and the results forward, so occurrences still land in exactly one window.
+
 ## Delivery model
 
 `run()` hands each occurrence over when it falls due, not when it was selected. A tick that selects `leadSeconds` ahead is what buys the scheduler the room to wait for the exact second, once, instead of every handler doing it:
@@ -194,10 +217,6 @@ $scheduler = new Scheduler(
     tickSeconds: 60,
     syncSeconds: 10,
     leadSeconds: 60,
-    // Thousands of schedules on `* * * * *` all fall due in the same second.
-    // A deterministic offset spreads them across the tick that covers them,
-    // and each keeps its slot across deploys.
-    offset: fn (Occurrence $occurrence): int => \abs(\crc32($occurrence->id)) % 60,
 );
 ```
 
@@ -205,7 +224,7 @@ Occurrences sharing a moment are handed over together; ones already past due —
 
 Two consequences worth planning for:
 
-- **A tick occupies up to `tickSeconds + leadSeconds`.** Keep any `offset` inside one tick; an offset longer than that delays the next tick, and the wall-anchored loop then skips to the following boundary.
+- **A tick occupies up to `tickSeconds + leadSeconds`.** A schedule due beyond that is simply selected by a later tick; the wall-anchored loop keeps its phase either way.
 - **`leaseSeconds` must outlive delivery**, which is why it defaults to three ticks of it and refuses to be shorter than two. A lease that expires mid-delivery hands the window to a standby and costs a re-delivered tick, reported as `schedule.error.total{stage="lease"}`.
 
 A handler that defers work of its own — enqueueing with a delay, say — should ask `isCurrent($occurrence)` when that work comes due, since only the scheduler knows which version of a definition it is currently reconciled to.
@@ -281,7 +300,7 @@ Each contract sits at the root of `src/` with its implementations in a folder be
 ```text
 Scheduler.php          the loop
 Occurrence.php         what a handler receives
-Trigger.php            when a schedule runs — Trigger/{Cron,Interval,At}.php
+Trigger.php            when a schedule runs — Trigger/{Cron,Interval,At,Shifted}.php
 Source.php             where schedules come from — Source/{Row,Entry}.php
 Changes.php            a source that can also report what changed
 Claim.php              leadership and coverage in one record
