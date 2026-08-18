@@ -9,11 +9,47 @@ use Utopia\Servers\Hook;
 use Utopia\Telemetry\Adapter as Telemetry;
 use Utopia\Telemetry\Adapter\None as NoTelemetry;
 use Utopia\Telemetry\Histogram;
-use Utopia\Telemetry\ObservableGauge;
 use Utopia\Validator;
 
 class Server
 {
+    /**
+     * Bucket boundaries for the duration histograms, in seconds.
+     *
+     * A queue spans a wider range than a web request: a job can be picked up
+     * in milliseconds or sit behind an hour of backlog. The OpenTelemetry
+     * defaults stop at 10 seconds, which puts every observation of a slow
+     * queue in the overflow bucket and makes every quantile read exactly 10.
+     *
+     * @var list<float|int>
+     */
+    private const array DURATION_BUCKETS = [
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.075,
+        0.1,
+        0.25,
+        0.5,
+        0.75,
+        1,
+        2.5,
+        5,
+        7.5,
+        10,
+        20,
+        30,
+        60,
+        120,
+        300,
+        600,
+        1200,
+        1800,
+        3600,
+        7200,
+    ];
+
     /**
      * Job
      */
@@ -75,7 +111,6 @@ class Server
 
     private Histogram $jobWaitTime;
     private Histogram $processDuration;
-    private ObservableGauge $queueDepth;
 
     /**
      * Creates an instance of a Queue server.
@@ -166,24 +201,7 @@ class Server
             'messaging.process.wait.duration',
             's',
             null,
-            [
-                'ExplicitBucketBoundaries' => [
-                    0.005,
-                    0.01,
-                    0.025,
-                    0.05,
-                    0.075,
-                    0.1,
-                    0.25,
-                    0.5,
-                    0.75,
-                    1,
-                    2.5,
-                    5,
-                    7.5,
-                    10,
-                ],
-            ],
+            ['ExplicitBucketBoundaries' => self::DURATION_BUCKETS],
         );
 
         // https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/#metric-messagingprocessduration
@@ -191,33 +209,33 @@ class Server
             'messaging.process.duration',
             's',
             null,
-            [
-                'ExplicitBucketBoundaries' => [
-                    0.005,
-                    0.01,
-                    0.025,
-                    0.05,
-                    0.075,
-                    0.1,
-                    0.25,
-                    0.5,
-                    0.75,
-                    1,
-                    2.5,
-                    5,
-                    7.5,
-                    10,
-                ],
-            ],
+            ['ExplicitBucketBoundaries' => self::DURATION_BUCKETS],
         );
 
-        $this->queueDepth = $telemetry->createObservableGauge(
+        $this->createDepthGauge(
+            $telemetry,
             'messaging.queue.depth',
-            '{message}',
             'Number of pending messages in the queue.',
+            failedJobs: false,
         );
 
-        $this->queueDepth->observe(function (callable $observe): void {
+        $this->createDepthGauge(
+            $telemetry,
+            'messaging.queue.failed.depth',
+            'Number of messages in the failed queue.',
+            failedJobs: true,
+        );
+    }
+
+    private function createDepthGauge(
+        Telemetry $telemetry,
+        string $name,
+        string $description,
+        bool $failedJobs,
+    ): void {
+        $gauge = $telemetry->createObservableGauge($name, '{message}', $description);
+
+        $gauge->observe(function (callable $observe) use ($failedJobs): void {
             if (!$this->adapter->consumer instanceof Publisher) {
                 return;
             }
@@ -228,7 +246,7 @@ class Server
                 $queue = new Queue($queueName, $this->adapter->namespace);
 
                 try {
-                    $size = $this->adapter->consumer->getQueueSize($queue);
+                    $size = $this->adapter->consumer->getQueueSize($queue, $failedJobs);
                 } catch (Throwable) {
                     continue;
                 }
