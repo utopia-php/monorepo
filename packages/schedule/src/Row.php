@@ -19,11 +19,14 @@ final readonly class Row
      * @param mixed $data raw source data, passed through to `make`
      * @param bool $active false marks a soft-deleted row: the entry is removed in both
      *                     full and incremental syncs
-     * @param \DateTimeImmutable|null $activeFrom occurrences before this moment are never
-     *                                            delivered — set it to the row's last change
-     *                                            time so a schedule created or edited during
-     *                                            downtime does not backfill under the old
-     *                                            watermark with the old definition
+     * @param \DateTimeImmutable|null $activeFrom the moment this definition takes effect —
+     *                                            set it to the row's last change time. Occurrences
+     *                                            before it are never delivered (no backfill under
+     *                                            an old watermark with an old definition), and
+     *                                            occurrences after it are delivered even when the
+     *                                            watermark passed them before the row was
+     *                                            discovered — late, never never. Without it,
+     *                                            coverage falls back to the previous sync time
      */
     public function __construct(
         public string $id,

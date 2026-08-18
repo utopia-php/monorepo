@@ -24,11 +24,9 @@
         "utopia-php/telemetry": "^0.4"
     },
     "require-dev": {
-        "phpunit/phpunit": "^12",
-        "utopia-php/lock": "^0.3"
+        "phpunit/phpunit": "^12"
     },
     "suggest": {
-        "utopia-php/lock": "Required when using LockLease for leader election across replicas",
         "ext-opentelemetry": "Required by utopia-php/telemetry when using OpenTelemetry metrics",
         "ext-protobuf": "Required by utopia-php/telemetry when using OpenTelemetry metrics"
     },

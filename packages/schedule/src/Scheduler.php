@@ -21,26 +21,37 @@ use Utopia\Telemetry\Histogram;
  *   moving "now". A minute boundary the loop crosses mid-evaluation
  *   cannot drop the occurrence sitting on it.
  * - Windows tile: each opens where the previous committed window closed
- *   (the watermark, held in {@see State}). Nothing falls between ticks,
- *   and with shared state nothing falls across a restart either.
- * - Delivery is at-least-once: {@see Scheduler::commit()} advances the
- *   watermark only after the caller has handled a tick's occurrences.
- *   A crash mid-tick re-delivers; it never silently skips.
+ *   (the watermark, part of the {@see Claim} held in {@see State}).
+ *   Nothing falls between ticks, and with shared state nothing falls
+ *   across a restart either.
+ * - Delivery is at-least-once within the lookback horizon:
+ *   {@see Scheduler::commit()} advances the watermark only after the
+ *   caller has handled a tick's occurrences. A crash mid-tick
+ *   re-delivers; it never silently skips.
  * - Catch-up is bounded: a watermark older than $lookback seconds is
  *   clamped, so recovery after a long outage replays a capped burst
  *   instead of everything since the outage began.
+ * - Coverage extends to late discoveries: an entry that appears or
+ *   changes between syncs is covered once from its own start — its
+ *   activeFrom, or the previous sync — even when the watermark has
+ *   already passed it. A one-shot due sooner than the sync lag runs
+ *   late, never never.
  * - The watermark never rewinds: a clock stepping backwards produces
  *   empty windows instead of duplicating already-delivered occurrences.
  * - Reconciliation is level-based: a full snapshot diff converges
  *   additions, updates and removals — including hard deletes no change
  *   feed can see. Incremental syncs are an optimization between full
  *   snapshots, never the correctness mechanism.
- * - With a {@see Lease}, replicas elect one dispatcher; failover resumes
- *   from the committed watermark, trading duplicates for losses never.
+ * - Leadership and the watermark share one claim: a commit renews the
+ *   lease and advances coverage in a single compare-and-swap. Replicas
+ *   sharing a {@see State} elect one dispatcher, a standby takes over
+ *   when the claim expires, and a deposed leader's late commit is
+ *   fenced instead of rewriting coverage — failover trades duplicates,
+ *   never losses.
  *
  * One instance is one loop: drive it from a single coroutine or process.
  *
- * @phpstan-type Registered array{schedule: Schedule, payload: mixed, version: string, activeFrom: \DateTimeImmutable|null}
+ * @phpstan-type Registered array{schedule: Schedule, payload: mixed, version: string, coverFrom: \DateTimeImmutable|null}
  */
 final class Scheduler
 {
@@ -59,12 +70,15 @@ final class Scheduler
 
     private ?\DateTimeImmutable $pendingWindowEnd = null;
 
-    /** @var list<string> */
+    /** @var array<string, string> delivered one-shots in the pending tick, id => version */
     private array $pendingOneShots = [];
+
+    /** @var array<string, string> entries whose coverFrom the pending tick consumed, id => version */
+    private array $pendingCovered = [];
 
     private bool $running = false;
 
-    private bool $held = false;
+    private readonly string $token;
 
     /** Cursor for incremental syncs; null forces the next sync to be full. */
     private ?\DateTimeImmutable $lastSyncAt = null;
@@ -89,7 +103,9 @@ final class Scheduler
 
     /**
      * @param Source $source the source of truth the loop reconciles against
-     * @param State $state watermark persistence; share it (Redis, database) to survive restarts
+     * @param State $state claim persistence — leadership plus watermark; share it (Redis, a
+     *                     database row) and standby replicas elect one dispatcher and survive
+     *                     restarts. Replica clocks must agree to within a fraction of $lease.
      * @param Clock $clock time source; swap for {@see TestClock} in tests
      * @param int $interval seconds between ticks in {@see Scheduler::run()}, wall-anchored
      * @param int $lookahead seconds a tick may reach past "now". Zero (the default) delivers
@@ -98,8 +114,9 @@ final class Scheduler
      *                       early hand-off: callers receive future occurrences (`$occurrence->due`)
      *                       to schedule precisely, but a crash after commit loses them.
      * @param int $lookback ceiling, in seconds, on how far behind the watermark may start a window
-     * @param Lease|null $lease leader election for standby replicas; without one this instance
-     *                          always dispatches
+     * @param int $lease seconds a leadership claim lives without a commit renewing it; a standby
+     *                   takes over this long after the leader stops committing
+     * @param string|null $token this instance's identity in the claim; defaults to a random one
      * @param Telemetry $telemetry metric backend; the four golden signals are recorded as
      *                             schedule.dispatch.delay and schedule.tick.duration (latency),
      *                             schedule.dispatch.total and schedule.entries (traffic),
@@ -109,7 +126,8 @@ final class Scheduler
      *                               `make` rejects) so dispatch keeps running on the last good
      *                               view; without it those failures rethrow
      *
-     * @throws \InvalidArgumentException on non-positive $interval or negative $lookahead/$lookback
+     * @throws \InvalidArgumentException on non-positive $interval, negative $lookahead/$lookback,
+     *                                   or a $lease shorter than two ticks
      */
     public function __construct(
         private readonly Source $source,
@@ -118,7 +136,8 @@ final class Scheduler
         private readonly int $interval = 1,
         private readonly int $lookahead = 0,
         private readonly int $lookback = 300,
-        private readonly ?Lease $lease = null,
+        private readonly int $lease = 60,
+        ?string $token = null,
         Telemetry $telemetry = new NoTelemetry(),
         private readonly ?\Closure $onError = null,
     ) {
@@ -128,6 +147,11 @@ final class Scheduler
         if ($lookahead < 0 || $lookback < 0) {
             throw new \InvalidArgumentException('Lookahead and lookback must not be negative');
         }
+        if ($lease < $interval * 2) {
+            throw new \InvalidArgumentException('A leadership claim must outlive at least two ticks');
+        }
+
+        $this->token = $token ?? bin2hex(random_bytes(8));
 
         // Dispatch delay spans "on time" (well under a second) to a full
         // lookback of catch-up; the default OpenTelemetry buckets stop at
@@ -204,7 +228,12 @@ final class Scheduler
                 'schedule' => $entry->schedule,
                 'payload' => $entry->payload,
                 'version' => $row->version,
-                'activeFrom' => $row->activeFrom,
+                // The entry is covered once from its own start — the row's
+                // activeFrom, or failing that the previous sync (the earliest
+                // moment it could have appeared) — even when the watermark
+                // has already moved past it. Discovered late means run late,
+                // never skipped.
+                'coverFrom' => $row->activeFrom ?? $since,
             ];
         }
 
@@ -226,22 +255,37 @@ final class Scheduler
     }
 
     /**
-     * Select every occurrence in the next window, oldest first.
+     * Select every occurrence in the next window, oldest first — after
+     * confirming (or taking) leadership; a follower gets an empty list.
      *
-     * The window opens at the committed watermark (clamped to $lookback,
+     * The window opens at the claimed watermark (clamped to $lookback,
      * initialized to "now" on first ever run) and closes at now plus
-     * $lookahead; an entry's activeFrom clamps its own start further.
-     * The result is remembered as pending until {@see Scheduler::commit()};
-     * ticking again without committing re-selects the same occurrences.
+     * $lookahead; an entry with pending coverFrom is covered from there
+     * instead, once. The result is remembered as pending until
+     * {@see Scheduler::commit()}; ticking again without committing
+     * re-selects the same occurrences.
      *
      * @return list<Occurrence>
      */
     public function tick(): array
     {
         $started = microtime(true);
+
+        $claim = $this->elect();
+        if (!$claim instanceof \Utopia\Schedule\Claim) {
+            $this->clearPending();
+
+            return [];
+        }
+
         $now = $this->clock->now();
         $end = $this->lookahead > 0 ? $now->modify("{$this->lookahead} seconds") : $now;
-        $start = $this->watermark() ?? $now;
+        $start = null;
+        if ($claim->windowEnd !== null) {
+            $watermark = \DateTimeImmutable::createFromFormat('U.u', $claim->windowEnd);
+            $start = $watermark === false ? null : $watermark;
+        }
+        $start ??= $now;
 
         $floor = $now->modify("-{$this->lookback} seconds");
         if ($start < $floor) {
@@ -257,15 +301,20 @@ final class Scheduler
             // has stepped backwards past the committed edge.
             $this->pendingWindowEnd = $start;
             $this->pendingOneShots = [];
+            $this->pendingCovered = [];
 
             return [];
         }
 
         $occurrences = [];
         $oneShots = [];
+        $covered = [];
 
         foreach ($this->entries as $id => $entry) {
-            $entryStart = $entry['activeFrom'] !== null && $entry['activeFrom'] > $start ? $entry['activeFrom'] : $start;
+            $entryStart = $entry['coverFrom'] ?? $start;
+            if ($entryStart < $floor) {
+                $entryStart = $floor;
+            }
             if ($entryStart >= $end) {
                 continue;
             }
@@ -276,8 +325,12 @@ final class Scheduler
                 $occurrences[] = new Occurrence($id, $due, $entry['payload']);
             }
 
+            if ($entry['coverFrom'] !== null) {
+                $covered[$id] = $entry['version'];
+            }
+
             if ($dues !== [] && !$entry['schedule']->recurring()) {
-                $oneShots[] = $id;
+                $oneShots[$id] = $entry['version'];
             }
         }
 
@@ -285,18 +338,24 @@ final class Scheduler
 
         $this->pendingWindowEnd = $end;
         $this->pendingOneShots = $oneShots;
+        $this->pendingCovered = $covered;
         $this->tickDuration->record(microtime(true) - $started);
 
         return $occurrences;
     }
 
     /**
-     * Advance the watermark past the last tick's window and retire
-     * delivered one-shots. Call after handling the tick's occurrences;
-     * skipping it on failure is what makes re-delivery work.
+     * Advance the watermark past the last tick's window, renew the
+     * leadership claim — one compare-and-swap does both — and retire
+     * what the tick consumed. Call after handling the tick's
+     * occurrences; skipping it on failure is what makes re-delivery
+     * work.
      *
-     * A delivered one-shot leaves a tombstone so the next snapshot does
-     * not re-add its row before the source records completion.
+     * The swap is fenced: if another instance took the claim while the
+     * tick was in flight, nothing is written and the pending tick is
+     * dropped — the new leader re-covers it. All retirement is guarded
+     * by the version seen at tick time, so an entry the source replaced
+     * mid-tick is left alone.
      */
     public function commit(): void
     {
@@ -304,26 +363,40 @@ final class Scheduler
             return;
         }
 
-        $this->state->put($this->pendingWindowEnd->format('U.u'));
+        $next = new Claim(
+            $this->token,
+            (float) $this->clock->now()->format('U.u') + $this->lease,
+            $this->pendingWindowEnd->format('U.u'),
+        );
 
-        foreach ($this->pendingOneShots as $id) {
-            $entry = $this->entries[$id] ?? null;
-            if ($entry === null) {
-                continue;
-            }
+        if (!$this->state->swap($this->token, $next)) {
+            $this->clearPending(); // deposed mid-tick: the new leader re-covers this window
 
-            $this->tombstones[$id] = $entry['version'];
-            unset($this->entries[$id]);
+            return;
         }
 
-        $this->pendingWindowEnd = null;
-        $this->pendingOneShots = [];
+        foreach ($this->pendingCovered as $id => $version) {
+            if (isset($this->entries[$id]) && $this->entries[$id]['version'] === $version) {
+                $this->entries[$id]['coverFrom'] = null;
+            }
+        }
+
+        foreach ($this->pendingOneShots as $id => $version) {
+            $this->tombstones[$id] = $version;
+
+            $entry = $this->entries[$id] ?? null;
+            if ($entry !== null && $entry['version'] === $version) {
+                unset($this->entries[$id]);
+            }
+        }
+
+        $this->clearPending();
     }
 
     /**
-     * The loop: elect (when a lease is configured), reconcile on the
-     * source's cadence, then tick, dispatch and commit on a wall-anchored
-     * cadence.
+     * The loop: elect, reconcile on the source's cadence, then tick,
+     * dispatch and commit on a wall-anchored cadence. Followers idle and
+     * poll for the claim.
      *
      * Anchoring ticks to the clock instead of sleeping a fixed span
      * after variable work keeps the tick phase from drifting. A handler
@@ -340,7 +413,7 @@ final class Scheduler
 
         try {
             while ($this->running) {
-                if (!$this->leading()) {
+                if (!$this->elect() instanceof \Utopia\Schedule\Claim) {
                     $this->clock->sleep((float) $this->interval);
                     continue;
                 }
@@ -392,52 +465,78 @@ final class Scheduler
                 $this->clock->sleep($pause);
             }
         } finally {
-            if ($this->held) {
-                $this->lease?->release();
-                $this->held = false;
-            }
+            $this->release();
         }
     }
 
     /**
      * Make {@see Scheduler::run()} return after the current tick
-     * finishes delivering and committing.
+     * finishes delivering and committing. The claim is released so a
+     * standby takes over immediately instead of waiting out the lease.
      */
     public function stop(): void
     {
         $this->running = false;
     }
 
-    private function leading(): bool
+    /**
+     * Confirm or take leadership. Returns the current claim when this
+     * instance holds it (or just took it), null when another holder's
+     * claim is still live.
+     */
+    private function elect(): ?Claim
     {
-        if (!$this->lease instanceof \Utopia\Schedule\Lease) {
-            return true;
-        }
+        $claim = $this->state->load();
+        $now = (float) $this->clock->now()->format('U.u');
+        $expected = null;
+        $windowEnd = null;
 
-        if ($this->held) {
-            if ($this->lease->renew()) {
-                return true;
+        if ($claim instanceof Claim) {
+            if ($claim->token === $this->token) {
+                return $claim;
             }
 
-            $this->held = false;
+            if ($claim->expiresAt > $now) {
+                return null; // another instance leads
+            }
 
-            return false;
+            $expected = $claim->token;
+            $windowEnd = $claim->windowEnd; // coverage carries over from the predecessor
         }
 
-        if (!$this->lease->acquire()) {
-            return false;
+        $next = new Claim($this->token, $now + $this->lease, $windowEnd);
+
+        if (!$this->state->swap($expected, $next)) {
+            return null; // lost the takeover race
         }
 
-        $this->held = true;
+        // A tick left pending from before losing leadership must never
+        // commit after re-acquiring: its window predates the successor's
+        // coverage and the matching token would let it through the fence.
+        // Memory staleness needs no special-casing — the relist timer is
+        // already due after any stretch spent as a follower.
+        $this->clearPending();
 
-        // A new leader must not trust memory from before the handover:
-        // force a full reconcile and drop any uncommitted tick.
-        $this->lastSyncAt = null;
-        $this->nextSyncAt = 0.0;
+        return $next;
+    }
+
+    private function release(): void
+    {
+        $claim = $this->state->load();
+        if (!$claim instanceof \Utopia\Schedule\Claim || $claim->token !== $this->token) {
+            return;
+        }
+
+        // An empty, expired claim keeps the watermark and frees the lease.
+        $this->state->swap($this->token, new Claim('', 0.0, $claim->windowEnd));
+        $this->clearPending();
+    }
+
+    private function clearPending(): void
+    {
         $this->pendingWindowEnd = null;
         $this->pendingOneShots = [];
-
-        return true;
+        $this->pendingCovered = [];
     }
 
     private function report(\Throwable $error, string $stage): void
@@ -449,17 +548,5 @@ final class Scheduler
         }
 
         ($this->onError)($error);
-    }
-
-    private function watermark(): ?\DateTimeImmutable
-    {
-        $stored = $this->state->get();
-        if ($stored === null) {
-            return null;
-        }
-
-        $watermark = \DateTimeImmutable::createFromFormat('U.u', $stored);
-
-        return $watermark === false ? null : $watermark;
     }
 }

@@ -5,14 +5,24 @@ declare(strict_types=1);
 namespace Utopia\Schedule;
 
 /**
- * Persistence for the scheduler's watermark — where the last committed
- * window closed. Back it with shared storage (Redis, a database row) and
- * a replacement process resumes coverage where its predecessor stopped
- * instead of losing every occurrence that fell in the gap.
+ * Storage for the scheduler's {@see Claim}. Back it with shared storage
+ * (Redis, a database row) and replicas elect one dispatcher, a
+ * replacement resumes coverage where its predecessor stopped, and a
+ * deposed leader's late commit is rejected instead of rewinding the
+ * watermark.
+ *
+ * Implementations must make {@see State::swap()} atomic: on Redis a Lua
+ * script or WATCH/MULTI, on a database `UPDATE … WHERE token = ?`.
  */
 interface State
 {
-    public function get(): ?string;
+    public function load(): ?Claim;
 
-    public function put(string $value): void;
+    /**
+     * Store $next only if the current record's token equals $expected
+     * (null means no record exists yet).
+     *
+     * @return bool true when the swap happened
+     */
+    public function swap(?string $expected, Claim $next): bool;
 }

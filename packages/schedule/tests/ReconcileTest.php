@@ -282,4 +282,124 @@ final class ReconcileTest extends TestCase
         $counted = get_object_vars($telemetry->counters['schedule.error.total'])['values'];
         $this->assertSame([1], $counted);
     }
+
+    public function testOneShotDueSoonerThanTheSyncLagFiresLate(): void
+    {
+        // A row created with a near-immediate due time is discovered by a
+        // sync that runs after the watermark already passed the due time.
+        // Coverage from the row's activeFrom delivers it late, not never.
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:00.000000'));
+        $set = new RowSet();
+        $scheduler = new Scheduler(
+            source: new Source(
+                list: $set->list(...),
+                make: fn(Row $row): Entry => new Entry(new At(new \DateTimeImmutable('2026-08-18 03:00:04'))),
+            ),
+            state: new MemoryState(),
+            clock: $clock,
+        );
+
+        $scheduler->reconcile();
+        $scheduler->tick();
+        $scheduler->commit();
+
+        $clock->advance(10.0); // watermark moves to 03:00:10
+        $scheduler->tick();
+        $scheduler->commit();
+
+        // Created at 03:00:02, due 03:00:04 — first seen by this sync.
+        $set->rows = [new Row('job', 'v1', activeFrom: new \DateTimeImmutable('2026-08-18 03:00:02'))];
+        $scheduler->reconcile();
+
+        $clock->advance(1.0); // 03:00:11
+        $delivered = $scheduler->tick();
+        $scheduler->commit();
+
+        $this->assertSame(
+            ['03:00:04'],
+            array_map(fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'), $delivered),
+        );
+
+        // Covered exactly once: nothing re-delivers on later ticks.
+        $clock->advance(5.0);
+        $this->assertSame([], $scheduler->tick());
+    }
+
+    public function testCoverageFromActiveFromDoesNotRedeliverAfterCommit(): void
+    {
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:05:10.000000'));
+        $set = new RowSet();
+        $scheduler = new Scheduler(
+            source: new Source(
+                list: $set->list(...),
+                make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
+            ),
+            state: new MemoryState(),
+            clock: $clock,
+        );
+
+        $scheduler->tick();
+        $scheduler->commit(); // watermark at 03:05:10
+
+        $set->rows = [new Row('a', 'v1', activeFrom: new \DateTimeImmutable('2026-08-18 03:03:30'))];
+        $scheduler->reconcile();
+        $clock->advance(5.0); // 03:05:15
+
+        $this->assertSame(
+            ['03:04:00', '03:05:00'],
+            array_map(fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'), $scheduler->tick()),
+            'the first tick covers back to activeFrom, past the watermark',
+        );
+        $scheduler->commit();
+
+        $clock->advance(60.0); // 03:06:15
+        $this->assertSame(
+            ['03:06:00'],
+            array_map(fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'), $scheduler->tick()),
+            'after commit the entry rides the watermark: no re-delivery',
+        );
+    }
+
+    public function testOneShotReplacedBetweenTickAndCommitSurvives(): void
+    {
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:00.000000'));
+        $set = new RowSet([new Row('job', 'v1', '2026-08-18 03:00:30')]);
+        $scheduler = new Scheduler(
+            source: new Source(
+                list: $set->list(...),
+                make: function (Row $row): Entry {
+                    $at = $row->data;
+                    if (!\is_string($at)) {
+                        throw new \InvalidArgumentException('time must be a string');
+                    }
+
+                    return new Entry(new At(new \DateTimeImmutable($at)));
+                },
+            ),
+            state: new MemoryState(),
+            clock: $clock,
+        );
+
+        $scheduler->reconcile();
+        $scheduler->tick();
+        $scheduler->commit();
+
+        $clock->advance(45.0);
+        $this->assertCount(1, $scheduler->tick()); // v1 delivered, not yet committed
+
+        // The source reschedules the same id before the commit lands.
+        $set->rows = [new Row('job', 'v2', '2026-08-18 03:01:30')];
+        $scheduler->reconcile();
+        $scheduler->commit(); // retires v1 only: the v2 replacement must survive
+
+        $clock->advance(60.0); // 03:01:45
+        $delivered = $scheduler->tick();
+        $scheduler->commit();
+
+        $this->assertSame(
+            ['03:01:30'],
+            array_map(fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'), $delivered),
+            'a one-shot replaced mid-tick is not deleted by the stale commit',
+        );
+    }
 }

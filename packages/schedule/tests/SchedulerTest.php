@@ -6,10 +6,10 @@ namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Schedule\At;
+use Utopia\Schedule\Claim;
 use Utopia\Schedule\Cron;
 use Utopia\Schedule\Entry;
 use Utopia\Schedule\Interval;
-use Utopia\Schedule\Lease;
 use Utopia\Schedule\MemoryState;
 use Utopia\Schedule\Occurrence;
 use Utopia\Schedule\Row;
@@ -56,10 +56,10 @@ final class SchedulerTest extends TestCase
         $scheduler->tick();
         $scheduler->commit();
 
-        // The process dies for 3 minutes; a replacement resumes from the
-        // shared watermark and delivers every occurrence it missed.
+        // The process dies for 3 minutes; a replacement takes the expired
+        // claim and delivers every occurrence its predecessor missed.
         $clock->advance(185.0);
-        $replacement = $this->scheduler($clock, ['fn' => new Interval(60)], state: $state);
+        $replacement = $this->scheduler($clock, ['fn' => new Interval(60)], state: $state, token: 'replacement');
 
         $this->assertSame(
             ['03:01:00', '03:02:00', '03:03:00'],
@@ -204,17 +204,14 @@ final class SchedulerTest extends TestCase
         );
     }
 
-    public function testFollowersDoNotDispatchUntilTheLeaseIsAcquired(): void
+    public function testStandbyTakesOverWhenTheClaimExpires(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
-        $attempts = 0;
-        $lease = new FakeLease(
-            onAcquire: function () use (&$attempts): bool {
-                return ++$attempts >= 3;
-            },
-            onRenew: fn(): bool => true,
-        );
-        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], interval: 60, lease: $lease);
+        $state = new MemoryState();
+        // Another instance holds the claim for the next 120 seconds.
+        $state->swap(null, new Claim('incumbent', (float) $clock->now()->format('U') + 120.0, null));
+
+        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], state: $state, interval: 60, token: 'standby');
 
         $delivered = [];
         $scheduler->run(function (Occurrence $occurrence) use (&$delivered, $scheduler): void {
@@ -222,48 +219,47 @@ final class SchedulerTest extends TestCase
             $scheduler->stop();
         });
 
-        // Two failed acquires idle at 00:00:30 and 00:01:30; leadership
-        // starts at 00:02:30, so the first covered minute is 00:03.
-        $this->assertSame(3, $lease->acquireAttempts);
+        // Idle at 00:00:30 and 00:01:30; the claim expires at 00:02:30, so
+        // the first covered minute is 00:03.
         $this->assertSame(['00:03:00'], $delivered);
-        $this->assertTrue($lease->released, 'a held lease is released on stop');
+
+        // stop() released the claim but kept the watermark, so the next
+        // instance resumes coverage instead of waiting out the lease.
+        $claim = $state->load();
+        $this->assertInstanceOf(\Utopia\Schedule\Claim::class, $claim);
+        $this->assertSame('', $claim->token);
+        $this->assertNotNull($claim->windowEnd);
     }
 
-    public function testLosingTheLeaseStopsDispatchImmediately(): void
+    public function testDeposedLeaderCommitIsFenced(): void
     {
-        $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
+        $state = new MemoryState();
 
-        $control = new class {
-            public ?Scheduler $scheduler = null;
+        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'leader');
+        $leader->tick();
+        $leader->commit(); // claim held, expires at 03:01:30
 
-            public bool $acquired = false;
+        $clock->advance(60.0); // 03:01:30
+        $inFlight = $leader->tick(); // delivers 03:01:00, not yet committed
+        $this->assertCount(1, $inFlight);
 
-            public int $renews = 0;
-        };
-        $lease = new FakeLease(
-            onAcquire: function () use ($control): bool {
-                if ($control->acquired) {
-                    $control->scheduler?->stop(); // regaining is not part of this test
-
-                    return false;
-                }
-
-                return $control->acquired = true;
-            },
-            onRenew: fn(): bool => ++$control->renews < 3,
+        // The leader stalls past its lease; a standby takes over and
+        // commits further coverage.
+        $clock->advance(61.0); // 03:02:31
+        $standby = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'standby');
+        $this->assertSame(
+            ['03:01:00', '03:02:00'], // the handover re-covers the in-flight window: duplicates, never losses
+            array_map(fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'), $standby->tick()),
         );
-        $control->scheduler = $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], interval: 60, lease: $lease);
+        $standby->commit();
+        $watermark = $state->load()?->windowEnd;
 
-        $delivered = [];
-        $scheduler->run(function (Occurrence $occurrence) use (&$delivered): void {
-            $delivered[] = $occurrence->due->format('H:i:s');
-        });
-
-        // The third renewal fails before the 00:02 minute is dispatched:
-        // nothing after the loss is delivered, and a lost lease is not
-        // released (this instance no longer owns it).
-        $this->assertSame(['00:01:00'], $delivered);
-        $this->assertFalse($lease->released);
+        // The deposed leader's late commit is fenced: no write, no rewind.
+        $leader->commit();
+        $this->assertSame($watermark, $state->load()?->windowEnd);
+        $this->assertSame('standby', $state->load()?->token);
+        $this->assertSame([], $leader->tick(), 'a deposed leader must not dispatch');
     }
 
     public function testGoldenSignalsAreRecorded(): void
@@ -328,6 +324,13 @@ final class SchedulerTest extends TestCase
         new Scheduler(source: $this->emptySource(), interval: 0);
     }
 
+    public function testRejectsALeaseShorterThanTwoTicks(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new Scheduler(source: $this->emptySource(), interval: 30, lease: 45);
+    }
+
     public function testSourceRejectsNonPositiveSyncCadence(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -345,7 +348,7 @@ final class SchedulerTest extends TestCase
         int $interval = 1,
         int $lookahead = 0,
         int $lookback = 300,
-        ?Lease $lease = null,
+        ?string $token = null,
         ?TestTelemetry $telemetry = null,
     ): Scheduler {
         $rows = [];
@@ -363,7 +366,8 @@ final class SchedulerTest extends TestCase
             interval: $interval,
             lookahead: $lookahead,
             lookback: $lookback,
-            lease: $lease,
+            lease: max(60, $interval * 4),
+            token: $token,
             telemetry: $telemetry ?? new \Utopia\Telemetry\Adapter\None(),
         );
         $scheduler->reconcile();

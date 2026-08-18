@@ -12,7 +12,7 @@ Most schedulers ask "what is due *now*?" in a loop, and sync their schedule list
 - **Gaps have no owner.** Whatever falls between two ticks, or between a crash and a restart, was due in a moment nobody ever asks about again.
 - **Deletes are invisible.** A change feed keyed on an updated-at column never sees a hard-deleted row, so removed schedules keep firing from memory until the next restart.
 
-Utopia Schedule replaces the questions. Occurrences are selected from an explicit half-open window `[start, end)`; each window opens exactly where the previous committed window closed, and the boundary (the *watermark*) persists through a storage port. Windows tile the timeline: every occurrence belongs to exactly one window, no matter how slowly the loop runs, how far the tick phase drifts, or how often the process restarts. And reconciliation is level-based: the source states the full desired set, the scheduler diffs — so removals converge by construction.
+Utopia Schedule replaces the questions. Occurrences are selected from an explicit half-open window `[start, end)`; each window opens exactly where the previous committed window closed, and the boundary (the *watermark*) persists through a storage port as part of a leadership claim. Windows tile the timeline: every occurrence belongs to exactly one window, no matter how slowly the loop runs, how far the tick phase drifts, or how often the process restarts. And reconciliation is level-based: the source states the full desired set, the scheduler diffs — so removals converge by construction.
 
 ## Getting started
 
@@ -86,6 +86,7 @@ Reconciliation is level-based: `list()` returns the full desired set and the sch
 
 - `make()` runs only for new or version-changed rows; an unchanged row costs a string compare.
 - A listing that throws mid-iteration discards the whole batch: a failed sync must never look like a mass removal. A row whose `make()` throws is skipped and reported; its previous entry stays.
+- Discovery lag cannot lose runs: a new or changed entry is covered once from its own start — its `activeFrom`, or the previous sync time — even when the watermark has already passed it. A one-shot due sooner than the sync cadence runs late instead of never.
 
 For large sets, add a change feed and the sync turns incremental between full snapshots:
 
@@ -102,29 +103,17 @@ new Source(
 
 The change feed carries updates and soft deletes (`active: false`); hard deletes converge on the next full snapshot. Updates are idempotent under the version diff, so an overlapping feed is harmless.
 
-`Row::$activeFrom` clamps each entry's window: a schedule created — or edited — while the scheduler was down backfills only from its change time, never under the old watermark with the old definition.
+`Row::$activeFrom` anchors each entry's coverage: a schedule created — or edited — while the scheduler was down backfills only from its change time, never under the old watermark with the old definition, and a schedule the sync discovers late is still covered from its change time forward. Set it to the row's last change time.
 
 ## Surviving restarts and failover
 
-The watermark lives behind the `State` interface (two methods; back it with Redis or a database row). A replacement process resumes coverage where its predecessor stopped: occurrences missed while it was down are delivered on the first tick back, oldest first. The `lookback` option (default 300 seconds) caps how far a stale watermark reaches, so recovery after a long outage replays a bounded burst.
+Leadership and the watermark share one lifecycle — the leader advances both on every commit — so they share one record: the `Claim` (`token`, `expiresAt`, `windowEnd`), stored behind the `State` interface (`load` and an atomic `swap`; back it with Redis or a database row). Every commit is one compare-and-swap that renews the lease and advances the watermark together. That single write buys three properties:
 
-For standby replicas, pass a `Lease`. Exactly one instance dispatches; the others poll for the lease and take over when the holder dies and its lease expires. A new leader forces a full reconcile and resumes from the committed watermark — a handover can duplicate a tick's occurrences, it can never lose them. `LockLease` adapts a `utopia-php/lock` distributed lock:
+- **Election is inherent.** Point replicas at the same state and exactly one dispatches; the others idle and take over when the claim expires — or immediately when `stop()` releases it. No lock service, no extra port.
+- **Failover resumes coverage.** A successor takes the watermark from the claim it inherits: occurrences missed in the handover are delivered on its first tick, oldest first, bounded by `lookback` (default 300 seconds).
+- **Commits are fenced.** A deposed leader's late commit no longer matches the stored token: nothing is written, the watermark never rewinds, and the new leader re-covers the in-flight window. A handover can duplicate a tick's occurrences; it can never lose them.
 
-```php
-<?php
-
-use Utopia\Lock\Distributed;
-use Utopia\Schedule\LockLease;
-use Utopia\Schedule\Scheduler;
-
-$scheduler = new Scheduler(
-    source: $source,
-    state: $state,
-    lease: new LockLease(new Distributed($redis, 'scheduler-leader', ttl: 30)),
-);
-```
-
-Set the lock TTL to a few tick intervals. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `list()` — and give each partition its own `State` key and its own lease; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
+Tune with the `lease` option (seconds a claim lives without a commit; must outlive at least two ticks) and `token` (the instance identity; defaults to a random one). Replica clocks must agree to within a fraction of the lease. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `list()` — and give each partition its own `State` record; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
 
 ## Delivery model
 
@@ -142,7 +131,7 @@ foreach ($scheduler->tick() as $occurrence) {
 $scheduler->commit();
 ```
 
-`tick()` selects the next window's occurrences without advancing the watermark; `commit()` advances it. Skip `commit()` when handling fails and the next `tick()` re-delivers — at-least-once, by construction. With the default `lookahead: 0`, occurrences are handed over after they fall due, late by at most one tick interval (default 1 second). Setting `lookahead` hands future occurrences over early — `$occurrence->due` says when they are meant to run — for callers that enqueue with precise delays, at the cost of losing occurrences committed but not yet run when a crash hits.
+`tick()` confirms (or takes) leadership and selects the next window's occurrences without advancing the watermark; `commit()` advances it and renews the claim in one swap. Skip `commit()` when handling fails and the next `tick()` re-delivers — at-least-once, by construction. With the default `lookahead: 0`, occurrences are handed over after they fall due, late by at most one tick interval (default 1 second). Setting `lookahead` hands future occurrences over early — `$occurrence->due` says when they are meant to run — for callers that enqueue with precise delays, at the cost of losing occurrences committed but not yet run when a crash hits.
 
 ## Metrics
 

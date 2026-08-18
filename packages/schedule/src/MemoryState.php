@@ -5,22 +5,29 @@ declare(strict_types=1);
 namespace Utopia\Schedule;
 
 /**
- * In-process watermark storage. Coverage survives ticks but not
- * restarts; use shared storage in production.
+ * In-process claim storage. Coverage and leadership survive ticks but
+ * not restarts, and only instances sharing the object contend; use
+ * shared storage in production.
  */
 final class MemoryState implements State
 {
-    private ?string $value = null;
+    private ?Claim $claim = null;
 
     #[\Override]
-    public function get(): ?string
+    public function load(): ?Claim
     {
-        return $this->value;
+        return $this->claim;
     }
 
     #[\Override]
-    public function put(string $value): void
+    public function swap(?string $expected, Claim $next): bool
     {
-        $this->value = $value;
+        if (($this->claim?->token) !== $expected) {
+            return false;
+        }
+
+        $this->claim = $next;
+
+        return true;
     }
 }
