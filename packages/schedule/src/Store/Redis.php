@@ -37,7 +37,7 @@ final readonly class Redis implements Store
             return 0
         end
 
-        redis.call('hset', KEYS[1], 'token', ARGV[3], 'expiresAt', ARGV[4], 'windowEnd', ARGV[5])
+        redis.call('hset', KEYS[1], 'token', ARGV[3], 'expiresAt', ARGV[4], 'windowEnd', ARGV[5], 'syncedUntil', ARGV[6])
 
         return 1
         LUA;
@@ -57,11 +57,13 @@ final readonly class Redis implements Store
         }
 
         $windowEnd = (string) ($record['windowEnd'] ?? '');
+        $syncedUntil = (string) ($record['syncedUntil'] ?? '');
 
         return new Claim(
             $record['token'],
             (float) $record['expiresAt'],
             $windowEnd === '' ? null : $windowEnd,
+            $syncedUntil === '' ? null : $syncedUntil,
         );
     }
 
@@ -77,6 +79,7 @@ final readonly class Redis implements Store
             $next->token,
             \sprintf('%.6F', $next->expiresAt),
             $next->windowEnd ?? '',
+            $next->syncedUntil ?? '',
         ], 1);
 
         return \in_array($result, [1, '1'], true);

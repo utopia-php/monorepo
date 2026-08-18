@@ -288,20 +288,24 @@ final class Scheduler
     /**
      * Where a freshly made entry's own coverage starts.
      *
-     * An entry that appeared between two syncs is covered from the moment it
-     * took effect, so occurrences the watermark has already passed are run
-     * late rather than lost — but never from further back than the last time
-     * the source was read. Before that point coverage is the watermark's job:
-     * either the row already existed and was covered, or it did not exist and
-     * has nothing owed. Without that floor, every schedule loaded on a cold
-     * start would replay its history back to whenever it was last edited.
+     * An entry that appeared since the source was last read is covered from
+     * the moment it took effect, so occurrences the watermark has already
+     * passed are run late rather than lost. Anything that already existed at
+     * that point was known when the watermark was committed, so its coverage
+     * is accounted for and reaching back would only duplicate it.
+     *
+     * The floor is when the source was last read — this process's own last
+     * sync, or the one the claim inherited from a predecessor — and not the
+     * watermark. The gap between them is exactly the window in which a
+     * predecessor committed coverage for schedules it had not yet seen, and
+     * treating it as covered would silently drop their runs.
      *
      * An activeFrom later than the floor still applies in full, which is what
      * stops a definition from running before it took effect.
      */
     private function coverFrom(?\DateTimeImmutable $activeFrom, ?\DateTimeImmutable $since): ?\DateTimeImmutable
     {
-        $floor = $since ?? $this->moment($this->store->load()?->windowEnd);
+        $floor = $since ?? $this->moment($this->store->load()?->syncedUntil);
 
         if (!$activeFrom instanceof \DateTimeImmutable) {
             return $since;
@@ -445,6 +449,10 @@ final class Scheduler
             $this->token,
             (float) $this->clock->now()->format('U.u') + $this->lease,
             $this->pendingWindowEnd->format('U.u'),
+            // A tick that has not reconciled in this process must not erase
+            // what its predecessor had read, or a later cold start would
+            // have no floor to reason from.
+            $this->lastSyncAt?->format('U.u') ?? $this->store->load()?->syncedUntil,
         );
 
         if (!$this->store->swap($this->token, $next)) {
@@ -587,6 +595,7 @@ final class Scheduler
         $now = (float) $this->clock->now()->format('U.u');
         $expected = null;
         $windowEnd = null;
+        $syncedUntil = null;
 
         if ($claim instanceof Claim) {
             if ($claim->token === $this->token) {
@@ -598,7 +607,7 @@ final class Scheduler
                     return $claim;
                 }
 
-                $renewed = new Claim($this->token, $now + $this->lease, $claim->windowEnd);
+                $renewed = new Claim($this->token, $now + $this->lease, $claim->windowEnd, $claim->syncedUntil);
                 if ($this->store->swap($this->token, $renewed)) {
                     return $renewed;
                 }
@@ -613,10 +622,13 @@ final class Scheduler
             }
 
             $expected = $claim->token;
-            $windowEnd = $claim->windowEnd; // coverage carries over from the predecessor
+            // Coverage and how much of the source produced it both carry over
+            // from the predecessor.
+            $windowEnd = $claim->windowEnd;
+            $syncedUntil = $claim->syncedUntil;
         }
 
-        $next = new Claim($this->token, $now + $this->lease, $windowEnd);
+        $next = new Claim($this->token, $now + $this->lease, $windowEnd, $syncedUntil);
 
         if (!$this->store->swap($expected, $next)) {
             return null; // lost the takeover race
@@ -640,7 +652,7 @@ final class Scheduler
         }
 
         // An empty, expired claim keeps the watermark and frees the lease.
-        $this->store->swap($this->token, new Claim('', 0.0, $claim->windowEnd));
+        $this->store->swap($this->token, new Claim('', 0.0, $claim->windowEnd, $claim->syncedUntil));
         $this->clearPending();
     }
 

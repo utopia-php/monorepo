@@ -56,6 +56,26 @@ final class RedisStoreTest extends TestCase
         $this->assertNull($claim->windowEnd);
     }
 
+    public function testEveryFieldOfTheClaimRoundTrips(): void
+    {
+        // A Store implementation that drops a field does not fail loudly: the
+        // scheduler simply reasons from less than it committed. syncedUntil is
+        // the newest of them and the easiest to forget.
+        $store = $this->store();
+        $store->swap(null, new Claim('leader', 100.5, '1787022060.000000', '1787022000.000000'));
+
+        $claim = $store->load();
+        $this->assertInstanceOf(\Utopia\Schedule\Claim::class, $claim);
+        $this->assertSame('leader', $claim->token);
+        $this->assertEqualsWithDelta(100.5, $claim->expiresAt, 0.000001);
+        $this->assertSame('1787022060.000000', $claim->windowEnd);
+        $this->assertSame('1787022000.000000', $claim->syncedUntil);
+
+        // And a claim that has never synced keeps that distinction.
+        $store->swap('leader', new Claim('leader', 200.0, '1787022120.000000'));
+        $this->assertNull($store->load()?->syncedUntil);
+    }
+
     public function testAStaleTokenCannotOverwriteItsSuccessor(): void
     {
         $store = $this->store();

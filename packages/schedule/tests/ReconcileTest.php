@@ -402,6 +402,51 @@ final class ReconcileTest extends TestCase
         );
     }
 
+    public function testASuccessorCoversWhatItsPredecessorNeverSaw(): void
+    {
+        // The window a single watermark cannot describe: a predecessor
+        // committed coverage up to 03:07:00, but its last read of the source
+        // was at 03:05:00, so a schedule created at 03:05:30 was never in its
+        // view. Its 03:06:00 run falls inside the committed window, and
+        // treating that window as covered for this row would drop it.
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:05:00.000000'));
+        $store = new MemoryStore();
+        $set = new RowSet();
+        $build = fn(string $token): Scheduler => new Scheduler(
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
+                make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
+            ),
+            store: $store,
+            clock: $clock,
+            interval: 60,
+            lease: 120,
+            token: $token,
+        );
+
+        $predecessor = $build('predecessor');
+        $predecessor->reconcile();   // reads an empty source at 03:05:00
+        $clock->advance(120.0);      // 03:07:00
+        $predecessor->tick();
+        $predecessor->commit();      // coverage to 03:07:00, source read to 03:05:00
+
+        // Created inside that gap, and due inside it too.
+        $set->rows = [new Row('late', 'v1', activeFrom: new \DateTimeImmutable('2026-08-18 03:05:30'))];
+
+        $clock->advance(130.0);      // 03:09:10 — the predecessor is gone, its claim expired
+        $successor = $build('successor');
+        $successor->reconcile();
+
+        $this->assertSame(
+            ['late@03:06:00', 'late@03:07:00', 'late@03:08:00', 'late@03:09:00'],
+            array_map(
+                fn(Occurrence $occurrence): string => $occurrence->id . '@' . $occurrence->due->format('H:i:s'),
+                $successor->tick(),
+            ),
+            'the successor owes every run since the row appeared, starting inside the committed window',
+        );
+    }
+
     public function testAColdStartDoesNotReplayHistoryForEverySchedule(): void
     {
         // The watermark is what a predecessor committed, and it already
@@ -421,15 +466,16 @@ final class ReconcileTest extends TestCase
             token: 'replacement',
         );
 
-        $predecessor = $build();
-        $predecessor->tick();
-        $predecessor->commit(); // watermark at 03:05:10
-
-        // Rows edited well before the watermark, loaded by a fresh process.
+        // Rows edited well before the watermark, and read by the predecessor.
         $set->rows = [
             new Row('a', 'v1', activeFrom: new \DateTimeImmutable('2026-08-18 03:01:00')),
             new Row('b', 'v1', activeFrom: new \DateTimeImmutable('2026-08-18 02:00:00')),
         ];
+
+        $predecessor = $build();
+        $predecessor->reconcile();
+        $predecessor->tick();
+        $predecessor->commit(); // watermark at 03:05:10, source read at 03:05:10
 
         $replacement = $build();
         $replacement->reconcile();
