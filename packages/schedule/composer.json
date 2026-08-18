@@ -21,7 +21,6 @@
     ],
     "require": {
         "php": ">=8.3",
-        "dragonmantank/cron-expression": "^3.4",
         "utopia-php/telemetry": "^0.4"
     },
     "require-dev": {

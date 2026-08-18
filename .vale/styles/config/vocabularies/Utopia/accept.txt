@@ -196,6 +196,7 @@ URI(?:s)?
 Utopia
 vendored
 Vivaldi
+vixie
 Vonage
 Wasabi
 watchOS

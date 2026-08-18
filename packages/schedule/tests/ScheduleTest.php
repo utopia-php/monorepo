@@ -121,6 +121,125 @@ final class ScheduleTest extends TestCase
         new Interval(0);
     }
 
+    public function testCronListsRangesAndSteps(): void
+    {
+        $cron = new Cron('15,45-50/2 8 * * *');
+
+        $this->assertSame(
+            ['08:15:00', '08:45:00', '08:47:00', '08:49:00'],
+            $this->format($cron->occurrencesBetween(
+                new \DateTimeImmutable('2026-08-17 00:00:00.000000'),
+                new \DateTimeImmutable('2026-08-18 00:00:00.000000'),
+            )),
+        );
+    }
+
+    public function testCronMonthAndDayNames(): void
+    {
+        // 2026-08-17 is a Monday.
+        $cron = new Cron('30 9 * AUG mon-Fri');
+
+        $occurrences = $cron->occurrencesBetween(
+            new \DateTimeImmutable('2026-08-14 12:00:00.000000'), // Friday noon
+            new \DateTimeImmutable('2026-08-18 00:00:00.000000'),
+        );
+
+        $this->assertSame(
+            ['2026-08-17 09:30:00'],
+            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d H:i:s'), $occurrences),
+        );
+    }
+
+    public function testCronSevenMeansSunday(): void
+    {
+        $sundayViaSeven = new Cron('0 0 * * 7');
+        $sundayViaZero = new Cron('0 0 * * 0');
+
+        $start = new \DateTimeImmutable('2026-08-17 00:00:01.000000');
+        $end = new \DateTimeImmutable('2026-08-31 00:00:00.000000');
+
+        $this->assertEquals($sundayViaZero->occurrencesBetween($start, $end), $sundayViaSeven->occurrencesBetween($start, $end));
+        $this->assertSame(
+            ['2026-08-23', '2026-08-30'],
+            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d'), $sundayViaSeven->occurrencesBetween($start, $end)),
+        );
+    }
+
+    public function testCronMacros(): void
+    {
+        $daily = new Cron('@daily');
+
+        $this->assertSame(
+            ['2026-08-18 00:00:00'],
+            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d H:i:s'), $daily->occurrencesBetween(
+                new \DateTimeImmutable('2026-08-17 00:00:01.000000'),
+                new \DateTimeImmutable('2026-08-19 00:00:00.000000'),
+            )),
+        );
+    }
+
+    public function testCronRestrictedDayFieldsCombineWithOr(): void
+    {
+        // Vixie cron: "the 13th, or any Friday" — not "Friday the 13th".
+        $cron = new Cron('0 0 13 * 5');
+
+        $this->assertSame(
+            ['2026-08-07', '2026-08-13', '2026-08-14'],
+            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d'), $cron->occurrencesBetween(
+                new \DateTimeImmutable('2026-08-01 00:00:01.000000'),
+                new \DateTimeImmutable('2026-08-15 00:00:00.000000'),
+            )),
+        );
+    }
+
+    public function testCronLeapDayFiresOnLeapYearsOnly(): void
+    {
+        $cron = new Cron('0 12 29 2 *');
+
+        $this->assertSame(
+            ['2028-02-29 12:00:00'],
+            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d H:i:s'), $cron->occurrencesBetween(
+                new \DateTimeImmutable('2026-03-01 00:00:00.000000'),
+                new \DateTimeImmutable('2029-01-01 00:00:00.000000'),
+            )),
+        );
+    }
+
+    /**
+     * @return \Iterator<int, array{string}>
+     */
+    public static function malformedCronProvider(): \Iterator
+    {
+        yield ['not a cron'];
+        yield ['* * * *'];
+        // four fields
+        yield ['* * * * * *'];
+        // six fields
+        yield ['61 * * * *'];
+        // out of range
+        yield ['* 24 * * *'];
+        // out of range
+        yield ['*/0 * * * *'];
+        // zero step
+        yield ['5/10 * * * *'];
+        // steps need * or a range
+        yield ['5-1 * * * *'];
+        // reversed range
+        yield ['* * L * *'];
+        // Quartz extension
+        yield ['* * * * 1#2'];
+        // Quartz extension
+        yield ['0 0 31 2 *'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('malformedCronProvider')]
+    public function testCronRejectsMalformedExpressions(string $expression): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new Cron($expression);
+    }
+
     public function testAtFiresInsideItsWindowOnly(): void
     {
         $at = new At(new \DateTimeImmutable('2026-08-17 16:00:30.000000'));
