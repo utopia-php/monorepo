@@ -20,5 +20,13 @@ final readonly class RouteMatch
          * @var array<string, string>
          */
         public array $params,
+        /**
+         * Path from the request URL.
+         */
+        public string $path,
+        /**
+         * Route template that matched the request, including aliases.
+         */
+        public string $template,
     ) {}
 }

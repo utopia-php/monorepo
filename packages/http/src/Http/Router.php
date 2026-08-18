@@ -20,9 +20,27 @@ class Router
     protected static ?Route $wildcard = null;
 
     /**
+     * Template registered for the method-agnostic wildcard route.
+     */
+    protected static ?string $wildcardTemplate = null;
+
+    /**
      * @var array<string,Route[]>
      */
     protected static array $routes = [
+        Http::REQUEST_METHOD_GET => [],
+        Http::REQUEST_METHOD_POST => [],
+        Http::REQUEST_METHOD_PUT => [],
+        Http::REQUEST_METHOD_PATCH => [],
+        Http::REQUEST_METHOD_DELETE => [],
+    ];
+
+    /**
+     * Original route templates, keyed by their prepared paths.
+     *
+     * @var array<string, array<string, string>>
+     */
+    protected static array $templates = [
         Http::REQUEST_METHOD_GET => [],
         Http::REQUEST_METHOD_POST => [],
         Http::REQUEST_METHOD_PUT => [],
@@ -105,9 +123,11 @@ class Router
         }
 
         self::$routes[$method][$path] = $route;
+        self::$templates[$method][$path] = $route->getPath();
 
         foreach ($additionalMethods as $additionalMethod) {
             self::$routes[$additionalMethod][$path] = $route;
+            self::$templates[$additionalMethod][$path] = $route->getPath();
         }
     }
 
@@ -137,6 +157,7 @@ class Router
 
         foreach ($methods as $method) {
             self::$routes[$method][$alias] = $route;
+            self::$templates[$method][$alias] = $path;
         }
     }
 
@@ -146,6 +167,7 @@ class Router
     public static function setWildcard(?Route $route): void
     {
         self::$wildcard = $route;
+        self::$wildcardTemplate = $route?->getPath();
     }
 
     /**
@@ -154,7 +176,9 @@ class Router
     public static function match(string $method, string $path): ?RouteMatch
     {
         if (!\array_key_exists($method, self::$routes)) {
-            return self::$wildcard !== null ? new RouteMatch(self::$wildcard, []) : null;
+            return self::$wildcard !== null
+                ? new RouteMatch(self::$wildcard, [], $path, self::$wildcardTemplate ?? '')
+                : null;
         }
 
         $parts = array_values(array_filter(explode('/', $path), fn($segment) => $segment !== ''));
@@ -173,7 +197,12 @@ class Router
 
             if (\array_key_exists($template, self::$routes[$method])) {
                 $route = self::$routes[$method][$template];
-                return new RouteMatch($route, $route->resolveParams($path, $template));
+                return new RouteMatch(
+                    $route,
+                    $route->resolveParams($path, $template),
+                    $path,
+                    self::$templates[$method][$template],
+                );
             }
         }
 
@@ -182,7 +211,12 @@ class Router
          */
         $template = self::WILDCARD_TOKEN;
         if (\array_key_exists($template, self::$routes[$method])) {
-            return new RouteMatch(self::$routes[$method][$template], []);
+            return new RouteMatch(
+                self::$routes[$method][$template],
+                [],
+                $path,
+                self::$templates[$method][$template],
+            );
         }
 
         /**
@@ -192,12 +226,17 @@ class Router
             $current = ($current ?? '') . "{$part}/";
             $template = $current . self::WILDCARD_TOKEN;
             if (\array_key_exists($template, self::$routes[$method])) {
-                return new RouteMatch(self::$routes[$method][$template], []);
+                return new RouteMatch(
+                    self::$routes[$method][$template],
+                    [],
+                    $path,
+                    self::$templates[$method][$template],
+                );
             }
         }
 
         if (self::$wildcard !== null) {
-            return new RouteMatch(self::$wildcard, []);
+            return new RouteMatch(self::$wildcard, [], $path, self::$wildcardTemplate ?? '');
         }
 
         return null;
@@ -262,8 +301,16 @@ class Router
     {
         self::$params = [];
         self::$wildcard = null;
+        self::$wildcardTemplate = null;
         self::$allowOverride = false;
         self::$routes = [
+            Http::REQUEST_METHOD_GET => [],
+            Http::REQUEST_METHOD_POST => [],
+            Http::REQUEST_METHOD_PUT => [],
+            Http::REQUEST_METHOD_PATCH => [],
+            Http::REQUEST_METHOD_DELETE => [],
+        ];
+        self::$templates = [
             Http::REQUEST_METHOD_GET => [],
             Http::REQUEST_METHOD_POST => [],
             Http::REQUEST_METHOD_PUT => [],

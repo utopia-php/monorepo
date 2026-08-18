@@ -103,6 +103,48 @@ final class RouterTest extends TestCase
         $this->assertEquals($routeGET, Router::match(Http::REQUEST_METHOD_GET, '/alias2')?->route);
     }
 
+    public function testMatchExposesRequestPathAndMatchedTemplate(): void
+    {
+        $route = new Route(Http::REQUEST_METHOD_GET, '/v1/projects/:projectId/team');
+        $route->alias('/v1/project/:projectId/team');
+
+        Router::addRoute($route);
+
+        $match = Router::match(Http::REQUEST_METHOD_GET, '/v1/projects/abc-123/team');
+
+        $this->assertSame($route, $match?->route);
+        $this->assertSame(['projectId' => 'abc-123'], $match?->params);
+        $this->assertSame('/v1/projects/abc-123/team', $match?->path);
+        $this->assertSame('/v1/projects/:projectId/team', $match?->template);
+
+        $match = Router::match(Http::REQUEST_METHOD_GET, '/v1/project/abc-123/team');
+
+        $this->assertSame($route, $match?->route);
+        $this->assertSame(['projectId' => 'abc-123'], $match?->params);
+        $this->assertSame('/v1/project/abc-123/team', $match?->path);
+        $this->assertSame('/v1/project/:projectId/team', $match?->template);
+    }
+
+    public function testMatchExposesWildcardTemplates(): void
+    {
+        $route = new Route(Http::REQUEST_METHOD_GET, '/about/*');
+        Router::addRoute($route);
+
+        $match = Router::match(Http::REQUEST_METHOD_GET, '/about/team');
+
+        $this->assertSame('/about/team', $match?->path);
+        $this->assertSame('/about/*', $match?->template);
+
+        $wildcard = new Route('', '');
+        Router::setWildcard($wildcard);
+        $wildcard->path('/changed-after-registration');
+
+        $match = Router::match(Http::REQUEST_METHOD_OPTIONS, '/anything');
+
+        $this->assertSame('/anything', $match?->path);
+        $this->assertSame('', $match?->template);
+    }
+
     public function testCanMatchMultipleAliases(): void
     {
         $routeGET = new Route(Http::REQUEST_METHOD_GET, '/target');

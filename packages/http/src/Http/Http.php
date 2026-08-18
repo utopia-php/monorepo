@@ -800,7 +800,7 @@ class Http
             'http.request.method' => $request->getMethod(),
             // OTel semantics: http.route is the matched route template, or
             // unset when no template applies (wildcard / no match).
-            'http.route' => ($this->match($request)?->route->getPath() ?: null),
+            'http.route' => ($this->match($request)?->template ?: null),
             'http.response.status_code' => $response->getStatusCode(),
         ];
         $this->requestDuration->record($requestDuration, $attributes);
