@@ -41,7 +41,8 @@
         }
     },
     "scripts": {
-        "test": "phpunit --testsuite unit"
+        "test": "phpunit --testsuite unit",
+        "bench": "php tests/bench/run.php"
     },
     "minimum-stability": "stable"
 }

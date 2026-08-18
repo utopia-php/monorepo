@@ -240,6 +240,67 @@ final class ScheduleTest extends TestCase
         new Cron($expression);
     }
 
+    public function testWindowsTileAtEverySubSecondSplitPhase(): void
+    {
+        // Two adjacent windows split anywhere inside the two seconds
+        // around a slot select the boundary occurrence exactly once —
+        // the property that makes tick phase irrelevant.
+        $cron = new Cron('*/5 * * * *');
+        $before = new \DateTimeImmutable('2026-08-17 15:59:00.000000');
+        $after = new \DateTimeImmutable('2026-08-17 16:01:00.000000');
+        $boundary = new \DateTimeImmutable('2026-08-17 16:00:00.000000');
+
+        for ($step = 0; $step <= 54; ++$step) {
+            $split = $before->modify('+59 seconds')->modify(\sprintf('+%d milliseconds', $step * 37));
+
+            $count = 0;
+            foreach ([...$cron->occurrencesBetween($before, $split), ...$cron->occurrencesBetween($split, $after)] as $occurrence) {
+                if ($occurrence == $boundary) {
+                    ++$count;
+                }
+            }
+
+            $this->assertSame(1, $count, "split at {$split->format('H:i:s.u')} must select 16:00:00 exactly once");
+        }
+    }
+
+    public function testCronSkipsNonexistentLocalTimes(): void
+    {
+        // America/New_York springs forward on 2026-03-08: 02:30 does not
+        // exist that day. The run is skipped, not doubled or crashed —
+        // nonexistent local times follow PHP's date normalization.
+        $timezone = new \DateTimeZone('America/New_York');
+        $cron = new Cron('30 2 * * *');
+
+        $occurrences = $cron->occurrencesBetween(
+            new \DateTimeImmutable('2026-03-07 12:00:00', $timezone),
+            new \DateTimeImmutable('2026-03-09 12:00:00', $timezone),
+        );
+
+        $this->assertSame(
+            ['2026-03-09 02:30:00 EDT'],
+            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d H:i:s T'), $occurrences),
+        );
+    }
+
+    public function testCronRepeatedLocalTimeFiresOnce(): void
+    {
+        // America/New_York falls back on 2026-11-01: wall-clock 01:30
+        // happens twice. The schedule fires once, on the first pass.
+        $timezone = new \DateTimeZone('America/New_York');
+        $cron = new Cron('30 1 * * *');
+
+        $occurrences = $cron->occurrencesBetween(
+            new \DateTimeImmutable('2026-10-31 12:00:00', $timezone),
+            new \DateTimeImmutable('2026-11-01 12:00:00', $timezone),
+        );
+
+        $this->assertSame(
+            ['2026-11-01 01:30:00 EDT'],
+            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d H:i:s T'), $occurrences),
+        );
+    }
+
     public function testAtFiresInsideItsWindowOnly(): void
     {
         $at = new At(new \DateTimeImmutable('2026-08-17 16:00:30.000000'));

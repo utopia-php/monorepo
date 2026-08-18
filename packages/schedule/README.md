@@ -149,6 +149,10 @@ Pass a `utopia-php/telemetry` adapter and the scheduler records the four golden 
 
 `Clock` isolates the scheduler from wall time, and the bundled `TestClock` makes timing defects reproducible fixtures — including the class of defect this library exists to prevent: the test suite replays a tick phase creeping across a minute boundary at 1.5ms per tick for an hour and asserts every occurrence is delivered exactly once.
 
+## Scale
+
+The design holds at fleet size: selection is pure per-schedule math and reconciliation is version-gated, so at 10,000 mixed schedules a full tick costs about 18ms against a 60-second interval, a warm snapshot diff under 1ms, and a cold one about 20ms. The exactly-once property is asserted at that scale in the test suite — 10,000 schedules through jittery ticks, expected counts derived with modular arithmetic rather than the schedule classes under test — and `composer bench` prints the current numbers.
+
 ## Tests
 
 ```bash
