@@ -28,6 +28,9 @@ final readonly class Interval implements Schedule
         $this->anchor = $anchor instanceof \DateTimeImmutable ? (float) $anchor->format('U.u') : 0.0;
     }
 
+    /**
+     * @return list<\DateTimeImmutable>
+     */
     #[\Override]
     public function occurrencesBetween(\DateTimeImmutable $start, \DateTimeImmutable $end): array
     {

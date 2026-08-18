@@ -31,6 +31,9 @@ final readonly class Cron implements Schedule
         }
     }
 
+    /**
+     * @return list<\DateTimeImmutable>
+     */
     #[\Override]
     public function occurrencesBetween(\DateTimeImmutable $start, \DateTimeImmutable $end): array
     {

@@ -1,17 +1,18 @@
 # Utopia Schedule
 
-An opinionated scheduler for PHP. It runs cron expressions, fixed intervals, delayed jobs and fixed-time jobs — and it is built so a run can be late, but never silently lost.
+An opinionated scheduler for PHP. One running loop with two duties: reconcile schedules into memory from a source of truth (usually a database), and dispatch their occurrences at the right time — cron, fixed interval, delayed, or at a fixed moment. Built so a run can be late, but never silently lost.
 
 This library is part of the [Utopia PHP Framework](https://github.com/utopia-php).
 
 ## Why opinionated
 
-Most schedulers ask "what is due *now*?" in a loop. That question harbors two production-grade defects:
+Most schedulers ask "what is due *now*?" in a loop, and sync their schedule list with "what changed since last time?". Both questions harbor production-grade defects:
 
 - **Evaluation races.** While the loop walks thousands of schedules, "now" keeps moving. When a tick starts milliseconds before a minute boundary, the boundary crosses mid-loop and every occurrence sitting on it falls between two answers — dropped, with no error and no trace.
 - **Gaps have no owner.** Whatever falls between two ticks, or between a crash and a restart, was due in a moment nobody ever asks about again.
+- **Deletes are invisible.** A change feed keyed on an updated-at column never sees a hard-deleted row, so removed schedules keep firing from memory until the next restart.
 
-Utopia Schedule replaces the question. Every tick selects occurrences from an explicit half-open window `[start, end)`, each window opens exactly where the previous committed window closed, and the boundary (the *watermark*) persists through a storage port. Windows tile the timeline: every occurrence belongs to exactly one window, no matter how slowly the loop runs, how far the tick phase drifts, or how often the process restarts.
+Utopia Schedule replaces the questions. Occurrences are selected from an explicit half-open window `[start, end)`; each window opens exactly where the previous committed window closed, and the boundary (the *watermark*) persists through a storage port. Windows tile the timeline: every occurrence belongs to exactly one window, no matter how slowly the loop runs, how far the tick phase drifts, or how often the process restarts. And reconciliation is level-based: the source states the full desired set, the scheduler diffs — so removals converge by construction.
 
 ## Getting started
 
@@ -21,31 +22,50 @@ Install with Composer:
 composer require utopia-php/schedule
 ```
 
-Register schedules and run:
+Describe the source of truth and run:
 
 ```php
 <?php
 
-use Utopia\Schedule\At;
 use Utopia\Schedule\Cron;
-use Utopia\Schedule\Interval;
+use Utopia\Schedule\Entry;
 use Utopia\Schedule\Occurrence;
+use Utopia\Schedule\Row;
 use Utopia\Schedule\Scheduler;
+use Utopia\Schedule\Source;
 
-$scheduler = new Scheduler();
+$scheduler = new Scheduler(
+    source: new Source(
+        // The full desired set, as cheap descriptors. Runs every 10 seconds.
+        list: function (): iterable {
+            foreach ($database->find('schedules') as $document) {
+                yield new Row(
+                    id: $document->getId(),
+                    version: $document->getAttribute('updatedAt'),
+                    data: $document,
+                    activeFrom: new DateTimeImmutable($document->getAttribute('updatedAt')),
+                );
+            }
+        },
+        // The expensive part — parsing, hydrating context — runs only when
+        // a row is new or its version changed.
+        make: fn (Row $row): Entry => new Entry(
+            schedule: new Cron($row->data->getAttribute('schedule')),
+            payload: ['projectId' => $row->data->getAttribute('projectId')],
+        ),
+    ),
+    state: $redisBackedState,
+);
 
-$scheduler->set('report', new Cron('*/15 * * * *'));   // cron semantics
-$scheduler->set('heartbeat', new Interval(30));        // every 30 seconds
-$scheduler->set('cleanup', At::in(300));               // in 5 minutes, once
-$scheduler->set('launch', new At(new DateTimeImmutable('2027-01-01 00:00:00'))); // at a fixed time, once
-
-$scheduler->run(function (Occurrence $occurrence) {
-    // $occurrence->id  — the key registered above
-    // $occurrence->due — when the run was scheduled for
+$scheduler->run(function (Occurrence $occurrence) use ($queue): void {
+    // $occurrence->id      — the row's identity
+    // $occurrence->due     — when the run was scheduled for
+    // $occurrence->payload — whatever make() attached
+    $queue->enqueue($occurrence->id, $occurrence->payload);
 });
 ```
 
-`run()` ticks on a wall-anchored cadence: it sleeps to the next multiple of the tick interval instead of sleeping a fixed span after variable work, so the tick phase never drifts. A handler exception propagates before the tick commits, which means a supervised restart re-delivers the tick instead of losing it. Call `stop()` — from the handler or a signal handler — to return after the current tick completes.
+`run()` ticks on a wall-anchored cadence: it sleeps to the next multiple of the tick interval instead of sleeping a fixed span after variable work, so the tick phase never drifts. A handler exception propagates before the tick commits, which means a supervised restart re-delivers the tick instead of losing it. Reconciliation errors go the other way — through the `onError` callback, leaving the last good view dispatching, because stale schedules beat a stopped scheduler. Call `stop()` — from the handler or a signal handler — to return after the current tick completes.
 
 ## Schedule semantics
 
@@ -53,42 +73,58 @@ $scheduler->run(function (Occurrence $occurrence) {
 |----------|-------|-------|
 | `new Cron('*/15 * * * *')` | on cron matches | Minute resolution. Invalid and never-matching expressions throw at construction instead of becoming a silent no-op. |
 | `new Interval(900)` | every 900 seconds | Occurrences sit on a deterministic grid (anchor + k × seconds, epoch-anchored by default), so the cadence survives restarts instead of re-phasing to process boot. Pass an anchor to set the phase. |
-| `At::in(300)` | once, 300 seconds after the call | The moment is absolute from construction; the scheduler drops the entry after delivery. |
-| `new At($dateTime)` | once, at `$dateTime` | Dropped after delivery. |
+| `At::in(300)` | once, 300 seconds after the call | The moment is absolute from construction. |
+| `new At($dateTime)` | once, at `$dateTime` | |
 
-All three types implement one contract: `occurrencesBetween($start, $end)` returns the occurrences inside `[start, end)`, ascending. An occurrence exactly at `$start` belongs to the window; one exactly at `$end` belongs to the next.
+All types implement one contract: `occurrencesBetween($start, $end)` returns the occurrences inside `[start, end)`, ascending. An occurrence exactly at `$start` belongs to the window; one exactly at `$end` belongs to the next.
 
-## Surviving restarts
+A delivered one-shot is dropped from memory and tombstoned by its `(id, version)`, so the next sync does not re-add the row before the source records completion — the handler (or the worker it feeds) owns marking the row done. The same row returning with a new version is a genuine reschedule and runs again.
 
-The watermark lives behind the `State` interface. The default `MemoryState` covers a single process; back it with shared storage and a replacement process resumes coverage where its predecessor stopped:
+## Reconciliation
+
+Reconciliation is level-based: `list()` returns the full desired set and the scheduler converges memory to it — additions, updates, and removals, including hard deletes no change feed can see. Two properties keep it cheap and safe:
+
+- `make()` runs only for new or version-changed rows; an unchanged row costs a string compare.
+- A listing that throws mid-iteration discards the whole batch: a failed sync must never look like a mass removal. A row whose `make()` throws is skipped and reported; its previous entry stays.
+
+For large sets, add a change feed and the sync turns incremental between full snapshots:
 
 ```php
 <?php
 
-use Utopia\Schedule\Scheduler;
-use Utopia\Schedule\State;
-
-$state = new class implements State {
-    public function __construct(private \Redis $redis = new \Redis()) {}
-
-    public function get(): ?string
-    {
-        $value = $this->redis->get('scheduler-watermark');
-        return \is_string($value) ? $value : null;
-    }
-
-    public function put(string $value): void
-    {
-        $this->redis->set('scheduler-watermark', $value);
-    }
-};
-
-$scheduler = new Scheduler(state: $state);
+new Source(
+    list: $listAll,                 // full snapshot, every $relist seconds (default 300)
+    make: $make,
+    changes: fn (DateTimeImmutable $since): iterable => $listChangedSince($since),
+    every: 10,                      // incremental cadence
+);
 ```
 
-Occurrences missed while the process was down are delivered on the first tick after it returns, oldest first. The `lookback` option (default 300 seconds) caps how far back a stale watermark reaches, so recovery after a long outage replays a bounded burst rather than everything since the outage began.
+The change feed carries updates and soft deletes (`active: false`); hard deletes converge on the next full snapshot. Updates are idempotent under the version diff, so an overlapping feed is harmless.
 
-Run one scheduler per watermark. Two instances sharing state race benignly on the watermark but deliver duplicates; use a lock or single replica for exactly-one-runner deployments.
+`Row::$activeFrom` clamps each entry's window: a schedule created — or edited — while the scheduler was down backfills only from its change time, never under the old watermark with the old definition.
+
+## Surviving restarts and failover
+
+The watermark lives behind the `State` interface (two methods; back it with Redis or a database row). A replacement process resumes coverage where its predecessor stopped: occurrences missed while it was down are delivered on the first tick back, oldest first. The `lookback` option (default 300 seconds) caps how far a stale watermark reaches, so recovery after a long outage replays a bounded burst.
+
+For standby replicas, pass a `Lease`. Exactly one instance dispatches; the others poll for the lease and take over when the holder dies and its lease expires. A new leader forces a full reconcile and resumes from the committed watermark — a handover can duplicate a tick's occurrences, it can never lose them. `LockLease` adapts a `utopia-php/lock` distributed lock:
+
+```php
+<?php
+
+use Utopia\Lock\Distributed;
+use Utopia\Schedule\LockLease;
+use Utopia\Schedule\Scheduler;
+
+$scheduler = new Scheduler(
+    source: $source,
+    state: $state,
+    lease: new LockLease(new Distributed($redis, 'scheduler-leader', ttl: 30)),
+);
+```
+
+Set the lock TTL to a few tick intervals. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `list()` — and give each partition its own `State` key and its own lease; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
 
 ## Delivery model
 
@@ -96,6 +132,8 @@ Run one scheduler per watermark. Two instances sharing state race benignly on th
 
 ```php
 <?php
+
+$scheduler->reconcile();
 
 foreach ($scheduler->tick() as $occurrence) {
     $handle($occurrence);
@@ -106,30 +144,21 @@ $scheduler->commit();
 
 `tick()` selects the next window's occurrences without advancing the watermark; `commit()` advances it. Skip `commit()` when handling fails and the next `tick()` re-delivers — at-least-once, by construction. With the default `lookahead: 0`, occurrences are handed over after they fall due, late by at most one tick interval (default 1 second). Setting `lookahead` hands future occurrences over early — `$occurrence->due` says when they are meant to run — for callers that enqueue with precise delays, at the cost of losing occurrences committed but not yet run when a crash hits.
 
+## Metrics
+
+Pass a `utopia-php/telemetry` adapter and the scheduler records the four golden signals:
+
+| Signal | Metric | Meaning |
+|--------|--------|---------|
+| Latency | `schedule.dispatch.delay` (histogram, s) | how late each occurrence was handed to the handler |
+| Latency | `schedule.tick.duration`, `schedule.reconcile.duration` (histograms, s) | time spent selecting and syncing |
+| Traffic | `schedule.dispatch.total` (counter), `schedule.entries` (gauge) | occurrences dispatched; schedules in memory |
+| Errors | `schedule.error.total` (counter, `stage` attribute) | reconcile, make, and dispatch failures |
+| Saturation | `schedule.lag` (gauge, s) | how far the window start trails "now" — steady at about one interval; growing means the loop is falling behind |
+
 ## Testing time
 
-`Clock` isolates the scheduler from wall time, and the bundled `TestClock` makes timing defects reproducible fixtures — including the class of defect this library exists to prevent:
-
-```php
-<?php
-
-use Utopia\Schedule\Cron;
-use Utopia\Schedule\Scheduler;
-use Utopia\Schedule\TestClock;
-
-// A tick phase 227ms before a minute boundary, drifting 1.5ms per tick
-// across it: the shape that made a "now"-based scheduler drop 90% of
-// runs. Tiled windows deliver every occurrence exactly once.
-$clock = new TestClock(new DateTimeImmutable('2026-08-17 15:53:59.773'));
-$scheduler = new Scheduler(clock: $clock, interval: 60);
-$scheduler->set('fn', new Cron('*/5 * * * *'));
-
-for ($tick = 0; $tick < 60; $tick++) {
-    $occurrences = $scheduler->tick();
-    $scheduler->commit();
-    $clock->advance(60.0015);
-}
-```
+`Clock` isolates the scheduler from wall time, and the bundled `TestClock` makes timing defects reproducible fixtures — including the class of defect this library exists to prevent: the test suite replays a tick phase creeping across a minute boundary at 1.5ms per tick for an hour and asserts every occurrence is delivered exactly once.
 
 ## Tests
 

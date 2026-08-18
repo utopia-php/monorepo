@@ -12,5 +12,6 @@ final readonly class Occurrence
     public function __construct(
         public string $id,
         public \DateTimeImmutable $due,
+        public mixed $payload = null,
     ) {}
 }

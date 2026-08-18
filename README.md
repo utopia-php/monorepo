@@ -83,6 +83,7 @@ graph TD
     queue --> pools
     queue --> telemetry
     queue --> validators
+    schedule --> telemetry
     servers --> di
     servers --> validators
     storage --> telemetry
@@ -93,7 +94,6 @@ graph TD
     image
     nats
     replication
-    schedule
     user-agent
 ```
 <!-- /graph -->

@@ -1,6 +1,6 @@
 {
     "name": "utopia-php/schedule",
-    "description": "An opinionated scheduler with cron, interval, delayed and fixed-time semantics that cannot silently skip a run",
+    "description": "An opinionated scheduler that reconciles schedules from a source of truth and dispatches cron, interval, delayed and fixed-time occurrences without silently skipping a run",
     "type": "library",
     "keywords": [
         "php",
@@ -21,10 +21,17 @@
     ],
     "require": {
         "php": ">=8.3",
-        "dragonmantank/cron-expression": "^3.4"
+        "dragonmantank/cron-expression": "^3.4",
+        "utopia-php/telemetry": "^0.4"
     },
     "require-dev": {
-        "phpunit/phpunit": "^11.5"
+        "phpunit/phpunit": "^12",
+        "utopia-php/lock": "^0.3"
+    },
+    "suggest": {
+        "utopia-php/lock": "Required when using LockLease for leader election across replicas",
+        "ext-opentelemetry": "Required by utopia-php/telemetry when using OpenTelemetry metrics",
+        "ext-protobuf": "Required by utopia-php/telemetry when using OpenTelemetry metrics"
     },
     "autoload": {
         "psr-4": {

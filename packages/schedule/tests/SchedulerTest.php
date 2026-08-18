@@ -7,11 +7,17 @@ namespace Utopia\Tests;
 use PHPUnit\Framework\TestCase;
 use Utopia\Schedule\At;
 use Utopia\Schedule\Cron;
+use Utopia\Schedule\Entry;
 use Utopia\Schedule\Interval;
+use Utopia\Schedule\Lease;
 use Utopia\Schedule\MemoryState;
 use Utopia\Schedule\Occurrence;
+use Utopia\Schedule\Row;
+use Utopia\Schedule\Schedule;
 use Utopia\Schedule\Scheduler;
+use Utopia\Schedule\Source;
 use Utopia\Schedule\TestClock;
+use Utopia\Telemetry\Adapter\Test as TestTelemetry;
 
 final class SchedulerTest extends TestCase
 {
@@ -22,11 +28,10 @@ final class SchedulerTest extends TestCase
         // A "now"-based scheduler dropped ~90% of runs for 45 minutes;
         // tiled windows must deliver every occurrence exactly once.
         $clock = new TestClock(new \DateTimeImmutable('2026-08-17 15:53:59.773000'));
-        $scheduler = new Scheduler(state: new MemoryState(), clock: $clock, interval: 60);
-        $scheduler->set('fn', new Cron('*/5 * * * *'));
+        $scheduler = $this->scheduler($clock, ['fn' => new Cron('*/5 * * * *')], interval: 60);
 
         $delivered = [];
-        for ($tick = 0; $tick < 60; $tick++) {
+        for ($tick = 0; $tick < 60; ++$tick) {
             foreach ($scheduler->tick() as $occurrence) {
                 $delivered[] = $occurrence->due->format('H:i:s');
             }
@@ -47,16 +52,14 @@ final class SchedulerTest extends TestCase
         $state = new MemoryState();
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
 
-        $scheduler = new Scheduler(state: $state, clock: $clock);
-        $scheduler->set('fn', new Interval(60));
+        $scheduler = $this->scheduler($clock, ['fn' => new Interval(60)], state: $state);
         $scheduler->tick();
         $scheduler->commit();
 
         // The process dies for 3 minutes; a replacement resumes from the
         // shared watermark and delivers every occurrence it missed.
         $clock->advance(185.0);
-        $replacement = new Scheduler(state: $state, clock: $clock);
-        $replacement->set('fn', new Interval(60));
+        $replacement = $this->scheduler($clock, ['fn' => new Interval(60)], state: $state);
 
         $this->assertSame(
             ['03:01:00', '03:02:00', '03:03:00'],
@@ -66,11 +69,8 @@ final class SchedulerTest extends TestCase
 
     public function testLookbackCapsTheCatchUpBurst(): void
     {
-        $state = new MemoryState();
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
-
-        $scheduler = new Scheduler(state: $state, clock: $clock, lookback: 120);
-        $scheduler->set('fn', new Interval(60));
+        $scheduler = $this->scheduler($clock, ['fn' => new Interval(60)], lookback: 120);
         $scheduler->tick();
         $scheduler->commit();
 
@@ -85,8 +85,7 @@ final class SchedulerTest extends TestCase
     public function testTickWithoutCommitRedelivers(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
-        $scheduler = new Scheduler(state: new MemoryState(), clock: $clock);
-        $scheduler->set('fn', new Interval(60));
+        $scheduler = $this->scheduler($clock, ['fn' => new Interval(60)]);
         $scheduler->tick();
         $scheduler->commit();
         $clock->advance(60.0);
@@ -104,8 +103,7 @@ final class SchedulerTest extends TestCase
     public function testOneShotsDeliverOnceAndAreDropped(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:00.000000'));
-        $scheduler = new Scheduler(state: new MemoryState(), clock: $clock);
-        $scheduler->set('delayed', At::in(30, $clock->now()));
+        $scheduler = $this->scheduler($clock, ['delayed' => At::in(30, $clock->now())]);
         $scheduler->tick();
         $scheduler->commit();
 
@@ -119,26 +117,13 @@ final class SchedulerTest extends TestCase
         $this->assertSame([], $scheduler->tick());
     }
 
-    public function testRemovedSchedulesStopFiring(): void
-    {
-        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
-        $scheduler = new Scheduler(state: new MemoryState(), clock: $clock);
-        $scheduler->set('fn', new Interval(60));
-        $scheduler->tick();
-        $scheduler->commit();
-
-        $scheduler->remove('fn');
-        $clock->advance(120.0);
-
-        $this->assertSame([], $scheduler->tick());
-    }
-
     public function testOccurrencesAreOrderedOldestFirstAcrossSchedules(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
-        $scheduler = new Scheduler(state: new MemoryState(), clock: $clock);
-        $scheduler->set('b-minutely', new Cron('* * * * *'));
-        $scheduler->set('a-half-minute', new Interval(30));
+        $scheduler = $this->scheduler($clock, [
+            'b-minutely' => new Cron('* * * * *'),
+            'a-half-minute' => new Interval(30),
+        ]);
         $scheduler->tick();
         $scheduler->commit();
 
@@ -161,8 +146,7 @@ final class SchedulerTest extends TestCase
     public function testWatermarkNeverRewindsWhenTheClockStepsBack(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:02:30.000000'));
-        $scheduler = new Scheduler(state: new MemoryState(), clock: $clock);
-        $scheduler->set('fn', new Interval(60));
+        $scheduler = $this->scheduler($clock, ['fn' => new Interval(60)]);
         $scheduler->tick();
         $scheduler->commit();
 
@@ -186,8 +170,7 @@ final class SchedulerTest extends TestCase
     public function testLookaheadHandsOverFutureOccurrences(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
-        $scheduler = new Scheduler(state: new MemoryState(), clock: $clock, lookahead: 60);
-        $scheduler->set('fn', new Cron('*/15 * * * *'));
+        $scheduler = $this->scheduler($clock, ['fn' => new Cron('*/15 * * * *')], lookahead: 60);
 
         $this->assertSame([], $scheduler->tick()); // 03:15 is beyond the first window
         $scheduler->commit();
@@ -203,8 +186,7 @@ final class SchedulerTest extends TestCase
     public function testRunDeliversOnAWallAnchoredCadenceUntilStopped(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
-        $scheduler = new Scheduler(state: new MemoryState(), clock: $clock, interval: 60);
-        $scheduler->set('minutely', new Cron('* * * * *'));
+        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], interval: 60);
 
         $seen = [];
         $scheduler->run(function (Occurrence $occurrence) use (&$seen, $scheduler, $clock): void {
@@ -222,10 +204,175 @@ final class SchedulerTest extends TestCase
         );
     }
 
+    public function testFollowersDoNotDispatchUntilTheLeaseIsAcquired(): void
+    {
+        $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
+        $attempts = 0;
+        $lease = new FakeLease(
+            onAcquire: function () use (&$attempts): bool {
+                return ++$attempts >= 3;
+            },
+            onRenew: fn(): bool => true,
+        );
+        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], interval: 60, lease: $lease);
+
+        $delivered = [];
+        $scheduler->run(function (Occurrence $occurrence) use (&$delivered, $scheduler): void {
+            $delivered[] = $occurrence->due->format('H:i:s');
+            $scheduler->stop();
+        });
+
+        // Two failed acquires idle at 00:00:30 and 00:01:30; leadership
+        // starts at 00:02:30, so the first covered minute is 00:03.
+        $this->assertSame(3, $lease->acquireAttempts);
+        $this->assertSame(['00:03:00'], $delivered);
+        $this->assertTrue($lease->released, 'a held lease is released on stop');
+    }
+
+    public function testLosingTheLeaseStopsDispatchImmediately(): void
+    {
+        $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
+
+        $control = new class {
+            public ?Scheduler $scheduler = null;
+
+            public bool $acquired = false;
+
+            public int $renews = 0;
+        };
+        $lease = new FakeLease(
+            onAcquire: function () use ($control): bool {
+                if ($control->acquired) {
+                    $control->scheduler?->stop(); // regaining is not part of this test
+
+                    return false;
+                }
+
+                return $control->acquired = true;
+            },
+            onRenew: fn(): bool => ++$control->renews < 3,
+        );
+        $control->scheduler = $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], interval: 60, lease: $lease);
+
+        $delivered = [];
+        $scheduler->run(function (Occurrence $occurrence) use (&$delivered): void {
+            $delivered[] = $occurrence->due->format('H:i:s');
+        });
+
+        // The third renewal fails before the 00:02 minute is dispatched:
+        // nothing after the loss is delivered, and a lost lease is not
+        // released (this instance no longer owns it).
+        $this->assertSame(['00:01:00'], $delivered);
+        $this->assertFalse($lease->released);
+    }
+
+    public function testGoldenSignalsAreRecorded(): void
+    {
+        $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
+        $telemetry = new TestTelemetry();
+        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], interval: 60, telemetry: $telemetry);
+
+        $scheduler->run(function () use ($scheduler): void {
+            $scheduler->stop();
+        });
+
+        /** @var list<float|int> $dispatched */
+        $dispatched = get_object_vars($telemetry->counters['schedule.dispatch.total'])['values'];
+        $this->assertSame([1], $dispatched);
+
+        /** @var list<float|int> $delays */
+        $delays = get_object_vars($telemetry->histograms['schedule.dispatch.delay'])['values'];
+        $this->assertCount(1, $delays);
+        // The 00:01:00 occurrence is handed over on the 00:02:00 tick.
+        $this->assertEqualsWithDelta(60.0, $delays[0], 0.001);
+
+        /** @var list<float|int> $entries */
+        $entries = get_object_vars($telemetry->gauges['schedule.entries'])['values'];
+        $this->assertContains(1, $entries);
+
+        /** @var list<float|int> $lags */
+        $lags = get_object_vars($telemetry->gauges['schedule.lag'])['values'];
+        // Saturation reads steady at about one interval behind "now".
+        $this->assertEqualsWithDelta(60.0, max([0.0, ...$lags]), 0.001);
+
+        $this->assertArrayHasKey('schedule.tick.duration', $telemetry->histograms);
+        $this->assertArrayHasKey('schedule.reconcile.duration', $telemetry->histograms);
+    }
+
+    public function testAFailingHandlerCountsADispatchErrorAndSkipsCommit(): void
+    {
+        $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
+        $telemetry = new TestTelemetry();
+        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], interval: 60, telemetry: $telemetry);
+
+        try {
+            $scheduler->run(function (): never {
+                throw new \RuntimeException('downstream unavailable');
+            });
+            $this->fail('the handler failure must propagate');
+        } catch (\RuntimeException) {
+        }
+
+        /** @var list<float|int> $errors */
+        $errors = get_object_vars($telemetry->counters['schedule.error.total'])['values'];
+        $this->assertSame([1], $errors);
+
+        // The failed tick was never committed: it re-delivers.
+        $this->assertCount(1, $scheduler->tick());
+    }
+
     public function testRejectsNonPositiveInterval(): void
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        new Scheduler(interval: 0);
+        new Scheduler(source: $this->emptySource(), interval: 0);
+    }
+
+    public function testSourceRejectsNonPositiveSyncCadence(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new Source(list: fn(): array => [], make: fn(Row $row): Entry => new Entry(new Interval(60)), every: 0);
+    }
+
+    /**
+     * @param array<string, Schedule> $schedules
+     */
+    private function scheduler(
+        TestClock $clock,
+        array $schedules,
+        ?MemoryState $state = null,
+        int $interval = 1,
+        int $lookahead = 0,
+        int $lookback = 300,
+        ?Lease $lease = null,
+        ?TestTelemetry $telemetry = null,
+    ): Scheduler {
+        $rows = [];
+        foreach (array_keys($schedules) as $id) {
+            $rows[] = new Row($id, '1');
+        }
+
+        $scheduler = new Scheduler(
+            source: new Source(
+                list: fn(): array => $rows,
+                make: fn(Row $row): Entry => new Entry($schedules[$row->id]),
+            ),
+            state: $state ?? new MemoryState(),
+            clock: $clock,
+            interval: $interval,
+            lookahead: $lookahead,
+            lookback: $lookback,
+            lease: $lease,
+            telemetry: $telemetry ?? new \Utopia\Telemetry\Adapter\None(),
+        );
+        $scheduler->reconcile();
+
+        return $scheduler;
+    }
+
+    private function emptySource(): Source
+    {
+        return new Source(list: fn(): array => [], make: fn(Row $row): Entry => new Entry(new Interval(60)));
     }
 }
