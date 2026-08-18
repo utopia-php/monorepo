@@ -35,10 +35,12 @@ use Utopia\Telemetry\Histogram;
  *   clamped, so recovery after a long outage replays a capped burst
  *   instead of everything since the outage began.
  * - Coverage extends to late discoveries: an entry that appears or
- *   changes between syncs is covered once from its own start — its
- *   activeFrom, or the previous sync — even when the watermark has
- *   already passed it. A one-shot due sooner than the sync lag runs
- *   late, never never.
+ *   changes between syncs is covered once from the moment it took
+ *   effect, even when the watermark has already passed it, so a one-shot
+ *   due sooner than the sync lag runs late instead of never. That reach
+ *   stops at the previous sync — earlier than that, coverage is the
+ *   watermark's job — so a cold start does not replay history for every
+ *   schedule it loads.
  * - The watermark never rewinds: a clock stepping backwards produces
  *   empty windows instead of duplicating already-delivered occurrences.
  * - Reconciliation is level-based: a full snapshot diff converges
@@ -262,12 +264,7 @@ final class Scheduler
                 'trigger' => $entry->trigger,
                 'payload' => $entry->payload,
                 'version' => $row->version,
-                // The entry is covered once from its own start — the row's
-                // activeFrom, or failing that the previous sync (the earliest
-                // moment it could have appeared) — even when the watermark
-                // has already moved past it. Discovered late means run late,
-                // never skipped.
-                'coverFrom' => $row->activeFrom ?? $since,
+                'coverFrom' => $this->coverFrom($row->activeFrom, $since),
             ];
         }
 
@@ -286,6 +283,54 @@ final class Scheduler
 
         $this->lastSyncAt = $syncStart;
         $this->reconcileDuration->record(microtime(true) - $started, ['full' => $full]);
+    }
+
+    /**
+     * Where a freshly made entry's own coverage starts.
+     *
+     * An entry that appeared between two syncs is covered from the moment it
+     * took effect, so occurrences the watermark has already passed are run
+     * late rather than lost — but never from further back than the last time
+     * the source was read. Before that point coverage is the watermark's job:
+     * either the row already existed and was covered, or it did not exist and
+     * has nothing owed. Without that floor, every schedule loaded on a cold
+     * start would replay its history back to whenever it was last edited.
+     *
+     * An activeFrom later than the floor still applies in full, which is what
+     * stops a definition from running before it took effect.
+     */
+    private function coverFrom(?\DateTimeImmutable $activeFrom, ?\DateTimeImmutable $since): ?\DateTimeImmutable
+    {
+        $floor = $since ?? $this->moment($this->store->load()?->windowEnd);
+
+        if (!$activeFrom instanceof \DateTimeImmutable) {
+            return $since;
+        }
+
+        return $floor instanceof \DateTimeImmutable && $activeFrom < $floor ? $floor : $activeFrom;
+    }
+
+    /**
+     * A committed window end as a moment, or null when there is none to read.
+     */
+    private function moment(?string $stamp): ?\DateTimeImmutable
+    {
+        if ($stamp === null) {
+            return null;
+        }
+
+        $moment = \DateTimeImmutable::createFromFormat('U.u', $stamp);
+
+        return $moment === false ? null : $moment;
+    }
+
+    /**
+     * How many schedules are loaded. The same figure the schedule.entries
+     * gauge reports, for a caller that wants to log or assert it.
+     */
+    public function count(): int
+    {
+        return \count($this->entries);
     }
 
     /**
@@ -314,12 +359,7 @@ final class Scheduler
 
         $now = $this->clock->now();
         $end = $this->lookahead > 0 ? $now->modify("{$this->lookahead} seconds") : $now;
-        $start = null;
-        if ($claim->windowEnd !== null) {
-            $watermark = \DateTimeImmutable::createFromFormat('U.u', $claim->windowEnd);
-            $start = $watermark === false ? null : $watermark;
-        }
-        $start ??= $now;
+        $start = $this->moment($claim->windowEnd) ?? $now;
 
         $floor = $now->modify("-{$this->lookback} seconds");
         if ($start < $floor) {

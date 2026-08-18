@@ -117,7 +117,7 @@ Reconciliation is level-based: `snapshot()` returns the full desired set and the
 
 - `make()` runs only for new or version-changed rows; an unchanged row costs a string compare.
 - A snapshot that throws mid-iteration discards the whole batch: a failed sync must never look like a mass removal. A row whose `make()` throws is skipped and reported; its previous entry stays.
-- Discovery lag cannot lose runs: a new or changed entry is covered once from its own start — its `activeFrom`, or the previous sync time — even when the watermark has already passed it. A one-shot due sooner than the sync cadence runs late instead of never.
+- Discovery lag cannot lose runs: a new or changed entry is covered once from the moment it took effect, even when the watermark has already passed it, so a one-shot due sooner than the sync cadence runs late instead of never. That reach stops at the previous sync — before that point, coverage is the watermark's job — so a cold start does not replay history for every schedule it loads.
 
 For large sets, implement `Changes` as well and syncs turn incremental between full snapshots:
 
@@ -144,7 +144,7 @@ A source either can answer "what changed?" or it cannot, so this is a second int
 
 A definition that changes is covered from its new change time, so a schedule edited while the scheduler was mid-tick runs under its new definition for that span — repeating a run the old definition already did rather than skipping one the new one never did. Delivery is at-least-once and the repeat carries the same `Occurrence::key()`, so a consumer keyed on it absorbs the second copy.
 
-`Row::$activeFrom` anchors each entry's coverage: a schedule created — or edited — while the scheduler was down backfills only from its change time, never under the old watermark with the old definition, and a schedule the sync discovers late is still covered from its change time forward. Set it to the row's last change time.
+`Row::$activeFrom` anchors each entry's coverage, in both directions: a definition never runs before it took effect, and one discovered between syncs is still covered from that moment forward rather than losing whatever the watermark has already passed. Set it to the row's last change time. Reaching back is bounded by the previous sync, so restarting a large fleet costs nothing extra.
 
 ## Surviving restarts and failover
 
@@ -196,7 +196,7 @@ foreach ($scheduler->tick() as $occurrence) {
 $scheduler->commit();
 ```
 
-`tick()` confirms (or takes) leadership and selects the next window's occurrences without advancing the watermark; `commit()` advances it and renews the claim in one swap. A retry loop keeps its leadership: `tick()` renews the claim when it is more than half spent, so retrying for longer than the lease does not hand the window to a standby mid-retry. Skip `commit()` when handling fails and the next `tick()` re-delivers — at-least-once, by construction. With the default `lookahead: 0`, occurrences are handed over after they fall due, late by at most one tick interval (default 1 second). Setting `lookahead` hands future occurrences over early — `$occurrence->due` says when they are meant to run — for callers that enqueue with precise delays, at the cost of losing occurrences committed but not yet run when a crash hits.
+`count()` reports how many schedules are loaded, for a caller that wants to log or assert it. `tick()` confirms (or takes) leadership and selects the next window's occurrences without advancing the watermark; `commit()` advances it and renews the claim in one swap. A retry loop keeps its leadership: `tick()` renews the claim when it is more than half spent, so retrying for longer than the lease does not hand the window to a standby mid-retry. Skip `commit()` when handling fails and the next `tick()` re-delivers — at-least-once, by construction. With the default `lookahead: 0`, occurrences are handed over after they fall due, late by at most one tick interval (default 1 second). Setting `lookahead` hands future occurrences over early — `$occurrence->due` says when they are meant to run — for callers that enqueue with precise delays, at the cost of losing occurrences committed but not yet run when a crash hits.
 
 ## Metrics
 
