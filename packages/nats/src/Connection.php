@@ -23,6 +23,7 @@ use Utopia\NATS\Protocol\Writer;
 use Utopia\NATS\Transport\TcpTransport;
 use Utopia\NATS\Transport\TlsTransport;
 use Utopia\NATS\Transport\Transport;
+use Utopia\NATS\Transport\WebSocketTransport;
 
 final class Connection
 {
@@ -59,8 +60,10 @@ final class Connection
     // Reconnection
     /** @var list<string> */
     private array $serverPool = [];
+    private string $currentServer = '';
     /** @var list<string> */
     private array $pendingBuffer = [];
+    private int $pendingBufferBytes = 0;
 
     private function __construct()
     {
@@ -95,14 +98,22 @@ final class Connection
     {
         $this->ensureConnected();
 
-        if (isset($this->serverInfo) && \strlen($data) > $this->serverInfo->maxPayload) {
+        $hasHeaders = $headers instanceof \Utopia\NATS\Headers && $headers->all() !== [];
+
+        if ($hasHeaders && isset($this->serverInfo) && !$this->serverInfo->headersSupported) {
+            throw new ProtocolException('Server does not support message headers');
+        }
+
+        $headerWire = $hasHeaders ? $headers->toWire() : '';
+        // The header block counts against the server's max payload budget.
+        $wireSize = \strlen($headerWire) + \strlen($data);
+        if (isset($this->serverInfo) && $wireSize > $this->serverInfo->maxPayload) {
             throw new MaxPayloadException(
-                'Payload size ' . \strlen($data) . " exceeds server maximum of {$this->serverInfo->maxPayload}",
+                "Payload size {$wireSize} exceeds server maximum of {$this->serverInfo->maxPayload}",
             );
         }
 
-        if ($headers instanceof \Utopia\NATS\Headers && $headers->all() !== []) {
-            $headerWire = $headers->toWire();
+        if ($hasHeaders) {
             $cmd = $this->writer->hpub($subject, $headerWire, $data, $replyTo);
         } else {
             $cmd = $this->writer->pub($subject, $data, $replyTo);
@@ -116,7 +127,15 @@ final class Connection
         $this->ensureConnected();
 
         $sid = (string) $this->nextSid++;
-        $sub = new Subscription($sid, $subject, $queue, $callback);
+        $sub = new Subscription(
+            $sid,
+            $subject,
+            $queue,
+            $callback,
+            $this->options->subPendingMsgsLimit,
+            $this->options->subPendingBytesLimit,
+            $this->options->onSlowConsumer,
+        );
         $sub->setConnection($this);
 
         $this->subscriptions[$sid] = $sub;
@@ -180,6 +199,63 @@ final class Connection
         }
 
         return $msg;
+    }
+
+    /**
+     * Scatter-gather request: publish once and collect every reply until a stop
+     * condition is met (ADR-47). A 503 "no responders" reply means zero
+     * responders and yields an empty list.
+     *
+     * @param array{max?: int, timeout?: float, stall?: float} $opts
+     *   max     stop after this many replies
+     *   timeout overall deadline in seconds (defaults to the request timeout)
+     *   stall   stop when no new reply arrives within this many seconds
+     * @return list<Message>
+     */
+    public function requestMany(string $subject, string $data = '', array $opts = []): array
+    {
+        $this->ensureConnected();
+
+        $max = $opts['max'] ?? null;
+        $timeout = $opts['timeout'] ?? $this->options->requestTimeout;
+        $stall = $opts['stall'] ?? null;
+
+        // Dedicated inbox subscription so replies never touch the mux inbox used
+        // by the single-reply request().
+        $inbox = Inbox::create($this->options->inboxPrefix);
+        $sub = $this->subscribe($inbox);
+        $this->publish($subject, $data, $inbox);
+
+        $deadline = microtime(true) + $timeout;
+        $messages = [];
+
+        while ($max === null || \count($messages) < $max) {
+            $remaining = $deadline - microtime(true);
+            if ($remaining <= 0) {
+                break;
+            }
+
+            // A stall window caps how long we wait for the next reply; whichever
+            // of stall/overall-deadline is sooner bounds this iteration.
+            $wait = $stall !== null ? min($remaining, $stall) : $remaining;
+
+            $msg = $sub->nextMessage($wait);
+            if (!$msg instanceof Message) {
+                // Overall deadline or stall window elapsed with no new reply.
+                break;
+            }
+
+            // 503 no-responders: zero responders, return whatever we have (none).
+            if ($msg->headers instanceof Headers && $msg->headers->getStatus() === '503') {
+                break;
+            }
+
+            $messages[] = $msg;
+        }
+
+        $this->unsubscribe($sub);
+
+        return $messages;
     }
 
     public function newInbox(): string
@@ -269,24 +345,34 @@ final class Connection
         $this->status = self::STATUS_DRAINING;
         $timeout ??= $this->options->drainTimeout;
 
-        // Unsub all subscriptions
+        // Unsub all subscriptions, then send a PING. The server processes the
+        // UNSUBs and flushes any already-queued messages ahead of the PONG, so
+        // receiving that PONG is a deterministic barrier: everything the server
+        // had for us has arrived, and nothing new will. This replaces the old
+        // pure-timeout drain.
         foreach ($this->subscriptions as $sub) {
             $this->send($this->writer->unsub($sub->sid));
         }
+        $this->send($this->writer->ping());
 
-        // Process remaining messages
         $deadline = microtime(true) + $timeout;
-        while ($this->subscriptions !== []) {
+        while (true) {
             $remaining = $deadline - microtime(true);
             if ($remaining <= 0) {
                 break;
             }
 
             try {
-                $this->processMessage($remaining);
-            } catch (TimeoutException) {
+                [$op, $data] = $this->parser->next($remaining);
+            } catch (TimeoutException|ConnectionException) {
                 break;
             }
+
+            if ($op === ServerOp::Pong) {
+                break;
+            }
+
+            $this->dispatchOp($op, $data);
         }
 
         $this->close();
@@ -374,12 +460,12 @@ final class Connection
         $scheme = $parsed['scheme'];
 
         // Create transport
-        if ($scheme === 'tls' || $this->options->tls) {
-            $this->transport = new TlsTransport([
-                'cafile' => $this->options->tlsCaFile,
-                'local_cert' => $this->options->tlsCertFile,
-                'local_pk' => $this->options->tlsKeyFile,
-            ]);
+        if ($this->options->transportFactory instanceof \Closure) {
+            $this->transport = ($this->options->transportFactory)($scheme);
+        } elseif ($scheme === 'ws' || $scheme === 'wss') {
+            $this->transport = new WebSocketTransport($scheme === 'wss', $this->tlsOptions());
+        } elseif ($scheme === 'tls' || $this->options->tls) {
+            $this->transport = new TlsTransport($this->tlsOptions());
         } else {
             $this->transport = new TcpTransport();
         }
@@ -401,13 +487,15 @@ final class Connection
             }
         }
 
-        // TLS upgrade if required by server
-        if ($this->serverInfo->tlsRequired && $scheme !== 'tls' && !$this->options->tls) {
-            $this->transport->upgradeTls([
-                'cafile' => $this->options->tlsCaFile,
-                'local_cert' => $this->options->tlsCertFile,
-                'local_pk' => $this->options->tlsKeyFile,
-            ]);
+        // TLS upgrade over a plaintext TCP connection: when the server requires
+        // TLS, or when the caller opted in and the server advertises it is
+        // available. A TlsTransport / custom transport handles its own TLS.
+        if ($this->transport instanceof TcpTransport && $scheme !== 'tls') {
+            $wantsUpgrade = $this->serverInfo->tlsRequired
+                || ($this->options->tls && $this->serverInfo->tlsAvailable);
+            if ($wantsUpgrade) {
+                $this->transport->upgradeTls($this->tlsOptions());
+            }
         }
 
         // Send CONNECT
@@ -442,10 +530,13 @@ final class Connection
         }
 
         $this->lastPingTime = microtime(true);
+        $this->currentServer = $url;
     }
 
     private function buildConnectPayload(): array
     {
+        $headersSupported = $this->serverInfo->headersSupported;
+
         $payload = [
             'verbose' => $this->options->verbose,
             'pedantic' => $this->options->pedantic,
@@ -453,8 +544,10 @@ final class Connection
             'version' => self::CLIENT_VERSION,
             'protocol' => 1,
             'echo' => $this->options->echo,
-            'headers' => true,
-            'no_responders' => true,
+            // Only negotiate headers (and the header-based no_responders reply)
+            // when the server advertises support for them.
+            'headers' => $headersSupported,
+            'no_responders' => $headersSupported,
         ];
 
         if ($this->options->name !== '') {
@@ -462,8 +555,18 @@ final class Connection
         }
 
         $authFields = $this->auth->authenticate($this->serverInfo->nonce);
+        $payload = array_merge($payload, $authFields);
 
-        return array_merge($payload, $authFields);
+        // Dynamic providers are resolved on every (re)connect so refreshed
+        // tokens/JWTs take effect without rebuilding the connection.
+        if ($this->options->tokenProvider instanceof \Closure) {
+            $payload['auth_token'] = (string) ($this->options->tokenProvider)();
+        }
+        if ($this->options->jwtProvider instanceof \Closure) {
+            $payload['jwt'] = (string) ($this->options->jwtProvider)();
+        }
+
+        return $payload;
     }
 
     private function dispatchOp(ServerOp $op, mixed $data): ?Message
@@ -536,25 +639,69 @@ final class Connection
             ($this->options->onError)(new NatsException($message));
         }
 
-        if (stripos($message, 'permissions violation') !== false) {
-            throw new PermissionException($message);
-        }
-        if (stripos($message, 'authorization') !== false || stripos($message, 'authentication') !== false) {
-            throw new AuthenticationException($message);
-        }
-        if (stripos($message, 'maximum payload') !== false) {
-            throw new MaxPayloadException($message);
-        }
+        throw self::mapServerError($message);
+    }
 
-        throw new ProtocolException("Server error: {$message}");
+    /**
+     * Map a server -ERR string to a typed exception (ADR-7). Pure so the mapping
+     * can be unit tested without a live connection.
+     */
+    public static function mapServerError(string $message): NatsException
+    {
+        $lower = strtolower($message);
+
+        return match (true) {
+            str_contains($lower, 'permissions violation') => new PermissionException($message),
+            str_contains($lower, 'authorization violation'),
+            str_contains($lower, 'authentication expired'),
+            str_contains($lower, 'authorization'),
+            str_contains($lower, 'authentication') => new AuthenticationException($message),
+            str_contains($lower, 'maximum payload') => new MaxPayloadException($message),
+            default => new ProtocolException("Server error: {$message}"),
+        };
     }
 
     private function handleInfo(mixed $data): null
     {
         if (\is_array($data)) {
             $this->serverInfo = ServerInfo::fromArray($data);
+
+            // Async INFO may advertise additional cluster members; fold any new
+            // ones into the pool so failover has somewhere to go.
+            foreach ($this->serverInfo->connectUrls as $connectUrl) {
+                $normalized = $this->normalizeUrl($connectUrl);
+                if (!\in_array($normalized, $this->serverPool, true)) {
+                    $this->serverPool[] = $normalized;
+                }
+            }
+
+            // Lame-duck mode (ADR-5): the server is draining and will close the
+            // connection. Notify the caller and move to a different server if we
+            // know of one.
+            if (($data['ldm'] ?? false) === true) {
+                $this->handleLameDuck();
+            }
         }
         return null;
+    }
+
+    private function handleLameDuck(): void
+    {
+        if ($this->options->onLameDuck instanceof \Closure) {
+            ($this->options->onLameDuck)();
+        }
+
+        $others = array_values(array_filter(
+            $this->serverPool,
+            fn(string $url): bool => $url !== $this->currentServer,
+        ));
+
+        // Only proactively reconnect when a different server is available;
+        // otherwise ride out the current connection until it is closed.
+        if ($others !== [] && $this->options->allowReconnect) {
+            $this->serverPool = [...$others, $this->currentServer];
+            $this->attemptReconnect();
+        }
     }
 
     private function checkPings(): void
@@ -603,9 +750,14 @@ final class Connection
         }
 
         for ($attempt = 0; $attempt < $this->options->maxReconnectAttempts; $attempt++) {
-            // Wait with jitter before reconnecting
+            // Exponential backoff (capped) plus jitter before reconnecting.
             if ($attempt > 0) {
-                $wait = $this->options->reconnectWait + (lcg_value() * $this->options->reconnectJitter);
+                $backoff = self::reconnectBackoff(
+                    $attempt,
+                    $this->options->reconnectWait,
+                    $this->options->maxReconnectWait,
+                );
+                $wait = $backoff + (lcg_value() * $this->options->reconnectJitter);
                 usleep((int) ($wait * 1_000_000));
             }
 
@@ -623,10 +775,12 @@ final class Connection
                     }
 
                     // Flush any buffered publishes
-                    foreach ($this->pendingBuffer as $cmd) {
+                    $buffered = $this->pendingBuffer;
+                    $this->pendingBuffer = [];
+                    $this->pendingBufferBytes = 0;
+                    foreach ($buffered as $cmd) {
                         $this->send($cmd);
                     }
-                    $this->pendingBuffer = [];
 
                     if ($this->options->onReconnect instanceof \Closure) {
                         ($this->options->onReconnect)();
@@ -653,7 +807,7 @@ final class Connection
     private function send(string $data): void
     {
         if ($this->status === self::STATUS_RECONNECTING) {
-            $this->pendingBuffer[] = $data;
+            $this->bufferPending($data);
             return;
         }
 
@@ -661,12 +815,58 @@ final class Connection
             $this->transport->write($data);
         } catch (ConnectionException $e) {
             if ($this->options->allowReconnect && $this->status !== self::STATUS_CLOSED) {
-                $this->pendingBuffer[] = $data;
+                $this->bufferPending($data);
                 $this->attemptReconnect();
                 return;
             }
             throw $e;
         }
+    }
+
+    /**
+     * Buffer a command while reconnecting, enforcing the reconnect buffer cap.
+     * Commands that would exceed the cap are dropped (and reported via onError)
+     * rather than growing the buffer without bound.
+     */
+    private function bufferPending(string $data): void
+    {
+        if (!self::reconnectBufferAccepts($this->pendingBufferBytes, \strlen($data), $this->options->reconnectBufSize)) {
+            if ($this->options->onError instanceof \Closure) {
+                ($this->options->onError)(new NatsException('Reconnect buffer full; dropping pending message'));
+            }
+            return;
+        }
+
+        $this->pendingBuffer[] = $data;
+        $this->pendingBufferBytes += \strlen($data);
+    }
+
+    /**
+     * Exponential reconnect backoff (in seconds), capped. Attempt 0 waits 0s
+     * (the first reconnect is immediate); subsequent attempts grow by $factor.
+     */
+    public static function reconnectBackoff(int $attempt, float $base, float $cap, float $factor = 2.0): float
+    {
+        if ($attempt <= 0) {
+            return 0.0;
+        }
+
+        $delay = $base * ($factor ** ($attempt - 1));
+
+        return min($delay, $cap);
+    }
+
+    /**
+     * Whether $incomingBytes may be appended to the reconnect buffer without
+     * exceeding $cap. A non-positive cap disables buffering entirely.
+     */
+    public static function reconnectBufferAccepts(int $currentBytes, int $incomingBytes, int $cap): bool
+    {
+        if ($cap <= 0) {
+            return false;
+        }
+
+        return ($currentBytes + $incomingBytes) <= $cap;
     }
 
     private function ensureInboxSub(): void
@@ -735,6 +935,28 @@ final class Connection
         }
 
         return $servers;
+    }
+
+    /**
+     * TLS context options shared by the initial TLS connect and STARTTLS upgrade.
+     *
+     * @return array<string, mixed>
+     */
+    private function tlsOptions(): array
+    {
+        $opts = [
+            'cafile' => $this->options->tlsCaFile,
+            'local_cert' => $this->options->tlsCertFile,
+            'local_pk' => $this->options->tlsKeyFile,
+            'verify_peer' => $this->options->tlsVerify,
+            'verify_peer_name' => $this->options->tlsVerify,
+        ];
+
+        if ($this->options->tlsServerName !== null) {
+            $opts['peer_name'] = $this->options->tlsServerName;
+        }
+
+        return $opts;
     }
 
     private function normalizeUrl(string $url): string

@@ -27,11 +27,22 @@ final class ConnectionOptions
         public readonly ?string $tlsCaFile = null,
         public readonly ?string $tlsCertFile = null,
         public readonly ?string $tlsKeyFile = null,
+        public readonly bool $tlsVerify = true,
+        public readonly ?string $tlsServerName = null,
+        // Dynamic auth providers, resolved on every (re)connect so tokens can refresh.
+        public readonly ?\Closure $tokenProvider = null,
+        public readonly ?\Closure $jwtProvider = null,
         // Reconnection
         public readonly bool $allowReconnect = true,
         public readonly int $maxReconnectAttempts = 60,
         public readonly float $reconnectWait = 2.0,
+        public readonly float $maxReconnectWait = 8.0,
         public readonly float $reconnectJitter = 0.1,
+        // Max bytes buffered for pending publishes while reconnecting; excess is dropped.
+        public readonly int $reconnectBufSize = 8_388_608,
+        // Slow-consumer limits per subscription (pending messages / bytes).
+        public readonly int $subPendingMsgsLimit = 65536,
+        public readonly int $subPendingBytesLimit = 67_108_864,
         // Timeouts
         public readonly float $connectTimeout = 2.0,
         public readonly float $requestTimeout = 5.0,
@@ -50,6 +61,13 @@ final class ConnectionOptions
         public readonly ?\Closure $onReconnect = null,
         public readonly ?\Closure $onClose = null,
         public readonly ?\Closure $onError = null,
+        // Fired with the Subscription when it exceeds its pending limits.
+        public readonly ?\Closure $onSlowConsumer = null,
+        // Fired when the server signals lame-duck mode (async INFO with "ldm": true).
+        public readonly ?\Closure $onLameDuck = null,
+        // Transport: fn(string $scheme): Transport. Defaults to the stream-based
+        // Tcp/Tls transports; inject to use a coroutine-native transport (e.g. Swoole).
+        public readonly ?\Closure $transportFactory = null,
     ) {
         $this->servers = \is_string($servers) ? [$servers] : $servers;
     }

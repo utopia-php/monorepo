@@ -22,6 +22,19 @@ final class JetStreamMessage
         $this->respond('');
     }
 
+    /**
+     * Acknowledge and wait for the server to confirm the ack was persisted.
+     * Unlike ack(), this blocks until confirmation or throws on timeout.
+     */
+    public function ackSync(?float $timeout = null): void
+    {
+        if ($this->message->replyTo === null) {
+            throw new \RuntimeException('Cannot acknowledge: message has no reply subject');
+        }
+
+        $this->conn->request($this->message->replyTo, '', $timeout ?? 5.0);
+    }
+
     public function nak(?float $delay = null): void
     {
         if ($delay !== null) {

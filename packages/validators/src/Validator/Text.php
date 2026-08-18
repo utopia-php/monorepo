@@ -24,10 +24,16 @@ class Text extends Validator
      *
      * Validate text with maximum length $length. Use $length = 0 for unlimited length.
      * Optionally, provide allowList characters array $allowList to only allow specific character.
+     * Set $requireNonBlank to reject values containing only Unicode separators, whitespace, or formatting characters.
      *
      * @param  string[]  $allowList
      */
-    public function __construct(protected int $length, protected int $min = 1, protected array $allowList = []) {}
+    public function __construct(
+        protected int $length,
+        protected int $min = 1,
+        protected array $allowList = [],
+        protected bool $requireNonBlank = false,
+    ) {}
 
     /**
      * Get Description
@@ -52,6 +58,10 @@ class Text extends Validator
 
         if ($this->allowList) {
             $message .= ' and only consist of \'' . implode(', ', $this->allowList) . '\' chars';
+        }
+
+        if ($this->requireNonBlank) {
+            $message .= ' and not be blank';
         }
 
         return $message;
@@ -85,6 +95,10 @@ class Text extends Validator
     public function isValid(mixed $value): bool
     {
         if (!\is_string($value)) {
+            return false;
+        }
+
+        if ($this->requireNonBlank && preg_match('/[^\p{Z}\p{Cf}\s]/u', $value) !== 1) {
             return false;
         }
 

@@ -35,21 +35,23 @@
     "require": {
         "php": ">=8.5",
         "utopia-php/di": "^0.3",
-        "utopia-php/lock": "^0.2",
+        "utopia-php/lock": "^0.3",
         "utopia-php/servers": "^0.4",
         "utopia-php/pools": "^2.0",
         "utopia-php/telemetry": "^0.4",
-        "utopia-php/validators": "0.3.*"
+        "utopia-php/validators": "^0.5"
     },
     "require-dev": {
         "ext-redis": "*",
         "swoole/ide-helper": "4.8.8",
+        "utopia-php/nats": "^1.0.0",
         "workerman/workerman": "^4.0"
     },
     "suggest": {
         "ext-swoole": "Needed to support Swoole.",
         "workerman/workerman": "Needed to support Workerman.",
-        "ext-pcntl": "Fallback for Adapter\\KubernetesJob graceful shutdown when Swoole is unavailable."
+        "ext-pcntl": "Fallback for Adapter\\KubernetesJob graceful shutdown when Swoole is unavailable.",
+        "utopia-php/nats": "Needed to support the NATS JetStream broker (Broker\\Nats)."
     },
     "config": {
         "allow-plugins": {

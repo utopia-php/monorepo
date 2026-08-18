@@ -228,7 +228,7 @@ final class SMTPTest extends Base
         $response1 = $sender->send($message1);
         $this->assertResponse($response1);
 
-        // Send second message — should reuse the PHPMailer instance
+        // Send second message — should reuse the open connection
         $message2 = new Email(
             to: [$to],
             subject: 'KeepAlive Test 2',
@@ -239,5 +239,84 @@ final class SMTPTest extends Base
 
         $response2 = $sender->send($message2);
         $this->assertResponse($response2);
+
+        $sender->disconnect();
+    }
+
+    public function testReportsEachRecipientSeparately(): void
+    {
+        $sender = new SMTP(host: '127.0.0.1', port: 11025);
+
+        $response = $sender->send(new Email(
+            to: ['tester@localhost.test', 'tester2@localhost.test'],
+            subject: 'Per recipient',
+            content: 'Test Content',
+            fromName: 'Test Sender',
+            fromEmail: 'sender@localhost.test',
+        ));
+
+        $this->assertResponse($response, deliveredTo: 2);
+
+        $recipients = array_column($response['results'], 'recipient');
+        $this->assertSame(['tester@localhost.test', 'tester2@localhost.test'], $recipients);
+
+        foreach ($response['results'] as $result) {
+            $this->assertSame('', $result['error']);
+        }
+    }
+
+    public function testReportsWhyAServerCouldNotBeReached(): void
+    {
+        // Nothing is listening on port 1, so the failure has to reach every
+        // recipient rather than being swallowed.
+        $sender = new SMTP(host: '127.0.0.1', port: 1, timeout: 2, timelimit: 2);
+
+        $response = $sender->send(new Email(
+            to: ['tester@localhost.test'],
+            subject: 'Unreachable',
+            content: 'Test Content',
+            fromName: 'Test Sender',
+            fromEmail: 'sender@localhost.test',
+        ));
+
+        $this->assertSame(0, $response['deliveredTo']);
+        $this->assertSame('tester@localhost.test', $response['results'][0]['recipient']);
+        $this->assertStringContainsString('127.0.0.1:1', (string) $response['results'][0]['error']);
+    }
+
+    public function testTreatsTheLegacyZeroCredentialAsAbsent(): void
+    {
+        // The adapter this replaces disabled authentication for a literal "0",
+        // an artefact of empty(). A server with no AUTH refuses the command, so
+        // sending at all proves none was attempted.
+        $sender = new SMTP(host: '127.0.0.1', port: 11025, username: '0', password: '0');
+
+        $response = $sender->send(new Email(
+            to: ['tester@localhost.test'],
+            subject: 'Zero credentials',
+            content: 'Test Content',
+            fromName: 'Test Sender',
+            fromEmail: 'sender@localhost.test',
+        ));
+
+        $this->assertResponse($response);
+    }
+
+    public function testTriesEveryHostItWasGiven(): void
+    {
+        // The first host answers nothing; the list is walked in order until one
+        // does, which is the behaviour the host string has always promised.
+        $sender = new SMTP(host: '127.0.0.1:1;127.0.0.1:11025', timeout: 2, timelimit: 2);
+
+        $response = $sender->send(new Email(
+            to: ['tester@localhost.test'],
+            subject: 'Failover',
+            content: 'Test Content',
+            fromName: 'Test Sender',
+            fromEmail: 'sender@localhost.test',
+        ));
+
+        $this->assertResponse($response);
+        $this->assertSame('Failover', $this->getLastEmail()['subject']);
     }
 }

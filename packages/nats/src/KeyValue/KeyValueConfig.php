@@ -40,7 +40,6 @@ final class KeyValueConfig
             replicas: $this->replicas,
             discard: DiscardPolicy::New,
             allowDirect: true,
-            mirrorDirect: true,
             allowRollup: true,
         );
     }

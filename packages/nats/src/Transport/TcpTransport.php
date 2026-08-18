@@ -38,10 +38,24 @@ final class TcpTransport implements Transport
     public function write(string $data): int
     {
         $stream = $this->ensureConnected();
-        $written = @fwrite($stream, $data);
+        $total = \strlen($data);
+        $written = 0;
 
-        if ($written === false) {
-            throw new ConnectionException('Failed to write to socket');
+        // Loop until every byte is on the wire: fwrite may perform a short write.
+        while ($written < $total) {
+            $chunk = @fwrite($stream, substr($data, $written));
+
+            if ($chunk === false || $chunk === 0) {
+                if ($this->isTimedOut($stream)) {
+                    throw new TimeoutException('Write timed out');
+                }
+                if (feof($stream)) {
+                    throw new ConnectionException('Connection closed by server');
+                }
+                throw new ConnectionException('Failed to write to socket');
+            }
+
+            $written += $chunk;
         }
 
         return $written;
@@ -108,6 +122,9 @@ final class TcpTransport implements Transport
         }
         if (isset($options['local_pk'])) {
             $contextOptions['ssl']['local_pk'] = $options['local_pk'];
+        }
+        if (isset($options['peer_name'])) {
+            $contextOptions['ssl']['peer_name'] = $options['peer_name'];
         }
         $contextOptions['ssl']['verify_peer'] = $options['verify_peer'] ?? true;
         $contextOptions['ssl']['verify_peer_name'] = $options['verify_peer_name'] ?? true;

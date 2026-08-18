@@ -10,6 +10,8 @@ final class Subscription
     private bool $active = true;
     private ?int $maxMessages = null;
     private int $received = 0;
+    private int $pendingBytes = 0;
+    private bool $slowConsumerSignaled = false;
 
     /** @var Connection|null Back-reference for sync operations */
     private ?Connection $connection = null;
@@ -19,6 +21,9 @@ final class Subscription
         public readonly string $subject,
         public readonly ?string $queue = null,
         private readonly ?\Closure $callback = null,
+        private readonly int $pendingMsgsLimit = 65536,
+        private readonly int $pendingBytesLimit = 67_108_864,
+        private readonly ?\Closure $onSlowConsumer = null,
     ) {
         $this->pendingMessages = new \SplQueue();
     }
@@ -35,7 +40,13 @@ final class Subscription
         while (true) {
             // Drain anything already queued before blocking on the socket.
             if (!$this->pendingMessages->isEmpty()) {
-                return $this->pendingMessages->dequeue();
+                $msg = $this->pendingMessages->dequeue();
+                $this->pendingBytes -= \strlen((string) $msg->data);
+                if ($this->pendingBytes < 0) {
+                    $this->pendingBytes = 0;
+                }
+                $this->slowConsumerSignaled = false;
+                return $msg;
             }
 
             if (!$this->active || !$this->connection instanceof \Utopia\NATS\Connection) {
@@ -65,16 +76,50 @@ final class Subscription
 
     public function deliver(Message $msg): void
     {
-        $this->received++;
-
         if ($this->callback instanceof \Closure) {
+            $this->received++;
             ($this->callback)($msg);
         } else {
+            // Guard the pending queue against unbounded growth: a consumer that
+            // never drains its messages signals slow-consumer and the message is
+            // dropped rather than exhausting memory.
+            $msgBytes = \strlen($msg->data);
+            if ($this->pendingMessages->count() >= $this->pendingMsgsLimit
+                || ($this->pendingBytes + $msgBytes) > $this->pendingBytesLimit) {
+                $this->signalSlowConsumer();
+                return;
+            }
+
+            $this->received++;
+            $this->pendingBytes += $msgBytes;
             $this->pendingMessages->enqueue($msg);
         }
 
         if ($this->maxMessages !== null && $this->received >= $this->maxMessages) {
             $this->active = false;
+        }
+    }
+
+    public function getPendingCount(): int
+    {
+        return $this->pendingMessages->count();
+    }
+
+    public function getPendingBytes(): int
+    {
+        return $this->pendingBytes;
+    }
+
+    private function signalSlowConsumer(): void
+    {
+        if ($this->slowConsumerSignaled) {
+            return;
+        }
+
+        $this->slowConsumerSignaled = true;
+
+        if ($this->onSlowConsumer instanceof \Closure) {
+            ($this->onSlowConsumer)($this);
         }
     }
 

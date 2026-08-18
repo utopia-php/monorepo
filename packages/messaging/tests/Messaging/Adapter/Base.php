@@ -39,10 +39,11 @@ class Base extends TestCase
 
     /**
      * @param  array<string, mixed>  $response
+     * @param  int  $deliveredTo  Every address the envelope carried, blind ones included.
      */
-    protected function assertResponse(array $response): void
+    protected function assertResponse(array $response, int $deliveredTo = 1): void
     {
-        $this->assertEquals(1, $response['deliveredTo'], var_export($response, true));
+        $this->assertEquals($deliveredTo, $response['deliveredTo'], var_export($response, true));
         $this->assertEquals('', $response['results'][0]['error'], var_export($response, true));
         $this->assertEquals('success', $response['results'][0]['status'], var_export($response, true));
     }

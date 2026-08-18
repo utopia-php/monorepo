@@ -15,7 +15,8 @@
         "ext-json": "*"
     },
     "suggest": {
-        "ext-sodium": "Required for NKey and JWT credential authentication"
+        "ext-sodium": "Required for NKey and JWT credential authentication",
+        "ext-swoole": "Required for the coroutine-native SwooleTransport"
     },
     "autoload": {
         "psr-4": {
