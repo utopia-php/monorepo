@@ -1,3 +1,4 @@
+[Bb]oolean(?:s)?
 [Cc]harset(?:s)?
 [Cc]onfig(?:s)?
 [Cc]ron
@@ -28,13 +29,13 @@ AWS
 Axios
 B2
 Backblaze
+backfills
 backoff
 backpressure
 Bcrypt
 binlog
 BlackBerry
 bool
-[Bb]oolean(?:s)?
 CI
 cicd
 ClaudeBot
@@ -51,6 +52,7 @@ cURL
 datetime
 Debian
 decodable
+Deduplication
 DELETE
 deserialize(?:s|d)?
 DI
@@ -66,6 +68,7 @@ Eldad
 enqueue(?:s|d)?
 enum(?:s)?
 etcd
+failover
 Fastly
 Fedora
 FPM
@@ -101,6 +104,7 @@ libcurl
 Linode
 Linode Object Storage
 Liskov
+liveness
 lockdown
 lookups
 loopback
@@ -108,8 +112,8 @@ Lua
 macOS
 Mailchimp
 Mailgun
-Mailpit
 Mailjet
+Mailpit
 Matomo(?:'s)?
 memoized
 MVC
@@ -168,8 +172,8 @@ stacktrace(?:s)?
 stderr
 superglobals
 Swoole
-Symfony
 Swoole Table
+Symfony
 teardown
 Telesign
 Telnyx
@@ -177,6 +181,7 @@ Textmagic
 Tizen
 TLS
 todo(?:s)?
+tombstoned
 toolchain
 Torsten
 traceparent
@@ -193,6 +198,7 @@ URI(?:s)?
 Utopia
 vendored
 Vivaldi
+vixie
 Vonage
 Wasabi
 watchOS
