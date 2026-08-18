@@ -142,6 +142,8 @@ final class FunctionSchedules implements Source, Changes
 
 A source either can answer "what changed?" or it cannot, so this is a second interface rather than a constructor argument left empty. The scheduler still takes a full snapshot every `relist` seconds (default 300) because a change feed cannot report a hard delete; between those it asks only for changes. The feed carries updates and soft deletes (`active: false`), and overlapping answers are harmless since the diff is by version.
 
+A definition that changes is covered from its new change time, so a schedule edited while the scheduler was mid-tick runs under its new definition for that span — repeating a run the old definition already did rather than skipping one the new one never did. Delivery is at-least-once and the repeat carries the same `Occurrence::key()`, so a consumer keyed on it absorbs the second copy.
+
 `Row::$activeFrom` anchors each entry's coverage: a schedule created — or edited — while the scheduler was down backfills only from its change time, never under the old watermark with the old definition, and a schedule the sync discovers late is still covered from its change time forward. Set it to the row's last change time.
 
 ## Surviving restarts and failover

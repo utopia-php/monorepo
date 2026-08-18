@@ -18,6 +18,15 @@ use Utopia\Telemetry\Adapter\Test as TestTelemetry;
 
 final class ReconcileTest extends TestCase
 {
+    /**
+     * @param list<Occurrence> $occurrences
+     * @return list<string>
+     */
+    private function dues(array $occurrences): array
+    {
+        return array_map(fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'), $occurrences);
+    }
+
     public function testFullSnapshotDiffAddsUpdatesAndRemoves(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
@@ -357,6 +366,63 @@ final class ReconcileTest extends TestCase
             array_map(fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'), $scheduler->tick()),
             'after commit the entry rides the watermark: no re-delivery',
         );
+    }
+
+    public function testAReplacementIsCoveredFromItsOwnChangeTimeAcrossACommit(): void
+    {
+        // A recurring row replaced between tick() and commit() keeps its new
+        // coverFrom, so the next tick covers the replacement from its own
+        // change time — even though the watermark has already passed it.
+        // That re-delivers occurrences the previous definition already ran,
+        // which is the deliberate direction of the trade: clearing coverFrom
+        // instead would mean the new definition never runs for that span,
+        // and this library loses runs to nothing. Delivery is at-least-once
+        // and the repeat carries the same Occurrence::key(), so a consumer
+        // keyed on it absorbs the second copy.
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:05:10.000000'));
+        $set = new RowSet();
+        $scheduler = new Scheduler(
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
+                make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
+            ),
+            store: new MemoryStore(),
+            clock: $clock,
+        );
+
+        $scheduler->tick();
+        $scheduler->commit(); // watermark at 03:05:10
+
+        $set->rows = [new Row('a', 'v1', activeFrom: new \DateTimeImmutable('2026-08-18 03:03:30'))];
+        $scheduler->reconcile();
+        $clock->advance(5.0); // 03:05:15
+
+        $underV1 = $scheduler->tick();
+        $this->assertSame(['03:04:00', '03:05:00'], $this->dues($underV1));
+
+        // The source replaces the row before the commit lands.
+        $set->rows = [new Row('a', 'v2', activeFrom: new \DateTimeImmutable('2026-08-18 03:04:30'))];
+        $scheduler->reconcile();
+        $scheduler->commit(); // watermark advances to 03:05:15 regardless
+
+        $clock->advance(60.0); // 03:06:15
+        $underV2 = $scheduler->tick();
+        $this->assertSame(
+            ['03:05:00', '03:06:00'],
+            $this->dues($underV2),
+            'the replacement runs from its own change time, repeating one already-committed run',
+        );
+        $this->assertSame(
+            $underV1[1]->key(),
+            $underV2[0]->key(),
+            'the repeat is the same run, so a consumer keyed on it deduplicates',
+        );
+        $scheduler->commit();
+
+        // Bounded to one span: the coverage is consumed, so it does not
+        // reach back again on later ticks.
+        $clock->advance(60.0);
+        $this->assertSame(['03:07:00'], $this->dues($scheduler->tick()));
     }
 
     public function testOneShotReplacedBetweenTickAndCommitSurvives(): void
