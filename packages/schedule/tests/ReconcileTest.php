@@ -402,6 +402,49 @@ final class ReconcileTest extends TestCase
         );
     }
 
+    public function testASuccessorDoesNotReplayWhatItsPredecessorAlreadyRan(): void
+    {
+        // Coverage runs past the last read of the source: the predecessor read
+        // at 03:05:00 and committed coverage to 03:07:00, so it dispatched
+        // 03:06:00 and 03:07:00 for a schedule it already held. A successor
+        // must not run those again just because they sit after that read.
+        $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:05:00.000000'));
+        $store = new MemoryStore();
+        $set = new RowSet([new Row('known', 'v1', activeFrom: new \DateTimeImmutable('2026-08-18 03:01:00'))]);
+        $build = fn(string $token): Scheduler => new Scheduler(
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
+                make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
+            ),
+            store: $store,
+            clock: $clock,
+            interval: 60,
+            lease: 120,
+            token: $token,
+        );
+
+        $predecessor = $build('predecessor');
+        $predecessor->reconcile();   // source read at 03:05:00
+        $clock->advance(120.0);      // 03:07:00
+        $predecessor->tick();        // dispatches 03:05:00 and 03:06:00
+        $predecessor->commit();      // coverage to 03:07:00, read to 03:05:00
+
+        $clock->advance(130.0);      // 03:09:10 — the claim has expired
+        $successor = $build('successor');
+        $successor->reconcile();
+
+        $this->assertSame(
+            // 03:07:00 belongs to the successor: windows are half-open, so the
+            // predecessor's ended just before it.
+            ['known@03:07:00', 'known@03:08:00', 'known@03:09:00'],
+            array_map(
+                fn(Occurrence $occurrence): string => $occurrence->id . '@' . $occurrence->due->format('H:i:s'),
+                $successor->tick(),
+            ),
+            'a schedule the predecessor held resumes at the watermark, not at its last read',
+        );
+    }
+
     public function testASuccessorCoversWhatItsPredecessorNeverSaw(): void
     {
         // The window a single watermark cannot describe: a predecessor

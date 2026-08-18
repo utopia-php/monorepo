@@ -264,7 +264,7 @@ final class Scheduler
                 'trigger' => $entry->trigger,
                 'payload' => $entry->payload,
                 'version' => $row->version,
-                'coverFrom' => $this->coverFrom($row->activeFrom, $since),
+                'coverFrom' => $this->coverFrom($row->activeFrom, $since, $existing !== null),
             ];
         }
 
@@ -288,30 +288,37 @@ final class Scheduler
     /**
      * Where a freshly made entry's own coverage starts.
      *
-     * An entry that appeared since the source was last read is covered from
-     * the moment it took effect, so occurrences the watermark has already
-     * passed are run late rather than lost. Anything that already existed at
-     * that point was known when the watermark was committed, so its coverage
-     * is accounted for and reaching back would only duplicate it.
+     * There are only two answers, and syncedUntil decides between them: an
+     * entry is either owed coverage from the moment it took effect, or it
+     * rides the watermark like everything else.
      *
-     * The floor is when the source was last read — this process's own last
-     * sync, or the one the claim inherited from a predecessor — and not the
-     * watermark. The gap between them is exactly the window in which a
-     * predecessor committed coverage for schedules it had not yet seen, and
-     * treating it as covered would silently drop their runs.
+     * It is owed its own coverage when nobody who committed the current
+     * coverage could have known about it — its definition took effect after
+     * the source was last read — or when this process held the previous
+     * definition and the source has since replaced it. Either way the
+     * watermark has moved over occurrences that were never dispatched for
+     * this definition, and they are run late rather than dropped.
      *
-     * An activeFrom later than the floor still applies in full, which is what
-     * stops a definition from running before it took effect.
+     * Otherwise the definition existed when the source was last read, so
+     * whoever committed the coverage accounted for it, and reaching back
+     * would re-deliver runs that already happened. That is the trap in
+     * treating syncedUntil as a floor rather than a question: a predecessor
+     * commits coverage past its last read of the source, and every schedule
+     * it already knew about would be replayed across that gap on takeover.
      */
-    private function coverFrom(?\DateTimeImmutable $activeFrom, ?\DateTimeImmutable $since): ?\DateTimeImmutable
+    private function coverFrom(?\DateTimeImmutable $activeFrom, ?\DateTimeImmutable $since, bool $replaced): ?\DateTimeImmutable
     {
-        $floor = $since ?? $this->moment($this->store->load()?->syncedUntil);
-
         if (!$activeFrom instanceof \DateTimeImmutable) {
-            return $since;
+            return null;
         }
 
-        return $floor instanceof \DateTimeImmutable && $activeFrom < $floor ? $floor : $activeFrom;
+        if ($replaced) {
+            return $activeFrom;
+        }
+
+        $seen = $since ?? $this->moment($this->store->load()?->syncedUntil);
+
+        return !$seen instanceof \DateTimeImmutable || $activeFrom > $seen ? $activeFrom : null;
     }
 
     /**
