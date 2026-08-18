@@ -418,12 +418,12 @@ final class ReconcileTest extends TestCase
                 make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
             ),
             store: $store,
-            clock: $clock,
-            interval: 60,
-            lookahead: 120,
-            lookback: 600,
-            lease: 120,
+            tickSeconds: 60,
+            leadSeconds: 120,
+            recoverSeconds: 600,
+            leaseSeconds: 360,
             token: $token,
+            clock: $clock,
         );
 
         $predecessor = $build('predecessor');
@@ -435,7 +435,7 @@ final class ReconcileTest extends TestCase
         $predecessor->reconcile();   // read at 03:05:20 — after the window was chosen
         $predecessor->commit();      // coverage to 03:07:00, from the 03:05:00 read
 
-        $clock->advance(130.0);      // 03:07:30 — the claim has expired
+        $clock->advance(400.0);      // 03:12:00 — the claim has expired
         $successor = $build('successor');
         $successor->reconcile();
 
@@ -464,10 +464,10 @@ final class ReconcileTest extends TestCase
                 make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
             ),
             store: $store,
-            clock: $clock,
-            interval: 60,
-            lease: 120,
+            tickSeconds: 60,
+            leaseSeconds: 120,
             token: $token,
+            clock: $clock,
         );
 
         $predecessor = $build('predecessor');
@@ -508,10 +508,10 @@ final class ReconcileTest extends TestCase
                 make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
             ),
             store: $store,
-            clock: $clock,
-            interval: 60,
-            lease: 120,
+            tickSeconds: 60,
+            leaseSeconds: 120,
             token: $token,
+            clock: $clock,
         );
 
         $predecessor = $build('predecessor');
@@ -552,8 +552,8 @@ final class ReconcileTest extends TestCase
                 make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
             ),
             store: $store,
-            clock: $clock,
             token: 'replacement',
+            clock: $clock,
         );
 
         // Rows edited well before the watermark, and read by the predecessor.

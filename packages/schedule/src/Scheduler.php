@@ -27,11 +27,11 @@ use Utopia\Telemetry\Histogram;
  *   (the watermark, part of the {@see Claim} held in {@see Store}).
  *   Nothing falls between ticks, and with shared state nothing falls
  *   across a restart either.
- * - Delivery is at-least-once within the lookback horizon:
+ * - Delivery is at-least-once within the recovery horizon:
  *   {@see Scheduler::commit()} advances the watermark only after the
  *   caller has handled a tick's occurrences. A crash mid-tick
  *   re-delivers; it never silently skips.
- * - Catch-up is bounded: a watermark older than $lookback seconds is
+ * - Catch-up is bounded: a watermark older than the recovery ceiling is
  *   clamped, so recovery after a long outage replays a capped burst
  *   instead of everything since the outage began.
  * - Coverage extends to late discoveries: an entry that appears or
@@ -61,7 +61,8 @@ use Utopia\Telemetry\Histogram;
  * concurrently and needs no locking. Everything about *how* a tick's
  * occurrences are processed — batching them into one round trip, fanning
  * them out across coroutines, isolating a failure — belongs to the
- * handler, which receives the whole batch. Two loops over one instance
+ * handler, which receives each due moment as it arrives. Two loops over
+ * one instance
  * are not supported; two loops over one {@see Store} are — that is the
  * leader election.
  *
@@ -82,7 +83,7 @@ final class Scheduler
      */
     private array $tombstones = [];
 
-    private ?\DateTimeImmutable $pendingWindowEnd = null;
+    private ?\DateTimeImmutable $pendingCoveredUntil = null;
 
     /**
      * The source read that fed the pending tick. Committed alongside the
@@ -106,7 +107,7 @@ final class Scheduler
 
     private float $nextSyncAt = 0.0;
 
-    private float $nextRelistAt = 0.0;
+    private float $nextSnapshotAt = 0.0;
 
     private readonly Histogram $dispatchDelay;
 
@@ -122,32 +123,44 @@ final class Scheduler
 
     private readonly Gauge $lagGauge;
 
+    private readonly int $snapshotSeconds;
+
+    private readonly int $recoverSeconds;
+
+    private readonly int $leaseSeconds;
+
     /**
      * @param Source $source the source of truth the loop reconciles against; implement
      *                        {@see Changes} on it as well to make syncs incremental
      * @param Store $store where the claim lives — leadership plus watermark; back it with
      *                     {@see Store\Redis} or a database row and standby replicas elect one
      *                     dispatcher and survive restarts. Replica clocks must agree to within
-     *                     a fraction of $lease.
-     * @param Clock $clock time source; swap for {@see Clock\Test} in tests
-     * @param int $interval seconds between ticks in {@see Scheduler::run()}, wall-anchored
-     * @param int $sync seconds between reconciliations
-     * @param int $relist seconds between full snapshot syncs when the source implements
-     *                    {@see Changes}; 0 disables periodic relisting, and with a source that
-     *                    reports no changes every sync is a full snapshot regardless
-     * @param int $lookahead seconds a tick may reach past "now". Zero (the default) delivers
-     *                       occurrences after they are due, late by at most one interval, and
-     *                       keeps at-least-once intact. Raising it trades that guarantee for
-     *                       early hand-off: callers receive future occurrences (`$occurrence->due`)
-     *                       to schedule precisely, but a crash after commit loses them.
-     * @param int $lookback ceiling, in seconds, on how far behind the watermark may start a window
-     * @param int $lease seconds a leadership claim lives before it must be renewed; a standby
-     *                   takes over this long after the leader stops ticking. A tick renews the
-     *                   claim before dispatching, so this must exceed the time one batch takes
-     *                   to hand over — a slower handler loses leadership mid-dispatch, which
-     *                   costs a re-delivered window and shows up as
-     *                   schedule.error.total{stage="lease"}
+     *                     a fraction of the lease.
+     * @param int $tickSeconds between ticks in {@see Scheduler::run()}, wall-anchored
+     * @param int $syncSeconds between reads of the source
+     * @param int $leadSeconds a tick may reach this far past "now". Zero (the default) hands
+     *                         occurrences over once due; raising it hands them over early so the
+     *                         wait for the exact second happens inside {@see Scheduler::run()}
+     * @param int|null $snapshotSeconds between full snapshot syncs when the source implements
+     *                                  {@see Changes}; defaults to 30 sync cadences, 0 disables
+     *                                  periodic relisting, and a source reporting no changes
+     *                                  takes a full snapshot every sync regardless
+     * @param int|null $recoverSeconds ceiling on how far behind the watermark may start a window,
+     *                                 which bounds the catch-up burst after downtime; defaults
+     *                                 to 300
+     * @param int|null $leaseSeconds a leadership claim lives this long before it must be renewed,
+     *                               so a standby takes over this long after the leader stops
+     *                               ticking. Defaults to three ticks of delivery, and must
+     *                               outlive two: a tick holds its claim until the last of its
+     *                               occurrences has gone out, and losing leadership mid-delivery
+     *                               costs a re-delivered window, reported as
+     *                               schedule.error.total{stage="lease"}
+     * @param (\Closure(Occurrence): int)|null $offset seconds to hold a due occurrence back, given the occurrence,
+     *                                spreading a same-second burst across the tick that covers
+     *                                it. Derive it from the id so a schedule keeps its slot. An
+     *                                offset longer than the tick cadence delays the next tick
      * @param string|null $token this instance's identity in the claim; defaults to a random one
+     * @param Clock $clock time source; swap for {@see Clock\Test} in tests
      * @param Telemetry $telemetry metric backend; the four golden signals are recorded as
      *                             schedule.dispatch.delay and schedule.tick.duration (latency),
      *                             schedule.dispatch.total and schedule.entries (traffic),
@@ -157,44 +170,53 @@ final class Scheduler
      *                               `make` rejects) so dispatch keeps running on the last good
      *                               view; without it those failures rethrow
      *
-     * @throws \InvalidArgumentException on a non-positive $interval or $sync, a negative
-     *                                   $relist/$lookahead/$lookback, or a $lease shorter than
-     *                                   two ticks
+     * @throws \InvalidArgumentException on a non-positive tick or sync cadence, a negative
+     *                                   snapshot cadence, lead time or recovery ceiling, or a
+     *                                   lease shorter than two ticks of delivery
      */
     public function __construct(
         private readonly Source $source,
         private readonly Store $store = new MemoryStore(),
-        private readonly Clock $clock = new SystemClock(),
-        private readonly int $interval = 1,
-        private readonly int $sync = 10,
-        private readonly int $relist = 300,
-        private readonly int $lookahead = 0,
-        private readonly int $lookback = 300,
-        private readonly int $lease = 60,
+        private readonly int $tickSeconds = 1,
+        private readonly int $syncSeconds = 10,
+        private readonly int $leadSeconds = 0,
+        ?int $snapshotSeconds = null,
+        ?int $recoverSeconds = null,
+        ?int $leaseSeconds = null,
+        private readonly ?\Closure $offset = null,
         ?string $token = null,
+        private readonly Clock $clock = new SystemClock(),
         Telemetry $telemetry = new NoTelemetry(),
         private readonly ?\Closure $onError = null,
     ) {
-        if ($interval < 1) {
+        // Derived from the three cadences above, so a caller sets what it
+        // knows — how often to tick, how often to read, how much lead time —
+        // and nothing else has to restate the arithmetic between them.
+        $this->snapshotSeconds = $snapshotSeconds ?? $syncSeconds * 30;
+        $this->recoverSeconds = $recoverSeconds ?? 300;
+        $this->leaseSeconds = $leaseSeconds ?? ($tickSeconds + $leadSeconds) * 3;
+
+        if ($tickSeconds < 1) {
             throw new \InvalidArgumentException('Tick interval must be at least 1 second');
         }
-        if ($sync < 1) {
+        if ($syncSeconds < 1) {
             throw new \InvalidArgumentException('Sync cadence must be at least 1 second');
         }
-        if ($relist < 0) {
-            throw new \InvalidArgumentException('Relist cadence must not be negative');
+        if ($this->snapshotSeconds < 0) {
+            throw new \InvalidArgumentException('Snapshot cadence must not be negative');
         }
-        if ($lookahead < 0 || $lookback < 0) {
-            throw new \InvalidArgumentException('Lookahead and lookback must not be negative');
+        if ($leadSeconds < 0 || $this->recoverSeconds < 0) {
+            throw new \InvalidArgumentException('Lead time and recovery ceiling must not be negative');
         }
-        if ($lease < $interval * 2) {
-            throw new \InvalidArgumentException('A leadership claim must outlive at least two ticks');
+        // A tick holds its claim through delivery, to the end of the lead time.
+        if ($this->leaseSeconds < ($tickSeconds + $leadSeconds) * 2) {
+            throw new \InvalidArgumentException('A leadership claim must outlive at least two ticks, delivery included');
         }
 
         $this->token = $token ?? bin2hex(random_bytes(8));
 
         // Dispatch delay spans "on time" (well under a second) to a full
-        // lookback of catch-up; the default OpenTelemetry buckets stop at
+        // recovery window of catch-up; the default OpenTelemetry buckets stop at
         // 10 seconds and would flatten every recovery into one bucket.
         $this->dispatchDelay = $telemetry->createHistogram(
             'schedule.dispatch.delay',
@@ -331,15 +353,27 @@ final class Scheduler
     /**
      * A committed window end as a moment, or null when there is none to read.
      */
-    private function moment(?string $stamp): ?\DateTimeImmutable
+    private function moment(?float $seconds): ?\DateTimeImmutable
     {
-        if ($stamp === null) {
+        if ($seconds === null) {
             return null;
         }
 
-        $moment = \DateTimeImmutable::createFromFormat('U.u', $stamp);
+        $moment = \DateTimeImmutable::createFromFormat('U.u', \sprintf('%.6F', $seconds));
 
         return $moment === false ? null : $moment;
+    }
+
+    /**
+     * Whether the definition an occurrence was selected against is still the
+     * one memory holds — false once the source disables, deletes or rewrites
+     * it. {@see Scheduler::run()} applies this before every hand-over; a
+     * handler that defers work of its own should apply it again when that
+     * work comes due.
+     */
+    public function isCurrent(Occurrence $occurrence): bool
+    {
+        return ($this->entries[$occurrence->id]['version'] ?? null) === $occurrence->version;
     }
 
     /**
@@ -355,9 +389,9 @@ final class Scheduler
      * Select every occurrence in the next window, oldest first — after
      * confirming (or taking) leadership; a follower gets an empty list.
      *
-     * The window opens at the claimed watermark (clamped to $lookback,
-     * initialized to "now" on first ever run) and closes at now plus
-     * $lookahead; an entry with pending coverFrom is covered from there
+     * The window opens at the claimed watermark (clamped to the recovery
+     * ceiling, initialized to "now" on first ever run) and closes at now
+     * plus the lead time; an entry with pending coverFrom is covered from there
      * instead, once. The result is remembered as pending until
      * {@see Scheduler::commit()}; ticking again without committing
      * re-selects the same occurrences.
@@ -376,10 +410,10 @@ final class Scheduler
         }
 
         $now = $this->clock->now();
-        $end = $this->lookahead > 0 ? $now->modify("{$this->lookahead} seconds") : $now;
-        $start = $this->moment($claim->windowEnd) ?? $now;
+        $end = $this->leadSeconds > 0 ? $now->modify("{$this->leadSeconds} seconds") : $now;
+        $start = $this->moment($claim->coveredUntil) ?? $now;
 
-        $floor = $now->modify("-{$this->lookback} seconds");
+        $floor = $now->modify("-{$this->recoverSeconds} seconds");
         if ($start < $floor) {
             $start = $floor;
         }
@@ -391,7 +425,7 @@ final class Scheduler
             // Nothing to cover, but committing $start still initializes the
             // watermark on first run — and never rewinds it when the clock
             // has stepped backwards past the committed edge.
-            $this->pendingWindowEnd = $start;
+            $this->pendingCoveredUntil = $start;
             $this->pendingSyncedUntil = $this->lastSyncAt;
             $this->pendingOneShots = [];
             $this->pendingCovered = [];
@@ -415,7 +449,7 @@ final class Scheduler
             $dues = $entry['trigger']->occurrencesBetween($entryStart, $end);
 
             foreach ($dues as $due) {
-                $occurrences[] = new Occurrence($id, $due, $entry['payload']);
+                $occurrences[] = new Occurrence($id, $due, $entry['payload'], $entry['version']);
             }
 
             if ($entry['coverFrom'] !== null) {
@@ -429,13 +463,121 @@ final class Scheduler
 
         usort($occurrences, fn(Occurrence $a, Occurrence $b): int => $a->due <=> $b->due ?: $a->id <=> $b->id);
 
-        $this->pendingWindowEnd = $end;
+        $this->pendingCoveredUntil = $end;
         $this->pendingSyncedUntil = $this->lastSyncAt;
         $this->pendingOneShots = $oneShots;
         $this->pendingCovered = $covered;
         $this->tickDuration->record(microtime(true) - $started);
 
         return $occurrences;
+    }
+
+    /** Reconcile if the source's cadence says it is time. */
+    private function syncIfDue(): void
+    {
+        $now = (float) $this->clock->now()->format('U.u');
+        if ($now < $this->nextSyncAt) {
+            return;
+        }
+
+        $full = $this->snapshotSeconds > 0 && $now >= $this->nextSnapshotAt;
+
+        try {
+            $this->reconcile($full);
+        } catch (\Throwable $error) {
+            $this->report($error, 'reconcile');
+        }
+
+        $this->nextSyncAt = $now + $this->syncSeconds;
+        if ($full) {
+            $this->nextSnapshotAt = $now + $this->snapshotSeconds;
+        }
+    }
+
+    /**
+     * Wait for a delivery moment, still reconciling on the way: sleeping
+     * straight through would leave a cancellation during the wait
+     * unobservable, and the run would go out anyway.
+     */
+    private function wait(float $until): void
+    {
+        while (true) {
+            $now = (float) $this->clock->now()->format('U.u');
+            if ($now >= $until) {
+                return;
+            }
+
+            $this->syncIfDue();
+
+            $this->clock->sleep(min($until - $now, max(0.001, $this->nextSyncAt - $now)));
+        }
+    }
+
+    /**
+     * Hand a tick's occurrences to the handler as each falls due: those
+     * sharing a moment together, those already past due immediately and in
+     * order. Waiting is against an absolute target, so a slow handler cannot
+     * push the ones behind it late.
+     *
+     * @param list<Occurrence> $occurrences
+     * @param callable(list<Occurrence>): void $handler
+     */
+    private function deliver(array $occurrences, callable $handler): void
+    {
+        if ($occurrences === []) {
+            return;
+        }
+
+        /** @var array<string, list<Occurrence>> $batches */
+        $batches = [];
+        foreach ($occurrences as $occurrence) {
+            $at = (float) $occurrence->due->format('U.u')
+                + ($this->offset instanceof \Closure ? max(0, ($this->offset)($occurrence)) : 0);
+
+            $batches[\sprintf('%.6F', $at)][] = $occurrence;
+        }
+
+        ksort($batches, SORT_NUMERIC);
+
+        foreach ($batches as $at => $batch) {
+            $wait = (float) $at - (float) $this->clock->now()->format('U.u');
+
+            if ($wait > 0.0) {
+                $this->wait((float) $at);
+
+                // Only a waited batch can have outlived the tick's election.
+                if (!$this->elect() instanceof Claim) {
+                    return;
+                }
+            }
+
+            $due = [];
+            foreach ($batch as $occurrence) {
+                if ($this->isCurrent($occurrence)) {
+                    $due[] = $occurrence;
+                }
+            }
+
+            if ($due === []) {
+                continue;
+            }
+
+            // Lateness is measured at hand-over, not after the handler.
+            $handedOver = (float) $this->clock->now()->format('U.u');
+
+            try {
+                $handler($due);
+            } catch (\Throwable $error) {
+                $this->errorTotal->add(1, ['stage' => 'dispatch']);
+
+                throw $error;
+            }
+
+            $this->dispatchTotal->add(\count($due));
+            foreach ($due as $occurrence) {
+                $this->dispatchDelay->record(max(0.0, $handedOver - (float) $at));
+            }
+        }
     }
 
     /**
@@ -457,21 +599,21 @@ final class Scheduler
      */
     public function commit(): bool
     {
-        if (!$this->pendingWindowEnd instanceof \DateTimeImmutable) {
+        if (!$this->pendingCoveredUntil instanceof \DateTimeImmutable) {
             return false;
         }
 
         $next = new Claim(
             $this->token,
-            (float) $this->clock->now()->format('U.u') + $this->lease,
-            $this->pendingWindowEnd->format('U.u'),
+            (float) $this->clock->now()->format('U.u') + $this->leaseSeconds,
+            (float) $this->pendingCoveredUntil->format('U.u'),
             // The read that fed *this* tick, not the newest one: a sync that
             // landed after the window was selected did not contribute to it,
             // and claiming otherwise would tell a successor that schedules
             // this tick never saw are already covered. A tick that has not
             // reconciled at all leaves what a predecessor recorded intact,
             // rather than erasing the only view anyone has.
-            $this->pendingSyncedUntil?->format('U.u') ?? $this->store->load()?->syncedUntil,
+            $this->pendingSyncedUntil instanceof \DateTimeImmutable ? (float) $this->pendingSyncedUntil->format('U.u') : $this->store->load()?->syncedUntil,
         );
 
         if (!$this->store->swap($this->token, $next)) {
@@ -516,13 +658,16 @@ final class Scheduler
      * go through onError and leave the last good view dispatching —
      * stale schedules beat a stopped scheduler.
      *
-     * The handler receives the tick's whole batch, oldest first, and owns
-     * how it runs: one round trip for the lot, a coroutine per schedule,
-     * or a plain loop. It must return only once that work has settled,
-     * because the window is committed as soon as it returns. Throwing
-     * means "do not commit", so the whole batch is re-delivered next
-     * tick; to isolate one bad schedule instead, catch inside the handler
-     * and return normally.
+     * The handler is called once per due moment in the tick, not once per
+     * tick: everything sharing a moment arrives together, oldest moment
+     * first, and a moment still ahead is held until it arrives. Within a
+     * hand-over the handler owns how the work runs — one round trip, a
+     * coroutine each, or a plain loop — and must return only once that work
+     * has settled, because the window is committed after the last hand-over
+     * returns. Throwing means "do not commit", so the whole tick is
+     * re-delivered — including the moments already handed over; to isolate
+     * one bad schedule instead, catch inside the handler and return
+     * normally.
      *
      * @param callable(list<Occurrence>): void $handler
      */
@@ -533,57 +678,23 @@ final class Scheduler
         try {
             while ($this->running) {
                 if (!$this->elect() instanceof Claim) {
-                    $this->clock->sleep((float) $this->interval);
+                    $this->clock->sleep((float) $this->tickSeconds);
                     continue;
                 }
 
-                $now = (float) $this->clock->now()->format('U.u');
-                if ($now >= $this->nextSyncAt) {
-                    $full = $this->relist > 0 && $now >= $this->nextRelistAt;
+                $this->syncIfDue();
 
-                    try {
-                        $this->reconcile($full);
-                    } catch (\Throwable $error) {
-                        $this->report($error, 'reconcile');
-                    }
-
-                    $this->nextSyncAt = $now + $this->sync;
-                    if ($full) {
-                        $this->nextRelistAt = $now + $this->relist;
-                    }
-                }
-
-                $occurrences = $this->tick();
-                if ($occurrences !== []) {
-                    // One clock read for the batch: lateness is measured at
-                    // hand-over, so the metric stays about the scheduler's
-                    // own punctuality rather than the handler's duration.
-                    $handedOver = (float) $this->clock->now()->format('U.u');
-
-                    try {
-                        $handler($occurrences);
-                    } catch (\Throwable $error) {
-                        $this->errorTotal->add(1, ['stage' => 'dispatch']);
-
-                        throw $error;
-                    }
-
-                    $this->dispatchTotal->add(\count($occurrences));
-                    foreach ($occurrences as $occurrence) {
-                        $this->dispatchDelay->record(max(0.0, $handedOver - (float) $occurrence->due->format('U.u')));
-                    }
-                }
-
+                $this->deliver($this->tick(), $handler);
                 $this->commit();
 
                 if (!$this->running) {
                     break;
                 }
 
-                $phase = fmod((float) $this->clock->now()->format('U.u'), (float) $this->interval);
-                $pause = (float) $this->interval - $phase;
+                $phase = fmod((float) $this->clock->now()->format('U.u'), (float) $this->tickSeconds);
+                $pause = (float) $this->tickSeconds - $phase;
                 if ($pause < 0.001) {
-                    $pause += $this->interval;
+                    $pause += $this->tickSeconds;
                 }
 
                 $this->clock->sleep($pause);
@@ -613,7 +724,7 @@ final class Scheduler
         $claim = $this->store->load();
         $now = (float) $this->clock->now()->format('U.u');
         $expected = null;
-        $windowEnd = null;
+        $coveredUntil = null;
         $syncedUntil = null;
 
         if ($claim instanceof Claim) {
@@ -622,11 +733,11 @@ final class Scheduler
                 // covers the dispatch ahead instead of the gap since the
                 // last commit. Half a lease of slack keeps this to one
                 // extra write per lease rather than one per tick.
-                if ($claim->expiresAt - $now >= $this->lease / 2) {
+                if ($claim->expiresAt - $now >= $this->leaseSeconds / 2) {
                     return $claim;
                 }
 
-                $renewed = new Claim($this->token, $now + $this->lease, $claim->windowEnd, $claim->syncedUntil);
+                $renewed = new Claim($this->token, $now + $this->leaseSeconds, $claim->coveredUntil, $claim->syncedUntil);
                 if ($this->store->swap($this->token, $renewed)) {
                     return $renewed;
                 }
@@ -643,11 +754,11 @@ final class Scheduler
             $expected = $claim->token;
             // Coverage and how much of the source produced it both carry over
             // from the predecessor.
-            $windowEnd = $claim->windowEnd;
+            $coveredUntil = $claim->coveredUntil;
             $syncedUntil = $claim->syncedUntil;
         }
 
-        $next = new Claim($this->token, $now + $this->lease, $windowEnd, $syncedUntil);
+        $next = new Claim($this->token, $now + $this->leaseSeconds, $coveredUntil, $syncedUntil);
 
         if (!$this->store->swap($expected, $next)) {
             return null; // lost the takeover race
@@ -656,7 +767,7 @@ final class Scheduler
         // A tick left pending from before losing leadership must never
         // commit after re-acquiring: its window predates the successor's
         // coverage and the matching token would let it through the fence.
-        // Memory staleness needs no special-casing — the relist timer is
+        // Memory staleness needs no special-casing — the snapshot timer is
         // already due after any stretch spent as a follower.
         $this->clearPending();
 
@@ -671,13 +782,13 @@ final class Scheduler
         }
 
         // An empty, expired claim keeps the watermark and frees the lease.
-        $this->store->swap($this->token, new Claim('', 0.0, $claim->windowEnd, $claim->syncedUntil));
+        $this->store->swap($this->token, new Claim('', 0.0, $claim->coveredUntil, $claim->syncedUntil));
         $this->clearPending();
     }
 
     private function clearPending(): void
     {
-        $this->pendingWindowEnd = null;
+        $this->pendingCoveredUntil = null;
         $this->pendingSyncedUntil = null;
         $this->pendingOneShots = [];
         $this->pendingCovered = [];

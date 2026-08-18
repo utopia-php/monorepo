@@ -75,12 +75,12 @@ use Utopia\Schedule\Store;
 $scheduler = new Scheduler(
     source: new FunctionSchedules($database),
     store: new Store\Redis($redis),
-    sync: 10,   // seconds between reconciliations
+    syncSeconds: 10,
 );
 
-// The handler gets the tick's whole batch, oldest first, and owns how the
-// work runs: one round trip for the lot, a coroutine per schedule, or a
-// plain loop.
+// The handler is called once per due moment, with everything due at that
+// moment. How that work runs is its choice: one round trip for the lot, a
+// coroutine each, or a plain loop.
 $scheduler->run(function (array $occurrences) use ($queue): void {
     foreach ($occurrences as $occurrence) {
         // $occurrence->id      — the row's identity
@@ -92,7 +92,7 @@ $scheduler->run(function (array $occurrences) use ($queue): void {
 });
 ```
 
-The scheduler decides *what runs when* and hands the batch over; it has no opinion about how the work is done. Batch it into one round trip, fan it out across coroutines, keep it serial — that is the handler's choice, because the right answer differs per workload. A handler must only return once its work has settled, since the window is committed as soon as it returns.
+The scheduler decides *what runs when* and hands each due moment over as it arrives; it has no opinion about how the work is done. Batch it into one round trip, fan it out across coroutines, keep it serial — that is the handler's choice, because the right answer differs per workload. A handler must only return once its work has settled, since the window is committed after the last hand-over returns.
 
 `run()` ticks on a wall-anchored cadence: it sleeps to the next multiple of the tick interval instead of sleeping a fixed span after variable work, so the tick phase never drifts. A handler exception propagates before the tick commits, which means a supervised restart re-delivers the tick instead of losing it. Reconciliation errors go the other way — through the `onError` callback, leaving the last good view dispatching, because stale schedules beat a stopped scheduler. Call `stop()` — from the handler or a signal handler — to return after the current tick completes.
 
@@ -140,22 +140,22 @@ final class FunctionSchedules implements Source, Changes
 }
 ```
 
-A source either can answer "what changed?" or it cannot, so this is a second interface rather than a constructor argument left empty. The scheduler still takes a full snapshot every `relist` seconds (default 300) because a change feed cannot report a hard delete; between those it asks only for changes. The feed carries updates and soft deletes (`active: false`), and overlapping answers are harmless since the diff is by version.
+A source either can answer "what changed?" or it cannot, so this is a second interface rather than a constructor argument left empty. The scheduler still takes a full snapshot every `snapshotSeconds` (30 sync cadences by default) because a change feed cannot report a hard delete; between those it asks only for changes. The feed carries updates and soft deletes (`active: false`), and overlapping answers are harmless since the diff is by version.
 
 A definition that changes is covered from its new change time, so a schedule edited while the scheduler was mid-tick runs under its new definition for that span — repeating a run the old definition already did rather than skipping one the new one never did. Delivery is at-least-once and the repeat carries the same `Occurrence::key()`, so a consumer keyed on it absorbs the second copy.
 
-`Row::$activeFrom` is when a definition took effect — set it to the row's last change time. It decides whether an entry is owed coverage of its own (nothing that committed the current coverage could have known about it) or rides the watermark like everything else, and it keeps a definition from running before it existed. Reaching back is always bounded by `lookback`, so restarting a large fleet costs nothing extra.
+`Row::$activeFrom` is when a definition took effect — set it to the row's last change time. It decides whether an entry is owed coverage of its own (nothing that committed the current coverage could have known about it) or rides the watermark like everything else, and it keeps a definition from running before it existed. Reaching back is always bounded by `recoverSeconds`, so restarting a large fleet costs nothing extra.
 
 ## Surviving restarts and failover
 
-Leadership and coverage share one lifecycle — the leader advances both on every commit — so they share one record: the `Claim` (`token`, `expiresAt`, `windowEnd`, `syncedUntil`), stored behind the `Store` interface (`load` and an atomic `swap`). A `Store` implementation must persist all four: dropping a field does not fail loudly, it just leaves the scheduler reasoning from less than it committed. Every commit is one compare-and-swap that renews the lease and advances the watermark together. That single write buys three properties:
+Leadership and coverage share one lifecycle — the leader advances both on every commit — so they share one record: the `Claim` (`token`, `expiresAt`, `coveredUntil`, `syncedUntil` — every moment in Unix seconds with microsecond precision), stored behind the `Store` interface (`load` and an atomic `swap`). A `Store` implementation must persist all four: dropping a field does not fail loudly, it just leaves the scheduler reasoning from less than it committed. Every commit is one compare-and-swap that renews the lease and advances the watermark together. That single write buys three properties:
 
 - **Election is inherent.** Point replicas at the same store and exactly one dispatches; the others idle and take over when the claim expires — or immediately when `stop()` releases it. No lock service, no extra port.
-- **Failover resumes coverage.** A successor takes the watermark from the claim it inherits: occurrences missed in the handover are delivered on its first tick, oldest first, bounded by `lookback` (default 300 seconds).
+- **Failover resumes coverage.** A successor takes the watermark from the claim it inherits: occurrences missed in the handover are delivered on its first tick, oldest first, bounded by `recoverSeconds` (default 300).
 - **A successor can tell what its predecessor never saw.** `syncedUntil` records when the source was last read, so coverage and the view that produced it travel together. It answers one question per entry: could whoever committed this coverage have known about this schedule? A definition that took effect after that read could not have been, so it is covered from its own start even though the watermark has moved past it; one that already existed was covered, so it rides the watermark. Without that question a cold start has to choose between losing the first runs of new schedules and replaying history for every schedule it loads — and treating `syncedUntil` as a floor rather than a question replays the gap between the last read and the last commit.
 - **Commits are fenced.** A deposed leader's late commit no longer matches the stored token: nothing is written, the watermark never rewinds, and the new leader re-covers the in-flight window. A handover can duplicate a tick's occurrences; it can never lose them.
 
-Tune with the `lease` option (seconds a claim lives before it must be renewed; must outlive at least two ticks) and `token` (the instance identity; defaults to a random one). A tick renews the claim before handing work over, so the lease has to exceed the time one batch takes: a slower handler loses leadership mid-dispatch, which costs a re-delivered window and shows up as `schedule.error.total{stage="lease"}` rather than passing silently. Replica clocks must agree to within a fraction of the lease. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `snapshot()` — and give each partition its own `Store` record; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
+Tune with `leaseSeconds` (how long a claim lives before it must be renewed; defaults to three ticks of delivery and must outlive two) and `token` (the instance identity; defaults to a random one). A tick renews the claim before handing work over, so the lease has to exceed the time one batch takes: a slower handler loses leadership mid-dispatch, which costs a re-delivered window and shows up as `schedule.error.total{stage="lease"}` rather than passing silently. Replica clocks must agree to within a fraction of the lease. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `snapshot()` — and give each partition its own `Store` record; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
 
 ## Deduplication
 
@@ -183,6 +183,36 @@ That is how at-least-once transport becomes effectively-once work, and it is the
 
 ## Delivery model
 
+`run()` hands each occurrence over when it falls due, not when it was selected. A tick that selects `leadSeconds` ahead is what buys the scheduler the room to wait for the exact second, once, instead of every handler doing it:
+
+```php
+<?php
+
+$scheduler = new Scheduler(
+    source: new FunctionSchedules($database),
+    store: new Store\Redis($redis),
+    tickSeconds: 60,
+    syncSeconds: 10,
+    leadSeconds: 60,
+    // Thousands of schedules on `* * * * *` all fall due in the same second.
+    // A deterministic offset spreads them across the tick that covers them,
+    // and each keeps its slot across deploys.
+    offset: fn (Occurrence $occurrence): int => \abs(\crc32($occurrence->id)) % 60,
+);
+```
+
+Occurrences sharing a moment are handed over together; ones already past due — catch-up after downtime — go out immediately, oldest first. Waiting is against an absolute target, so a slow handler cannot push the ones behind it late, and the wait keeps reconciling on the sync cadence: a schedule disabled, deleted or rewritten while its run waits is dropped rather than published, and leadership is re-confirmed before any held batch goes out. The window is committed only once the whole tick has been delivered.
+
+Two consequences worth planning for:
+
+- **A tick occupies up to `tickSeconds + leadSeconds`.** Keep any `offset` inside one tick; an offset longer than that delays the next tick, and the wall-anchored loop then skips to the following boundary.
+- **`leaseSeconds` must outlive delivery**, which is why it defaults to three ticks of it and refuses to be shorter than two. A lease that expires mid-delivery hands the window to a standby and costs a re-delivered tick, reported as `schedule.error.total{stage="lease"}`.
+
+A handler that defers work of its own — enqueueing with a delay, say — should ask `isCurrent($occurrence)` when that work comes due, since only the scheduler knows which version of a definition it is currently reconciled to.
+
+### Driving it yourself
+
+
 `run()` wraps a two-phase primitive you can drive yourself:
 
 ```php
@@ -197,7 +227,7 @@ foreach ($scheduler->tick() as $occurrence) {
 $scheduler->commit();
 ```
 
-`count()` reports how many schedules are loaded, for a caller that wants to log or assert it. `tick()` confirms (or takes) leadership and selects the next window's occurrences without advancing the watermark; `commit()` advances it and renews the claim in one swap. A retry loop keeps its leadership: `tick()` renews the claim when it is more than half spent, so retrying for longer than the lease does not hand the window to a standby mid-retry. Skip `commit()` when handling fails and the next `tick()` re-delivers — at-least-once, by construction. With the default `lookahead: 0`, occurrences are handed over after they fall due, late by at most one tick interval (default 1 second). Setting `lookahead` hands future occurrences over early — `$occurrence->due` says when they are meant to run — for callers that enqueue with precise delays, at the cost of losing occurrences committed but not yet run when a crash hits.
+`count()` reports how many schedules are loaded, for a caller that wants to log or assert it. `tick()` confirms (or takes) leadership and selects the next window's occurrences without advancing the watermark; `commit()` advances it and renews the claim in one swap. A retry loop keeps its leadership: `tick()` renews the claim when it is more than half spent, so retrying for longer than the lease does not hand the window to a standby mid-retry. Skip `commit()` when handling fails and the next `tick()` re-delivers — at-least-once, by construction. With the default `leadSeconds: 0`, a tick selects only what is already due. Raising it lets a tick select ahead, and `run()` then holds each occurrence until its moment arrives — see [Delivery](#delivery-model). Driving `tick()` yourself gets the whole selected window immediately, future occurrences included (`$occurrence->due` says when each is meant to run), and the waiting becomes yours to do.
 
 ## Metrics
 
@@ -209,7 +239,7 @@ Pass a `utopia-php/telemetry` adapter and the scheduler records the four golden 
 | Latency | `schedule.tick.duration`, `schedule.reconcile.duration` (histograms, s) | time spent selecting and syncing |
 | Traffic | `schedule.dispatch.total` (counter), `schedule.entries` (gauge) | occurrences dispatched; schedules in memory |
 | Errors | `schedule.error.total` (counter, `stage` attribute) | `reconcile`, `make` and `dispatch` failures, plus `lease` when a commit is fenced because leadership was lost mid-tick |
-| Saturation | `schedule.lag` (gauge, s) | how far the window start trails "now" — steady at about one interval; growing means the loop is falling behind |
+| Saturation | `schedule.lag` (gauge, s) | how far the window start trails "now" — steady at about one tick; growing means the loop is falling behind |
 
 ## Tracing
 
@@ -242,7 +272,7 @@ $scheduler->run(function (array $occurrences) use ($queue): void {
 
 ## Scale
 
-The design holds at fleet size: selection is pure per-schedule math and reconciliation is version-gated, so at 10,000 mixed schedules a full tick costs about 18ms against a 60-second interval, a warm snapshot diff under 1ms, and a cold one about 20ms. The exactly-once property is asserted at that scale in the test suite — 10,000 schedules through jittery ticks, expected counts derived with modular arithmetic rather than the schedule classes under test — and `composer bench` prints the current numbers.
+The design holds at fleet size: selection is pure per-schedule math and reconciliation is version-gated, so at 10,000 mixed schedules a full tick costs about 18ms against a 60-second tick cadence, a warm snapshot diff under 1ms, and a cold one about 20ms. The exactly-once property is asserted at that scale in the test suite — 10,000 schedules through jittery ticks, expected counts derived with modular arithmetic rather than the schedule classes under test — and `composer bench` prints the current numbers.
 
 ## Layout
 

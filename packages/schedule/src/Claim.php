@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Utopia\Schedule;
 
 /**
- * The scheduler's shared record: who leads, until when, where committed
- * coverage stops, and how much of the source had been read when it
- * stopped there.
+ * The scheduler's shared record: who leads, until when, how far coverage
+ * has been committed, and how much of the source had been read when it
+ * got there.
  *
  * Leadership and coverage share one lifecycle — the leader advances both
  * on every commit — so they share one record, and one compare-and-swap
@@ -23,19 +23,22 @@ namespace Utopia\Schedule;
 final readonly class Claim
 {
     /**
+     * Every moment is Unix seconds with microsecond precision, the same
+     * unit {@see Clock} works in. The two watermarks are null until the
+     * first ever commit; a claim always has an expiry.
+     *
      * @param string $token the holder's identity; empty when the claim was released
-     * @param float $expiresAt Unix seconds; at or past this moment any instance may take over
-     * @param string|null $windowEnd where committed coverage stops, as a `U.u` timestamp;
-     *                               null before the first ever commit
-     * @param string|null $syncedUntil when the source was last read successfully, as a `U.u`
-     *                                 timestamp. Every schedule that existed then was known,
-     *                                 so the coverage above accounts for it; anything created
-     *                                 later was invisible and is owed its own coverage
+     * @param float $expiresAt at or past this moment, any instance may take over
+     * @param float|null $coveredUntil how far committed coverage reaches
+     * @param float|null $syncedUntil when the source was last read successfully. Every
+     *                                schedule that existed then was known, so the coverage
+     *                                above accounts for it; anything created later was
+     *                                invisible and is owed its own coverage
      */
     public function __construct(
         public string $token,
         public float $expiresAt,
-        public ?string $windowEnd,
-        public ?string $syncedUntil = null,
+        public ?float $coveredUntil,
+        public ?float $syncedUntil = null,
     ) {}
 }
