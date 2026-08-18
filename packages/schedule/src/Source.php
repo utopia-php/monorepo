@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Utopia\Schedule;
 
+use Utopia\Schedule\Source\Entry;
+use Utopia\Schedule\Source\Row;
+
 /**
  * The source of truth for a scheduler's entries, usually a database.
  *

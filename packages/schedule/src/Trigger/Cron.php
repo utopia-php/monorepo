@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Utopia\Schedule;
+namespace Utopia\Schedule\Trigger;
+
+use Utopia\Schedule\Trigger;
 
 /**
- * Recurring schedule described by a five-field cron expression:
+ * Recurring trigger described by a five-field cron expression:
  * minute, hour, day of month, month, day of week.
  *
  * Supported syntax is the portable cron core: `*`, values, ranges
@@ -21,7 +23,7 @@ namespace Utopia\Schedule;
  * evaluation time. Around daylight-saving transitions, nonexistent
  * local times follow PHP's date normalization.
  */
-final readonly class Cron implements Schedule
+final readonly class Cron implements Trigger
 {
     private const array MACROS = [
         '@yearly' => '0 0 1 1 *',

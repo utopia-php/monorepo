@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\Tests;
 
-use Utopia\Schedule\Row;
+use Utopia\Schedule\Source\Row;
 
 /**
  * Mutable row store for reconciliation tests: closures capture the set

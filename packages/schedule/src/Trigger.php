@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace Utopia\Schedule;
 
 /**
- * When something should run, expressed as pure occurrence math.
+ * When a schedule should run, expressed as pure occurrence math.
  *
- * A schedule never consults the current time: callers hand it an explicit
+ * A trigger never consults the current time: callers hand it an explicit
  * half-open window and it answers which occurrences fall inside. This is
  * the contract that makes a scheduler immune to evaluation-time races —
  * an occurrence belongs to exactly one window no matter how long the
- * caller's loop has been running when the schedule is evaluated.
+ * caller's loop has been running when the trigger is evaluated.
+ *
+ * Implementations live alongside this interface: {@see Trigger\Cron},
+ * {@see Trigger\Interval}, {@see Trigger\At}.
  */
-interface Schedule
+interface Trigger
 {
     /**
      * Occurrences inside the half-open window [$start, $end), ascending.
@@ -27,8 +30,8 @@ interface Schedule
     public function occurrencesBetween(\DateTimeImmutable $start, \DateTimeImmutable $end): array;
 
     /**
-     * Whether the schedule keeps producing occurrences. One-shot schedules
-     * return false and are dropped by the scheduler once delivered.
+     * Whether this trigger keeps producing occurrences. One-shot triggers
+     * return false and are retired by the scheduler once delivered.
      */
     public function recurring(): bool;
 }

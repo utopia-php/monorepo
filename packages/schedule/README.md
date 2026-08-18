@@ -27,12 +27,12 @@ Describe the source of truth and run:
 ```php
 <?php
 
-use Utopia\Schedule\Cron;
-use Utopia\Schedule\Entry;
 use Utopia\Schedule\Occurrence;
-use Utopia\Schedule\Row;
 use Utopia\Schedule\Scheduler;
 use Utopia\Schedule\Source;
+use Utopia\Schedule\Source\Entry;
+use Utopia\Schedule\Source\Row;
+use Utopia\Schedule\Trigger\Cron;
 
 $scheduler = new Scheduler(
     source: new Source(
@@ -50,7 +50,7 @@ $scheduler = new Scheduler(
         // The expensive part — parsing, hydrating context — runs only when
         // a row is new or its version changed.
         make: fn (Row $row): Entry => new Entry(
-            schedule: new Cron($row->data->getAttribute('schedule')),
+            trigger: new Cron($row->data->getAttribute('schedule')),
             payload: ['projectId' => $row->data->getAttribute('projectId')],
         ),
     ),
@@ -75,16 +75,18 @@ The scheduler decides *what runs when* and hands the batch over; it has no opini
 
 `run()` ticks on a wall-anchored cadence: it sleeps to the next multiple of the tick interval instead of sleeping a fixed span after variable work, so the tick phase never drifts. A handler exception propagates before the tick commits, which means a supervised restart re-delivers the tick instead of losing it. Reconciliation errors go the other way — through the `onError` callback, leaving the last good view dispatching, because stale schedules beat a stopped scheduler. Call `stop()` — from the handler or a signal handler — to return after the current tick completes.
 
-## Schedule semantics
+## Triggers
 
-| Schedule | Fires | Notes |
+A schedule's **trigger** answers one question: which moments does this schedule fall due at? Three implementations ship, all under `Utopia\Schedule\Trigger`:
+
+| Trigger | Fires | Notes |
 |----------|-------|-------|
 | `new Cron('*/15 * * * *')` | on cron matches | Minute resolution, zero dependencies: the portable five-field dialect (`*`, values, ranges, steps over `*` or ranges, lists, `JAN`/`FRI` names, `7` as Sunday, `@daily`-style macros, the vixie either-day rule). Invalid, never-matching, and Quartz-extension expressions throw at construction instead of becoming a silent no-op. |
 | `new Interval(900)` | every 900 seconds | Occurrences sit on a deterministic grid (anchor + k × seconds, epoch-anchored by default), so the cadence survives restarts instead of re-phasing to process boot. Pass an anchor to set the phase. |
 | `At::in(300)` | once, 300 seconds after the call | The moment is absolute from construction. |
 | `new At($dateTime)` | once, at `$dateTime` | |
 
-All types implement one contract: `occurrencesBetween($start, $end)` returns the occurrences inside `[start, end)`, ascending. An occurrence exactly at `$start` belongs to the window; one exactly at `$end` belongs to the next.
+All of them implement one contract, `Trigger`: `occurrencesBetween($start, $end)` returns the occurrences inside `[start, end)`, ascending. An occurrence exactly at `$start` belongs to the window; one exactly at `$end` belongs to the next.
 
 A delivered one-shot is dropped from memory and tombstoned by its `(id, version)`, so the next sync does not re-add the row before the source records completion — the handler (or the worker it feeds) owns marking the row done. The same row returning with a new version is a genuine reschedule and runs again.
 
@@ -179,11 +181,24 @@ Pass a `utopia-php/telemetry` adapter and the scheduler records the four golden 
 
 ## Testing time
 
-`Clock` isolates the scheduler from wall time, and the bundled `TestClock` makes timing defects reproducible fixtures — including the class of defect this library exists to prevent: the test suite replays a tick phase creeping across a minute boundary at 1.5ms per tick for an hour and asserts every occurrence is delivered exactly once.
+`Clock` isolates the scheduler from wall time, and the bundled `Clock\Test` makes timing defects reproducible fixtures — including the class of defect this library exists to prevent: the test suite replays a tick phase creeping across a minute boundary at 1.5ms per tick for an hour and asserts every occurrence is delivered exactly once.
 
 ## Scale
 
 The design holds at fleet size: selection is pure per-schedule math and reconciliation is version-gated, so at 10,000 mixed schedules a full tick costs about 18ms against a 60-second interval, a warm snapshot diff under 1ms, and a cold one about 20ms. The exactly-once property is asserted at that scale in the test suite — 10,000 schedules through jittery ticks, expected counts derived with modular arithmetic rather than the schedule classes under test — and `composer bench` prints the current numbers.
+
+## Layout
+
+Each contract sits at the root of `src/` with its implementations in a folder beside it:
+
+```text
+Scheduler.php          the loop
+Occurrence.php         what a handler receives
+Trigger.php            when a schedule runs — Trigger/{Cron,Interval,At}.php
+Source.php             where schedules come from — Source/{Row,Entry}.php
+State.php              claim persistence — State/{Claim,Memory}.php
+Clock.php              time — Clock/{System,Test}.php
+```
 
 ## Tests
 

@@ -5,18 +5,18 @@ declare(strict_types=1);
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Schedule\At;
-use Utopia\Schedule\Claim;
-use Utopia\Schedule\Cron;
-use Utopia\Schedule\Entry;
-use Utopia\Schedule\Interval;
-use Utopia\Schedule\MemoryState;
+use Utopia\Schedule\Clock\Test as TestClock;
 use Utopia\Schedule\Occurrence;
-use Utopia\Schedule\Row;
-use Utopia\Schedule\Schedule;
 use Utopia\Schedule\Scheduler;
 use Utopia\Schedule\Source;
-use Utopia\Schedule\TestClock;
+use Utopia\Schedule\Source\Entry;
+use Utopia\Schedule\Source\Row;
+use Utopia\Schedule\State\Claim;
+use Utopia\Schedule\State\Memory as MemoryState;
+use Utopia\Schedule\Trigger;
+use Utopia\Schedule\Trigger\At;
+use Utopia\Schedule\Trigger\Cron;
+use Utopia\Schedule\Trigger\Interval;
 use Utopia\Telemetry\Adapter\Test as TestTelemetry;
 
 final class SchedulerTest extends TestCase
@@ -230,7 +230,7 @@ final class SchedulerTest extends TestCase
         // stop() released the claim but kept the watermark, so the next
         // instance resumes coverage instead of waiting out the lease.
         $claim = $state->load();
-        $this->assertInstanceOf(\Utopia\Schedule\Claim::class, $claim);
+        $this->assertInstanceOf(Claim::class, $claim);
         $this->assertSame('', $claim->token);
         $this->assertNotNull($claim->windowEnd);
     }
@@ -458,11 +458,11 @@ final class SchedulerTest extends TestCase
     }
 
     /**
-     * @param array<string, Schedule> $schedules
+     * @param array<string, Trigger> $triggers
      */
     private function scheduler(
         TestClock $clock,
-        array $schedules,
+        array $triggers,
         ?MemoryState $state = null,
         int $interval = 1,
         int $lookahead = 0,
@@ -472,14 +472,14 @@ final class SchedulerTest extends TestCase
         ?int $lease = null,
     ): Scheduler {
         $rows = [];
-        foreach (array_keys($schedules) as $id) {
+        foreach (array_keys($triggers) as $id) {
             $rows[] = new Row($id, '1');
         }
 
         $scheduler = new Scheduler(
             source: new Source(
                 list: fn(): array => $rows,
-                make: fn(Row $row): Entry => new Entry($schedules[$row->id]),
+                make: fn(Row $row): Entry => new Entry($triggers[$row->id]),
             ),
             state: $state ?? new MemoryState(),
             clock: $clock,

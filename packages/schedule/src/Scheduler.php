@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Utopia\Schedule;
 
+use Utopia\Schedule\Clock\System as SystemClock;
+use Utopia\Schedule\Source\Row;
+use Utopia\Schedule\State\Claim;
+use Utopia\Schedule\State\Memory as MemoryState;
 use Utopia\Telemetry\Adapter as Telemetry;
 use Utopia\Telemetry\Adapter\None as NoTelemetry;
 use Utopia\Telemetry\Counter;
@@ -60,7 +64,7 @@ use Utopia\Telemetry\Histogram;
  * are not supported; two loops over one {@see State} are — that is the
  * leader election.
  *
- * @phpstan-type Registered array{schedule: Schedule, payload: mixed, version: string, coverFrom: \DateTimeImmutable|null}
+ * @phpstan-type Registered array{trigger: Trigger, payload: mixed, version: string, coverFrom: \DateTimeImmutable|null}
  */
 final class Scheduler
 {
@@ -115,7 +119,7 @@ final class Scheduler
      * @param State $state claim persistence — leadership plus watermark; share it (Redis, a
      *                     database row) and standby replicas elect one dispatcher and survive
      *                     restarts. Replica clocks must agree to within a fraction of $lease.
-     * @param Clock $clock time source; swap for {@see TestClock} in tests
+     * @param Clock $clock time source; swap for {@see Clock\Test} in tests
      * @param int $interval seconds between ticks in {@see Scheduler::run()}, wall-anchored
      * @param int $lookahead seconds a tick may reach past "now". Zero (the default) delivers
      *                       occurrences after they are due, late by at most one interval, and
@@ -238,7 +242,7 @@ final class Scheduler
             }
 
             $this->entries[$id] = [
-                'schedule' => $entry->schedule,
+                'trigger' => $entry->trigger,
                 'payload' => $entry->payload,
                 'version' => $row->version,
                 // The entry is covered once from its own start — the row's
@@ -285,7 +289,7 @@ final class Scheduler
         $started = microtime(true);
 
         $claim = $this->elect();
-        if (!$claim instanceof \Utopia\Schedule\Claim) {
+        if (!$claim instanceof Claim) {
             $this->clearPending();
 
             return [];
@@ -332,7 +336,7 @@ final class Scheduler
                 continue;
             }
 
-            $dues = $entry['schedule']->occurrencesBetween($entryStart, $end);
+            $dues = $entry['trigger']->occurrencesBetween($entryStart, $end);
 
             foreach ($dues as $due) {
                 $occurrences[] = new Occurrence($id, $due, $entry['payload']);
@@ -342,7 +346,7 @@ final class Scheduler
                 $covered[$id] = $entry['version'];
             }
 
-            if ($dues !== [] && !$entry['schedule']->recurring()) {
+            if ($dues !== [] && !$entry['trigger']->recurring()) {
                 $oneShots[$id] = $entry['version'];
             }
         }
@@ -438,7 +442,7 @@ final class Scheduler
 
         try {
             while ($this->running) {
-                if (!$this->elect() instanceof \Utopia\Schedule\Claim) {
+                if (!$this->elect() instanceof Claim) {
                     $this->clock->sleep((float) $this->interval);
                     continue;
                 }
@@ -568,7 +572,7 @@ final class Scheduler
     private function release(): void
     {
         $claim = $this->state->load();
-        if (!$claim instanceof \Utopia\Schedule\Claim || $claim->token !== $this->token) {
+        if (!$claim instanceof Claim || $claim->token !== $this->token) {
             return;
         }
 

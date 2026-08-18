@@ -2,17 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Utopia\Schedule;
+namespace Utopia\Schedule\Trigger;
+
+use Utopia\Schedule\Trigger;
 
 /**
- * Recurring schedule that fires every fixed number of seconds.
+ * Recurring trigger that fires every fixed number of seconds.
  *
  * Occurrences sit on a deterministic grid — anchor + k × seconds — so the
  * cadence survives restarts instead of re-phasing to whenever the process
  * happened to boot. The anchor defaults to the Unix epoch; pass one to
  * phase the grid (for example to a resource's creation time).
  */
-final readonly class Interval implements Schedule
+final readonly class Interval implements Trigger
 {
     private float $anchor;
 

@@ -2,13 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Utopia\Schedule;
+namespace Utopia\Schedule\Clock;
+
+use Utopia\Schedule\Clock;
 
 /**
  * Wall clock. Under Swoole with runtime hooks enabled, usleep() yields
  * the coroutine instead of blocking the process.
  */
-final class SystemClock implements Clock
+final class System implements Clock
 {
     #[\Override]
     public function now(): \DateTimeImmutable

@@ -2,17 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Utopia\Schedule;
+namespace Utopia\Schedule\Trigger;
+
+use Utopia\Schedule\Trigger;
 
 /**
- * One-shot schedule: a single occurrence at a fixed moment.
+ * One-shot trigger: a single occurrence at a fixed moment.
  *
  * The moment is absolute from construction onward, so "in 30 seconds"
  * captured through {@see At::in()} means 30 seconds from when it was
  * scheduled — not from whenever the scheduler happens to evaluate it.
- * The scheduler drops the schedule once the occurrence is delivered.
+ * The scheduler retires it once the occurrence is delivered.
  */
-final readonly class At implements Schedule
+final readonly class At implements Trigger
 {
     public function __construct(private \DateTimeImmutable $time) {}
 

@@ -11,14 +11,14 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../vendor/autoload.php';
 
-use Utopia\Schedule\Cron;
-use Utopia\Schedule\Entry;
-use Utopia\Schedule\Interval;
-use Utopia\Schedule\MemoryState;
-use Utopia\Schedule\Row;
+use Utopia\Schedule\Clock\Test as TestClock;
 use Utopia\Schedule\Scheduler;
 use Utopia\Schedule\Source;
-use Utopia\Schedule\TestClock;
+use Utopia\Schedule\Source\Entry;
+use Utopia\Schedule\Source\Row;
+use Utopia\Schedule\State\Memory as MemoryState;
+use Utopia\Schedule\Trigger\Cron;
+use Utopia\Schedule\Trigger\Interval;
 
 const SCHEDULES = 10_000;
 const TICKS = 30;

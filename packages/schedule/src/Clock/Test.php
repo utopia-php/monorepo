@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Utopia\Schedule;
+namespace Utopia\Schedule\Clock;
+
+use Utopia\Schedule\Clock;
 
 /**
  * Deterministic clock for tests: time stands still until advanced, and
@@ -10,7 +12,7 @@ namespace Utopia\Schedule;
  * starting 59 milliseconds before a minute boundary, a sleep(60) that
  * resumes 1.5 milliseconds late — become exact, repeatable fixtures.
  */
-final class TestClock implements Clock
+final class Test implements Clock
 {
     private float $timestamp;
 
@@ -24,7 +26,7 @@ final class TestClock implements Clock
     {
         $now = \DateTimeImmutable::createFromFormat('U.u', \sprintf('%.6F', $this->timestamp));
         if ($now === false) {
-            throw new \RuntimeException('TestClock holds an unrepresentable timestamp');
+            throw new \RuntimeException('The test clock holds an unrepresentable timestamp');
         }
 
         return $now;

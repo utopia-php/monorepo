@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Utopia\Schedule;
+namespace Utopia\Schedule\Source;
 
 /**
  * One schedule as the source of truth describes it: a lightweight

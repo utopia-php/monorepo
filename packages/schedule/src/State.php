@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Utopia\Schedule;
 
+use Utopia\Schedule\State\Claim;
+
 /**
  * Storage for the scheduler's {@see Claim}. Back it with shared storage
  * (Redis, a database row) and replicas elect one dispatcher, a

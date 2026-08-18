@@ -2,14 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Utopia\Schedule;
+namespace Utopia\Schedule\State;
+
+use Utopia\Schedule\State;
 
 /**
  * In-process claim storage. Coverage and leadership survive ticks but
  * not restarts, and only instances sharing the object contend; use
  * shared storage in production.
  */
-final class MemoryState implements State
+final class Memory implements State
 {
     private ?Claim $claim = null;
 

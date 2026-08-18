@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Schedule\Cron;
-use Utopia\Schedule\Entry;
-use Utopia\Schedule\Interval;
-use Utopia\Schedule\MemoryState;
-use Utopia\Schedule\Row;
+use Utopia\Schedule\Clock\Test as TestClock;
 use Utopia\Schedule\Scheduler;
 use Utopia\Schedule\Source;
-use Utopia\Schedule\TestClock;
+use Utopia\Schedule\Source\Entry;
+use Utopia\Schedule\Source\Row;
+use Utopia\Schedule\State\Memory as MemoryState;
+use Utopia\Schedule\Trigger\Cron;
+use Utopia\Schedule\Trigger\Interval;
 
 /**
  * Exactly-once properties at production scale. Expected occurrence
@@ -38,14 +38,14 @@ final class ReliabilityTest extends TestCase
         ];
 
         $rows = [];
-        $schedules = [];
+        $triggers = [];
         $classOf = [];
         foreach ($classes as $index => [$count, $modulus, $remainder, $factory]) {
-            $schedule = $factory(); // schedules are stateless: one instance serves its class
+            $trigger = $factory(); // schedules are stateless: one instance serves its class
             for ($i = 0; $i < $count; ++$i) {
                 $id = "s{$index}-{$i}";
                 $rows[] = new Row($id, 'v1');
-                $schedules[$id] = $schedule;
+                $triggers[$id] = $trigger;
                 $classOf[$id] = $index;
             }
         }
@@ -54,7 +54,7 @@ final class ReliabilityTest extends TestCase
         $scheduler = new Scheduler(
             source: new Source(
                 list: fn(): array => $rows,
-                make: fn(Row $row): Entry => new Entry($schedules[$row->id]),
+                make: fn(Row $row): Entry => new Entry($triggers[$row->id]),
             ),
             state: new MemoryState(),
             clock: $clock,

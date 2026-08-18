@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Schedule\At;
-use Utopia\Schedule\Cron;
-use Utopia\Schedule\Interval;
+use Utopia\Schedule\Trigger\At;
+use Utopia\Schedule\Trigger\Cron;
+use Utopia\Schedule\Trigger\Interval;
 
 final class ScheduleTest extends TestCase
 {

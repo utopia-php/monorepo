@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Schedule\At;
-use Utopia\Schedule\Cron;
-use Utopia\Schedule\Entry;
-use Utopia\Schedule\Interval;
-use Utopia\Schedule\MemoryState;
+use Utopia\Schedule\Clock\Test as TestClock;
 use Utopia\Schedule\Occurrence;
-use Utopia\Schedule\Row;
 use Utopia\Schedule\Scheduler;
 use Utopia\Schedule\Source;
-use Utopia\Schedule\TestClock;
+use Utopia\Schedule\Source\Entry;
+use Utopia\Schedule\Source\Row;
+use Utopia\Schedule\State\Memory as MemoryState;
+use Utopia\Schedule\Trigger\At;
+use Utopia\Schedule\Trigger\Cron;
+use Utopia\Schedule\Trigger\Interval;
 use Utopia\Telemetry\Adapter\Test as TestTelemetry;
 
 final class ReconcileTest extends TestCase
