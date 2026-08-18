@@ -6,8 +6,7 @@ namespace Utopia\Schedule;
 
 use Utopia\Schedule\Clock\System as SystemClock;
 use Utopia\Schedule\Source\Row;
-use Utopia\Schedule\State\Claim;
-use Utopia\Schedule\State\Memory as MemoryState;
+use Utopia\Schedule\Store\Memory as MemoryStore;
 use Utopia\Telemetry\Adapter as Telemetry;
 use Utopia\Telemetry\Adapter\None as NoTelemetry;
 use Utopia\Telemetry\Counter;
@@ -25,7 +24,7 @@ use Utopia\Telemetry\Histogram;
  *   moving "now". A minute boundary the loop crosses mid-evaluation
  *   cannot drop the occurrence sitting on it.
  * - Windows tile: each opens where the previous committed window closed
- *   (the watermark, part of the {@see Claim} held in {@see State}).
+ *   (the watermark, part of the {@see Claim} held in {@see Store}).
  *   Nothing falls between ticks, and with shared state nothing falls
  *   across a restart either.
  * - Delivery is at-least-once within the lookback horizon:
@@ -49,7 +48,7 @@ use Utopia\Telemetry\Histogram;
  * - Leadership and the watermark share one claim: a commit renews the
  *   lease and advances coverage in a single compare-and-swap, and a tick
  *   renews it up front so the lease covers the dispatch ahead. Replicas
- *   sharing a {@see State} elect one dispatcher, a standby takes over
+ *   sharing a {@see Store} elect one dispatcher, a standby takes over
  *   when the claim expires, and a deposed leader's late commit is
  *   fenced instead of rewriting coverage — failover trades duplicates,
  *   never losses. Duplicates stop being work when the consumer derives
@@ -61,7 +60,7 @@ use Utopia\Telemetry\Histogram;
  * occurrences are processed — batching them into one round trip, fanning
  * them out across coroutines, isolating a failure — belongs to the
  * handler, which receives the whole batch. Two loops over one instance
- * are not supported; two loops over one {@see State} are — that is the
+ * are not supported; two loops over one {@see Store} are — that is the
  * leader election.
  *
  * @phpstan-type Registered array{trigger: Trigger, payload: mixed, version: string, coverFrom: \DateTimeImmutable|null}
@@ -116,9 +115,10 @@ final class Scheduler
 
     /**
      * @param Source $source the source of truth the loop reconciles against
-     * @param State $state claim persistence — leadership plus watermark; share it (Redis, a
-     *                     database row) and standby replicas elect one dispatcher and survive
-     *                     restarts. Replica clocks must agree to within a fraction of $lease.
+     * @param Store $store where the claim lives — leadership plus watermark; back it with
+     *                     {@see Store\Redis} or a database row and standby replicas elect one
+     *                     dispatcher and survive restarts. Replica clocks must agree to within
+     *                     a fraction of $lease.
      * @param Clock $clock time source; swap for {@see Clock\Test} in tests
      * @param int $interval seconds between ticks in {@see Scheduler::run()}, wall-anchored
      * @param int $lookahead seconds a tick may reach past "now". Zero (the default) delivers
@@ -148,7 +148,7 @@ final class Scheduler
      */
     public function __construct(
         private readonly Source $source,
-        private readonly State $state = new MemoryState(),
+        private readonly Store $store = new MemoryStore(),
         private readonly Clock $clock = new SystemClock(),
         private readonly int $interval = 1,
         private readonly int $lookahead = 0,
@@ -390,7 +390,7 @@ final class Scheduler
             $this->pendingWindowEnd->format('U.u'),
         );
 
-        if (!$this->state->swap($this->token, $next)) {
+        if (!$this->store->swap($this->token, $next)) {
             // Deposed mid-tick: the new leader re-covers this window, so
             // nothing is lost — but a lease shorter than a dispatch takes
             // would do this every tick, which is worth seeing.
@@ -526,7 +526,7 @@ final class Scheduler
      */
     private function elect(): ?Claim
     {
-        $claim = $this->state->load();
+        $claim = $this->store->load();
         $now = (float) $this->clock->now()->format('U.u');
         $expected = null;
         $windowEnd = null;
@@ -542,7 +542,7 @@ final class Scheduler
                 }
 
                 $renewed = new Claim($this->token, $now + $this->lease, $claim->windowEnd);
-                if ($this->state->swap($this->token, $renewed)) {
+                if ($this->store->swap($this->token, $renewed)) {
                     return $renewed;
                 }
 
@@ -561,7 +561,7 @@ final class Scheduler
 
         $next = new Claim($this->token, $now + $this->lease, $windowEnd);
 
-        if (!$this->state->swap($expected, $next)) {
+        if (!$this->store->swap($expected, $next)) {
             return null; // lost the takeover race
         }
 
@@ -577,13 +577,13 @@ final class Scheduler
 
     private function release(): void
     {
-        $claim = $this->state->load();
+        $claim = $this->store->load();
         if (!$claim instanceof Claim || $claim->token !== $this->token) {
             return;
         }
 
         // An empty, expired claim keeps the watermark and frees the lease.
-        $this->state->swap($this->token, new Claim('', 0.0, $claim->windowEnd));
+        $this->store->swap($this->token, new Claim('', 0.0, $claim->windowEnd));
         $this->clearPending();
     }
 

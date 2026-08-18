@@ -4,19 +4,17 @@ declare(strict_types=1);
 
 namespace Utopia\Schedule;
 
-use Utopia\Schedule\State\Claim;
-
 /**
- * Storage for the scheduler's {@see Claim}. Back it with shared storage
- * (Redis, a database row) and replicas elect one dispatcher, a
- * replacement resumes coverage where its predecessor stopped, and a
- * deposed leader's late commit is rejected instead of rewinding the
- * watermark.
+ * Where the scheduler's {@see Claim} lives. Back it with shared storage
+ * — {@see Store\Redis}, or a database row — and replicas elect one
+ * dispatcher, a replacement resumes coverage where its predecessor
+ * stopped, and a deposed leader's late commit is rejected instead of
+ * rewinding the watermark.
  *
- * Implementations must make {@see State::swap()} atomic: on Redis a Lua
+ * Implementations must make {@see Store::swap()} atomic: on Redis a Lua
  * script or WATCH/MULTI, on a database `UPDATE … WHERE token = ?`.
  */
-interface State
+interface Store
 {
     public function load(): ?Claim;
 

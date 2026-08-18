@@ -11,7 +11,7 @@ use Utopia\Schedule\Scheduler;
 use Utopia\Schedule\Source;
 use Utopia\Schedule\Source\Entry;
 use Utopia\Schedule\Source\Row;
-use Utopia\Schedule\State\Memory as MemoryState;
+use Utopia\Schedule\Store\Memory as MemoryStore;
 use Utopia\Schedule\Trigger\At;
 use Utopia\Schedule\Trigger\Cron;
 use Utopia\Schedule\Trigger\Interval;
@@ -45,7 +45,7 @@ final class ReconcileTest extends TestCase
                         : new Entry(new Cron($spec), $row->id);
                 },
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
         );
 
@@ -88,7 +88,7 @@ final class ReconcileTest extends TestCase
                 make: fn(Row $row): Entry => new Entry(new Interval(60), $row->id),
                 changes: fn(\DateTimeImmutable $since): array => $changed->list(),
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
         );
 
@@ -136,7 +136,7 @@ final class ReconcileTest extends TestCase
                     return new Entry(new At(new \DateTimeImmutable($at)));
                 },
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
         );
 
@@ -184,7 +184,7 @@ final class ReconcileTest extends TestCase
                 list: $set->list(...),
                 make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
         );
         $scheduler->tick();
@@ -220,7 +220,7 @@ final class ReconcileTest extends TestCase
                 },
                 make: fn(Row $row): Entry => new Entry(new Interval(60), $row->id),
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
         );
 
@@ -260,7 +260,7 @@ final class ReconcileTest extends TestCase
                     return new Entry(new Interval(60), $row->id);
                 },
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
             telemetry: $telemetry,
             onError: function (\Throwable $error) use ($errors): void {
@@ -295,7 +295,7 @@ final class ReconcileTest extends TestCase
                 list: $set->list(...),
                 make: fn(Row $row): Entry => new Entry(new At(new \DateTimeImmutable('2026-08-18 03:00:04'))),
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
         );
 
@@ -334,7 +334,7 @@ final class ReconcileTest extends TestCase
                 list: $set->list(...),
                 make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
         );
 
@@ -376,7 +376,7 @@ final class ReconcileTest extends TestCase
                     return new Entry(new At(new \DateTimeImmutable($at)));
                 },
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
         );
 

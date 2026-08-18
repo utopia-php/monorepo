@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Utopia\Schedule\Claim;
 use Utopia\Schedule\Clock\Test as TestClock;
 use Utopia\Schedule\Occurrence;
 use Utopia\Schedule\Scheduler;
 use Utopia\Schedule\Source;
 use Utopia\Schedule\Source\Entry;
 use Utopia\Schedule\Source\Row;
-use Utopia\Schedule\State\Claim;
-use Utopia\Schedule\State\Memory as MemoryState;
+use Utopia\Schedule\Store\Memory as MemoryStore;
 use Utopia\Schedule\Trigger;
 use Utopia\Schedule\Trigger\At;
 use Utopia\Schedule\Trigger\Cron;
@@ -49,17 +49,17 @@ final class SchedulerTest extends TestCase
 
     public function testRestartWithSharedStateBackfillsTheGap(): void
     {
-        $state = new MemoryState();
+        $store = new MemoryStore();
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
 
-        $scheduler = $this->scheduler($clock, ['fn' => new Interval(60)], state: $state);
+        $scheduler = $this->scheduler($clock, ['fn' => new Interval(60)], store: $store);
         $scheduler->tick();
         $scheduler->commit();
 
         // The process dies for 3 minutes; a replacement takes the expired
         // claim and delivers every occurrence its predecessor missed.
         $clock->advance(185.0);
-        $replacement = $this->scheduler($clock, ['fn' => new Interval(60)], state: $state, token: 'replacement');
+        $replacement = $this->scheduler($clock, ['fn' => new Interval(60)], store: $store, token: 'replacement');
 
         $this->assertSame(
             ['03:01:00', '03:02:00', '03:03:00'],
@@ -212,11 +212,11 @@ final class SchedulerTest extends TestCase
     public function testStandbyTakesOverWhenTheClaimExpires(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
-        $state = new MemoryState();
+        $store = new MemoryStore();
         // Another instance holds the claim for the next 120 seconds.
-        $state->swap(null, new Claim('incumbent', (float) $clock->now()->format('U') + 120.0, null));
+        $store->swap(null, new Claim('incumbent', (float) $clock->now()->format('U') + 120.0, null));
 
-        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], state: $state, interval: 60, token: 'standby');
+        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], store: $store, interval: 60, token: 'standby');
 
         $delivered = [];
         $scheduler->run(function (array $occurrences) use (&$delivered, $scheduler): void {
@@ -232,7 +232,7 @@ final class SchedulerTest extends TestCase
 
         // stop() released the claim but kept the watermark, so the next
         // instance resumes coverage instead of waiting out the lease.
-        $claim = $state->load();
+        $claim = $store->load();
         $this->assertInstanceOf(Claim::class, $claim);
         $this->assertSame('', $claim->token);
         $this->assertNotNull($claim->windowEnd);
@@ -241,9 +241,9 @@ final class SchedulerTest extends TestCase
     public function testDeposedLeaderCommitIsFenced(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
-        $state = new MemoryState();
+        $store = new MemoryStore();
 
-        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'leader');
+        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], store: $store, token: 'leader');
         $leader->tick();
         $leader->commit(); // claim held, expires at 03:01:30
 
@@ -254,28 +254,28 @@ final class SchedulerTest extends TestCase
         // The leader stalls past its lease; a standby takes over and
         // commits further coverage.
         $clock->advance(61.0); // 03:02:31
-        $standby = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'standby');
+        $standby = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], store: $store, token: 'standby');
         $this->assertSame(
             ['03:01:00', '03:02:00'], // the handover re-covers the in-flight window: duplicates, never losses
             array_map(fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'), $standby->tick()),
         );
         $standby->commit();
-        $watermark = $state->load()?->windowEnd;
+        $watermark = $store->load()?->windowEnd;
 
         // The deposed leader's late commit is fenced: no write, no rewind.
         $leader->commit();
-        $this->assertSame($watermark, $state->load()?->windowEnd);
-        $this->assertSame('standby', $state->load()?->token);
+        $this->assertSame($watermark, $store->load()?->windowEnd);
+        $this->assertSame('standby', $store->load()?->token);
         $this->assertSame([], $leader->tick(), 'a deposed leader must not dispatch');
     }
 
     public function testAFencedCommitIsCountedAsALeaseError(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
-        $state = new MemoryState();
+        $store = new MemoryStore();
         $telemetry = new TestTelemetry();
 
-        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'leader', telemetry: $telemetry);
+        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], store: $store, token: 'leader', telemetry: $telemetry);
         $leader->tick();
         $leader->commit();
 
@@ -284,7 +284,7 @@ final class SchedulerTest extends TestCase
 
         // A standby takes the expired claim, then the leader tries to commit.
         $clock->advance(121.0);
-        $standby = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'standby');
+        $standby = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], store: $store, token: 'standby');
         $standby->tick();
         $standby->commit();
         $leader->commit();
@@ -302,13 +302,13 @@ final class SchedulerTest extends TestCase
         // and could then never commit — both instances re-covering the
         // same window forever.
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
-        $state = new MemoryState();
+        $store = new MemoryStore();
 
-        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'leader', lease: 60);
+        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], store: $store, token: 'leader', lease: 60);
         $leader->tick();
         $leader->commit(); // claim expires 03:01:30
 
-        $standby = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], state: $state, token: 'standby', lease: 60);
+        $standby = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], store: $store, token: 'standby', lease: 60);
 
         // Two failed attempts, 40 seconds apart, neither committing.
         foreach ([40.0, 40.0] as $backoff) {
@@ -321,7 +321,7 @@ final class SchedulerTest extends TestCase
         // retry finally succeeds and commits.
         $leader->tick();
         $leader->commit();
-        $this->assertSame('leader', $state->load()?->token);
+        $this->assertSame('leader', $store->load()?->token);
     }
 
     public function testHandlerReceivesTheWholeTickAsOneBatch(): void
@@ -466,7 +466,7 @@ final class SchedulerTest extends TestCase
     private function scheduler(
         TestClock $clock,
         array $triggers,
-        ?MemoryState $state = null,
+        ?MemoryStore $store = null,
         int $interval = 1,
         int $lookahead = 0,
         int $lookback = 300,
@@ -484,7 +484,7 @@ final class SchedulerTest extends TestCase
                 list: fn(): array => $rows,
                 make: fn(Row $row): Entry => new Entry($triggers[$row->id]),
             ),
-            state: $state ?? new MemoryState(),
+            store: $store ?? new MemoryStore(),
             clock: $clock,
             interval: $interval,
             lookahead: $lookahead,

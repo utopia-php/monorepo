@@ -10,7 +10,7 @@ use Utopia\Schedule\Scheduler;
 use Utopia\Schedule\Source;
 use Utopia\Schedule\Source\Entry;
 use Utopia\Schedule\Source\Row;
-use Utopia\Schedule\State\Memory as MemoryState;
+use Utopia\Schedule\Store\Memory as MemoryStore;
 use Utopia\Schedule\Trigger\Cron;
 use Utopia\Schedule\Trigger\Interval;
 
@@ -56,7 +56,7 @@ final class ReliabilityTest extends TestCase
                 list: fn(): array => $rows,
                 make: fn(Row $row): Entry => new Entry($triggers[$row->id]),
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
             interval: 60,
             lease: 600,
@@ -134,7 +134,7 @@ final class ReliabilityTest extends TestCase
                     return new Entry(new Interval(60));
                 },
             ),
-            state: new MemoryState(),
+            store: new MemoryStore(),
             clock: $clock,
         );
 
@@ -179,7 +179,7 @@ final class ReliabilityTest extends TestCase
 
     public function testLeaderlessGapIsRecoveredExactlyOnceAfterTakeover(): void
     {
-        $state = new MemoryState();
+        $store = new MemoryStore();
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 12:00:30.000000'));
 
         $rows = [];
@@ -191,7 +191,7 @@ final class ReliabilityTest extends TestCase
                 list: fn(): array => $rows,
                 make: fn(Row $row): Entry => new Entry(new Interval(60)),
             ),
-            state: $state,
+            store: $store,
             clock: $clock,
             interval: 60,
             lookback: 600,

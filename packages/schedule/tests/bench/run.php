@@ -16,7 +16,7 @@ use Utopia\Schedule\Scheduler;
 use Utopia\Schedule\Source;
 use Utopia\Schedule\Source\Entry;
 use Utopia\Schedule\Source\Row;
-use Utopia\Schedule\State\Memory as MemoryState;
+use Utopia\Schedule\Store\Memory as MemoryStore;
 use Utopia\Schedule\Trigger\Cron;
 use Utopia\Schedule\Trigger\Interval;
 
@@ -44,7 +44,7 @@ $make = function (Row $row) use ($expressions, $intervals): Entry {
 $clock = new TestClock(new DateTimeImmutable('2026-08-18 12:00:30.250000'));
 $scheduler = new Scheduler(
     source: new Source(list: fn(): array => $rows, make: $make),
-    state: new MemoryState(),
+    store: new MemoryStore(),
     clock: $clock,
     interval: INTERVAL,
     lease: 600,

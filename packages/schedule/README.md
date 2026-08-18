@@ -32,6 +32,7 @@ use Utopia\Schedule\Scheduler;
 use Utopia\Schedule\Source;
 use Utopia\Schedule\Source\Entry;
 use Utopia\Schedule\Source\Row;
+use Utopia\Schedule\Store;
 use Utopia\Schedule\Trigger\Cron;
 
 $scheduler = new Scheduler(
@@ -54,7 +55,7 @@ $scheduler = new Scheduler(
             payload: ['projectId' => $row->data->getAttribute('projectId')],
         ),
     ),
-    state: $redisBackedState,
+    store: new Store\Redis($redis),
 );
 
 // The handler gets the tick's whole batch, oldest first, and owns how the
@@ -117,13 +118,13 @@ The change feed carries updates and soft deletes (`active: false`); hard deletes
 
 ## Surviving restarts and failover
 
-Leadership and the watermark share one lifecycle — the leader advances both on every commit — so they share one record: the `Claim` (`token`, `expiresAt`, `windowEnd`), stored behind the `State` interface (`load` and an atomic `swap`; back it with Redis or a database row). Every commit is one compare-and-swap that renews the lease and advances the watermark together. That single write buys three properties:
+Leadership and the watermark share one lifecycle — the leader advances both on every commit — so they share one record: the `Claim` (`token`, `expiresAt`, `windowEnd`), stored behind the `Store` interface (`load` and an atomic `swap`). Every commit is one compare-and-swap that renews the lease and advances the watermark together. That single write buys three properties:
 
-- **Election is inherent.** Point replicas at the same state and exactly one dispatches; the others idle and take over when the claim expires — or immediately when `stop()` releases it. No lock service, no extra port.
+- **Election is inherent.** Point replicas at the same store and exactly one dispatches; the others idle and take over when the claim expires — or immediately when `stop()` releases it. No lock service, no extra port.
 - **Failover resumes coverage.** A successor takes the watermark from the claim it inherits: occurrences missed in the handover are delivered on its first tick, oldest first, bounded by `lookback` (default 300 seconds).
 - **Commits are fenced.** A deposed leader's late commit no longer matches the stored token: nothing is written, the watermark never rewinds, and the new leader re-covers the in-flight window. A handover can duplicate a tick's occurrences; it can never lose them.
 
-Tune with the `lease` option (seconds a claim lives before it must be renewed; must outlive at least two ticks) and `token` (the instance identity; defaults to a random one). A tick renews the claim before handing work over, so the lease has to exceed the time one batch takes: a slower handler loses leadership mid-dispatch, which costs a re-delivered window and shows up as `schedule.error.total{stage="lease"}` rather than passing silently. Replica clocks must agree to within a fraction of the lease. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `list()` — and give each partition its own `State` record; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
+Tune with the `lease` option (seconds a claim lives before it must be renewed; must outlive at least two ticks) and `token` (the instance identity; defaults to a random one). A tick renews the claim before handing work over, so the lease has to exceed the time one batch takes: a slower handler loses leadership mid-dispatch, which costs a re-delivered window and shows up as `schedule.error.total{stage="lease"}` rather than passing silently. Replica clocks must agree to within a fraction of the lease. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `list()` — and give each partition its own `Store` record; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
 
 ## Deduplication
 
@@ -214,21 +215,30 @@ The design holds at fleet size: selection is pure per-schedule math and reconcil
 
 ## Layout
 
-Each contract sits at the root of `src/` with its implementations in a folder beside it:
+Each contract sits at the root of `src/` with its implementations in a folder beside it; value objects stay at the root, or with the concept that defines them:
 
 ```text
 Scheduler.php          the loop
 Occurrence.php         what a handler receives
 Trigger.php            when a schedule runs — Trigger/{Cron,Interval,At}.php
 Source.php             where schedules come from — Source/{Row,Entry}.php
-State.php              claim persistence — State/{Claim,Memory}.php
+Claim.php              leadership and coverage in one record
+Store.php              where the claim lives — Store/{Memory,Redis}.php
 Clock.php              time — Clock/{System,Test}.php
 ```
 
 ## Tests
 
 ```bash
-composer test
+composer test       # unit tier, bare host
+```
+
+The `Store\Redis` tests run against a real Redis on the host:
+
+```bash
+docker compose up -d --wait
+composer test:e2e
+docker compose down -v
 ```
 
 ## Copyright and license

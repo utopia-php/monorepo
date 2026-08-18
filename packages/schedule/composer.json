@@ -28,7 +28,8 @@
     },
     "suggest": {
         "ext-opentelemetry": "Required by utopia-php/telemetry when using OpenTelemetry metrics",
-        "ext-protobuf": "Required by utopia-php/telemetry when using OpenTelemetry metrics"
+        "ext-protobuf": "Required by utopia-php/telemetry when using OpenTelemetry metrics",
+        "ext-redis": "Required when using Store\\Redis to share the claim across replicas"
     },
     "autoload": {
         "psr-4": {
@@ -42,7 +43,8 @@
     },
     "scripts": {
         "test": "phpunit --testsuite unit",
-        "bench": "php tests/bench/run.php"
+        "bench": "php tests/bench/run.php",
+        "test:e2e": "phpunit --testsuite e2e"
     },
     "minimum-stability": "stable"
 }

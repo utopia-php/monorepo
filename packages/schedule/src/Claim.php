@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Utopia\Schedule\State;
+namespace Utopia\Schedule;
 
 /**
  * The scheduler's shared record: who leads, until when, and where
