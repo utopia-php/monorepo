@@ -145,14 +145,17 @@ class Inline extends Adapter implements Publisher, Consumer
             'payload' => $payload,
         ]);
 
+        $this->queue = $queue;
         $previous = $this->swapContext(new Container($this->resources()));
 
         try {
-            $this->process(
+            $this->processFrom(
                 $message,
                 $this->messageCallback,
                 $this->successCallback,
                 $this->errorCallback,
+                $queue,
+                $this,
             );
         } finally {
             $this->swapContext($previous);

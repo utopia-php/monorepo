@@ -38,7 +38,7 @@ final class InlineAdapterTest extends TestCase
         $server = new Server($adapter);
         $server->job('v1-mails')->action(static fn(): null => null);
 
-        $this->assertSame($adapter, $server->start());
+        $this->assertSame($server, $server->start());
     }
 
     public function testEnqueueBeforeStartIsRejected(): void
