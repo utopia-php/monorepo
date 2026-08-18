@@ -8,6 +8,18 @@ On every push to `main`, CI splits each `packages/<name>` directory into a stand
 
 The distribution repositories become read-only mirrors: archive their open PRs, enable branch protection, and point contributors to the monorepo.
 
+## A new package
+
+Libraries that predate the monorepo arrive with `bin/monorepo import`, which brings their history and their existing mirror with them. A package written here has neither, so three things have to exist before its first split:
+
+- **The mirror repository**, created empty at `utopia-php/<name>`. The split pushes `main` fast-forward and without `--force`, so an auto-initialised repository (a README, a licence, any commit at all) rejects that push and the `Split` job fails on merge. The split App is installed org-wide, so a new repository needs no separate grant.
+- **`packages/<name>/.github/workflows/mirror.yml`**, calling the shared `mirror-redirect` workflow with the package name. The package directory becomes the mirror root, so this is how a pull request or issue opened on the mirror gets closed with a pointer back here.
+- **`packages/<name>/.gitignore`**, because the monorepo's root ignore file is not part of the split and the mirror would otherwise have none.
+
+Then submit the mirror to [Packagist](https://packagist.org/packages/submit) so `composer require utopia-php/<name>` resolves; Packagist follows the mirror's branches and tags from there. Finish with the same hygiene as any mirror: a description pointing at the monorepo, and a ruleset protecting the default branch.
+
+Verify before merging with `bin/monorepo split <name> --dry-run`, which synthesizes the history and prints its head without pushing.
+
 ## Dev branches
 
 Before the monorepo split, an in-flight PR branch on a library's own repository was directly installable (`composer require utopia-php/http:dev-my-branch`) — handy for unblocking a consumer without waiting for a release. The `Split Dev` workflow restores that: dispatch it (**Actions → Split Dev → Run workflow**) on the feature branch, naming the package(s) to publish, and it pushes the branch's split to the mirror under the same branch name. Packagist tracks the mirror's branches, so the consumer can then require:
