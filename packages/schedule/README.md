@@ -224,10 +224,10 @@ Occurrences sharing a moment are handed over together; ones already past due —
 
 Two consequences worth planning for:
 
-- **A tick occupies up to `tickSeconds + leadSeconds`.** A schedule due beyond that is simply selected by a later tick; the wall-anchored loop keeps its phase either way.
+- **A tick occupies up to `tickSeconds + leadSeconds`.** A schedule due beyond that is selected by a later tick, and the wall-anchored loop keeps its phase either way.
 - **`leaseSeconds` must outlive delivery**, which is why it defaults to three ticks of it and refuses to be shorter than two. A lease that expires mid-delivery hands the window to a standby and costs a re-delivered tick, reported as `schedule.error.total{stage="lease"}`.
 
-A handler that defers work of its own — enqueueing with a delay, say — should ask `isCurrent($occurrence)` when that work comes due, since only the scheduler knows which version of a definition it is currently reconciled to.
+A handler that defers work of its own — publishing with a delay, say — should ask `isCurrent($occurrence)` when that work comes due, since only the scheduler knows which version of a definition it is currently reconciled to.
 
 ### Driving it yourself
 
