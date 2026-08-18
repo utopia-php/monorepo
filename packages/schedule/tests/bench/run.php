@@ -22,6 +22,7 @@ use Utopia\Schedule\TestClock;
 
 const SCHEDULES = 10_000;
 const TICKS = 30;
+const INTERVAL = 60;
 
 $expressions = ['* * * * *', '*/5 * * * *', '*/15 * * * *', '0 * * * *', '30 9 * * MON-FRI', '0 0 1 * *'];
 $intervals = [30, 60, 300, 900, 3600];
@@ -45,11 +46,14 @@ $scheduler = new Scheduler(
     source: new Source(list: fn(): array => $rows, make: $make),
     state: new MemoryState(),
     clock: $clock,
-    interval: 60,
+    interval: INTERVAL,
     lease: 600,
 );
 
-$measure = function (string $label, callable $work, int $times = 1): void {
+/** @var list<array{string, string, float, float}> $results */
+$results = [];
+
+$measure = function (string $label, string $scale, callable $work, int $times = 1) use (&$results): void {
     $durations = [];
     for ($i = 0; $i < $times; ++$i) {
         $start = hrtime(true);
@@ -57,31 +61,65 @@ $measure = function (string $label, callable $work, int $times = 1): void {
         $durations[] = (hrtime(true) - $start) / 1e6;
     }
     sort($durations);
-    $p50 = $durations[(int) floor(count($durations) * 0.50)];
-    $max = $durations[count($durations) - 1];
-    printf("%-46s p50 %8.2fms   max %8.2fms\n", $label, $p50, $max);
+
+    $results[] = [$label, $scale, $durations[(int) floor(count($durations) * 0.50)], $durations[count($durations) - 1]];
 };
 
-printf("schedules: %d (30%% cron / 70%% interval), tick interval: 60s, ticks: %d\n\n", SCHEDULES, TICKS);
-
-$measure('reconcile: full snapshot, cold (all made)', fn() => $scheduler->reconcile());
-$measure('reconcile: full snapshot, warm (version diff)', fn() => $scheduler->reconcile(full: true), 5);
+$measure('reconcile: full snapshot, cold (every row made)', SCHEDULES . ' rows', fn() => $scheduler->reconcile());
+$measure('reconcile: full snapshot, warm (version diff)', SCHEDULES . ' rows', fn() => $scheduler->reconcile(full: true), 5);
 
 $occurrences = 0;
-$measure('tick + commit (one minute of coverage)', function () use ($scheduler, $clock, &$occurrences): void {
+$measure('tick + commit (one minute of coverage)', SCHEDULES . ' schedules', function () use ($scheduler, $clock, &$occurrences): void {
     $occurrences += count($scheduler->tick());
     $scheduler->commit();
-    $clock->advance(60.0);
+    $clock->advance((float) INTERVAL);
 }, TICKS);
 
-printf("\noccurrences dispatched: %d (%.1f per tick average)\n", $occurrences, $occurrences / TICKS);
-
-$sparse = new Cron('0 12 29 2 *'); // leap day: the worst-case search
+$sparse = new Cron('0 12 29 2 *'); // leap day: the worst-case field-skipping search
 $start = new DateTimeImmutable('2026-08-18 12:00:30.250000');
 $found = 0;
-$measure('cron next-occurrence: leap-day expression x1000', function () use ($sparse, $start, &$found): void {
+$measure('cron next occurrence: leap-day expression', '1000 windows', function () use ($sparse, $start, &$found): void {
     for ($i = 0; $i < 1000; ++$i) {
         $found += count($sparse->occurrencesBetween($start, $start->modify('+60 seconds')));
     }
 });
-printf("leap-day matches inside a 60s window: %d (expected 0)\n", $found);
+
+if ($found !== 0) {
+    fwrite(STDERR, "leap-day expression matched inside a 60s window: the benchmark is measuring the wrong thing\n");
+    exit(1);
+}
+
+$cores = trim((string) shell_exec('nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null'));
+
+$table = "| stage | scale | p50 ms | max ms |\n|---|---|---|---|\n";
+foreach ($results as [$label, $scale, $p50, $max]) {
+    $table .= sprintf("| %s | %s | %.2f | %.2f |\n", $label, $scale, $p50, $max);
+}
+
+// A tick must finish well inside its interval, or coverage falls behind.
+$duty = $results[2][2] / (INTERVAL * 1000) * 100;
+
+$section = sprintf(
+    "### schedule — dispatch and reconcile at scale (%s cores, %d schedules: 30%% cron / 70%% interval, %d ticks)\n\n%s\n"
+        . "%d occurrences dispatched, %.0f per tick average. Selecting one minute of coverage spends %.3f%% of the %ds tick interval.\n",
+    $cores === '' ? '?' : $cores,
+    SCHEDULES,
+    TICKS,
+    $table,
+    $occurrences,
+    $occurrences / TICKS,
+    $duty,
+    INTERVAL,
+);
+
+echo "\n" . $section;
+
+// GITHUB_STEP_SUMMARY: the run's own job summary.
+// BENCH_REPORT: shared file a bench script appends its section to, so a
+// caller (the Benchmark workflow) can collect every package into one place.
+foreach (['GITHUB_STEP_SUMMARY', 'BENCH_REPORT'] as $variable) {
+    $path = getenv($variable);
+    if (is_string($path) && $path !== '') {
+        file_put_contents($path, $section . "\n", FILE_APPEND);
+    }
+}
