@@ -179,6 +179,41 @@ Pass a `utopia-php/telemetry` adapter and the scheduler records the four golden 
 | Errors | `schedule.error.total` (counter, `stage` attribute) | `reconcile`, `make` and `dispatch` failures, plus `lease` when a commit is fenced because leadership was lost mid-tick |
 | Saturation | `schedule.lag` (gauge, s) | how far the window start trails "now" — steady at about one interval; growing means the loop is falling behind |
 
+## Tracing
+
+Metrics say how the scheduler is behaving; the `onTick` hook says what just happened. It receives a `Tick` after every iteration — the window covered, how many runs it carried, how long selection and the handler each took, whether this instance was leading, and whether the coverage stuck — which is everything needed for a span or a log line per tick:
+
+```php
+<?php
+
+use Utopia\Schedule\Scheduler;
+use Utopia\Schedule\Tick;
+use Utopia\Span\Span;
+
+$scheduler = new Scheduler(
+    source: $source,
+    state: $state,
+    onTick: function (Tick $tick): void {
+        Span::init('schedule.tick')
+            ->set('span.started_at', (float) $tick->startedAt->format('U.u'))
+            ->set('schedule.window.start', $tick->windowStart?->format('c'))
+            ->set('schedule.window.end', $tick->windowEnd?->format('c'))
+            ->set('schedule.occurrences', $tick->count)
+            ->set('schedule.select_duration', $tick->selectDuration)
+            ->set('schedule.dispatch_duration', $tick->dispatchDuration)
+            ->set('schedule.leader', $tick->leader)
+            ->set('schedule.committed', $tick->committed)
+            ->finish();
+    },
+);
+```
+
+Splitting `selectDuration` from `dispatchDuration` is deliberate: the first is what the scheduler itself costs and grows with the fleet, the second is the handler's and has to stay well inside both the tick interval and the lease. A tick with `committed: false` means its window will be re-covered — the handler threw, or leadership was lost mid-tick.
+
+The hook cannot break the loop. An exception thrown by the observer is counted as `schedule.error.total{stage="observer"}` and dropped, because losing observability must never stop scheduling.
+
+Everything else is already yours to instrument: the handler, `list`, `make`, `changes` and `onError` are all your closures, so a span around a publish or a source query needs nothing from this library. `commit()` also returns whether the watermark advanced, for callers driving `tick()`/`commit()` themselves.
+
 ## Testing time
 
 `Clock` isolates the scheduler from wall time, and the bundled `Clock\Test` makes timing defects reproducible fixtures — including the class of defect this library exists to prevent: the test suite replays a tick phase creeping across a minute boundary at 1.5ms per tick for an hour and asserts every occurrence is delivered exactly once.
