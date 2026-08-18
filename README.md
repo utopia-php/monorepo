@@ -93,6 +93,7 @@ graph TD
     image
     nats
     replication
+    schedule
     user-agent
 ```
 <!-- /graph -->

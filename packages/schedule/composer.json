@@ -1,0 +1,43 @@
+{
+    "name": "utopia-php/schedule",
+    "description": "An opinionated scheduler with cron, interval, delayed and fixed-time semantics that cannot silently skip a run",
+    "type": "library",
+    "keywords": [
+        "php",
+        "framework",
+        "upf",
+        "utopia",
+        "schedule",
+        "scheduler",
+        "cron",
+        "interval"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Team Appwrite",
+            "email": "team@appwrite.io"
+        }
+    ],
+    "require": {
+        "php": ">=8.3",
+        "dragonmantank/cron-expression": "^3.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Utopia\\Schedule\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Utopia\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit --testsuite unit"
+    },
+    "minimum-stability": "stable"
+}
