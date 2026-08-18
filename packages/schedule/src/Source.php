@@ -8,59 +8,37 @@ use Utopia\Schedule\Source\Entry;
 use Utopia\Schedule\Source\Row;
 
 /**
- * The source of truth for a scheduler's entries, usually a database.
+ * Where a scheduler's schedules come from, usually a database.
  *
- * `list` returns the full desired set as {@see Row} descriptors; the
- * scheduler diffs it against memory, so additions, updates and removals
- * — including hard deletes — all converge. `make` builds the
- * {@see Entry} for a row and runs only when the row is new or its
- * version changed, keeping frequent syncs cheap.
- *
- * `changes`, when given, makes syncs incremental: it receives the time
- * of the last successful sync and returns rows changed since, including
- * soft-deleted ones as `active: false`. Hard deletes are invisible to a
- * change feed, so a full `list` sync still runs every `relist` seconds
- * to converge them. Row updates are idempotent under the version diff,
- * so an overlapping change feed is harmless.
+ * The scheduler converges memory to whatever {@see Source::snapshot()}
+ * reports, so additions, updates and removals — including hard deletes
+ * no change feed can see — all follow from stating the desired set. This
+ * is the correctness mechanism; a change feed ({@see Changes}) is only
+ * ever an optimization on top of it.
  */
-final readonly class Source
+interface Source
 {
-    /** @var \Closure(): iterable<Row> */
-    public \Closure $list;
-
-    /** @var \Closure(Row): Entry */
-    public \Closure $make;
-
-    /** @var (\Closure(\DateTimeImmutable): iterable<Row>)|null */
-    public ?\Closure $changes;
+    /**
+     * Every schedule that should be running, as cheap {@see Row}
+     * descriptors, at the moment of the call.
+     *
+     * Returning a generator is encouraged: rows are consumed once, so a
+     * paged query never has to be materialized. Throwing part-way
+     * through discards the whole batch rather than reading as a mass
+     * removal, so a failing query is safe.
+     *
+     * @return iterable<Row>
+     */
+    public function snapshot(): iterable;
 
     /**
-     * @param callable(): iterable<Row> $list
-     * @param callable(Row): Entry $make
-     * @param (callable(\DateTimeImmutable): iterable<Row>)|null $changes
-     * @param int $every seconds between syncs
-     * @param int $relist seconds between full snapshot syncs when $changes is given;
-     *                    0 disables periodic relisting (removals then converge only
-     *                    through soft deletes or a manual `reconcile(full: true)`)
+     * Build the schedule a row describes: parse its expression, hydrate
+     * whatever context the handler will need, and return both as an
+     * {@see Entry}.
      *
-     * @throws \InvalidArgumentException on a non-positive $every or negative $relist
+     * Called only when a row is new or its version changed, so this is
+     * where expensive work belongs. Throwing skips that one row — the
+     * failure is reported and the row's previous entry, if any, stays.
      */
-    public function __construct(
-        callable $list,
-        callable $make,
-        ?callable $changes = null,
-        public int $every = 10,
-        public int $relist = 300,
-    ) {
-        if ($every < 1) {
-            throw new \InvalidArgumentException('Sync cadence must be at least 1 second');
-        }
-        if ($relist < 0) {
-            throw new \InvalidArgumentException('Relist cadence must not be negative');
-        }
-
-        $this->list = $list(...);
-        $this->make = $make(...);
-        $this->changes = $changes === null ? null : $changes(...);
-    }
+    public function make(Row $row): Entry;
 }

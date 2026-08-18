@@ -9,7 +9,6 @@ use Utopia\Schedule\Claim;
 use Utopia\Schedule\Clock\Test as TestClock;
 use Utopia\Schedule\Occurrence;
 use Utopia\Schedule\Scheduler;
-use Utopia\Schedule\Source;
 use Utopia\Schedule\Source\Entry;
 use Utopia\Schedule\Source\Row;
 use Utopia\Schedule\Store\Redis as RedisStore;
@@ -107,8 +106,8 @@ final class RedisStoreTest extends TestCase
         $store = $this->store();
 
         $build = fn(string $token): Scheduler => new Scheduler(
-            source: new Source(
-                list: fn(): array => [new Row('fn', 'v1')],
+            source: new SnapshotSource(
+                snapshot: fn(): array => [new Row('fn', 'v1')],
                 make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
             ),
             store: $store,

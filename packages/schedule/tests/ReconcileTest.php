@@ -8,7 +8,6 @@ use PHPUnit\Framework\TestCase;
 use Utopia\Schedule\Clock\Test as TestClock;
 use Utopia\Schedule\Occurrence;
 use Utopia\Schedule\Scheduler;
-use Utopia\Schedule\Source;
 use Utopia\Schedule\Source\Entry;
 use Utopia\Schedule\Source\Row;
 use Utopia\Schedule\Store\Memory as MemoryStore;
@@ -31,8 +30,8 @@ final class ReconcileTest extends TestCase
             public int $count = 0;
         };
         $scheduler = new Scheduler(
-            source: new Source(
-                list: $set->list(...),
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
                 make: function (Row $row) use ($made): Entry {
                     ++$made->count;
                     $spec = $row->data;
@@ -83,10 +82,10 @@ final class ReconcileTest extends TestCase
         $full = new RowSet([new Row('a', 'v1'), new Row('b', 'v1')]);
         $changed = new RowSet();
         $scheduler = new Scheduler(
-            source: new Source(
-                list: $full->list(...),
+            source: new IncrementalSource(
+                snapshot: $full->list(...),
                 make: fn(Row $row): Entry => new Entry(new Interval(60), $row->id),
-                changes: fn(\DateTimeImmutable $since): array => $changed->list(),
+                since: fn(\DateTimeImmutable $moment): array => $changed->list(),
             ),
             store: new MemoryStore(),
             clock: $clock,
@@ -125,8 +124,8 @@ final class ReconcileTest extends TestCase
 
         $set = new RowSet([new Row('job', 'v1', '2026-08-18 03:00:30')]);
         $scheduler = new Scheduler(
-            source: new Source(
-                list: $set->list(...),
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
                 make: function (Row $row): Entry {
                     $at = $row->data;
                     if (!\is_string($at)) {
@@ -180,8 +179,8 @@ final class ReconcileTest extends TestCase
 
         $set = new RowSet();
         $scheduler = new Scheduler(
-            source: new Source(
-                list: $set->list(...),
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
                 make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
             ),
             store: new MemoryStore(),
@@ -210,8 +209,8 @@ final class ReconcileTest extends TestCase
             public bool $broken = false;
         };
         $scheduler = new Scheduler(
-            source: new Source(
-                list: function () use ($link): iterable {
+            source: new SnapshotSource(
+                snapshot: function () use ($link): iterable {
                     yield new Row('a', 'v1');
                     if ($link->broken) {
                         throw new \RuntimeException('connection lost');
@@ -250,8 +249,8 @@ final class ReconcileTest extends TestCase
             public array $messages = [];
         };
         $scheduler = new Scheduler(
-            source: new Source(
-                list: fn(): array => [new Row('a', 'v1'), new Row('bad', 'v1'), new Row('c', 'v1')],
+            source: new SnapshotSource(
+                snapshot: fn(): array => [new Row('a', 'v1'), new Row('bad', 'v1'), new Row('c', 'v1')],
                 make: function (Row $row): Entry {
                     if ($row->id === 'bad') {
                         throw new \InvalidArgumentException('poison row');
@@ -291,8 +290,8 @@ final class ReconcileTest extends TestCase
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:00.000000'));
         $set = new RowSet();
         $scheduler = new Scheduler(
-            source: new Source(
-                list: $set->list(...),
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
                 make: fn(Row $row): Entry => new Entry(new At(new \DateTimeImmutable('2026-08-18 03:00:04'))),
             ),
             store: new MemoryStore(),
@@ -330,8 +329,8 @@ final class ReconcileTest extends TestCase
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:05:10.000000'));
         $set = new RowSet();
         $scheduler = new Scheduler(
-            source: new Source(
-                list: $set->list(...),
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
                 make: fn(Row $row): Entry => new Entry(new Cron('* * * * *')),
             ),
             store: new MemoryStore(),
@@ -365,8 +364,8 @@ final class ReconcileTest extends TestCase
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:00.000000'));
         $set = new RowSet([new Row('job', 'v1', '2026-08-18 03:00:30')]);
         $scheduler = new Scheduler(
-            source: new Source(
-                list: $set->list(...),
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
                 make: function (Row $row): Entry {
                     $at = $row->data;
                     if (!\is_string($at)) {

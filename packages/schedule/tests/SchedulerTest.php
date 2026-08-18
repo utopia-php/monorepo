@@ -453,11 +453,18 @@ final class SchedulerTest extends TestCase
         new Scheduler(source: $this->emptySource(), interval: 30, lease: 45);
     }
 
-    public function testSourceRejectsNonPositiveSyncCadence(): void
+    public function testRejectsNonPositiveSyncCadence(): void
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        new Source(list: fn(): array => [], make: fn(Row $row): Entry => new Entry(new Interval(60)), every: 0);
+        new Scheduler(source: $this->emptySource(), sync: 0);
+    }
+
+    public function testRejectsANegativeRelistCadence(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new Scheduler(source: $this->emptySource(), relist: -1);
     }
 
     /**
@@ -480,8 +487,8 @@ final class SchedulerTest extends TestCase
         }
 
         $scheduler = new Scheduler(
-            source: new Source(
-                list: fn(): array => $rows,
+            source: new SnapshotSource(
+                snapshot: fn(): array => $rows,
                 make: fn(Row $row): Entry => new Entry($triggers[$row->id]),
             ),
             store: $store ?? new MemoryStore(),
@@ -489,7 +496,7 @@ final class SchedulerTest extends TestCase
             interval: $interval,
             lookahead: $lookahead,
             lookback: $lookback,
-            lease: max(60, $interval * 4),
+            lease: $lease ?? max(60, $interval * 4),
             token: $token,
             telemetry: $telemetry ?? new \Utopia\Telemetry\Adapter\None(),
         );
@@ -500,6 +507,6 @@ final class SchedulerTest extends TestCase
 
     private function emptySource(): Source
     {
-        return new Source(list: fn(): array => [], make: fn(Row $row): Entry => new Entry(new Interval(60)));
+        return new SnapshotSource(snapshot: fn(): array => [], make: fn(Row $row): Entry => new Entry(new Interval(60)));
     }
 }

@@ -32,18 +32,37 @@ for ($i = 0; $i < SCHEDULES; ++$i) {
     $rows[] = new Row("s{$i}", 'v1', $i);
 }
 
-$make = function (Row $row) use ($expressions, $intervals): Entry {
-    $index = is_int($row->data) ? $row->data : 0;
+$source = new readonly class ($rows, $expressions, $intervals) implements Source {
+    /**
+     * @param list<Row> $rows
+     * @param list<string> $expressions
+     * @param list<int> $intervals
+     */
+    public function __construct(
+        private array $rows,
+        private array $expressions,
+        private array $intervals,
+    ) {}
 
-    // 30% cron, 70% interval — roughly the shape of a real fleet.
-    return $index % 10 < 3
-        ? new Entry(new Cron($expressions[$index % count($expressions)]))
-        : new Entry(new Interval($intervals[$index % count($intervals)]));
+    public function snapshot(): iterable
+    {
+        return $this->rows;
+    }
+
+    public function make(Row $row): Entry
+    {
+        $index = is_int($row->data) ? $row->data : 0;
+
+        // 30% cron, 70% interval — roughly the shape of a real fleet.
+        return $index % 10 < 3
+            ? new Entry(new Cron($this->expressions[$index % count($this->expressions)]))
+            : new Entry(new Interval($this->intervals[$index % count($this->intervals)]));
+    }
 };
 
 $clock = new TestClock(new DateTimeImmutable('2026-08-18 12:00:30.250000'));
 $scheduler = new Scheduler(
-    source: new Source(list: fn(): array => $rows, make: $make),
+    source: $source,
     store: new MemoryStore(),
     clock: $clock,
     interval: INTERVAL,

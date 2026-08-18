@@ -114,13 +114,18 @@ final class Scheduler
     private readonly Gauge $lagGauge;
 
     /**
-     * @param Source $source the source of truth the loop reconciles against
+     * @param Source $source the source of truth the loop reconciles against; implement
+     *                        {@see Changes} on it as well to make syncs incremental
      * @param Store $store where the claim lives — leadership plus watermark; back it with
      *                     {@see Store\Redis} or a database row and standby replicas elect one
      *                     dispatcher and survive restarts. Replica clocks must agree to within
      *                     a fraction of $lease.
      * @param Clock $clock time source; swap for {@see Clock\Test} in tests
      * @param int $interval seconds between ticks in {@see Scheduler::run()}, wall-anchored
+     * @param int $sync seconds between reconciliations
+     * @param int $relist seconds between full snapshot syncs when the source implements
+     *                    {@see Changes}; 0 disables periodic relisting, and with a source that
+     *                    reports no changes every sync is a full snapshot regardless
      * @param int $lookahead seconds a tick may reach past "now". Zero (the default) delivers
      *                       occurrences after they are due, late by at most one interval, and
      *                       keeps at-least-once intact. Raising it trades that guarantee for
@@ -143,14 +148,17 @@ final class Scheduler
      *                               `make` rejects) so dispatch keeps running on the last good
      *                               view; without it those failures rethrow
      *
-     * @throws \InvalidArgumentException on non-positive $interval, negative $lookahead/$lookback,
-     *                                   or a $lease shorter than two ticks
+     * @throws \InvalidArgumentException on a non-positive $interval or $sync, a negative
+     *                                   $relist/$lookahead/$lookback, or a $lease shorter than
+     *                                   two ticks
      */
     public function __construct(
         private readonly Source $source,
         private readonly Store $store = new MemoryStore(),
         private readonly Clock $clock = new SystemClock(),
         private readonly int $interval = 1,
+        private readonly int $sync = 10,
+        private readonly int $relist = 300,
         private readonly int $lookahead = 0,
         private readonly int $lookback = 300,
         private readonly int $lease = 60,
@@ -160,6 +168,12 @@ final class Scheduler
     ) {
         if ($interval < 1) {
             throw new \InvalidArgumentException('Tick interval must be at least 1 second');
+        }
+        if ($sync < 1) {
+            throw new \InvalidArgumentException('Sync cadence must be at least 1 second');
+        }
+        if ($relist < 0) {
+            throw new \InvalidArgumentException('Relist cadence must not be negative');
         }
         if ($lookahead < 0 || $lookback < 0) {
             throw new \InvalidArgumentException('Lookahead and lookback must not be negative');
@@ -190,27 +204,30 @@ final class Scheduler
     /**
      * Synchronize memory with the source: one full snapshot diff, or one
      * incremental pass when a change feed is configured and a cursor
-     * exists. {@see Scheduler::run()} calls this on the source's cadence;
+     * exists. {@see Scheduler::run()} calls this on the $sync cadence;
      * call it directly when driving the loop yourself.
      *
      * A source that throws mid-listing discards the whole batch — a
      * failed sync must never look like a mass removal. A row whose
-     * `make` throws is skipped (reported through onError) and its
-     * previous entry, if any, stays.
+     * {@see Source::make()} throws is skipped (reported through onError)
+     * and its previous entry, if any, stays.
      */
     public function reconcile(bool $full = false): void
     {
         $started = microtime(true);
         $syncStart = $this->clock->now();
 
-        $changes = $this->source->changes;
+        $source = $this->source;
         $since = $this->lastSyncAt;
 
-        if (!$full && $changes instanceof \Closure && $since instanceof \DateTimeImmutable) {
-            $feed = $changes($since);
+        // A change feed cannot report a hard delete, so only a full
+        // snapshot converges removals; incremental syncs fill the gaps
+        // between them.
+        if (!$full && $since instanceof \DateTimeImmutable && $source instanceof Changes) {
+            $feed = $source->since($since);
         } else {
             $full = true;
-            $feed = ($this->source->list)();
+            $feed = $source->snapshot();
         }
 
         $rows = [];
@@ -235,7 +252,7 @@ final class Scheduler
             }
 
             try {
-                $entry = ($this->source->make)($row);
+                $entry = $this->source->make($row);
             } catch (\Throwable $error) {
                 $this->report($error, 'make');
                 continue;
@@ -455,7 +472,7 @@ final class Scheduler
 
                 $now = (float) $this->clock->now()->format('U.u');
                 if ($now >= $this->nextSyncAt) {
-                    $full = $this->source->relist > 0 && $now >= $this->nextRelistAt;
+                    $full = $this->relist > 0 && $now >= $this->nextRelistAt;
 
                     try {
                         $this->reconcile($full);
@@ -463,9 +480,9 @@ final class Scheduler
                         $this->report($error, 'reconcile');
                     }
 
-                    $this->nextSyncAt = $now + $this->source->every;
+                    $this->nextSyncAt = $now + $this->sync;
                     if ($full) {
-                        $this->nextRelistAt = $now + $this->source->relist;
+                        $this->nextRelistAt = $now + $this->relist;
                     }
                 }
 

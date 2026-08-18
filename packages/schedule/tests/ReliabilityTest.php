@@ -7,7 +7,6 @@ namespace Utopia\Tests;
 use PHPUnit\Framework\TestCase;
 use Utopia\Schedule\Clock\Test as TestClock;
 use Utopia\Schedule\Scheduler;
-use Utopia\Schedule\Source;
 use Utopia\Schedule\Source\Entry;
 use Utopia\Schedule\Source\Row;
 use Utopia\Schedule\Store\Memory as MemoryStore;
@@ -52,8 +51,8 @@ final class ReliabilityTest extends TestCase
 
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 13:20:30.250000'));
         $scheduler = new Scheduler(
-            source: new Source(
-                list: fn(): array => $rows,
+            source: new SnapshotSource(
+                snapshot: fn(): array => $rows,
                 make: fn(Row $row): Entry => new Entry($triggers[$row->id]),
             ),
             store: new MemoryStore(),
@@ -126,8 +125,8 @@ final class ReliabilityTest extends TestCase
 
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 13:20:30.000000'));
         $scheduler = new Scheduler(
-            source: new Source(
-                list: $set->list(...),
+            source: new SnapshotSource(
+                snapshot: $set->list(...),
                 make: function (Row $row) use ($made): Entry {
                     ++$made->count;
 
@@ -187,8 +186,8 @@ final class ReliabilityTest extends TestCase
             $rows[] = new Row("s{$i}", 'v1');
         }
         $build = fn(string $token): Scheduler => new Scheduler(
-            source: new Source(
-                list: fn(): array => $rows,
+            source: new SnapshotSource(
+                snapshot: fn(): array => $rows,
                 make: fn(Row $row): Entry => new Entry(new Interval(60)),
             ),
             store: $store,

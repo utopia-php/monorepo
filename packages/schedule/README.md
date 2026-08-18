@@ -22,40 +22,60 @@ Install with Composer:
 composer require utopia-php/schedule
 ```
 
-Describe the source of truth and run:
+Describe the source of truth by implementing two methods:
+
+```php
+<?php
+
+use Utopia\Schedule\Source;
+use Utopia\Schedule\Source\Entry;
+use Utopia\Schedule\Source\Row;
+use Utopia\Schedule\Trigger\Cron;
+
+final class FunctionSchedules implements Source
+{
+    public function __construct(private Database $database) {}
+
+    /** Every schedule that should be running, as cheap descriptors. */
+    public function snapshot(): iterable
+    {
+        foreach ($this->database->find('schedules') as $document) {
+            yield new Row(
+                id: $document->getId(),
+                version: $document->getAttribute('updatedAt'),
+                data: $document,
+                activeFrom: new DateTimeImmutable($document->getAttribute('updatedAt')),
+            );
+        }
+    }
+
+    /**
+     * The expensive part — parsing, hydrating context — called only when a
+     * row is new or its version changed.
+     */
+    public function make(Row $row): Entry
+    {
+        return new Entry(
+            trigger: new Cron($row->data->getAttribute('schedule')),
+            payload: ['projectId' => $row->data->getAttribute('projectId')],
+        );
+    }
+}
+```
+
+Then run it:
 
 ```php
 <?php
 
 use Utopia\Schedule\Occurrence;
 use Utopia\Schedule\Scheduler;
-use Utopia\Schedule\Source;
-use Utopia\Schedule\Source\Entry;
-use Utopia\Schedule\Source\Row;
 use Utopia\Schedule\Store;
-use Utopia\Schedule\Trigger\Cron;
 
 $scheduler = new Scheduler(
-    source: new Source(
-        // The full desired set, as cheap descriptors. Runs every 10 seconds.
-        list: function (): iterable {
-            foreach ($database->find('schedules') as $document) {
-                yield new Row(
-                    id: $document->getId(),
-                    version: $document->getAttribute('updatedAt'),
-                    data: $document,
-                    activeFrom: new DateTimeImmutable($document->getAttribute('updatedAt')),
-                );
-            }
-        },
-        // The expensive part — parsing, hydrating context — runs only when
-        // a row is new or its version changed.
-        make: fn (Row $row): Entry => new Entry(
-            trigger: new Cron($row->data->getAttribute('schedule')),
-            payload: ['projectId' => $row->data->getAttribute('projectId')],
-        ),
-    ),
+    source: new FunctionSchedules($database),
     store: new Store\Redis($redis),
+    sync: 10,   // seconds between reconciliations
 );
 
 // The handler gets the tick's whole batch, oldest first, and owns how the
@@ -93,26 +113,34 @@ A delivered one-shot is dropped from memory and tombstoned by its `(id, version)
 
 ## Reconciliation
 
-Reconciliation is level-based: `list()` returns the full desired set and the scheduler converges memory to it — additions, updates, and removals, including hard deletes no change feed can see. Two properties keep it cheap and safe:
+Reconciliation is level-based: `snapshot()` returns the full desired set and the scheduler converges memory to it — additions, updates, and removals, including hard deletes no change feed can see. Two properties keep it cheap and safe:
 
 - `make()` runs only for new or version-changed rows; an unchanged row costs a string compare.
-- A listing that throws mid-iteration discards the whole batch: a failed sync must never look like a mass removal. A row whose `make()` throws is skipped and reported; its previous entry stays.
+- A snapshot that throws mid-iteration discards the whole batch: a failed sync must never look like a mass removal. A row whose `make()` throws is skipped and reported; its previous entry stays.
 - Discovery lag cannot lose runs: a new or changed entry is covered once from its own start — its `activeFrom`, or the previous sync time — even when the watermark has already passed it. A one-shot due sooner than the sync cadence runs late instead of never.
 
-For large sets, add a change feed and the sync turns incremental between full snapshots:
+For large sets, implement `Changes` as well and syncs turn incremental between full snapshots:
 
 ```php
 <?php
 
-new Source(
-    list: $listAll,                 // full snapshot, every $relist seconds (default 300)
-    make: $make,
-    changes: fn (DateTimeImmutable $since): iterable => $listChangedSince($since),
-    every: 10,                      // incremental cadence
-);
+use Utopia\Schedule\Changes;
+use Utopia\Schedule\Source;
+
+final class FunctionSchedules implements Source, Changes
+{
+    // snapshot() and make() as above.
+
+    public function since(DateTimeImmutable $moment): iterable
+    {
+        foreach ($this->database->find('schedules', [Query::greaterThanEqual('updatedAt', $moment)]) as $document) {
+            yield new Row(/* ..., */ active: $document->getAttribute('enabled'));
+        }
+    }
+}
 ```
 
-The change feed carries updates and soft deletes (`active: false`); hard deletes converge on the next full snapshot. Updates are idempotent under the version diff, so an overlapping feed is harmless.
+A source either can answer "what changed?" or it cannot, so this is a second interface rather than a constructor argument left empty. The scheduler still takes a full snapshot every `relist` seconds (default 300) because a change feed cannot report a hard delete; between those it asks only for changes. The feed carries updates and soft deletes (`active: false`), and overlapping answers are harmless since the diff is by version.
 
 `Row::$activeFrom` anchors each entry's coverage: a schedule created — or edited — while the scheduler was down backfills only from its change time, never under the old watermark with the old definition, and a schedule the sync discovers late is still covered from its change time forward. Set it to the row's last change time.
 
@@ -124,7 +152,7 @@ Leadership and the watermark share one lifecycle — the leader advances both on
 - **Failover resumes coverage.** A successor takes the watermark from the claim it inherits: occurrences missed in the handover are delivered on its first tick, oldest first, bounded by `lookback` (default 300 seconds).
 - **Commits are fenced.** A deposed leader's late commit no longer matches the stored token: nothing is written, the watermark never rewinds, and the new leader re-covers the in-flight window. A handover can duplicate a tick's occurrences; it can never lose them.
 
-Tune with the `lease` option (seconds a claim lives before it must be renewed; must outlive at least two ticks) and `token` (the instance identity; defaults to a random one). A tick renews the claim before handing work over, so the lease has to exceed the time one batch takes: a slower handler loses leadership mid-dispatch, which costs a re-delivered window and shows up as `schedule.error.total{stage="lease"}` rather than passing silently. Replica clocks must agree to within a fraction of the lease. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `list()` — and give each partition its own `Store` record; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
+Tune with the `lease` option (seconds a claim lives before it must be renewed; must outlive at least two ticks) and `token` (the instance identity; defaults to a random one). A tick renews the claim before handing work over, so the lease has to exceed the time one batch takes: a slower handler loses leadership mid-dispatch, which costs a re-delivered window and shows up as `schedule.error.total{stage="lease"}` rather than passing silently. Replica clocks must agree to within a fraction of the lease. To shard instead of (or as well as) failing over, partition rows by a stable hash of their id — filter in `snapshot()` — and give each partition its own `Store` record; selection is pure per-schedule math, so any id-to-partition mapping that is exactly one-to-one is correct.
 
 ## Deduplication
 
@@ -203,7 +231,7 @@ $scheduler->run(function (array $occurrences) use ($queue): void {
 });
 ```
 
-`list`, `make`, `changes` and `onError` are your closures too, so a span around a source query needs nothing from this library either. What happens inside the loop is reported as metrics rather than spans: selection cost as `schedule.tick.duration`, a lost claim as `schedule.error.total{stage="lease"}`, liveness as `schedule.lag` and `schedule.entries`. If you want per-tick control — a span covering the window, or a log line on an empty tick — drive `tick()`/`commit()` yourself; `commit()` returns whether the watermark advanced.
+`snapshot()`, `make()`, `since()` and `onError` are your code too, so a span around a source query needs nothing from this library either. What happens inside the loop is reported as metrics rather than spans: selection cost as `schedule.tick.duration`, a lost claim as `schedule.error.total{stage="lease"}`, liveness as `schedule.lag` and `schedule.entries`. If you want per-tick control — a span covering the window, or a log line on an empty tick — drive `tick()`/`commit()` yourself; `commit()` returns whether the watermark advanced.
 
 ## Testing time
 
@@ -222,6 +250,7 @@ Scheduler.php          the loop
 Occurrence.php         what a handler receives
 Trigger.php            when a schedule runs — Trigger/{Cron,Interval,At}.php
 Source.php             where schedules come from — Source/{Row,Entry}.php
+Changes.php            a source that can also report what changed
 Claim.php              leadership and coverage in one record
 Store.php              where the claim lives — Store/{Memory,Redis}.php
 Clock.php              time — Clock/{System,Test}.php
