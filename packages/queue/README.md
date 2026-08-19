@@ -148,6 +148,8 @@ With [`utopia-php/platform`](https://github.com/utopia-php/platform), pass `work
 
 `Adapter\Inline` is both the transport and the publisher. `enqueue()` runs the matching `job()` in the same process and returns when the handler finishes. `start()` registers those handlers and returns — there is no consume loop and no worker process.
 
+Payloads are JSON-round-tripped before the handler runs (same as Redis/Nats), so handlers always receive plain arrays — never live objects.
+
 ```php
 use Utopia\Queue;
 use Utopia\Queue\Adapter\Inline;

@@ -182,4 +182,37 @@ final class InlineAdapterTest extends TestCase
         $this->assertSame(0, $adapter->getQueueSize(new Queue('v1-mails')));
         $this->assertSame(0, $adapter->getQueueSize(new Queue('v1-mails'), failedJobs: true));
     }
+
+    public function testEnqueueJsonRoundTripsPayloadLikeRedis(): void
+    {
+        $seen = null;
+        $adapter = new Inline();
+        $server = new Server($adapter);
+        $server
+            ->job('v1-mails')
+            ->inject('message')
+            ->action(function (Message $message) use (&$seen): void {
+                $seen = $message->getPayload();
+            });
+        $server->start();
+
+        $document = new class () implements \JsonSerializable {
+            public function jsonSerialize(): array
+            {
+                return ['$id' => 'proj', 'prefs' => new \stdClass()];
+            }
+        };
+
+        $this->assertTrue($adapter->enqueue(new Queue('v1-mails'), [
+            'project' => $document,
+            'emptyObject' => new \stdClass(),
+            'nested' => ['user' => $document],
+        ]));
+
+        $this->assertSame([
+            'project' => ['$id' => 'proj', 'prefs' => []],
+            'emptyObject' => [],
+            'nested' => ['user' => ['$id' => 'proj', 'prefs' => []]],
+        ], $seen);
+    }
 }

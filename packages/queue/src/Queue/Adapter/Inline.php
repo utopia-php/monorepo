@@ -138,11 +138,18 @@ class Inline extends Adapter implements Publisher, Consumer
             return true;
         }
 
+        // Match Redis/Nats: handlers always see JSON-decoded arrays, never
+        // live objects (Document, stdClass, …). Empty objects become [].
+        $decoded = \json_decode(\json_encode($payload), true);
+        if (!\is_array($decoded)) {
+            throw new \InvalidArgumentException('Inline enqueue payload must be JSON-serializable to an array');
+        }
+
         $message = new Message([
             'pid' => uniqid(more_entropy: true),
             'queue' => $queue->name,
             'timestamp' => time(),
-            'payload' => $payload,
+            'payload' => $decoded,
         ]);
 
         $this->queue = $queue;
