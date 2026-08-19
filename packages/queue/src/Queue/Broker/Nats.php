@@ -72,7 +72,9 @@ class Nats implements Publisher, Consumer
     // run from the telemetry/health coroutine, NOT the consume coroutine, and a NATS
     // socket cannot be read by two coroutines at once — Swoole aborts the process with
     // "Socket#N has already been bound to another coroutine". Keeping these reads off the
-    // consume connection is the fix; see controlConnection().
+    // consume connection is the fix. This is a migration-parity stopgap, not a design
+    // choice — it exists only to keep the inherited getQueueSize() depth gauge working;
+    // see getQueueSize() for why, and delete it once depth comes from the monitoring endpoint.
     private ?NatsConnection $controlConnection = null;
     private ?JetStream $controlJs = null;
 
@@ -259,6 +261,15 @@ class Nats implements Publisher, Consumer
      * broker. It is a passive observer: it does NOT provision (ensure()) or drain dead
      * letters — the consume loop owns those — and reports 0 for a queue whose streams
      * do not exist yet, matching Broker\Redis's empty-list semantics.
+     *
+     * That this reads over a client connection at all is inertia, not intent. getQueueSize()
+     * is part of the Consumer contract, and Queue\Server emits a generic depth gauge through
+     * it; on Redis that is a cheap LLEN on a pooled connection, so it was free and nobody
+     * noticed. On NATS the same call is a JetStream consumer.info() round-trip, which is the
+     * only reason the dedicated control connection exists (see controlConnection()). The same
+     * num_pending is already published on the NATS monitoring endpoint, so this call — and its
+     * extra connection — are a migration-parity stopgap: once autoscaling/telemetry read depth
+     * from that endpoint, drop the client-side gauge and delete this connection.
      */
     public function getQueueSize(Queue $queue, bool $failedJobs = false): int
     {
