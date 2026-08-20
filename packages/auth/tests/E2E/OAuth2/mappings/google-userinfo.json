@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/oauth2/v3/userinfo"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "sub": "google-user-1",
+      "email": "user@example.com",
+      "email_verified": true,
+      "name": "Ada Lovelace"
+    }
+  }
+}

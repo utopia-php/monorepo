@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/api/v1/user/repos"
+  },
+  "response": {
+    "status": 201,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "id": 3,
+      "name": "demo",
+      "full_name": "owner/demo",
+      "private": true
+    }
+  }
+}

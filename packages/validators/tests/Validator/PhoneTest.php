@@ -68,4 +68,14 @@ final class PhoneTest extends TestCase
         $this->assertFalse($validator->isValid('%2B0123456789'));
         $this->assertFalse($validator->isValid('+1 555 010 2680'));
     }
+
+    public function testCanRequireAKnownCallingCode(): void
+    {
+        $validator = new Phone(knownCallingCode: true);
+
+        $this->assertTrue($validator->isValid('+14155552680'));
+        $this->assertTrue($validator->isValid('+447911123456'));
+        $this->assertFalse($validator->isValid('+8020000000'));
+        $this->assertFalse($validator->isValid('+141555'));
+    }
 }

@@ -1,0 +1,15 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/api/v4/projects"
+  },
+  "response": {
+    "status": 201,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "id": 7,
+      "name": "demo",
+      "path_with_namespace": "group/demo"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/user/repos"
+  },
+  "response": {
+    "status": 201,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "id": 99,
+      "name": "demo",
+      "full_name": "octocat/demo",
+      "private": true
+    }
+  }
+}

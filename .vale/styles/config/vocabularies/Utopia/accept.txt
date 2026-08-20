@@ -20,7 +20,7 @@
 accessor(?:s)?
 ACLs?
 aiohttp
-allowlist
+allowlist(?:s)?
 API(?:s)?
 Appwrite
 Argon2
@@ -121,11 +121,20 @@ namespace(?:s)?
 NATS
 Nintendo
 OAuth
+OAuth2
 OIDC
+PKCE
+WireMock
+GitHub
+GitLab
+Gitea
+Bitbucket
+E.164
+Etsy
 OkHttp
 OpenID
 OpenID Connect
-OTLP
+OTP
 Packagist
 parentless
 PATCH
