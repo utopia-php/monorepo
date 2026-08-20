@@ -56,7 +56,21 @@ echo $data;
 | `Hazelcast` | Hazelcast over its Memcached protocol. |
 | `Sharding` | Spreads keys across several adapters. |
 | `Pool` | Checks an adapter out of a `utopia-php/pools` pool per call. |
-| `CircuitBreaker` | Wraps an adapter so a failing cache stops being called. |
+| `CircuitBreaker` | Wraps an adapter so a failing cache stops being read — see [what an open circuit sheds](#what-an-open-circuit-sheds). |
+
+## What an open circuit sheds
+
+`CircuitBreaker` sheds reads while its circuit is open, and still lets writes through.
+
+Shedding reads is the point: the dependency is sick, the read would fail anyway, and refusing it early costs nothing. A write is not the same thing, because a cache write is the repair. Refusing it holds the miss rate at 100% for as long as the circuit stays open, so the traffic the breaker diverted keeps arriving at whatever it was diverted to well after the cache itself is healthy. A cache cannot warm up while it is forbidden to remember anything.
+
+So `save()`, `saveWithLease()` and `touch()` go to the adapter even while the circuit is open, and return their usual fallback if they fail. `load()`, `list()`, `getSize()` and `ping()` are shed as before.
+
+Two details keep that from costing anything:
+
+**The write bypasses the breaker while open, rather than reporting to it.** The verdict is already made, so one more data point cannot change it, and what decides when the circuit closes should be the probes half-open schedules rather than repair traffic arriving at whatever rate the fallback path happens to generate. While the circuit is *not* open, a write reports normally, so a failing cache can still open the circuit.
+
+**One failed repair ends the attempts for that open episode.** A repair is worth one timeout to learn whether the cache accepts writes and worth nothing after that: against an adapter that is not answering, retrying on every request would add its timeout to every request, which is the cost an open circuit exists to avoid. The first failure suppresses the rest of the episode, and the guard clears as soon as the circuit is no longer open — so a cache that refused writes is tried again next time, not written off for the life of the process.
 
 ## System requirements
 
