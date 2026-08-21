@@ -15,7 +15,7 @@ final class CircuitBreakerTest extends TestCase
 {
     public function testUsesInMemoryStateByDefault(): void
     {
-        $breaker = new CircuitBreaker(threshold: 2, timeout: 30, successThreshold: 1);
+        $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, minimumThroughput: 2);
 
         $first = $breaker->call(
             open: static fn(): string => 'fallback',
@@ -39,8 +39,8 @@ final class CircuitBreakerTest extends TestCase
     public function testCachedStateIsSharedAcrossBreakerInstances(): void
     {
         $cache = $this->createArrayAdapter();
-        $first = new CircuitBreaker(threshold: 2, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
-        $second = new CircuitBreaker(threshold: 2, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
+        $first = new CircuitBreaker(timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api', minimumThroughput: 2);
+        $second = new CircuitBreaker(timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api', minimumThroughput: 2);
 
         $first->call(
             open: static fn(): string => 'fallback',
@@ -56,7 +56,10 @@ final class CircuitBreakerTest extends TestCase
         );
 
         $this->assertTrue($second->isOpen());
-        $this->assertSame(2, $second->getFailureCount());
+
+        // The verdict is shared; the tally behind it is measured per process, so
+        // the second instance did not inherit failures it never saw.
+        $this->assertSame(0, $second->getFailureCount());
 
         $result = $second->call(
             open: static fn(): string => 'shared fallback',
@@ -98,7 +101,7 @@ final class CircuitBreakerTest extends TestCase
                 $this->writes[] = ['delete', $key, null];
             }
         };
-        $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
+        $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api', minimumThroughput: 1);
 
         $this->assertSame('ok', $breaker->call(
             open: static fn(): string => 'fallback',
@@ -148,7 +151,7 @@ final class CircuitBreakerTest extends TestCase
                 unset($this->values[$key]);
             }
         };
-        $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api');
+        $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api', minimumThroughput: 1);
 
         $breaker->call(
             open: static fn(): string => 'fallback',
@@ -167,7 +170,7 @@ final class CircuitBreakerTest extends TestCase
 
     public function testHalfOpenSuccessesCloseTheCircuit(): void
     {
-        $breaker = new CircuitBreaker(threshold: 1, timeout: 0, successThreshold: 2);
+        $breaker = new CircuitBreaker(timeout: 0, successThreshold: 2, minimumThroughput: 1);
 
         $breaker->call(
             open: static fn(): string => 'fallback',
@@ -198,7 +201,7 @@ final class CircuitBreakerTest extends TestCase
     public function testRecordsTelemetryForCallsFallbacksAndTransitions(): void
     {
         $telemetry = new TestTelemetry();
-        $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, telemetry: $telemetry);
+        $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, telemetry: $telemetry, minimumThroughput: 1);
 
         $result = $breaker->call(
             open: static fn(): string => 'fallback',
@@ -222,7 +225,7 @@ final class CircuitBreakerTest extends TestCase
     public function testPrefixesTelemetryMetricNames(): void
     {
         $telemetry = new TestTelemetry();
-        $breaker = new CircuitBreaker(threshold: 1, timeout: 30, successThreshold: 1, metricPrefix: '.edge.');
+        $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, metricPrefix: '.edge.', minimumThroughput: 1);
         $breaker->setTelemetry($telemetry);
 
         $result = $breaker->call(
@@ -342,12 +345,12 @@ final class CircuitBreakerTest extends TestCase
             }
         };
         $breaker = new CircuitBreaker(
-            threshold: 1,
             timeout: 0,
             successThreshold: 1,
             cache: $cache,
             key: 'users-api',
             telemetry: $telemetry,
+            minimumThroughput: 1,
         );
 
         $result = $breaker->call(
@@ -383,7 +386,7 @@ final class CircuitBreakerTest extends TestCase
 
     public function testTrippedBreakerShortCircuitsCalls(): void
     {
-        $breaker = new CircuitBreaker(threshold: 100, timeout: 30, successThreshold: 1);
+        $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, minimumThroughput: 100);
         $breaker->trip();
 
         $result = $breaker->call(
