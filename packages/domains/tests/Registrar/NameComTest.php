@@ -1,22 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\Tests\Registrar;
 
-use Utopia\Cache\Cache as UtopiaCache;
 use Utopia\Cache\Adapter\None as NoneAdapter;
+use Utopia\Cache\Cache as UtopiaCache;
 use Utopia\Domains\Cache;
 use Utopia\Domains\Registrar;
+use Utopia\Domains\Registrar\Adapter\NameCom;
 use Utopia\Domains\Registrar\Exception\AuthException;
 use Utopia\Domains\Registrar\Exception\InvalidPeriodException;
 use Utopia\Domains\Registrar\Exception\UnsupportedTldException;
-use Utopia\Domains\Registrar\Adapter\NameCom;
 use Utopia\Domains\Registrar\UpdateDetails;
 
-class NameComTest extends Base
+final class NameComTest extends Base
 {
     private Registrar $registrar;
     private Registrar $registrarWithCache;
-    private NameCom $adapter;
 
     protected function setUp(): void
     {
@@ -25,30 +26,31 @@ class NameComTest extends Base
         $utopiaCache = new UtopiaCache(new NoneAdapter());
         $cache = new Cache($utopiaCache);
 
-        $this->assertNotEmpty($username, 'NAMECOM_USERNAME environment variable must be set');
-        $this->assertNotEmpty($token, 'NAMECOM_TOKEN environment variable must be set');
+        if (empty($username) || empty($token)) {
+            $this->markTestSkipped('NAMECOM_USERNAME and NAMECOM_TOKEN must be set to reach the Name.com sandbox');
+        }
 
-        $this->adapter = new NameCom(
+        $adapter = new NameCom(
             $username,
             $token,
-            'https://api.dev.name.com'
+            'https://api.dev.name.com',
         );
 
         $this->registrar = new Registrar(
-            $this->adapter,
-            [
-                'ns1.name.com',
-                'ns2.name.com',
-            ]
-        );
-
-        $this->registrarWithCache = new Registrar(
-            $this->adapter,
+            $adapter,
             [
                 'ns1.name.com',
                 'ns2.name.com',
             ],
-            $cache
+        );
+
+        $this->registrarWithCache = new Registrar(
+            $adapter,
+            [
+                'ns1.name.com',
+                'ns2.name.com',
+            ],
+            $cache,
         );
     }
 
@@ -76,6 +78,7 @@ class NameComTest extends Base
         return 'namecom';
     }
 
+    #[\Override]
     protected function getDefaultNameservers(): array
     {
         return [
@@ -89,6 +92,7 @@ class NameComTest extends Base
         return new UpdateDetails($autoRenew);
     }
 
+    #[\Override]
     protected function getPricingTestDomain(): string
     {
         // Name.com doesn't like 'example.com' for pricing
@@ -102,7 +106,7 @@ class NameComTest extends Base
         $adapter = new NameCom(
             'invalid-username',
             'invalid-token',
-            'https://api.dev.name.com'
+            'https://api.dev.name.com',
         );
 
         $registrar = new Registrar(
@@ -110,13 +114,13 @@ class NameComTest extends Base
             [
                 'ns1.name.com',
                 'ns2.name.com',
-            ]
+            ],
         );
 
         $domain = $this->generateRandomString() . '.com';
 
         $this->expectException(AuthException::class);
-        $this->expectExceptionMessage("Failed to purchase domain: Unauthorized");
+        $this->expectExceptionMessage('Failed to purchase domain: Unauthorized');
 
         $registrar->purchase($domain, $this->getPurchaseContact(), 1);
     }
@@ -129,12 +133,11 @@ class NameComTest extends Base
             5,
             'premium',
             10000,
-            100
+            100,
         );
 
-        $this->assertIsArray($result);
 
-        foreach ($result as $domain => $data) {
+        foreach ($result as $data) {
             $this->assertEquals('premium', $data['type']);
             if ($data['price'] !== null) {
                 $this->assertGreaterThanOrEqual(100, $data['price']);
@@ -149,12 +152,11 @@ class NameComTest extends Base
             'testdomain',
             ['com'],
             5,
-            'suggestion'
+            'suggestion',
         );
 
-        $this->assertIsArray($result);
 
-        foreach ($result as $domain => $data) {
+        foreach ($result as $data) {
             $this->assertEquals('suggestion', $data['type']);
         }
     }
@@ -175,6 +177,7 @@ class NameComTest extends Base
         $this->registrar->transfer($domain, 'test-auth-code');
     }
 
+    #[\Override]
     public function testCheckTransferStatus(): void
     {
         $this->markTestSkipped('Name.com for some reason always returning 404 (Not Found) for transfer status check. Investigate later.');

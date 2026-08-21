@@ -121,9 +121,11 @@ memoized
 MVC
 namespace(?:s)?
 NATS
+Name\.com
 Nintendo
 OAuth
 OIDC
+OpenSRS
 OkHttp
 OpenID
 OpenID Connect

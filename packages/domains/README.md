@@ -1,16 +1,18 @@
 # Utopia Domains
 
-[![Build Status](https://travis-ci.org/utopia-php/domains.svg?branch=master)](https://travis-ci.com/utopia-php/domains)
+> [!IMPORTANT]
+> This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Development happens in [`packages/domains`](https://github.com/utopia-php/monorepo/tree/main/packages/domains) — please open issues and pull requests there.
+
 ![Total Downloads](https://img.shields.io/packagist/dt/utopia-php/domains.svg)
 [![Discord](https://img.shields.io/discord/564160730845151244)](https://appwrite.io/discord)
 
-Utopia Domains library is a simple and lite library for parsing domain names structure. This library is aiming to be as simple and easy to learn and use.  This library is maintained by the [Appwrite team](https://appwrite.io).
+Utopia Domains is a lite library for parsing domain names and talking to domain registrars. This library is maintained by the [Appwrite team](https://appwrite.io).
 
-Although this library is part of the [Utopia Framework](https://github.com/utopia-php/framework) project, it is completely **dependency-free** and can be used as standalone with any other PHP project or framework.
+Although this library is part of the [Utopia Framework](https://github.com/utopia-php/framework) project, it can be used standalone with any other PHP project or framework.
 
-## Getting Started
+## Getting started
 
-Install using composer:
+Install using Composer:
 ```bash
 composer require utopia-php/domains
 ```
@@ -54,7 +56,7 @@ $domain->isTest(); // true
 
 ```
 
-Utopia Domains parser uses a public suffix PHP dataset auto-generated from the [publicsuffix.org](https://publicsuffix.org/). The dataset get periodically updates from us, but you can also manually update it by cloning this library and running the import script with the import command:
+The parser reads a PHP dataset generated from [publicsuffix.org](https://publicsuffix.org/), mapping each public suffix rule to the list section it came from. Refresh it by running the import script:
 
 ```bash
 php ./data/import.php
@@ -62,27 +64,27 @@ php ./data/import.php
 
 ## Library API
 
-* **get()** - Return you full domain name.
-* **getTLD()** - Return only the top-level-domain.
-* **getSuffix()** - Return only the public suffix of your domain, for example: co.uk, ac.be, org.il, com, org.
-* **getRegisterable()** - Return the registered or registrable domain, which is the public suffix plus one additional label.
-* **getName()** - Returns only the registerable domain name. For example, blog.example.com will return 'example', and demo.co.uk will return 'demo'.
-* **getSub()** - Returns the full sub domain path for you domain. For example, blog.example.com will return 'blog', and subdomain.demo.co.uk will return 'subdomain.demo'.
-* **isKnown()** - Returns true if public suffix is know and false otherwise.
-* **isICANN()** - Returns true if the public suffix is found in the ICANN DOMAINS section of the public suffix list.
-* **isPrivate()** - Returns true if the public suffix is found in the PRIVATE DOMAINS section of the public suffix list.
-* **isTest()** - Returns true if the domain TLD is 'locahost' or 'test' and false otherwise.
+* `get()` — the full domain name.
+* `getTLD()` — the top-level domain only.
+* `getSuffix()` — the public suffix only, for example `co.uk`, `ac.be`, `org.il`, `com`, `org`.
+* `getRegisterable()` — the registrable domain: the public suffix plus one label.
+* `getName()` — the registrable domain's name only. `blog.example.com` returns `example`, `demo.co.uk` returns `demo`.
+* `getSub()` — the full subdomain path. `blog.example.com` returns `blog`, `subdomain.demo.co.uk` returns `subdomain.demo`.
+* `isKnown()` — true if the public suffix is known.
+* `isICANN()` — true if the public suffix comes from the ICANN section of the public suffix list.
+* `isPrivate()` — true if the public suffix comes from the private section of the public suffix list.
+* `isTest()` — true if the domain's top-level domain is `localhost` or `test`.
 
-> If you want to parse ordinary web urls then use `$host = parse_url($return, PHP_URL_HOST); $domain = new Utopia\Domains\Domain($host);` to get the domain object. 
+> To parse an ordinary web URL, take its host first: `$host = parse_url($url, PHP_URL_HOST); $domain = new Utopia\Domains\Domain($host);`
 
 
-## Using the Registrar API
+## Using the registrar API
 
 The library supports multiple domain registrar adapters:
 - **OpenSRS** - OpenSRS domain registrar
 - **NameCom** - Name.com domain registrar
 
-### Using OpenSRS Adapter
+### Using the OpenSRS adapter
 ```php
 <?php
 
@@ -104,7 +106,7 @@ $opensrs = new OpenSRS(
 $reg = new Registrar($opensrs);
 ```
 
-### Using NameCom Adapter
+### Using the Name.com adapter
 ```php
 <?php
 
@@ -125,7 +127,7 @@ $namecom = new NameCom(
 $reg = new Registrar($namecom);
 ```
 
-### Using the Registrar
+### Using the registrar
 Once you have initialized an adapter, you can use the Registrar API:
 
 ```php
@@ -160,7 +162,7 @@ $transfer = $reg->transfer($domain, 'authcode', [$contact]);
 
 ```
 
-### Update Auto-Renew
+### Update auto-renew
 ```php
 use Utopia\Domains\Registrar\UpdateDetails;
 
@@ -168,21 +170,36 @@ $details = new UpdateDetails(autoRenew: true);
 $reg->updateDomain($domain, $details);
 ```
 
-## Library Registrar API
-* **available(string $domain): bool** - Checks to see if a domain is available for registration.
-* **purchase(string $domain, array|Contact $contacts, int $periodYears = 1, array $nameservers = []): Registration** - Purchase a domain name and returns a Registration object.
-* **suggest(array $query, array $tlds = [], int|null $limit = null, int|null $priceMax = null, int|null $priceMin = null): array** - Suggest or search for domain names.
-* **getDomain(string $domain): Domain** - Get domain details and returns a Domain object.
-* **updateDomain(string $domain, UpdateDetails $details): bool** - Update domain details such as auto-renew.
-* **renew(string $domain, int $periodYears): Renewal** - Renewal a domain name and returns a Renewal object.
-* **transfer(string $domain, string $authCode, array|Contact $contacts, int $periodYears = 1, array $nameservers = []): Registration** - Transfer a domain name and returns a Registration object.
-* **getAuthCode(string $domain): string** - Retrieve the authorization code for a domain.
-* **checkTransferStatus(string $domain, bool $checkStatus = true, bool $getRequestAddress = false): TransferStatus** - Check the transfer status of a domain.
+## Library registrar API
+
+* `available(string $domain): bool` — is the domain free to register?
+* `purchase(string $domain, array|Contact $contacts, int $periodYears = 1, array $nameservers = []): Registration` — register a domain.
+* `suggest(array $query, array $tlds = [], ?int $limit = null, ?int $priceMax = null, ?int $priceMin = null): array` — search for domain names.
+* `getDomain(string $domain): Domain` — the domain's details.
+* `updateDomain(string $domain, UpdateDetails $details): bool` — update details such as auto-renew.
+* `renew(string $domain, int $periodYears): Renewal` — renew a domain.
+* `transfer(string $domain, string $authCode, array|Contact $contacts, int $periodYears = 1, array $nameservers = []): Registration` — transfer a domain in.
+* `getAuthCode(string $domain): string` — the domain's authorization code.
+* `checkTransferStatus(string $domain, bool $checkStatus = true, bool $getRequestAddress = false): TransferStatus` — where a transfer stands.
 
 
-## System Requirements
+## System requirements
 
-Utopia Framework requires PHP 8.2 or later. We recommend using the latest PHP version whenever possible.
+Utopia Domains requires PHP 8.4 or later. We recommend using the latest PHP version whenever possible.
+
+## Tests
+
+The unit tier covers the parser, the validators and the `Mock` registrar, and needs nothing running:
+
+```bash
+composer test
+```
+
+The end-to-end tier drives the OpenSRS and Name.com sandboxes, so it needs sandbox credentials in the environment — without them every test skips:
+
+```bash
+OPENSRS_KEY=... OPENSRS_USERNAME=... NAMECOM_USERNAME=... NAMECOM_TOKEN=... composer test:e2e
+```
 
 ## Authors
 

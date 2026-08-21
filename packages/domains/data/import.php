@@ -1,87 +1,54 @@
 <?php
 
-$data = file_get_contents('https://publicsuffix.org/list/public_suffix_list.dat');
-if ($data === false) {
+/**
+ * Regenerate data/data.php from the public suffix list.
+ *
+ * The dataset maps each PSL rule to the section it came from ('ICANN',
+ * 'PRIVATE', or null) — the only thing Domain asks of it.
+ */
+$list = file_get_contents('https://publicsuffix.org/list/public_suffix_list.dat');
+if ($list === false) {
     throw new RuntimeException('Could not download public suffix list');
 }
 
-$list = explode("\n", $data);
-
-function arrayToCode(array $data, $level = 0): string
-{
-    $output = '['."\n";
-
-    $level++;
-
-    $tabs = str_repeat("\t", $level);
-
-    foreach ($data as $key => $node) {
-        $key = is_int($key) ? '' : var_export($key, true).' => ';
-        $value = is_array($node) ? arrayToCode($node, $level) : var_export($node, true);
-        $output .= $tabs.$key.$value.",\n";
-    }
-
-    $level--;
-
-    $tabs = str_repeat("\t", $level);
-
-    $output .= $tabs.']';
-
-    return $output;
-}
-
 $type = null;
-$comments = [];
 $domains = [];
 
-foreach ($list as $key => $line) {
-    if (mb_strpos($line, '===BEGIN ICANN DOMAINS===')) {
+foreach (explode("\n", $list) as $line) {
+    $line = trim($line);
+
+    if (str_contains($line, '===BEGIN ICANN DOMAINS===')) {
         $type = 'ICANN';
-        $comments = [];
 
         continue;
     }
 
-    if (mb_strpos($line, '===END ICANN DOMAINS===')) {
-        $type = null;
-
-        continue;
-    }
-
-    if (mb_strpos($line, '===BEGIN PRIVATE DOMAINS===')) {
+    if (str_contains($line, '===BEGIN PRIVATE DOMAINS===')) {
         $type = 'PRIVATE';
-        $comments = [];
 
         continue;
     }
 
-    if (mb_strpos($line, '===END PRIVATE DOMAINS===')) {
+    if (str_contains($line, '===END ICANN DOMAINS===') || str_contains($line, '===END PRIVATE DOMAINS===')) {
         $type = null;
 
         continue;
     }
 
-    if (empty($line)) {
+    if ($line === '' || str_starts_with($line, '//')) {
         continue;
     }
 
-    if (mb_substr($line, 0, mb_strlen('// ')) === '// ') {
-        $comments[] = mb_substr($line, mb_strlen('// '));
-
-        continue;
-    }
-
-    $domains[$line] = [
-        'suffix' => $line,
-        'type' => $type,
-        'comments' => $comments,
-    ];
-
-    $comments = [];
+    $domains[$line] = $type;
 }
 
 if (! isset($domains['com'])) {
     throw new RuntimeException('.com is missing from public suffix list; it must be corrupted');
 }
 
-file_put_contents(__DIR__.'/data.php', "<?php\n\nreturn ".arrayToCode($domains).';');
+$lines = '';
+foreach ($domains as $rule => $section) {
+    $lines .= '    ' . var_export($rule, true) . ' => ' . var_export($section, true) . ",\n";
+}
+
+file_put_contents(__DIR__ . '/data.php', "<?php\n\nreturn [\n" . $lines . "];\n");
