@@ -90,6 +90,7 @@ graph TD
     storage --> validators
     storage --> client
     storage --> psr7
+    vcs --> cache
     auth
     image
     nats

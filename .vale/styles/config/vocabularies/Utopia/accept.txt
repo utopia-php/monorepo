@@ -75,8 +75,11 @@ Fastly
 Fedora
 FPM
 Fux
+Forgejo
 GET
 getters?
+Gitea
+Gogs
 GPTBot
 Grafana
 Guzzle
