@@ -18,6 +18,35 @@ class CircuitBreaker
     private int $failures = 0;
     private int $successes = 0;
     private ?int $openedAt = null;
+
+    /**
+     * Probes executing right now.
+     *
+     * Deliberately per-process and not mirrored to the cache adapter. This bounds
+     * the herd one process can send at a recovering dependency, which is the part
+     * a process can see and act on; a cross-process count would need a lease and a
+     * timeout to survive a crashed holder, and would still be a guess.
+     */
+    private int $halfOpenInFlight = 0;
+
+    /**
+     * The rolling window, kept in this process and not mirrored to the cache
+     * adapter.
+     *
+     * What is worth sharing between processes is the verdict — the state and when
+     * it was reached — and those still are. The tally behind it is a measurement of
+     * recent local traffic, and persisting it would mean writing counters on every
+     * call, including the successes: a cost on the hot path, paid to share a number
+     * each process can compute for itself. Any process that sees a bad enough rate
+     * opens the shared circuit for all of them.
+     *
+     * Which $window-wide bucket the current counts belong to.
+     */
+    private int $windowSlot = 0;
+    private int $windowFailures = 0;
+    private int $windowCalls = 0;
+    private int $windowPreviousFailures = 0;
+    private int $windowPreviousCalls = 0;
     private ?Counter $calls = null;
     private ?Counter $callbackFailures = null;
     private ?Counter $fallbacks = null;
@@ -28,17 +57,62 @@ class CircuitBreaker
     private ?Gauge $successesGauge = null;
     private ?Gauge $eventTimestamp = null;
 
+    /**
+     * @param  int  $window seconds of history the failure rate is judged over.
+     *                      A rate, not a count, because a count answers "how many
+     *                      calls failed" — which on any shared connection or pool
+     *                      is partly a fact about how many calls were in flight
+     *                      when something broke, not about how unhealthy the
+     *                      dependency is. One fault fails everything queued behind
+     *                      it, so the same fault costs three failures on an idle
+     *                      caller and ninety on a busy one. A rate is the same
+     *                      number either way. Counting consecutive failures also
+     *                      cannot see a steady trickle at all, because the
+     *                      successes interleaved with it keep resetting the tally.
+     * @param  float  $failureRatio share of calls in the window that must fail to
+     *                              open the circuit, between 0 and 1.
+     * @param  int  $minimumThroughput calls required in the window before the ratio
+     *                                 is trusted, so a single failure among two
+     *                                 calls does not read as 50% unhealthy.
+     * @param  int  $halfOpenPermittedCalls probes allowed to run at the same time
+     *                                      while half open. The rest take the
+     *                                      fallback, as they would while open. One
+     *                                      probe answers the only question half
+     *                                      open asks — is the dependency back —
+     *                                      and sending a thousand concurrent
+     *                                      callers to find out is how a recovering
+     *                                      dependency is knocked over again.
+     */
     public function __construct(
-        private readonly int $threshold = 3,
         private readonly int $timeout = 30,
         private readonly int $successThreshold = 2,
         private readonly ?Adapter $cache = null,
         private readonly string $key = 'default',
         ?Telemetry $telemetry = null,
         private readonly string $metricPrefix = '',
+        private readonly int $window = 10,
+        private readonly float $failureRatio = 0.5,
+        private readonly int $minimumThroughput = 20,
+        private readonly int $halfOpenPermittedCalls = 1,
     ) {
         if ($this->cache instanceof \Utopia\CircuitBreaker\Adapter && $this->key === '') {
             throw new \InvalidArgumentException('Key must not be empty when a cache adapter is configured.');
+        }
+
+        if ($this->window <= 0) {
+            throw new \InvalidArgumentException('Window must be greater than 0 seconds.');
+        }
+
+        if ($this->failureRatio <= 0 || $this->failureRatio > 1) {
+            throw new \InvalidArgumentException('Failure ratio must be greater than 0 and at most 1.');
+        }
+
+        if ($this->minimumThroughput < 1) {
+            throw new \InvalidArgumentException('Minimum throughput must be at least 1.');
+        }
+
+        if ($this->halfOpenPermittedCalls < 1) {
+            throw new \InvalidArgumentException('Half-open permitted calls must be at least 1.');
         }
 
         if ($telemetry instanceof \Utopia\Telemetry\Adapter) {
@@ -67,6 +141,7 @@ class CircuitBreaker
         $outcome = 'unknown';
         $exceptionType = null;
         $activeAttributes = null;
+        $probing = false;
 
         try {
             $this->updateState();
@@ -82,6 +157,24 @@ class CircuitBreaker
                 ]));
 
                 return $open();
+            }
+
+            if ($this->state === CircuitState::HALF_OPEN) {
+                if ($this->halfOpenInFlight >= $this->halfOpenPermittedCalls) {
+                    // A probe is already asking the question this call would ask.
+                    // Waiting for its answer costs nothing; joining it would turn
+                    // the recovery attempt into the load that broke the dependency.
+                    $outcome = 'short_circuit';
+                    $this->fallbacks?->add(1, $this->telemetryAttributes([
+                        'circuit_breaker.reason' => 'half_open_saturated',
+                        'circuit_breaker.state' => $this->state->value,
+                    ]));
+
+                    return $open();
+                }
+
+                $probing = true;
+                $this->halfOpenInFlight++;
             }
 
             // Determine which callback to use
@@ -113,6 +206,10 @@ class CircuitBreaker
             $outcome = $outcome === 'unknown' ? 'exception' : $outcome . '_exception';
             throw $e;
         } finally {
+            if ($probing) {
+                $this->halfOpenInFlight--;
+            }
+
             $attributes = $this->telemetryAttributes([
                 'circuit_breaker.initial_state' => $initialState->value,
                 'circuit_breaker.state' => $this->state->value,
@@ -153,23 +250,112 @@ class CircuitBreaker
             if ($successes >= $this->successThreshold) {
                 $this->transitionToClosed();
             }
-        } elseif ($this->state === CircuitState::CLOSED) {
-            if ($this->failures !== 0) {
-                $this->setFailures(0);
-            }
+
+            return;
         }
+
+        if ($this->state !== CircuitState::CLOSED) {
+            return;
+        }
+
+        // A data point, not an all-clear. The window decides what is stale; wiping
+        // the tally on every success is what would let a steady trickle of failures
+        // hide behind the successes interleaved with it.
+        $this->recordWindowOutcome(failed: false);
     }
 
     private function onFailure(): void
     {
-        $failures = $this->incrementFailures();
-
         if ($this->state === CircuitState::HALF_OPEN) {
             // Immediately reopen on failure in half-open state
+            $this->incrementFailures();
             $this->transitionToOpen();
-        } elseif ($failures >= $this->threshold) {
+
+            return;
+        }
+
+        [$failures, $calls] = $this->recordWindowOutcome(failed: true);
+
+        if ($calls >= $this->minimumThroughput && ($failures / $calls) >= $this->failureRatio) {
             $this->transitionToOpen();
         }
+    }
+
+    /**
+     * Add one outcome to the rolling window and return the failure and call totals
+     * it now holds.
+     *
+     * Two buckets, each $window wide: the one being filled and the one before it.
+     * Totalling both covers somewhere between one and two windows depending on
+     * where the current bucket started, which is the usual trade for not keeping a
+     * timestamp per call — and it only ever errs by remembering slightly too much,
+     * never by forgetting a failure early.
+     *
+     * @return array{int, int} failures and total calls now in the window
+     */
+    private function recordWindowOutcome(bool $failed): array
+    {
+        $slot = intdiv(time(), $this->window);
+
+        if ($slot !== $this->windowSlot) {
+            $elapsed = $slot - $this->windowSlot;
+
+            // One slot on: what was current becomes the previous bucket. More than
+            // that and both buckets predate the window entirely.
+            $this->setWindowCounts(
+                previousFailures: $elapsed === 1 ? $this->windowFailures : 0,
+                previousCalls: $elapsed === 1 ? $this->windowCalls : 0,
+                failures: 0,
+                calls: 0,
+                slot: $slot,
+            );
+        }
+
+        $this->setWindowCounts(
+            previousFailures: $this->windowPreviousFailures,
+            previousCalls: $this->windowPreviousCalls,
+            failures: $this->windowFailures + ($failed ? 1 : 0),
+            calls: $this->windowCalls + 1,
+            slot: $slot,
+        );
+
+        return [
+            $this->windowFailureCount(),
+            $this->windowCalls + $this->windowPreviousCalls,
+        ];
+    }
+
+    /**
+     * Failures the window is currently holding.
+     */
+    private function windowFailureCount(): int
+    {
+        return $this->windowFailures + $this->windowPreviousFailures;
+    }
+
+    private function setWindowCounts(
+        int $previousFailures,
+        int $previousCalls,
+        int $failures,
+        int $calls,
+        int $slot,
+    ): void {
+        $this->windowPreviousFailures = $previousFailures;
+        $this->windowPreviousCalls = $previousCalls;
+        $this->windowFailures = $failures;
+        $this->windowCalls = $calls;
+        $this->windowSlot = $slot;
+    }
+
+    private function resetWindow(): void
+    {
+        $this->setWindowCounts(
+            previousFailures: 0,
+            previousCalls: 0,
+            failures: 0,
+            calls: 0,
+            slot: intdiv(time(), $this->window),
+        );
     }
 
     private function hasTimedOut(): bool
@@ -191,6 +377,11 @@ class CircuitBreaker
         $from = $this->state;
         $this->setFailures(0);
         $this->setSuccesses(0);
+        // Clearing here, rather than on opening, is what keeps the tally that
+        // opened the circuit readable while it is open — and it is enough, because
+        // half open is the only way out of open, so no probe can ever re-open on
+        // the evidence that opened it the first time.
+        $this->resetWindow();
         $this->setState(CircuitState::HALF_OPEN);
         $this->recordTransition($from, CircuitState::HALF_OPEN);
     }
@@ -200,6 +391,7 @@ class CircuitBreaker
         $from = $this->state;
         $this->setFailures(0);
         $this->setSuccesses(0);
+        $this->resetWindow();
         $this->setOpenedAt(null);
         $this->setState(CircuitState::CLOSED);
         $this->recordTransition($from, CircuitState::CLOSED);
@@ -358,7 +550,10 @@ class CircuitBreaker
     {
         $attributes = $this->telemetryAttributes();
         $this->stateGauge?->record($this->stateValue(), $attributes);
-        $this->failuresGauge?->record($this->failures, $attributes);
+        $this->failuresGauge?->record(
+            $this->state === CircuitState::HALF_OPEN ? $this->failures : $this->windowFailureCount(),
+            $attributes,
+        );
         $this->successesGauge?->record($this->successes, $attributes);
     }
 
@@ -377,11 +572,17 @@ class CircuitBreaker
         return $this->state;
     }
 
+    /**
+     * Failures the circuit is currently judging on: the window's tally while
+     * closed, and the probe failures while half open.
+     */
     public function getFailureCount(): int
     {
         $this->syncFromCache();
 
-        return $this->failures;
+        return $this->state === CircuitState::HALF_OPEN
+            ? $this->failures
+            : $this->windowFailureCount();
     }
 
     public function getSuccessCount(): int

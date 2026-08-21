@@ -13,7 +13,7 @@ require __DIR__ . '/../../vendor/autoload.php';
 $duration = duration($argv);
 $config = [
     'key' => getenv('BREAKER_SCENARIO_CACHE_KEY') ?: 'checkout-api',
-    'threshold' => (int) (getenv('BREAKER_SCENARIO_THRESHOLD') ?: 5),
+    'minimumThroughput' => (int) (getenv('BREAKER_SCENARIO_THRESHOLD') ?: 5),
     'timeout' => (int) (getenv('BREAKER_SCENARIO_TIMEOUT') ?: 12),
     'successThreshold' => (int) (getenv('BREAKER_SCENARIO_SUCCESS_THRESHOLD') ?: 3),
     'prefix' => getenv('BREAKER_DEMO_REDIS_PREFIX') ?: 'breaker-demo:',
@@ -113,12 +113,12 @@ function createTelemetry(): Telemetry
 }
 
 /**
- * @param array{key: string, threshold: int, timeout: int, successThreshold: int, prefix: string} $config
+ * @param array{key: string, minimumThroughput: int, timeout: int, successThreshold: int, prefix: string} $config
  */
 function createBreaker(Telemetry $telemetry, array $config): CircuitBreaker
 {
     return new CircuitBreaker(
-        threshold: $config['threshold'],
+        minimumThroughput: $config['minimumThroughput'],
         timeout: $config['timeout'],
         successThreshold: $config['successThreshold'],
         cache: new RedisAdapter(redis(), $config['prefix']),
@@ -128,7 +128,7 @@ function createBreaker(Telemetry $telemetry, array $config): CircuitBreaker
 }
 
 /**
- * @param array{key: string, threshold: int, timeout: int, successThreshold: int, prefix: string} $config
+ * @param array{key: string, minimumThroughput: int, timeout: int, successThreshold: int, prefix: string} $config
  */
 function resetBreaker(array $config): void
 {
