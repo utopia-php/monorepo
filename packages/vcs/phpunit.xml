@@ -1,0 +1,34 @@
+<phpunit backupGlobals="false"
+         backupStaticAttributes="false"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         convertErrorsToExceptions="true"
+         convertNoticesToExceptions="true"
+         convertWarningsToExceptions="true"
+         processIsolation="false"
+         stopOnFailure="false"
+        >
+    <testsuites>
+        <testsuite name="gitea">
+            <file>./tests/VCS/Adapter/GiteaTest.php</file>
+        </testsuite>
+        <testsuite name="forgejo">
+            <file>./tests/VCS/Adapter/ForgejoTest.php</file>
+        </testsuite>
+        <testsuite name="github">
+            <file>./tests/VCS/Adapter/GitHubTest.php</file>
+        </testsuite>
+        <testsuite name="gitlab">
+            <file>./tests/VCS/Adapter/GitLabTest.php</file>
+        </testsuite>
+        <testsuite name="gogs">
+            <file>./tests/VCS/Adapter/GogsTest.php</file>
+        </testsuite>
+        <testsuite name="bitbucket">
+            <file>./tests/VCS/Adapter/BitbucketTest.php</file>
+        </testsuite>
+        <testsuite name="origin">
+            <file>./tests/VCS/Adapter/OriginTest.php</file>
+        </testsuite>
+    </testsuites>
+</phpunit>
