@@ -66,6 +66,8 @@ dotenv
 DuckDuckGo
 Eldad
 enqueue(?:s|d)?
+dequeue(?:s|d)?
+misroute(?:s|d)?
 enum(?:s)?
 etcd
 failover
