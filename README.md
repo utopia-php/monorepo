@@ -59,6 +59,9 @@ graph TD
     console --> validators
     dns --> telemetry
     dns --> validators
+    dns --> domains
+    domains --> validators
+    domains --> cache
     fastly --> client
     fastly --> psr7
     http --> di

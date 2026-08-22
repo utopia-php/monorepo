@@ -1,0 +1,54 @@
+{
+    "name": "utopia-php/domains",
+    "description": "Utopia Domains library is a lite library for parsing web domains and talking to domain registrars.",
+    "type": "library",
+    "keywords": [
+        "php",
+        "framework",
+        "upf",
+        "utopia",
+        "domains",
+        "tld",
+        "tld extract",
+        "public suffix",
+        "ICANN",
+        "registrar"
+    ],
+    "license": "MIT",
+    "minimum-stability": "stable",
+    "scripts": {
+        "test": "phpunit --testsuite unit",
+        "test:e2e": "phpunit --testsuite e2e"
+    },
+    "authors": [
+        {
+            "name": "Eldad Fux",
+            "email": "eldad@appwrite.io"
+        },
+        {
+            "name": "Wess Cope",
+            "email": "wess@appwrite.io"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Utopia\\Domains\\": "src/Domains"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Utopia\\Tests\\": "tests"
+        }
+    },
+    "require": {
+        "php": ">=8.4",
+        "utopia-php/validators": "^0.5",
+        "utopia-php/cache": "^4.0 || ^5.0"
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true,
+            "tbachert/spi": true
+        }
+    }
+}
