@@ -48,16 +48,21 @@ final class SwooleRequestTest extends TestCase
         );
     }
 
-    public function testPopulatedObjectsStayAssociativeArrays(): void
+    public function testObjectsAreLeftAsObjects(): void
     {
-        $request = new Request($this->swooleRequest('{"data":{"a":{},"b":{"c":1}}}'));
+        // The request layer no longer reshapes objects into associative arrays;
+        // a JSON object arrives as a stdClass at every depth, a list as an array.
+        $request = new Request($this->swooleRequest('{"data":{"a":{},"b":{"c":1},"list":[{"d":2}]}}'));
 
         $data = $request->getPayload('data');
 
-        $this->assertIsArray($data);
-        $this->assertInstanceOf(\stdClass::class, $data['a']);
-        $this->assertIsArray($data['b'], 'a populated object must stay an associative array');
-        $this->assertSame(['c' => 1], $data['b']);
+        $this->assertInstanceOf(\stdClass::class, $data);
+        $this->assertInstanceOf(\stdClass::class, $data->a);
+        $this->assertEquals(new \stdClass(), $data->a);
+        $this->assertInstanceOf(\stdClass::class, $data->b);
+        $this->assertSame(1, $data->b->c);
+        $this->assertIsArray($data->list, 'a JSON list must stay an array');
+        $this->assertInstanceOf(\stdClass::class, $data->list[0]);
     }
 
     public function testBodyWithoutParamsDecodesToNoParams(): void
