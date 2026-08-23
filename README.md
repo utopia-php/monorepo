@@ -83,12 +83,14 @@ graph TD
     queue --> pools
     queue --> telemetry
     queue --> validators
+    schedule --> telemetry
     servers --> di
     servers --> validators
     storage --> telemetry
     storage --> validators
     storage --> client
     storage --> psr7
+    vcs --> cache
     auth
     image
     nats

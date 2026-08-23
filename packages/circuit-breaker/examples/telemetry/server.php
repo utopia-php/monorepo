@@ -114,12 +114,12 @@ function createTelemetry(): Telemetry
 }
 
 /**
- * @param array{threshold: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
+ * @param array{minimumThroughput: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
  */
 function createBreaker(Telemetry $telemetry, array $options): CircuitBreaker
 {
     return new CircuitBreaker(
-        threshold: $options['threshold'],
+        minimumThroughput: $options['minimumThroughput'],
         timeout: $options['timeout'],
         successThreshold: $options['successThreshold'],
         cache: new RedisAdapter(redis(), $options['prefix']),
@@ -164,7 +164,7 @@ function runDependency(string $mode, int $latency, string $state): array
 }
 
 /**
- * @param array{threshold: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
+ * @param array{minimumThroughput: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
  */
 function statusPayload(CircuitBreaker $breaker, array $options): array
 {
@@ -179,13 +179,13 @@ function statusPayload(CircuitBreaker $breaker, array $options): array
         'stateLabel' => stateLabel($state),
         'failures' => $breaker->getFailureCount(),
         'successes' => $breaker->getSuccessCount(),
-        'threshold' => $options['threshold'],
+        'minimumThroughput' => $options['minimumThroughput'],
         'timeout' => $options['timeout'],
         'successThreshold' => $options['successThreshold'],
         'nextRetryIn' => $nextRetryIn,
         'config' => [
             'key' => $options['key'],
-            'threshold' => $options['threshold'],
+            'minimumThroughput' => $options['minimumThroughput'],
             'timeout' => $options['timeout'],
             'successThreshold' => $options['successThreshold'],
         ],
@@ -205,7 +205,7 @@ function stateLabel(CircuitState $state): string
 }
 
 /**
- * @param array{threshold: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
+ * @param array{minimumThroughput: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
  */
 function resetBreaker(array $options): void
 {
@@ -219,12 +219,12 @@ function resetBreaker(array $options): void
 
 /**
  * @param array<string, mixed> $payload
- * @return array{threshold: int, timeout: int, successThreshold: int, key: string, prefix: string}
+ * @return array{minimumThroughput: int, timeout: int, successThreshold: int, key: string, prefix: string}
  */
 function breakerOptions(array $payload): array
 {
     return [
-        'threshold' => intOption($payload, 'threshold', (int) (getenv('BREAKER_DEMO_THRESHOLD') ?: 3), 1, 20),
+        'minimumThroughput' => intOption($payload, 'minimumThroughput', (int) (getenv('BREAKER_DEMO_THRESHOLD') ?: 3), 1, 20),
         'timeout' => intOption($payload, 'timeout', (int) (getenv('BREAKER_DEMO_TIMEOUT') ?: 8), 1, 120),
         'successThreshold' => intOption($payload, 'successThreshold', (int) (getenv('BREAKER_DEMO_SUCCESS_THRESHOLD') ?: 2), 1, 10),
         'key' => normalizeKey($payload['key'] ?? getenv('BREAKER_DEMO_CACHE_KEY') ?: 'local-api'),
@@ -254,7 +254,7 @@ function normalizeKey(mixed $value): string
 }
 
 /**
- * @param array{threshold: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
+ * @param array{minimumThroughput: int, timeout: int, successThreshold: int, key: string, prefix: string} $options
  */
 function openedAt(array $options): ?int
 {
