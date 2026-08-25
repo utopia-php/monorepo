@@ -130,7 +130,7 @@ final class GitHubTest extends Base
             /** @var array<string, mixed> */
             public array $captured = [];
 
-            protected function call(string $method, string $path = '', array $headers = [], array $params = [], bool $decode = true, bool $followRedirects = true)
+            protected function call(string $method, string $path = '', array $headers = [], array $params = [], bool $decode = true, bool $followRedirects = true): array
             {
                 $this->captured = ['method' => $method, 'path' => $path, 'headers' => $headers];
 
@@ -145,16 +145,16 @@ final class GitHubTest extends Base
         $adapter->initializeVariables('1234', $pem, '5678');
 
         $this->assertSame('/app/installations/1234/access_tokens', $adapter->captured['path']);
-        $jwt = substr($adapter->captured['headers']['Authorization'], \strlen('Bearer '));
+        $jwt = substr((string) $adapter->captured['headers']['Authorization'], \strlen('Bearer '));
         [$header, $payload, $signature] = explode('.', $jwt);
         $verified = openssl_verify(
             $header . '.' . $payload,
-            (string) base64_decode(strtr($signature, '-_', '+/')),
+            base64_decode(strtr($signature, '-_', '+/')),
             $publicKey,
             OPENSSL_ALGO_SHA256,
         );
         $this->assertSame(1, $verified);
-        $claims = json_decode((string) base64_decode(strtr($payload, '-_', '+/')), true);
+        $claims = json_decode(base64_decode(strtr($payload, '-_', '+/')), true);
         $this->assertSame('5678', $claims['iss']);
     }
 }
