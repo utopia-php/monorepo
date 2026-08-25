@@ -134,8 +134,16 @@ class Appwrite extends PushAdapter
                     userProperties: ['subId' => (string) $packetId],
                 ));
 
-                if ($this->readPacket($socket)['type'] !== MQTT::PACKET_SUBACK) {
+                $suback = $this->readPacket($socket);
+                if ($suback['type'] !== MQTT::PACKET_SUBACK) {
                     throw new \RuntimeException('Broker did not acknowledge SUBSCRIBE');
+                }
+
+                // A reason code >= 0x80 means the broker refused the filter (e.g. ACL denial).
+                foreach (MQTT::parseSuback($suback['payload'])['reasonCodes'] as $code) {
+                    if ($code >= 0x80) {
+                        throw new \RuntimeException("SUBSCRIBE to \"{$topic}\" denied (reason 0x" . dechex($code) . ')');
+                    }
                 }
             }
 

@@ -497,6 +497,32 @@ class MQTT
         ];
     }
 
+    /**
+     * Parse a SUBACK packet body: one reason code per topic filter in the SUBSCRIBE.
+     * A code >= 0x80 is a failure (e.g. 0x87 Not Authorized).
+     *
+     * @return array{packetId: int, reasonCodes: array<int>}
+     */
+    public static function parseSuback(string $payload): array
+    {
+        $offset = 0;
+        $packetId = (int) unpack('n', substr($payload, 0, 2))[1];
+        $offset = 2;
+
+        $propLen = self::readVariableByteInteger($payload, $offset);
+        $offset += $propLen;
+
+        $reasonCodes = [];
+        for ($i = $offset, $length = \strlen($payload); $i < $length; $i++) {
+            $reasonCodes[] = \ord($payload[$i]);
+        }
+
+        return [
+            'packetId' => $packetId,
+            'reasonCodes' => $reasonCodes,
+        ];
+    }
+
     private static function buildPacket(int $type, int $flags, string $body): string
     {
         $header = \chr((($type & 0x0F) << 4) | ($flags & 0x0F));
