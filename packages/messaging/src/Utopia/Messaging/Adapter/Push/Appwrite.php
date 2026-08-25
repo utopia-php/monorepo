@@ -7,6 +7,7 @@ use Utopia\Messaging\Helpers\MQTT;
 use Utopia\Messaging\Messages\Push as PushMessage;
 use Utopia\Messaging\Priority;
 use Utopia\Messaging\Response;
+use Utopia\Telemetry\Adapter as Telemetry;
 
 /**
  * Appwrite Push (MQTT 5) adapter.
@@ -59,7 +60,10 @@ class Appwrite extends PushAdapter
         private readonly bool $tls = true,
         private readonly int $messageExpiry = self::DEFAULT_MESSAGE_EXPIRY,
         private string $clientId = '',
+        ?Telemetry $telemetry = null,
     ) {
+        parent::__construct($telemetry);
+
         if ($this->clientId === '') {
             $this->clientId = self::CLIENT_PREFIX . '-' . bin2hex(random_bytes(6));
         }
