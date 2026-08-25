@@ -134,11 +134,10 @@ final readonly class Factory implements RequestFactoryInterface
             $headers,
         )->withBody(new Body($boundary, $this->parts($parts)));
 
-        if (!$request->hasHeader(Header::CONTENT_TYPE)) {
-            return $request->withHeader(Header::CONTENT_TYPE, ContentType::MULTIPART_FORM_DATA . '; boundary=' . $boundary);
-        }
-
-        return $request;
+        return $request->withHeader(
+            Header::CONTENT_TYPE,
+            ContentType::MULTIPART_FORM_DATA . '; boundary=' . $boundary,
+        );
     }
 
     /**

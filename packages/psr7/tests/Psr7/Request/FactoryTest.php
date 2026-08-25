@@ -8,6 +8,7 @@ use JsonException;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
 use Utopia\Psr7\Request;
+use Utopia\Psr7\Request\Multipart\Body as MultipartBody;
 use Utopia\Psr7\Request\Multipart\Part as RequestPart;
 
 final class FactoryTest extends TestCase
@@ -107,8 +108,10 @@ final class FactoryTest extends TestCase
 
         $contentType = $request->getHeaderLine('Content-Type');
         $body = (string) $request->getBody();
+        $boundary = $this->assertMultipartContentTypeMatchesBody($request);
 
         $this->assertStringStartsWith('multipart/form-data; boundary=utopia-', $contentType);
+        $this->assertStringStartsWith('utopia-', $boundary);
         $this->assertStringContainsString('Content-Disposition: form-data; name="name"', $body);
         $this->assertStringContainsString("\r\n\r\nAda\r\n", $body);
         $this->assertStringContainsString('Content-Disposition: form-data; name="avatar"; filename="ada.png"', $body);
@@ -158,6 +161,78 @@ final class FactoryTest extends TestCase
         $this->assertStringContainsString('X-Part-ID: 123', (string) $request->getBody());
     }
 
+    public function testItAddsMultipartBoundaryWhenCallerPassesContentTypeWithoutOne(): void
+    {
+        $requestFactory = new Request\Factory();
+
+        $request = $requestFactory->multipart('POST', 'https://example.com/upload', [
+            'name' => 'Ada',
+        ], [
+            'Content-Type' => 'multipart/form-data',
+            'X-Request-Id' => 'abc',
+        ]);
+
+        $this->assertSame('abc', $request->getHeaderLine('X-Request-Id'));
+        $this->assertMultipartContentTypeMatchesBody($request);
+    }
+
+    public function testItReplacesCallerSuppliedMultipartBoundaryWithTheGeneratedBodyBoundary(): void
+    {
+        $requestFactory = new Request\Factory();
+
+        $request = $requestFactory->multipart('POST', 'https://example.com/upload', [
+            'name' => 'Ada',
+        ], [
+            'Content-Type' => 'multipart/form-data; boundary=stale-boundary',
+        ]);
+
+        $boundary = $this->assertMultipartContentTypeMatchesBody($request);
+
+        $this->assertNotSame('stale-boundary', $boundary);
+        $this->assertStringNotContainsString('stale-boundary', $request->getHeaderLine('Content-Type'));
+        $this->assertStringNotContainsString('--stale-boundary', (string) $request->getBody());
+    }
+
+    public function testItPreservesCallerContentTypeOnTypedBodies(): void
+    {
+        $requestFactory = new Request\Factory();
+
+        $form = $requestFactory->form('POST', 'https://example.com/users', ['name' => 'Ada'], [
+            'Content-Type' => 'application/x-www-form-urlencoded; charset=utf-8',
+        ]);
+        $text = $requestFactory->text('POST', 'https://example.com/notes', 'Hello', [
+            'Content-Type' => 'text/plain; charset=utf-8',
+        ]);
+        $xml = $requestFactory->xml('POST', 'https://example.com/users', '<user/>', [
+            'Content-Type' => 'text/xml; charset=utf-8',
+        ]);
+        $body = $requestFactory->body('PUT', 'https://example.com/archive', 'raw', 'application/octet-stream', [
+            'Content-Type' => 'application/custom',
+        ]);
+
+        $this->assertSame('application/x-www-form-urlencoded; charset=utf-8', $form->getHeaderLine('Content-Type'));
+        $this->assertSame('text/plain; charset=utf-8', $text->getHeaderLine('Content-Type'));
+        $this->assertSame('text/xml; charset=utf-8', $xml->getHeaderLine('Content-Type'));
+        $this->assertSame('application/custom', $body->getHeaderLine('Content-Type'));
+    }
+
+    public function testItLeavesQueryRequestsWithoutContentTypeUnlessCallerSetsOne(): void
+    {
+        $requestFactory = new Request\Factory();
+
+        $request = $requestFactory->query('GET', 'https://example.com/users', [
+            'page' => 1,
+        ]);
+        $typed = $requestFactory->query('GET', 'https://example.com/users', [
+            'page' => 1,
+        ], [
+            'Content-Type' => 'application/json',
+        ]);
+
+        $this->assertFalse($request->hasHeader('Content-Type'));
+        $this->assertSame('application/json', $typed->getHeaderLine('Content-Type'));
+    }
+
     public function testItEscapesMultipartDispositionQuotedStrings(): void
     {
         $requestFactory = new Request\Factory();
@@ -179,5 +254,22 @@ final class FactoryTest extends TestCase
         $this->expectException(JsonException::class);
 
         $requestFactory->json('POST', 'https://example.com/users', "\xB1\x31");
+    }
+
+    private function assertMultipartContentTypeMatchesBody(RequestInterface $request): string
+    {
+        $body = $request->getBody();
+        $this->assertInstanceOf(MultipartBody::class, $body);
+
+        $boundary = $body->boundary();
+        $this->assertNotSame('', $boundary);
+        $this->assertSame(
+            'multipart/form-data; boundary=' . $boundary,
+            $request->getHeaderLine('Content-Type'),
+        );
+        $this->assertStringContainsString('--' . $boundary . "\r\n", (string) $body);
+        $this->assertStringEndsWith('--' . $boundary . "--\r\n", (string) $body);
+
+        return $boundary;
     }
 }

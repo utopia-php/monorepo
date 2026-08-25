@@ -35,6 +35,7 @@ Source specs:
 ## Multipart coverage
 
 - Multipart request factory creates stable per-part headers and terminal boundaries.
+- Multipart request factory always sets `Content-Type` to `multipart/form-data` with a `boundary` parameter equal to the generated body's boundary, including when the caller already supplied `Content-Type`.
 - Multipart request factory supports scalar fields, file/body parts, filenames, content types, and custom per-part headers.
 - Multipart request factory emits CRLF-delimited part headers and bodies.
 - Multipart request factory escapes quoted `Content-Disposition` parameter values for field names and filenames.
