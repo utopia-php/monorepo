@@ -55,6 +55,11 @@ abstract class Decorator implements Adapter
         return $this->wrap($this->adapter->withConnectionReuse($enabled));
     }
 
+    public function withFollowRedirects(bool $enabled = true): static
+    {
+        return $this->wrap($this->adapter->withFollowRedirects($enabled));
+    }
+
     /**
      * @throws ClientExceptionInterface
      */

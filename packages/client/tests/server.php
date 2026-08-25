@@ -31,6 +31,14 @@ if ($path === '/redirect') {
     return;
 }
 
+if ($path === '/final') {
+    http_response_code(200);
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'final';
+
+    return;
+}
+
 if ($path === '/headers') {
     http_response_code(204);
     header('X-Trace: one', false);

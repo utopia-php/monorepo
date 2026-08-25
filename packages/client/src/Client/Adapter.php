@@ -32,4 +32,10 @@ interface Adapter extends ClientInterface, StreamingClientInterface
      * cURL handle, a kept-alive Swoole client, and so on.
      */
     public function withConnectionReuse(bool $enabled = true): static;
+
+    /**
+     * Follow HTTP Location redirects until the final non-redirect response.
+     * Off by default, so a 3xx response is returned with its Location header.
+     */
+    public function withFollowRedirects(bool $enabled = true): static;
 }

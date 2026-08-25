@@ -229,6 +229,11 @@ final class QueueAdapter implements Adapter
         return $this;
     }
 
+    public function withFollowRedirects(bool $enabled = true): static
+    {
+        return $this;
+    }
+
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
         return $this->next(static function (string $chunk): void {});

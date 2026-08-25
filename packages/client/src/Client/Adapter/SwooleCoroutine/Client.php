@@ -10,6 +10,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Message\UriInterface;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Http\Client as SwooleClient;
 use Throwable;
@@ -28,9 +29,11 @@ use Utopia\Client\Exception\TlsException;
 use Utopia\Client\Response\Builder as ResponseBuilder;
 use Utopia\Client\Tls;
 use Utopia\Psr7\Header;
+use Utopia\Psr7\Method;
 use Utopia\Psr7\Request\Multipart\Body;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
+use Utopia\Psr7\Uri;
 use ValueError;
 
 class Client implements Adapter
@@ -38,6 +41,8 @@ class Client implements Adapter
     private const float DEFAULT_CONNECT_TIMEOUT = 5.0;
 
     private const float DEFAULT_TIMEOUT = 30.0;
+
+    private const int MAX_REDIRECTS = 50;
 
     private const string SETTING_CONNECT_TIMEOUT = 'connect_timeout';
 
@@ -62,6 +67,8 @@ class Client implements Adapter
     private readonly ResponseBuilder $responseBuilder;
 
     private bool $reuseConnections = false;
+
+    private bool $followRedirects = false;
 
     private ?SwooleClient $connection = null;
 
@@ -156,6 +163,14 @@ class Client implements Adapter
         return $clone;
     }
 
+    public function withFollowRedirects(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->followRedirects = $enabled;
+
+        return $clone;
+    }
+
     /**
      * @throws ClientExceptionInterface
      */
@@ -175,10 +190,11 @@ class Client implements Adapter
     }
 
     /**
-     * Execute the request. When $sink is given, Swoole's write callback forwards
-     * each body chunk to it as data arrives, so the body is never fully held in
-     * memory and the returned response has an empty body; otherwise the body is
-     * buffered onto the response.
+     * Execute the request, following Location redirects when enabled. The
+     * coroutine HTTP client has no native follow-redirects setting, so hops are
+     * issued here. Intermediate redirect bodies are buffered (Swoole's write
+     * callback would otherwise deliver them to a streaming sink). The final
+     * body is forwarded to $sink when one is given.
      *
      * @param (callable(string): void)|null $sink
      *
@@ -194,13 +210,58 @@ class Client implements Adapter
             throw new AdapterPreconditionException($request, 'Swoole coroutine HTTP requests must run inside a coroutine.');
         }
 
+        $this->validateSettings();
+
+        if (!$this->followRedirects) {
+            return $this->exchange($request, $sink);
+        }
+
+        $current = $request;
+
+        for ($redirects = 0; $redirects <= self::MAX_REDIRECTS; $redirects++) {
+            $response = $this->exchange($current, null);
+
+            if (!$this->isRedirect($response)) {
+                if ($sink !== null) {
+                    $body = (string) $response->getBody();
+
+                    if ($body !== '') {
+                        $sink($body);
+                    }
+
+                    return $response->withBody(new Stream\Factory()->createStream(''));
+                }
+
+                return $response;
+            }
+
+            if ($redirects === self::MAX_REDIRECTS) {
+                throw new ProtocolException($request, 'Too many redirects.');
+            }
+
+            $current = $this->followTo($current, $response);
+        }
+
+        throw new ProtocolException($request, 'Too many redirects.');
+    }
+
+    /**
+     * Execute a single hop. When $sink is given, Swoole's write callback
+     * forwards each body chunk to it as data arrives, so the body is never
+     * fully held in memory and the returned response has an empty body;
+     * otherwise the body is buffered onto the response.
+     *
+     * @param (callable(string): void)|null $sink
+     *
+     * @throws ClientExceptionInterface
+     */
+    private function exchange(RequestInterface $request, ?callable $sink): ResponseInterface
+    {
         $uri = $request->getUri();
 
         if (!\in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
             throw new InvalidUriException($request, 'Requests must use an absolute URI.');
         }
-
-        $this->validateSettings();
 
         // Swoole decodes a buffered body itself, but its streaming write_func
         // delivers it undecoded — so a stream must ask for identity instead.
@@ -318,6 +379,85 @@ class Client implements Adapter
             $headers,
             $responseBody,
         );
+    }
+
+    private function isRedirect(ResponseInterface $response): bool
+    {
+        $status = $response->getStatusCode();
+
+        return $status >= 300 && $status < 400 && $response->getHeaderLine(Header::LOCATION) !== '';
+    }
+
+    /**
+     * @throws ClientExceptionInterface
+     */
+    private function followTo(RequestInterface $request, ResponseInterface $response): RequestInterface
+    {
+        try {
+            $uri = $this->resolveRedirectUri($request->getUri(), $response->getHeaderLine(Header::LOCATION));
+        } catch (InvalidArgumentException $invalidArgumentException) {
+            throw new InvalidUriException($request, 'Invalid redirect location.', 0, $invalidArgumentException);
+        }
+
+        if (!\in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
+            throw new InvalidUriException($request, 'Redirect location must be an absolute HTTP URI.');
+        }
+
+        $status = $response->getStatusCode();
+        $method = strtoupper($request->getMethod());
+
+        if (\in_array($status, [301, 302, 303], true) && !\in_array($method, ['GET', 'HEAD'], true)) {
+            $request = $request
+                ->withMethod(Method::GET)
+                ->withBody(new Stream\Factory()->createStream(''))
+                ->withoutHeader(Header::CONTENT_LENGTH)
+                ->withoutHeader(Header::CONTENT_TYPE);
+        } else {
+            $body = $request->getBody();
+
+            if ($body->isSeekable()) {
+                $body->rewind();
+            }
+        }
+
+        return $request->withUri($uri)->withoutHeader(Header::HOST);
+    }
+
+    private function resolveRedirectUri(UriInterface $base, string $location): UriInterface
+    {
+        $target = Uri::parse($location);
+
+        if ($target->getScheme() !== '') {
+            return $target;
+        }
+
+        if ($target->getHost() !== '') {
+            return $target->withScheme($base->getScheme());
+        }
+
+        $path = $target->getPath();
+
+        if ($path === '') {
+            return $base
+                ->withQuery($target->getQuery() !== '' ? $target->getQuery() : $base->getQuery())
+                ->withFragment($target->getFragment());
+        }
+
+        if (str_starts_with($path, '/')) {
+            return $base
+                ->withPath($path)
+                ->withQuery($target->getQuery())
+                ->withFragment($target->getFragment());
+        }
+
+        $basePath = $base->getPath();
+        $slash = strrpos($basePath, '/');
+        $directory = $slash === false ? '/' : substr($basePath, 0, $slash + 1);
+
+        return $base
+            ->withPath($directory . $path)
+            ->withQuery($target->getQuery())
+            ->withFragment($target->getFragment());
     }
 
     /**

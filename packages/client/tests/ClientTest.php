@@ -66,6 +66,17 @@ final class ClientTest extends TestCase
         $this->assertSame('off', $client->withConnectionReuse(false)->sendRequest($request)->getHeaderLine('X-Connection-Reuse'));
     }
 
+    public function testItDecoratesFollowRedirects(): void
+    {
+        $request = new Request\Factory()->createRequest('GET', 'https://example.com');
+        $client = new Client(new RecordingAdapter());
+        $configured = $client->withFollowRedirects();
+
+        $this->assertSame('', $client->sendRequest($request)->getHeaderLine('X-Follow-Redirects'));
+        $this->assertSame('on', $configured->sendRequest($request)->getHeaderLine('X-Follow-Redirects'));
+        $this->assertSame('off', $client->withFollowRedirects(false)->sendRequest($request)->getHeaderLine('X-Follow-Redirects'));
+    }
+
     public function testItRejectsInvalidTimeouts(): void
     {
         $client = new Client(new RecordingAdapter());
@@ -239,6 +250,7 @@ final class RecordingAdapter implements Adapter
         private ?string $certificate = null,
         private ?Tls $minTlsVersion = null,
         private ?bool $connectionReuse = null,
+        private ?bool $followRedirects = null,
     ) {}
 
     public function withTimeout(float $seconds): static
@@ -305,6 +317,14 @@ final class RecordingAdapter implements Adapter
         return $clone;
     }
 
+    public function withFollowRedirects(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->followRedirects = $enabled;
+
+        return $clone;
+    }
+
     /**
      * @throws ClientExceptionInterface
      */
@@ -341,6 +361,10 @@ final class RecordingAdapter implements Adapter
 
         if ($this->connectionReuse !== null) {
             $response = $response->withHeader('X-Connection-Reuse', $this->connectionReuse ? 'on' : 'off');
+        }
+
+        if ($this->followRedirects !== null) {
+            $response = $response->withHeader('X-Follow-Redirects', $this->followRedirects ? 'on' : 'off');
         }
 
         if ($this->connectTimeout !== null) {

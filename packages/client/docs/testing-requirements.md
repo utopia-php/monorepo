@@ -21,3 +21,9 @@ Source specs:
 - Swoole adapter maps timeout seconds to `timeout`.
 - Swoole adapter maps connect timeout seconds to `connect_timeout`.
 - Invalid timeout values throw `ValueError`.
+
+## Redirect coverage
+
+- Redirects are not followed by default; a 3xx response is returned with its `Location` header.
+- `withFollowRedirects()` follows `Location` to the final non-redirect response on both adapters.
+- `Utopia\Client::withFollowRedirects()` forwards onto the adapter.

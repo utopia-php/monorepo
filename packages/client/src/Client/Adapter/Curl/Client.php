@@ -41,6 +41,8 @@ class Client implements Adapter
 
     private bool $reuseConnections = false;
 
+    private bool $followRedirects = false;
+
     private ?CurlHandle $handle = null;
 
     /**
@@ -130,6 +132,14 @@ class Client implements Adapter
     {
         $clone = clone $this;
         $clone->reuseConnections = $enabled;
+
+        return $clone;
+    }
+
+    public function withFollowRedirects(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->followRedirects = $enabled;
 
         return $clone;
     }
@@ -276,7 +286,6 @@ class Client implements Adapter
             \CURLOPT_URL => (string) $request->getUri(),
             \CURLOPT_CUSTOMREQUEST => $request->getMethod(),
             \CURLOPT_NOBODY => $request->getMethod() === Method::HEAD,
-            \CURLOPT_FOLLOWLOCATION => false,
             \CURLOPT_HEADER => false,
             \CURLOPT_HTTPHEADER => $this->headers($request),
             \CURLOPT_HTTP_VERSION => \CURL_HTTP_VERSION_1_1,
@@ -325,8 +334,11 @@ class Client implements Adapter
 
         $merged = $this->options + $options;
 
-        // Authoritative over any caller-supplied CURLOPT_FORBID_REUSE.
+        // Authoritative over any caller-supplied CURLOPT_FORBID_REUSE /
+        // CURLOPT_FOLLOWLOCATION so constructor options cannot silently override
+        // the helpers.
         $merged[\CURLOPT_FORBID_REUSE] = !$this->reuseConnections;
+        $merged[\CURLOPT_FOLLOWLOCATION] = $this->followRedirects;
 
         return $merged;
     }

@@ -86,6 +86,14 @@ final class Client implements Adapter
         return $clone;
     }
 
+    public function withFollowRedirects(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->adapter = $this->adapter->withFollowRedirects($enabled);
+
+        return $clone;
+    }
+
     /**
      * @param array<string, string|array<int, string>> $headers
      */

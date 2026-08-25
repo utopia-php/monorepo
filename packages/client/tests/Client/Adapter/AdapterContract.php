@@ -59,6 +59,14 @@ abstract class AdapterContract extends TestCase
      */
     abstract protected function proxyOptions(int $port): array;
 
+    /**
+     * Native constructor options that would enable or disable following
+     * redirects if the helper were not authoritative over them.
+     *
+     * @return array<string|int, mixed>
+     */
+    abstract protected function followRedirectsTransportOptions(bool $enabled): array;
+
     protected function setUp(): void
     {
         $this->requireAdapterAvailable();
@@ -149,6 +157,66 @@ abstract class AdapterContract extends TestCase
             $this->assertSame('/final', $response->getHeaderLine(Header::LOCATION));
             $this->assertSame('redirect', $received);
             $this->assertSame('', (string) $response->getBody());
+        });
+    }
+
+    public function testItFollowsRedirectsWhenEnabled(): void
+    {
+        Http::serve(function (int $port): void {
+            $requestFactory = new Request\Factory();
+            $client = $this->createAdapter()->withFollowRedirects();
+
+            $response = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect'));
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('final', (string) $response->getBody());
+            $this->assertSame('', $response->getHeaderLine(Header::LOCATION));
+        });
+    }
+
+    public function testItFollowsRedirectsWhenStreaming(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect');
+            $client = $this->createAdapter()->withFollowRedirects();
+
+            $received = '';
+
+            $response = $this->sendStream($client, $request, function (string $chunk) use (&$received): void {
+                $received .= $chunk;
+            });
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('final', $received);
+            $this->assertSame('', (string) $response->getBody());
+            $this->assertSame('', $response->getHeaderLine(Header::LOCATION));
+        });
+    }
+
+    public function testConstructorFollowRedirectsOptionsDoNotOverrideTheDefault(): void
+    {
+        Http::serve(function (int $port): void {
+            $client = $this->createAdapter($this->followRedirectsTransportOptions(true));
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect');
+
+            $response = $this->send($client, $request);
+
+            $this->assertSame(302, $response->getStatusCode());
+            $this->assertSame('/final', $response->getHeaderLine(Header::LOCATION));
+            $this->assertSame('redirect', (string) $response->getBody());
+        });
+    }
+
+    public function testWithFollowRedirectsOverridesConstructorTransportOptions(): void
+    {
+        Http::serve(function (int $port): void {
+            $client = $this->createAdapter($this->followRedirectsTransportOptions(false))->withFollowRedirects();
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect');
+
+            $response = $this->send($client, $request);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('final', (string) $response->getBody());
         });
     }
 
@@ -439,6 +507,14 @@ abstract class AdapterContract extends TestCase
         $this->assertNotSame($client, $client->withCertificate('/etc/ssl/client.pem', '/etc/ssl/client.key'));
         $this->assertNotSame($client, $client->withCertificate('/etc/ssl/client.pem', '/etc/ssl/client.key', 'secret'));
         $this->assertNotSame($client, $client->withMinTlsVersion(Tls::V1_2));
+    }
+
+    public function testFollowRedirectsHelperReturnsConfiguredClones(): void
+    {
+        $client = $this->createAdapter();
+
+        $this->assertNotSame($client, $client->withFollowRedirects());
+        $this->assertNotSame($client, $client->withFollowRedirects(false));
     }
 
     public function testDefaultTimeoutsAllowReasonablySlowResponses(): void
