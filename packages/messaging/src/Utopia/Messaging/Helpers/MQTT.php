@@ -65,7 +65,7 @@ class MQTT
         ?string $password = null,
         int $keepAlive = 60,
         bool $cleanStart = true,
-        array $properties = []
+        array $properties = [],
     ): string {
         $variable = self::encodeString(self::PROTOCOL_NAME);
         $variable .= \chr(self::PROTOCOL_VERSION);
@@ -85,20 +85,20 @@ class MQTT
         }
 
         $variable .= \chr($flags);
-        $variable .= \pack('n', $keepAlive);
+        $variable .= pack('n', $keepAlive);
 
         $props = '';
         if (isset($properties['sessionExpiryInterval'])) {
-            $props .= \chr(self::PROPERTY_SESSION_EXPIRY) . \pack('N', (int)$properties['sessionExpiryInterval']);
+            $props .= \chr(self::PROPERTY_SESSION_EXPIRY) . pack('N', (int) $properties['sessionExpiryInterval']);
         }
         if (isset($properties['authenticationMethod'])) {
-            $props .= \chr(self::PROPERTY_AUTHENTICATION_METHOD) . self::encodeString((string)$properties['authenticationMethod']);
+            $props .= \chr(self::PROPERTY_AUTHENTICATION_METHOD) . self::encodeString((string) $properties['authenticationMethod']);
         }
         if (isset($properties['authenticationData'])) {
-            $props .= \chr(self::PROPERTY_AUTHENTICATION_DATA) . self::encodeBinary((string)$properties['authenticationData']);
+            $props .= \chr(self::PROPERTY_AUTHENTICATION_DATA) . self::encodeBinary((string) $properties['authenticationData']);
         }
         foreach ($properties['userProperties'] ?? [] as $key => $value) {
-            $props .= \chr(self::PROPERTY_USER_PROPERTY) . self::encodeString((string)$key) . self::encodeString((string)$value);
+            $props .= \chr(self::PROPERTY_USER_PROPERTY) . self::encodeString((string) $key) . self::encodeString((string) $value);
         }
 
         $variable .= self::encodeVariableByteInteger(\strlen($props)) . $props;
@@ -126,22 +126,22 @@ class MQTT
 
         $props = '';
         if (isset($properties['serverKeepAlive'])) {
-            $props .= \chr(self::PROPERTY_SERVER_KEEP_ALIVE) . \pack('n', (int)$properties['serverKeepAlive']);
+            $props .= \chr(self::PROPERTY_SERVER_KEEP_ALIVE) . pack('n', (int) $properties['serverKeepAlive']);
         }
         if (isset($properties['assignedClientId'])) {
-            $props .= \chr(self::PROPERTY_ASSIGNED_CLIENT_ID) . self::encodeString((string)$properties['assignedClientId']);
+            $props .= \chr(self::PROPERTY_ASSIGNED_CLIENT_ID) . self::encodeString((string) $properties['assignedClientId']);
         }
         if (isset($properties['reasonString'])) {
-            $props .= \chr(self::PROPERTY_REASON_STRING) . self::encodeString((string)$properties['reasonString']);
+            $props .= \chr(self::PROPERTY_REASON_STRING) . self::encodeString((string) $properties['reasonString']);
         }
         if (isset($properties['maximumQoS'])) {
-            $props .= \chr(self::PROPERTY_MAXIMUM_QOS) . \chr((int)$properties['maximumQoS']);
+            $props .= \chr(self::PROPERTY_MAXIMUM_QOS) . \chr((int) $properties['maximumQoS']);
         }
         if (isset($properties['retainAvailable'])) {
             $props .= \chr(self::PROPERTY_RETAIN_AVAILABLE) . \chr($properties['retainAvailable'] ? 1 : 0);
         }
         if (isset($properties['receiveMaximum'])) {
-            $props .= \chr(self::PROPERTY_RECEIVE_MAXIMUM) . \pack('n', (int)$properties['receiveMaximum']);
+            $props .= \chr(self::PROPERTY_RECEIVE_MAXIMUM) . pack('n', (int) $properties['receiveMaximum']);
         }
         if (isset($properties['wildcardSubscriptionAvailable'])) {
             $props .= \chr(self::PROPERTY_WILDCARD_SUBSCRIPTION_AVAILABLE) . \chr($properties['wildcardSubscriptionAvailable'] ? 1 : 0);
@@ -167,7 +167,7 @@ class MQTT
         bool $retain = false,
         bool $dup = false,
         ?int $packetId = null,
-        array $properties = []
+        array $properties = [],
     ): string {
         if ($qos < 0 || $qos > 2) {
             throw new \InvalidArgumentException("MQTT QoS must be 0, 1, or 2 ({$qos} given)");
@@ -187,24 +187,24 @@ class MQTT
             if ($packetId === null) {
                 throw new \InvalidArgumentException('packetId is required for QoS > 0');
             }
-            $variable .= \pack('n', $packetId);
+            $variable .= pack('n', $packetId);
         }
 
         $props = '';
         if (isset($properties['messageExpiryInterval'])) {
-            $props .= \chr(self::PROPERTY_MESSAGE_EXPIRY) . \pack('N', (int)$properties['messageExpiryInterval']);
+            $props .= \chr(self::PROPERTY_MESSAGE_EXPIRY) . pack('N', (int) $properties['messageExpiryInterval']);
         }
         if (isset($properties['contentType'])) {
-            $props .= \chr(self::PROPERTY_CONTENT_TYPE) . self::encodeString((string)$properties['contentType']);
+            $props .= \chr(self::PROPERTY_CONTENT_TYPE) . self::encodeString((string) $properties['contentType']);
         }
         if (isset($properties['correlationData'])) {
-            $props .= \chr(self::PROPERTY_CORRELATION_DATA) . self::encodeBinary((string)$properties['correlationData']);
+            $props .= \chr(self::PROPERTY_CORRELATION_DATA) . self::encodeBinary((string) $properties['correlationData']);
         }
         if (isset($properties['responseTopic'])) {
-            $props .= \chr(self::PROPERTY_RESPONSE_TOPIC) . self::encodeString((string)$properties['responseTopic']);
+            $props .= \chr(self::PROPERTY_RESPONSE_TOPIC) . self::encodeString((string) $properties['responseTopic']);
         }
         foreach ($properties['userProperties'] ?? [] as $key => $value) {
-            $props .= \chr(self::PROPERTY_USER_PROPERTY) . self::encodeString((string)$key) . self::encodeString((string)$value);
+            $props .= \chr(self::PROPERTY_USER_PROPERTY) . self::encodeString((string) $key) . self::encodeString((string) $value);
         }
 
         $variable .= self::encodeVariableByteInteger(\strlen($props)) . $props;
@@ -217,7 +217,7 @@ class MQTT
      */
     public static function encodePuback(int $packetId, int $reasonCode = self::REASON_SUCCESS): string
     {
-        $variable = \pack('n', $packetId);
+        $variable = pack('n', $packetId);
         $variable .= \chr($reasonCode);
         $variable .= \chr(0);
 
@@ -231,7 +231,7 @@ class MQTT
      */
     public static function encodeSuback(int $packetId, array $reasonCodes): string
     {
-        $variable = \pack('n', $packetId);
+        $variable = pack('n', $packetId);
         $variable .= \chr(0);
         foreach ($reasonCodes as $code) {
             $variable .= \chr($code);
@@ -300,8 +300,8 @@ class MQTT
             return null;
         }
 
-        $payload = \substr($buffer, $offset, $remaining);
-        $buffer = \substr($buffer, $total);
+        $payload = substr($buffer, $offset, $remaining);
+        $buffer = substr($buffer, $total);
 
         return [
             'type' => $type,
@@ -331,11 +331,11 @@ class MQTT
         $protocol = self::readString($payload, $offset);
         $version = \ord($payload[$offset++]);
         $flags = \ord($payload[$offset++]);
-        $keepAlive = \unpack('n', \substr($payload, $offset, 2))[1];
+        $keepAlive = unpack('n', substr($payload, $offset, 2))[1];
         $offset += 2;
 
         $propLen = self::readVariableByteInteger($payload, $offset);
-        $props = self::readProperties(\substr($payload, $offset, $propLen));
+        $props = self::readProperties(substr($payload, $offset, $propLen));
         $offset += $propLen;
 
         $clientId = self::readString($payload, $offset);
@@ -343,10 +343,10 @@ class MQTT
         $username = null;
         $password = null;
 
-        if ($flags & 0x80) {
+        if (($flags & 0x80) !== 0) {
             $username = self::readString($payload, $offset);
         }
-        if ($flags & 0x40) {
+        if (($flags & 0x40) !== 0) {
             $password = self::readBinary($payload, $offset);
         }
 
@@ -354,7 +354,7 @@ class MQTT
             'protocol' => $protocol,
             'version' => $version,
             'flags' => $flags,
-            'cleanStart' => (bool)($flags & 0x02),
+            'cleanStart' => (bool) ($flags & 0x02),
             'keepAlive' => $keepAlive,
             'clientId' => $clientId,
             'username' => $username,
@@ -379,25 +379,25 @@ class MQTT
     public static function parsePublish(string $payload, int $flags): array
     {
         $qos = ($flags >> 1) & 0x03;
-        $retain = (bool)($flags & 0x01);
-        $dup = (bool)($flags & 0x08);
+        $retain = (bool) ($flags & 0x01);
+        $dup = (bool) ($flags & 0x08);
 
         $offset = 0;
         $topic = self::readString($payload, $offset);
 
         $packetId = null;
         if ($qos > 0) {
-            $packetId = \unpack('n', \substr($payload, $offset, 2))[1];
+            $packetId = unpack('n', substr($payload, $offset, 2))[1];
             $offset += 2;
         }
 
         $propLen = self::readVariableByteInteger($payload, $offset);
-        $props = self::readProperties(\substr($payload, $offset, $propLen));
+        $props = self::readProperties(substr($payload, $offset, $propLen));
         $offset += $propLen;
 
         return [
             'topic' => $topic,
-            'payload' => \substr($payload, $offset),
+            'payload' => substr($payload, $offset),
             'qos' => $qos,
             'retain' => $retain,
             'dup' => $dup,
@@ -417,7 +417,7 @@ class MQTT
     public static function parseSubscribe(string $payload): array
     {
         $offset = 0;
-        $packetId = \unpack('n', \substr($payload, $offset, 2))[1];
+        $packetId = unpack('n', substr($payload, $offset, 2))[1];
         $offset += 2;
 
         $propLen = self::readVariableByteInteger($payload, $offset);
@@ -430,8 +430,8 @@ class MQTT
             $filters[] = [
                 'topic' => $topic,
                 'qos' => $options & 0x03,
-                'noLocal' => (bool)($options & 0x04),
-                'retainAsPublished' => (bool)($options & 0x08),
+                'noLocal' => (bool) ($options & 0x04),
+                'retainAsPublished' => (bool) ($options & 0x08),
                 'retainHandling' => ($options >> 4) & 0x03,
             ];
         }
@@ -449,11 +449,11 @@ class MQTT
      */
     public static function parseConnack(string $payload): array
     {
-        $sessionPresent = (bool)(\ord($payload[0]) & 0x01);
+        $sessionPresent = (bool) (\ord($payload[0]) & 0x01);
         $reasonCode = \ord($payload[1]);
         $offset = 2;
         $propLen = self::readVariableByteInteger($payload, $offset);
-        $props = self::readProperties(\substr($payload, $offset, $propLen));
+        $props = self::readProperties(substr($payload, $offset, $propLen));
 
         return [
             'sessionPresent' => $sessionPresent,
@@ -469,7 +469,7 @@ class MQTT
      */
     public static function parsePuback(string $payload): array
     {
-        $packetId = \unpack('n', \substr($payload, 0, 2))[1];
+        $packetId = unpack('n', substr($payload, 0, 2))[1];
         $reasonCode = \strlen($payload) > 2 ? \ord($payload[2]) : self::REASON_SUCCESS;
 
         return [
@@ -492,7 +492,7 @@ class MQTT
             throw new \InvalidArgumentException("MQTT string exceeds 65535 byte limit ({$length} given)");
         }
 
-        return \pack('n', $length) . $value;
+        return pack('n', $length) . $value;
     }
 
     private static function encodeBinary(string $value): string
@@ -502,7 +502,7 @@ class MQTT
             throw new \InvalidArgumentException("MQTT binary exceeds 65535 byte limit ({$length} given)");
         }
 
-        return \pack('n', $length) . $value;
+        return pack('n', $length) . $value;
     }
 
     private static function encodeVariableByteInteger(int $value): string
@@ -549,9 +549,9 @@ class MQTT
 
     private static function readString(string $buffer, int &$offset): string
     {
-        $len = \unpack('n', \substr($buffer, $offset, 2))[1];
+        $len = (int) unpack('n', substr($buffer, $offset, 2))[1];
         $offset += 2;
-        $value = \substr($buffer, $offset, $len);
+        $value = substr($buffer, $offset, $len);
         $offset += $len;
 
         return $value;
@@ -576,7 +576,7 @@ class MQTT
 
             switch ($identifier) {
                 case self::PROPERTY_MESSAGE_EXPIRY:
-                    $properties['messageExpiryInterval'] = \unpack('N', \substr($buffer, $offset, 4))[1];
+                    $properties['messageExpiryInterval'] = unpack('N', substr($buffer, $offset, 4))[1];
                     $offset += 4;
                     break;
                 case self::PROPERTY_CONTENT_TYPE:
@@ -589,11 +589,11 @@ class MQTT
                     $properties['correlationData'] = self::readBinary($buffer, $offset);
                     break;
                 case self::PROPERTY_SESSION_EXPIRY:
-                    $properties['sessionExpiryInterval'] = \unpack('N', \substr($buffer, $offset, 4))[1];
+                    $properties['sessionExpiryInterval'] = unpack('N', substr($buffer, $offset, 4))[1];
                     $offset += 4;
                     break;
                 case self::PROPERTY_RECEIVE_MAXIMUM:
-                    $properties['receiveMaximum'] = \unpack('n', \substr($buffer, $offset, 2))[1];
+                    $properties['receiveMaximum'] = unpack('n', substr($buffer, $offset, 2))[1];
                     $offset += 2;
                     break;
                 case self::PROPERTY_AUTHENTICATION_METHOD:
@@ -608,11 +608,11 @@ class MQTT
                     $properties['userProperties'][$key] = $value;
                     break;
                 case self::PROPERTY_TOPIC_ALIAS_MAXIMUM:
-                    $properties['topicAliasMaximum'] = \unpack('n', \substr($buffer, $offset, 2))[1];
+                    $properties['topicAliasMaximum'] = unpack('n', substr($buffer, $offset, 2))[1];
                     $offset += 2;
                     break;
                 case self::PROPERTY_SERVER_KEEP_ALIVE:
-                    $properties['serverKeepAlive'] = \unpack('n', \substr($buffer, $offset, 2))[1];
+                    $properties['serverKeepAlive'] = unpack('n', substr($buffer, $offset, 2))[1];
                     $offset += 2;
                     break;
                 case self::PROPERTY_REASON_STRING:

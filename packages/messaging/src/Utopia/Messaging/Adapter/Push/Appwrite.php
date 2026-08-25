@@ -52,16 +52,16 @@ class Appwrite extends PushAdapter
      * @param string $authMethod  Broker auth method: 'appwrite-jwt' or 'appwrite-session'.
      */
     public function __construct(
-        private string $endpoint,
-        private string $projectId,
-        private string $credential,
-        private string $authMethod = 'appwrite-jwt',
-        private bool $tls = true,
-        private int $messageExpiry = self::DEFAULT_MESSAGE_EXPIRY,
+        private readonly string $endpoint,
+        private readonly string $projectId,
+        private readonly string $credential,
+        private readonly string $authMethod = 'appwrite-jwt',
+        private readonly bool $tls = true,
+        private readonly int $messageExpiry = self::DEFAULT_MESSAGE_EXPIRY,
         private string $clientId = '',
     ) {
         if ($this->clientId === '') {
-            $this->clientId = self::CLIENT_PREFIX . '-' . \bin2hex(\random_bytes(6));
+            $this->clientId = self::CLIENT_PREFIX . '-' . bin2hex(random_bytes(6));
         }
     }
 
@@ -122,7 +122,7 @@ class Appwrite extends PushAdapter
         $cursor = 0;
         $total = \count($tokens);
 
-        while ($cursor < $total || !empty($inflight)) {
+        while ($cursor < $total || $inflight !== []) {
             while ($cursor < $total && \count($inflight) < $this->receiveMaximum) {
                 $token = $tokens[$cursor++];
                 $packetId = $this->nextPacketId();
@@ -147,7 +147,7 @@ class Appwrite extends PushAdapter
                 }
             }
 
-            if (empty($inflight)) {
+            if ($inflight === []) {
                 continue;
             }
 
@@ -219,24 +219,24 @@ class Appwrite extends PushAdapter
             $envelope['notification']['action'] = $message->getAction();
         }
         if ($message->getContentAvailable() !== null) {
-            $envelope['notification']['contentAvailable'] = (bool)$message->getContentAvailable();
+            $envelope['notification']['contentAvailable'] = $message->getContentAvailable();
         }
         if ($message->getCritical() !== null) {
-            $envelope['notification']['critical'] = (bool)$message->getCritical();
+            $envelope['notification']['critical'] = $message->getCritical();
         }
         if ($message->getData() !== null) {
             $envelope['data'] = $message->getData();
         }
-        if ($message->getPriority() !== null) {
+        if ($message->getPriority() instanceof Priority) {
             $envelope['priority'] = match ($message->getPriority()) {
                 Priority::HIGH => 'high',
                 Priority::NORMAL => 'normal',
             };
         }
 
-        $json = \json_encode($envelope, JSON_UNESCAPED_SLASHES);
+        $json = json_encode($envelope, JSON_UNESCAPED_SLASHES);
         if ($json === false) {
-            throw new \RuntimeException('Failed to encode push payload: ' . \json_last_error_msg());
+            throw new \RuntimeException('Failed to encode push payload: ' . json_last_error_msg());
         }
 
         return $json;
@@ -244,7 +244,7 @@ class Appwrite extends PushAdapter
 
     private function resolveExpiry(PushMessage $message): int
     {
-        if (\method_exists($message, 'getMessageExpiry')) {
+        if (method_exists($message, 'getMessageExpiry')) {
             $expiry = $message->getMessageExpiry();
             if (\is_int($expiry) && $expiry > 0) {
                 return $expiry;
@@ -275,7 +275,7 @@ class Appwrite extends PushAdapter
     private function connect()
     {
         $url = $this->resolveEndpoint();
-        $context = \stream_context_create([
+        $context = stream_context_create([
             'ssl' => [
                 'verify_peer' => true,
                 'verify_peer_name' => true,
@@ -283,7 +283,7 @@ class Appwrite extends PushAdapter
             ],
         ]);
 
-        $socket = @\stream_socket_client(
+        $socket = @stream_socket_client(
             $url,
             $errno,
             $errstr,
@@ -296,29 +296,29 @@ class Appwrite extends PushAdapter
             throw new \RuntimeException("Unable to connect to Appwrite Push broker at {$url}: {$errstr} (errno {$errno})");
         }
 
-        \stream_set_timeout($socket, self::READ_TIMEOUT);
+        stream_set_timeout($socket, self::READ_TIMEOUT);
 
         return $socket;
     }
 
     private function resolveEndpoint(): string
     {
-        $endpoint = \rtrim($this->endpoint);
+        $endpoint = rtrim($this->endpoint);
         if ($endpoint === '') {
             throw new \RuntimeException('Appwrite Push endpoint is not configured');
         }
 
         $scheme = $this->tls ? 'tls' : 'tcp';
 
-        if (\str_contains($endpoint, '://')) {
-            $parts = \parse_url($endpoint);
+        if (str_contains($endpoint, '://')) {
+            $parts = parse_url($endpoint);
             $host = $parts['host'] ?? '';
             $port = $parts['port'] ?? ($this->tls ? 8883 : 1883);
 
             return "{$scheme}://{$host}:{$port}";
         }
 
-        if (\str_contains($endpoint, ':')) {
+        if (str_contains($endpoint, ':')) {
             return "{$scheme}://{$endpoint}";
         }
 
@@ -358,9 +358,9 @@ class Appwrite extends PushAdapter
             throw new \RuntimeException("Broker rejected CONNECT (reason {$connack['reasonCode']})");
         }
 
-        $brokerLimit = (int)($connack['properties']['receiveMaximum'] ?? 0);
+        $brokerLimit = (int) ($connack['properties']['receiveMaximum'] ?? 0);
         if ($brokerLimit > 0) {
-            $this->receiveMaximum = \min($this->receiveMaximum, $brokerLimit);
+            $this->receiveMaximum = min($this->receiveMaximum, $brokerLimit);
         }
     }
 
@@ -376,13 +376,13 @@ class Appwrite extends PushAdapter
                 return $packet;
             }
 
-            $chunk = @\fread($socket, 4096);
+            $chunk = @fread($socket, 4096);
             if ($chunk === false || $chunk === '') {
-                if (\feof($socket)) {
+                if (feof($socket)) {
                     throw new \RuntimeException('Broker closed the connection');
                 }
 
-                $info = \stream_get_meta_data($socket);
+                $info = stream_get_meta_data($socket);
                 if (!empty($info['timed_out'])) {
                     throw new \RuntimeException('Broker read timeout');
                 }
@@ -403,7 +403,7 @@ class Appwrite extends PushAdapter
         $written = 0;
 
         while ($written < $length) {
-            $result = @\fwrite($socket, \substr($bytes, $written));
+            $result = @fwrite($socket, substr($bytes, $written));
             if ($result === false || $result === 0) {
                 throw new \RuntimeException('Failed to write to broker socket');
             }
@@ -417,7 +417,7 @@ class Appwrite extends PushAdapter
     private function close($socket): void
     {
         if (\is_resource($socket)) {
-            @\fclose($socket);
+            @fclose($socket);
         }
     }
 
@@ -429,7 +429,7 @@ class Appwrite extends PushAdapter
             0x97 => 'Quota exceeded',
             0x99 => 'Payload format invalid',
             0x87 => 'Not authorized',
-            default => "Broker returned reason code 0x" . \dechex($code),
+            default => 'Broker returned reason code 0x' . dechex($code),
         };
     }
 }
