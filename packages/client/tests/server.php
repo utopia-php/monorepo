@@ -318,6 +318,13 @@ if ($path === '/stream-large') {
     header('Content-Type: application/octet-stream');
     header('Content-Length: ' . ($chunkSize * $chunkCount));
 
+    $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    $method = is_string($requestMethod) ? $requestMethod : 'GET';
+
+    if (strtoupper($method) === 'HEAD') {
+        return;
+    }
+
     while (ob_get_level() > 0) {
         ob_end_flush();
     }

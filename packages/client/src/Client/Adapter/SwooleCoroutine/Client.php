@@ -209,42 +209,53 @@ class Client implements Adapter
 
         $this->validateSettings();
 
-        if (!$this->followRedirects) {
-            return $this->exchange($request, $sink);
-        }
-
-        $current = $request;
-        $probeWithHead = $sink !== null && $this->canProbeWithHead($current);
-
-        for ($redirects = 0; $redirects <= Redirect::MAX_HOPS; $redirects++) {
-            $response = $this->exchange($probeWithHead ? $this->asHead($current) : $current, null);
-
-            if (!Redirect::isRedirect($response)) {
-                if ($sink === null) {
-                    return $response;
-                }
-
-                if ($probeWithHead) {
-                    return $this->exchange($current, $sink);
-                }
-
-                $body = (string) $response->getBody();
-
-                if ($body !== '') {
-                    $sink($body);
-                }
-
-                return $response->withBody(new Stream\Factory()->createStream(''));
+        try {
+            if (!$this->followRedirects) {
+                return $this->exchange($request, $sink);
             }
 
-            if ($redirects === Redirect::MAX_HOPS) {
-                throw new ProtocolException($request, 'Too many redirects.');
+            $current = $request;
+            $probeWithHead = $sink !== null && $this->canProbeWithHead($current);
+
+            for ($redirects = 0; $redirects <= Redirect::MAX_HOPS; $redirects++) {
+                $response = $this->exchange($probeWithHead ? $this->asHead($current) : $current, null);
+
+                if (!Redirect::isRedirect($response)) {
+                    if ($sink === null) {
+                        return $response;
+                    }
+
+                    if ($probeWithHead) {
+                        // HEAD advertised the final resource's Content-Length
+                        // without a body. Reusing that socket would desync
+                        // keep-alive, so the streaming GET dials fresh.
+                        $this->forgetConnection();
+
+                        return $this->exchange($current, $sink);
+                    }
+
+                    $body = (string) $response->getBody();
+
+                    if ($body !== '') {
+                        $sink($body);
+                    }
+
+                    return $response->withBody(new Stream\Factory()->createStream(''));
+                }
+
+                if ($redirects === Redirect::MAX_HOPS) {
+                    throw new ProtocolException($request, 'Too many redirects.');
+                }
+
+                $current = $this->followTo($current, $response);
             }
 
-            $current = $this->followTo($current, $response);
+            throw new ProtocolException($request, 'Too many redirects.');
+        } finally {
+            if (!$this->reuseConnections) {
+                $this->forgetConnection();
+            }
         }
-
-        throw new ProtocolException($request, 'Too many redirects.');
     }
 
     /**
@@ -276,12 +287,12 @@ class Client implements Adapter
         // Authoritative over any keep_alive passed in $settings.
         $settings[self::SETTING_KEEP_ALIVE] = $this->reuseConnections;
 
-        if ($sink !== null) {
-            $settings['write_func'] = static function (SwooleClient $cli, string $chunk) use ($sink): void {
-                unset($cli);
-                $sink($chunk);
-            };
-        }
+        // Always set write_func so a prior streamed request on a reused
+        // client cannot keep delivering chunks into a stale sink.
+        $settings['write_func'] = $sink === null ? null : static function (SwooleClient $cli, string $chunk) use ($sink): void {
+            unset($cli);
+            $sink($chunk);
+        };
 
         try {
             if ($client->set($settings) === false) {
@@ -445,6 +456,10 @@ class Client implements Adapter
      * socket before each request, reconnecting if it was dropped — so a cached
      * client is reused per origin and stays usable even after an error.
      *
+     * The object is cached for every hop of a single perform(), including
+     * when keep-alive is off, so a 50-hop follow does not leave 50 clients
+     * for later GC (which can abort PHP while another client reconnects).
+     *
      * @throws ClientExceptionInterface
      */
     private function connect(RequestInterface $request): SwooleClient
@@ -453,7 +468,7 @@ class Client implements Adapter
         $secure = $uri->getScheme() === 'https';
         $key = $uri->getHost() . ':' . $this->port($request) . ':' . ($secure ? 's' : 'p');
 
-        if ($this->reuseConnections && $this->connection instanceof SwooleClient && $this->connectionKey === $key) {
+        if ($this->connection instanceof SwooleClient && $this->connectionKey === $key) {
             return $this->connection;
         }
 
@@ -463,12 +478,16 @@ class Client implements Adapter
             throw new AdapterInitializationException($request, $throwable->getMessage(), (int) $throwable->getCode(), $throwable);
         }
 
-        if ($this->reuseConnections) {
-            $this->connection = $client;
-            $this->connectionKey = $key;
-        }
+        $this->connection = $client;
+        $this->connectionKey = $key;
 
         return $client;
+    }
+
+    private function forgetConnection(): void
+    {
+        $this->connection = null;
+        $this->connectionKey = '';
     }
 
     private function port(RequestInterface $request): int
