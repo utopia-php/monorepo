@@ -307,7 +307,7 @@ abstract class AdapterContract extends TestCase
 
             $this->assertSame(200, $response->getStatusCode());
             $this->assertSame('|', (string) $response->getBody());
-        }, '0.0.0.0');
+        });
     }
 
     public function testItStreamsTheFinalHopAfterARedirect(): void
@@ -335,6 +335,26 @@ abstract class AdapterContract extends TestCase
             $this->assertGreaterThan(1, $chunks, 'The final hop must be delivered in chunks, not as one assembled body.');
             $this->assertSame(hash('sha256', str_repeat('a', $expected)), hash_final($hash));
             $this->assertLessThan(2 * 1_048_576, $peak, 'Following a redirect must still stream the final body.');
+            $this->assertSame('', (string) $response->getBody());
+        });
+    }
+
+    public function testItStreamsPreservedMethodFinalHopAfterARedirect(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()->createRequest(Method::POST, 'http://127.0.0.1:' . $port . '/redirect-stream-preserve');
+            $client = $this->createAdapter()->withFollowRedirects();
+            $received = '';
+            $chunks = 0;
+
+            $response = $this->sendStream($client, $request, function (string $chunk) use (&$received, &$chunks): void {
+                $received .= $chunk;
+                $chunks++;
+            });
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame("chunk0\nchunk1\nchunk2\nchunk3\nchunk4\n", $received);
+            $this->assertGreaterThan(1, $chunks, 'Redirected non-GET responses must reach the sink incrementally.');
             $this->assertSame('', (string) $response->getBody());
         });
     }

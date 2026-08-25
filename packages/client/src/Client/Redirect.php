@@ -55,8 +55,10 @@ final class Redirect
         $path = $target->getPath();
 
         if ($path === '') {
+            $query = self::locationHasQuery($location) ? $target->getQuery() : $base->getQuery();
+
             return $base
-                ->withQuery($target->getQuery() !== '' ? $target->getQuery() : $base->getQuery())
+                ->withQuery($query)
                 ->withFragment($target->getFragment());
         }
 
@@ -74,32 +76,43 @@ final class Redirect
     }
 
     /**
-     * RFC 3986 remove_dot_segments, matching the algorithm Utopia\Client uses
-     * for base-URI path joining.
+     * RFC 3986 section 5.2.4 remove_dot_segments algorithm.
      */
     public static function removeDotSegments(string $path): string
     {
-        $segments = [];
+        $output = '';
 
-        foreach (explode('/', $path) as $segment) {
-            if ($segment === '') {
-                continue;
+        while ($path !== '') {
+            if (str_starts_with($path, '../')) {
+                $path = substr($path, 3);
+            } elseif (str_starts_with($path, './')) {
+                $path = substr($path, 2);
+            } elseif (str_starts_with($path, '/./')) {
+                $path = substr($path, 2);
+            } elseif ($path === '/.') {
+                $path = '/';
+            } elseif (str_starts_with($path, '/../')) {
+                $path = substr($path, 3);
+                $output = self::withoutLastPathSegment($output);
+            } elseif ($path === '/..') {
+                $path = '/';
+                $output = self::withoutLastPathSegment($output);
+            } elseif ($path === '.' || $path === '..') {
+                $path = '';
+            } else {
+                $nextSlash = strpos($path, '/', str_starts_with($path, '/') ? 1 : 0);
+
+                if ($nextSlash === false) {
+                    $output .= $path;
+                    $path = '';
+                } else {
+                    $output .= substr($path, 0, $nextSlash);
+                    $path = substr($path, $nextSlash);
+                }
             }
-
-            if ($segment === '.') {
-                continue;
-            }
-
-            if ($segment === '..') {
-                array_pop($segments);
-
-                continue;
-            }
-
-            $segments[] = $segment;
         }
 
-        return '/' . implode('/', $segments);
+        return $output;
     }
 
     public static function isSameOrigin(UriInterface $from, UriInterface $to): bool
@@ -123,6 +136,18 @@ final class Redirect
         }
 
         return $request;
+    }
+
+    private static function locationHasQuery(string $location): bool
+    {
+        return str_contains(explode('#', $location, 2)[0], '?');
+    }
+
+    private static function withoutLastPathSegment(string $path): string
+    {
+        $slash = strrpos($path, '/');
+
+        return $slash === false ? '' : substr($path, 0, $slash);
     }
 
     /**

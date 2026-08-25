@@ -24,6 +24,17 @@ final class RedirectTest extends TestCase
         $this->assertSame('http://example.test:8080/final', (string) Redirect::resolve($base, '../../final'));
     }
 
+    public function testItPreservesRfc3986PathAndQuerySemantics(): void
+    {
+        $base = Uri::parse('http://example.test/a/b/c?old=1');
+
+        $this->assertSame('http://example.test/a/b//final', (string) Redirect::resolve($base, '../b//final'));
+        $this->assertSame('http://example.test/a/b/', (string) Redirect::resolve($base, './'));
+        $this->assertSame('http://example.test/a/b/c', (string) Redirect::resolve($base, '?'));
+        $this->assertSame('http://example.test/a/b/c?new=1', (string) Redirect::resolve($base, '?new=1'));
+        $this->assertSame('http://example.test/a/b/c?old=1#result', (string) Redirect::resolve($base, '#result'));
+    }
+
     public function testItResolvesAbsoluteHttpAndHttpsLocations(): void
     {
         $base = Uri::parse('http://example.test/a/b');

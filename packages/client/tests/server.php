@@ -48,6 +48,15 @@ if ($path === '/redirect-large') {
     return;
 }
 
+if ($path === '/redirect-stream-preserve') {
+    http_response_code(307);
+    header('Location: /stream');
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'redirect';
+
+    return;
+}
+
 if ($path === '/nested/parent') {
     http_response_code(302);
     header('Location: ../final');
@@ -107,7 +116,7 @@ if ($path === '/redirect-cross') {
     $port = $_SERVER['SERVER_PORT'] ?? '';
     $port = is_numeric($port) ? (int) $port : 0;
     http_response_code(302);
-    header('Location: http://127.0.0.2:' . $port . '/echo-auth');
+    header('Location: http://localhost:' . $port . '/echo-auth');
     header('Content-Type: text/plain;charset=UTF-8');
     echo 'redirect';
 
