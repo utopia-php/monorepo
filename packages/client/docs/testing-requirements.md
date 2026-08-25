@@ -21,3 +21,13 @@ Source specs:
 - Swoole adapter maps timeout seconds to `timeout`.
 - Swoole adapter maps connect timeout seconds to `connect_timeout`.
 - Invalid timeout values throw `ValueError`.
+
+## Redirect coverage
+
+- Redirects are not followed by default; a 3xx response is returned with its `Location` header.
+- `withFollowRedirects()` follows `Location` to the final non-redirect response on both adapters.
+- Relative `Location` values are resolved with RFC 3986, including `.` / `..`.
+- Same-origin redirects keep `Authorization`; cross-origin and HTTPS to HTTP hops strip sensitive headers.
+- Streaming after a redirect delivers the final body to the sink without buffering it first.
+- Fifty hops succeed; the fifty-first throws `ProtocolException`.
+- `Utopia\Client::withFollowRedirects()` forwards onto the adapter.

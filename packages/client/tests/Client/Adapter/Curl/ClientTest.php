@@ -132,4 +132,14 @@ final class ClientTest extends AdapterContract
             \CURLOPT_PROXYTYPE => \CURLPROXY_SOCKS5,
         ];
     }
+
+    /**
+     * @return array<int, bool>
+     */
+    protected function followRedirectsTransportOptions(bool $enabled): array
+    {
+        return [
+            \CURLOPT_FOLLOWLOCATION => $enabled,
+        ];
+    }
 }

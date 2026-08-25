@@ -80,4 +80,14 @@ final class ClientTest extends AdapterContract
             'socks5_port' => $port,
         ];
     }
+
+    /**
+     * @return array<string, bool>
+     */
+    protected function followRedirectsTransportOptions(bool $enabled): array
+    {
+        return [
+            'follow_location' => $enabled,
+        ];
+    }
 }

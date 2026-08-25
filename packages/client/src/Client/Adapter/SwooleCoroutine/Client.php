@@ -25,9 +25,11 @@ use Utopia\Client\Exception\ProtocolException;
 use Utopia\Client\Exception\ProxyException;
 use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
+use Utopia\Client\Redirect;
 use Utopia\Client\Response\Builder as ResponseBuilder;
 use Utopia\Client\Tls;
 use Utopia\Psr7\Header;
+use Utopia\Psr7\Method;
 use Utopia\Psr7\Request\Multipart\Body;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
@@ -62,6 +64,8 @@ class Client implements Adapter
     private readonly ResponseBuilder $responseBuilder;
 
     private bool $reuseConnections = false;
+
+    private bool $followRedirects = false;
 
     private ?SwooleClient $connection = null;
 
@@ -156,6 +160,14 @@ class Client implements Adapter
         return $clone;
     }
 
+    public function withFollowRedirects(bool $enabled = true): static
+    {
+        $clone = clone $this;
+        $clone->followRedirects = $enabled;
+
+        return $clone;
+    }
+
     /**
      * @throws ClientExceptionInterface
      */
@@ -175,10 +187,10 @@ class Client implements Adapter
     }
 
     /**
-     * Execute the request. When $sink is given, Swoole's write callback forwards
-     * each body chunk to it as data arrives, so the body is never fully held in
-     * memory and the returned response has an empty body; otherwise the body is
-     * buffered onto the response.
+     * Execute the request, following Location redirects when enabled. The
+     * coroutine HTTP client has no native follow-redirects setting, so hops are
+     * issued here. When streaming, intermediate redirect bodies are discarded
+     * and only the final response body is forwarded to the sink.
      *
      * @param (callable(string): void)|null $sink
      *
@@ -194,13 +206,54 @@ class Client implements Adapter
             throw new AdapterPreconditionException($request, 'Swoole coroutine HTTP requests must run inside a coroutine.');
         }
 
+        $this->validateSettings();
+
+        try {
+            if (!$this->followRedirects) {
+                return $this->exchange($request, $sink);
+            }
+
+            $current = $request;
+
+            for ($redirects = 0; $redirects <= Redirect::MAX_HOPS; $redirects++) {
+                $response = $this->exchange($current, $sink, suppressRedirectBody: true);
+
+                if (!Redirect::isRedirect($response)) {
+                    return $response;
+                }
+
+                if ($redirects === Redirect::MAX_HOPS) {
+                    throw new ProtocolException($request, 'Too many redirects.');
+                }
+
+                $current = $this->followTo($current, $response);
+            }
+
+            throw new ProtocolException($request, 'Too many redirects.');
+        } finally {
+            if (!$this->reuseConnections) {
+                $this->forgetConnection();
+            }
+        }
+    }
+
+    /**
+     * Execute a single hop. When $sink is given, Swoole's write callback
+     * forwards each body chunk to it as data arrives, so the body is never
+     * fully held in memory and the returned response has an empty body;
+     * otherwise the body is buffered onto the response.
+     *
+     * @param (callable(string): void)|null $sink
+     *
+     * @throws ClientExceptionInterface
+     */
+    private function exchange(RequestInterface $request, ?callable $sink, bool $suppressRedirectBody = false): ResponseInterface
+    {
         $uri = $request->getUri();
 
         if (!\in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
             throw new InvalidUriException($request, 'Requests must use an absolute URI.');
         }
-
-        $this->validateSettings();
 
         // Swoole decodes a buffered body itself, but its streaming write_func
         // delivers it undecoded — so a stream must ask for identity instead.
@@ -213,9 +266,30 @@ class Client implements Adapter
         // Authoritative over any keep_alive passed in $settings.
         $settings[self::SETTING_KEEP_ALIVE] = $this->reuseConnections;
 
+        $suppressedBody = null;
+
+        // Always set write_func so a prior streamed request on a reused
+        // client cannot keep delivering chunks into a stale sink.
+        $settings['write_func'] = null;
+
         if ($sink !== null) {
-            $settings['write_func'] = static function (SwooleClient $cli, string $chunk) use ($sink): void {
-                unset($cli);
+            if ($suppressRedirectBody) {
+                $suppressedBody = tmpfile();
+
+                if ($suppressedBody === false) {
+                    throw new InvalidArgumentException('Unable to buffer a redirect response body.');
+                }
+            }
+
+            $settings['write_func'] = function (SwooleClient $client, string $chunk) use ($sink, $suppressRedirectBody, $suppressedBody): void {
+                if ($suppressRedirectBody && $this->nativeResponseHasLocation($client)) {
+                    if (\is_resource($suppressedBody)) {
+                        fwrite($suppressedBody, $chunk);
+                    }
+
+                    return;
+                }
+
                 $sink($chunk);
             };
         }
@@ -305,25 +379,91 @@ class Client implements Adapter
             $headers = $this->decoded($headers);
         }
 
-        $responseBody = $sink === null ? $client->body : '';
+        $responseBody = $streaming ? '' : $client->body;
 
         if (!\is_string($responseBody)) {
             $responseBody = '';
         }
 
         // Swoole keeps or closes the socket itself; never close it here.
-        return $this->responseBuilder->build(
+        $response = $this->responseBuilder->build(
             $statusCode,
             '',
             $headers,
             $responseBody,
         );
+
+        if (\is_resource($suppressedBody) && $sink !== null && !Redirect::isRedirect($response)) {
+            rewind($suppressedBody);
+
+            while (($chunk = fread($suppressedBody, 8192)) !== false && $chunk !== '') {
+                $sink($chunk);
+            }
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws ClientExceptionInterface
+     */
+    private function followTo(RequestInterface $request, ResponseInterface $response): RequestInterface
+    {
+        $from = $request->getUri();
+
+        try {
+            $uri = Redirect::resolve($from, $response->getHeaderLine(Header::LOCATION));
+        } catch (InvalidArgumentException $invalidArgumentException) {
+            throw new InvalidUriException($request, 'Invalid redirect location.', 0, $invalidArgumentException);
+        }
+
+        if (!\in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
+            throw new InvalidUriException($request, 'Redirect location must be an absolute HTTP URI.');
+        }
+
+        $status = $response->getStatusCode();
+        $method = strtoupper($request->getMethod());
+
+        if (\in_array($status, [301, 302, 303], true) && !\in_array($method, ['GET', 'HEAD'], true)) {
+            $request = $request
+                ->withMethod(Method::GET)
+                ->withBody(new Stream\Factory()->createStream(''))
+                ->withoutHeader(Header::CONTENT_LENGTH)
+                ->withoutHeader(Header::CONTENT_TYPE);
+        } else {
+            $body = $request->getBody();
+
+            if ($body->isSeekable()) {
+                $body->rewind();
+            }
+        }
+
+        $request = $request->withUri($uri)->withoutHeader(Header::HOST);
+
+        if (Redirect::shouldStripSensitiveHeaders($from, $uri)) {
+            return Redirect::withoutSensitiveHeaders($request);
+        }
+
+        return $request;
+    }
+
+    private function nativeResponseHasLocation(SwooleClient $client): bool
+    {
+        if (!\is_array($client->headers)) {
+            return false;
+        }
+
+        return array_any($client->headers, fn($value, $name): bool => \is_string($name) && strcasecmp($name, Header::LOCATION) === 0 && \is_string($value) && $value !== '');
     }
 
     /**
      * Swoole binds a client to its origin at construction and re-checks the
      * socket before each request, reconnecting if it was dropped — so a cached
      * client is reused per origin and stays usable even after an error.
+     *
+     * The object is cached for every hop of a single perform(), including
+     * when keep-alive is off, so a 50-hop follow does not leave 50 clients
+     * for later GC (which can abort PHP while another client reconnects).
      *
      * @throws ClientExceptionInterface
      */
@@ -333,7 +473,7 @@ class Client implements Adapter
         $secure = $uri->getScheme() === 'https';
         $key = $uri->getHost() . ':' . $this->port($request) . ':' . ($secure ? 's' : 'p');
 
-        if ($this->reuseConnections && $this->connection instanceof SwooleClient && $this->connectionKey === $key) {
+        if ($this->connection instanceof SwooleClient && $this->connectionKey === $key) {
             return $this->connection;
         }
 
@@ -343,12 +483,16 @@ class Client implements Adapter
             throw new AdapterInitializationException($request, $throwable->getMessage(), (int) $throwable->getCode(), $throwable);
         }
 
-        if ($this->reuseConnections) {
-            $this->connection = $client;
-            $this->connectionKey = $key;
-        }
+        $this->connection = $client;
+        $this->connectionKey = $key;
 
         return $client;
+    }
+
+    private function forgetConnection(): void
+    {
+        $this->connection = null;
+        $this->connectionKey = '';
     }
 
     private function port(RequestInterface $request): int

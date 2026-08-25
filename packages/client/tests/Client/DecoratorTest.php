@@ -97,6 +97,11 @@ final class SwappableAdapter implements Adapter
         return $this;
     }
 
+    public function withFollowRedirects(bool $enabled = true): static
+    {
+        return $this;
+    }
+
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
         return new Response($this->status);

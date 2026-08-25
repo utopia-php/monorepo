@@ -61,6 +61,26 @@ Reuse is most useful when one adapter sends many requests to the same host — s
 [pooling](pooling.md) for spreading a bounded set of reused connections across
 concurrent callers.
 
+## Redirects
+
+Off by default, a 3xx response is returned as-is with its `Location` header.
+`withFollowRedirects()` follows `Location` until the final non-redirect response.
+Pass `false` to turn following off again.
+
+```php
+<?php
+
+$client = $client->withFollowRedirects();        // or ->withFollowRedirects(false)
+```
+
+The cURL adapter maps this to `CURLOPT_FOLLOWLOCATION`. The Swoole coroutine HTTP
+client has no follow-redirects setting, so the adapter issues each hop itself.
+Relative `Location` values are resolved with RFC 3986 (including `.` / `..`).
+Same-origin hops keep `Authorization` and `Cookie`; a change of origin or an
+HTTPS to HTTP downgrade strips `Authorization`, `Cookie`, `Cookie2`, and
+`Proxy-Authorization`. Constructor `CURLOPT_FOLLOWLOCATION` or `follow_location`
+values do not override the helper.
+
 ## Compression
 
 Both adapters negotiate response compression automatically: each request
@@ -106,8 +126,10 @@ $adapter = new CurlAdapter(options: [
 
 The adapter defaults include:
 
-- `CURLOPT_FOLLOWLOCATION => false`
 - `CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1`
+
+`CURLOPT_FOLLOWLOCATION` is owned by [`withFollowRedirects()`](#redirects) and is
+not taken from constructor options.
 
 ## Swoole coroutine adapter
 
