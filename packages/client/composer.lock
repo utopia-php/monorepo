@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "84179de9cee604df08f1c78c2947ac51",
+    "content-hash": "de184963e77aee9b1916ddb3ef91852d",
     "packages": [
         {
             "name": "brick/math",
@@ -1929,16 +1929,16 @@
         },
         {
             "name": "utopia-php/psr7",
-            "version": "0.2.0",
+            "version": "0.2.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/utopia-php/psr7.git",
-                "reference": "115753c36194d53abe5587d383810724ac3a782d"
+                "reference": "7d3f88b9ee0b57237547eef634dbb5399b2a907e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/utopia-php/psr7/zipball/115753c36194d53abe5587d383810724ac3a782d",
-                "reference": "115753c36194d53abe5587d383810724ac3a782d",
+                "url": "https://api.github.com/repos/utopia-php/psr7/zipball/7d3f88b9ee0b57237547eef634dbb5399b2a907e",
+                "reference": "7d3f88b9ee0b57237547eef634dbb5399b2a907e",
                 "shasum": ""
             },
             "require": {
@@ -1969,9 +1969,9 @@
             ],
             "support": {
                 "issues": "https://github.com/utopia-php/psr7/issues",
-                "source": "https://github.com/utopia-php/psr7/tree/0.2.0"
+                "source": "https://github.com/utopia-php/psr7/tree/0.2.1"
             },
-            "time": "2026-07-06T12:40:23+00:00"
+            "time": "2026-08-25T12:45:40+00:00"
         },
         {
             "name": "utopia-php/span",
