@@ -23,6 +23,7 @@ use Utopia\Client\Exception\ProtocolException;
 use Utopia\Client\Exception\ProxyException;
 use Utopia\Client\Exception\TimeoutException;
 use Utopia\Client\Exception\TlsException;
+use Utopia\Client\Redirect;
 use Utopia\Client\Response\Builder as ResponseBuilder;
 use Utopia\Client\Tls;
 use Utopia\Psr7\Header;
@@ -339,6 +340,10 @@ class Client implements Adapter
         // the helpers.
         $merged[\CURLOPT_FORBID_REUSE] = !$this->reuseConnections;
         $merged[\CURLOPT_FOLLOWLOCATION] = $this->followRedirects;
+
+        if ($this->followRedirects) {
+            $merged[\CURLOPT_MAXREDIRS] = Redirect::MAX_HOPS;
+        }
 
         return $merged;
     }

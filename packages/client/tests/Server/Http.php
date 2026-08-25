@@ -14,10 +14,10 @@ final class Http
      *
      * @param callable(int): void $test receives the listening port
      */
-    public static function serve(callable $test): void
+    public static function serve(callable $test, string $address = '127.0.0.1'): void
     {
         $port = self::availablePort();
-        $server = self::start($port);
+        $server = self::start($port, $address);
 
         try {
             $test($port);
@@ -172,10 +172,10 @@ final class Http
     /**
      * @return resource
      */
-    private static function start(int $port): mixed
+    private static function start(int $port, string $address = '127.0.0.1'): mixed
     {
         $server = proc_open(
-            [\PHP_BINARY, '-d', 'post_max_size=64M', '-d', 'upload_max_filesize=64M', '-d', 'memory_limit=256M', '-S', '127.0.0.1:' . $port, \dirname(__DIR__) . '/server.php'],
+            [\PHP_BINARY, '-d', 'post_max_size=64M', '-d', 'upload_max_filesize=64M', '-d', 'memory_limit=256M', '-S', $address . ':' . $port, \dirname(__DIR__) . '/server.php'],
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],

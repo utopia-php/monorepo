@@ -75,8 +75,11 @@ $client = $client->withFollowRedirects();        // or ->withFollowRedirects(fal
 
 The cURL adapter maps this to `CURLOPT_FOLLOWLOCATION`. The Swoole coroutine HTTP
 client has no follow-redirects setting, so the adapter issues each hop itself.
-Constructor `CURLOPT_FOLLOWLOCATION` or `follow_location` values do not override
-the helper.
+Relative `Location` values are resolved with RFC 3986 (including `.` / `..`).
+Same-origin hops keep `Authorization` and `Cookie`; a change of origin or an
+HTTPS to HTTP downgrade strips `Authorization`, `Cookie`, `Cookie2`, and
+`Proxy-Authorization`. Constructor `CURLOPT_FOLLOWLOCATION` or `follow_location`
+values do not override the helper.
 
 ## Compression
 

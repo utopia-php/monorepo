@@ -39,6 +39,131 @@ if ($path === '/final') {
     return;
 }
 
+if ($path === '/redirect-large') {
+    http_response_code(302);
+    header('Location: /stream-large');
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'redirect';
+
+    return;
+}
+
+if ($path === '/nested/parent') {
+    http_response_code(302);
+    header('Location: ../final');
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'redirect';
+
+    return;
+}
+
+if ($path === '/nested/dot') {
+    http_response_code(302);
+    header('Location: ./final');
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'redirect';
+
+    return;
+}
+
+if ($path === '/nested/plain') {
+    http_response_code(302);
+    header('Location: final');
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'redirect';
+
+    return;
+}
+
+if ($path === '/nested/final') {
+    http_response_code(200);
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'nested-final';
+
+    return;
+}
+
+if ($path === '/redirect-absolute') {
+    $host = $_SERVER['HTTP_HOST'] ?? '127.0.0.1';
+    $host = is_string($host) ? $host : '127.0.0.1';
+    http_response_code(302);
+    header('Location: http://' . $host . '/final');
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'redirect';
+
+    return;
+}
+
+if ($path === '/redirect-auth') {
+    http_response_code(302);
+    header('Location: /echo-auth');
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'redirect';
+
+    return;
+}
+
+if ($path === '/redirect-cross') {
+    $port = $_SERVER['SERVER_PORT'] ?? '';
+    $port = is_numeric($port) ? (int) $port : 0;
+    http_response_code(302);
+    header('Location: http://127.0.0.2:' . $port . '/echo-auth');
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'redirect';
+
+    return;
+}
+
+if ($path === '/echo-auth') {
+    http_response_code(200);
+    header('Content-Type: text/plain;charset=UTF-8');
+
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    $authorization = '';
+    $cookie = '';
+
+    foreach ($headers as $name => $value) {
+        if (!is_string($name) || !is_string($value)) {
+            continue;
+        }
+
+        if (strcasecmp($name, 'Authorization') === 0) {
+            $authorization = $value;
+        }
+
+        if (strcasecmp($name, 'Cookie') === 0) {
+            $cookie = $value;
+        }
+    }
+
+    $authorization = $_SERVER['HTTP_AUTHORIZATION'] ?? $authorization;
+    $authorization = is_string($authorization) ? $authorization : '';
+    $cookie = is_string($_SERVER['HTTP_COOKIE'] ?? null) ? $_SERVER['HTTP_COOKIE'] : $cookie;
+
+    echo $authorization . '|' . $cookie;
+
+    return;
+}
+
+if (preg_match('#^/hops/(\d+)$#', $path, $matches) === 1) {
+    $remaining = (int) $matches[1];
+
+    if ($remaining === 0) {
+        http_response_code(200);
+        header('Content-Type: text/plain;charset=UTF-8');
+        echo 'hopped';
+
+        return;
+    }
+
+    http_response_code(302);
+    header('Location: /hops/' . ($remaining - 1));
+    header('Content-Type: text/plain;charset=UTF-8');
+    echo 'redirect';
+
+    return;
+}
+
 if ($path === '/headers') {
     http_response_code(204);
     header('X-Trace: one', false);

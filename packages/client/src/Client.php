@@ -10,6 +10,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\UriInterface;
 use Utopia\Client\Adapter;
+use Utopia\Client\Redirect;
 use Utopia\Client\Tls;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Uri;
@@ -239,38 +240,13 @@ final class Client implements Adapter
         }
 
         if (str_starts_with($path, '/')) {
-            return $this->removeDotSegments($path);
+            return Redirect::removeDotSegments($path);
         }
 
         if ($basePath === '' || !str_ends_with($basePath, '/')) {
             $basePath .= '/';
         }
 
-        return $this->removeDotSegments($basePath . $path);
-    }
-
-    private function removeDotSegments(string $path): string
-    {
-        $segments = [];
-
-        foreach (explode('/', $path) as $segment) {
-            if ($segment === '') {
-                continue;
-            }
-
-            if ($segment === '.') {
-                continue;
-            }
-
-            if ($segment === '..') {
-                array_pop($segments);
-
-                continue;
-            }
-
-            $segments[] = $segment;
-        }
-
-        return '/' . implode('/', $segments);
+        return Redirect::removeDotSegments($basePath . $path);
     }
 }

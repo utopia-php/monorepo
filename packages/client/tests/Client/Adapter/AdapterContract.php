@@ -220,6 +220,125 @@ abstract class AdapterContract extends TestCase
         });
     }
 
+    public function testItFollowsPathRelativeRedirects(): void
+    {
+        Http::serve(function (int $port): void {
+            $requestFactory = new Request\Factory();
+            $client = $this->createAdapter()->withFollowRedirects();
+            $origin = 'http://127.0.0.1:' . $port;
+
+            $parent = $this->send($client, $requestFactory->createRequest(Method::GET, $origin . '/nested/parent'));
+            $dot = $this->send($client, $requestFactory->createRequest(Method::GET, $origin . '/nested/dot'));
+            $plain = $this->send($client, $requestFactory->createRequest(Method::GET, $origin . '/nested/plain'));
+
+            $this->assertSame(200, $parent->getStatusCode());
+            $this->assertSame('final', (string) $parent->getBody());
+            $this->assertSame(200, $dot->getStatusCode());
+            $this->assertSame('nested-final', (string) $dot->getBody());
+            $this->assertSame(200, $plain->getStatusCode());
+            $this->assertSame('nested-final', (string) $plain->getBody());
+        });
+    }
+
+    public function testItFollowsAbsoluteRedirectUris(): void
+    {
+        Http::serve(function (int $port): void {
+            $client = $this->createAdapter()->withFollowRedirects();
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect-absolute');
+
+            $response = $this->send($client, $request);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('final', (string) $response->getBody());
+        });
+    }
+
+    public function testItAllowsFiftyRedirectHops(): void
+    {
+        Http::serve(function (int $port): void {
+            $client = $this->createAdapter()->withFollowRedirects();
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/hops/50');
+
+            $response = $this->send($client, $request);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('hopped', (string) $response->getBody());
+        });
+    }
+
+    public function testItRejectsFiftyOneRedirectHops(): void
+    {
+        Http::serve(function (int $port): void {
+            $client = $this->createAdapter()->withFollowRedirects();
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/hops/51');
+
+            $this->expectException(ProtocolException::class);
+
+            $this->send($client, $request);
+        });
+    }
+
+    public function testItKeepsAuthorizationOnSameOriginRedirects(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()
+                ->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect-auth')
+                ->withHeader(Header::AUTHORIZATION, 'Bearer secret')
+                ->withHeader(Header::COOKIE, 'session=keep');
+            $client = $this->createAdapter()->withFollowRedirects();
+
+            $response = $this->send($client, $request);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('Bearer secret|session=keep', (string) $response->getBody());
+        });
+    }
+
+    public function testItStripsAuthorizationOnCrossOriginRedirects(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()
+                ->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect-cross')
+                ->withHeader(Header::AUTHORIZATION, 'Bearer secret')
+                ->withHeader(Header::COOKIE, 'session=drop');
+            $client = $this->createAdapter()->withFollowRedirects();
+
+            $response = $this->send($client, $request);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('|', (string) $response->getBody());
+        }, '0.0.0.0');
+    }
+
+    public function testItStreamsTheFinalHopAfterARedirect(): void
+    {
+        Http::serve(function (int $port): void {
+            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect-large');
+            $client = $this->createAdapter()->withFollowRedirects();
+
+            $expected = self::PAYLOAD_SIZE;
+            $hash = hash_init('sha256');
+            $read = 0;
+            $baseline = memory_get_usage();
+            $peak = 0;
+            $chunks = 0;
+
+            $response = $this->sendStream($client, $request, function (string $chunk) use ($hash, &$read, $baseline, &$peak, &$chunks): void {
+                $chunks++;
+                hash_update($hash, $chunk);
+                $read += \strlen($chunk);
+                $peak = max($peak, memory_get_usage() - $baseline);
+            });
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame($expected, $read);
+            $this->assertGreaterThan(1, $chunks, 'The final hop must be delivered in chunks, not as one assembled body.');
+            $this->assertSame(hash('sha256', str_repeat('a', $expected)), hash_final($hash));
+            $this->assertLessThan(2 * 1_048_576, $peak, 'Following a redirect must still stream the final body.');
+            $this->assertSame('', (string) $response->getBody());
+        });
+    }
+
     public function testItPreservesDuplicateMixedCaseHeadersAndBinaryBodies(): void
     {
         Http::serve(function (int $port): void {
