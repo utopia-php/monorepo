@@ -241,6 +241,25 @@ class MQTT
     }
 
     /**
+     * Encode a SUBSCRIBE packet for a single topic filter (subscriber role).
+     *
+     * @param array<string, string> $userProperties Extra User Properties (e.g. a subId the broker keys on).
+     */
+    public static function encodeSubscribe(string $topic, int $packetId, int $qos = 0, array $userProperties = []): string
+    {
+        $props = '';
+        foreach ($userProperties as $key => $value) {
+            $props .= \chr(self::PROPERTY_USER_PROPERTY) . self::encodeString((string) $key) . self::encodeString((string) $value);
+        }
+
+        $variable = pack('n', $packetId) . self::encodeVariableByteInteger(\strlen($props)) . $props;
+        $payload = self::encodeString($topic) . \chr($qos & 0x03); // subscription options: max QoS
+
+        // SUBSCRIBE fixed-header flags are reserved and must be 0b0010.
+        return self::buildPacket(self::PACKET_SUBSCRIBE, 0x02, $variable . $payload);
+    }
+
+    /**
      * Encode a PINGRESP packet.
      */
     public static function encodePingresp(): string
