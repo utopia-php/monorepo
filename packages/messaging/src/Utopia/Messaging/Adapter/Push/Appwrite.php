@@ -104,6 +104,80 @@ class Appwrite extends PushAdapter
     }
 
     /**
+     * Subscribe to topics on the broker and invoke $onMessage for each PUBLISH received,
+     * until $limit messages have been handled or $timeout seconds elapse. QoS 1 messages
+     * are acked. Returns the number of messages handled.
+     *
+     * Complements the publisher path: the same enhanced-auth connection can consume, which
+     * is what verifies broker fan-out end to end.
+     *
+     * @param array<string> $topics
+     * @param callable(array{topic: string, payload: string, qos: int}): void $onMessage
+     */
+    public function consume(array $topics, callable $onMessage, int $limit = 1, float $timeout = 5.0): int
+    {
+        $socket = $this->connect();
+
+        try {
+            $this->handshake($socket);
+
+            foreach ($topics as $topic) {
+                $packetId = $this->nextPacketId();
+                $this->write($socket, MQTT::encodeSubscribe(
+                    topic: $topic,
+                    packetId: $packetId,
+                    qos: 1,
+                    userProperties: ['subId' => (string) $packetId],
+                ));
+
+                if ($this->readPacket($socket)['type'] !== MQTT::PACKET_SUBACK) {
+                    throw new \RuntimeException('Broker did not acknowledge SUBSCRIBE');
+                }
+            }
+
+            $handled = 0;
+            $deadline = microtime(true) + $timeout;
+            stream_set_timeout($socket, 1);
+
+            while ($handled < $limit && microtime(true) < $deadline) {
+                try {
+                    $packet = $this->readPacket($socket);
+                } catch (\RuntimeException) {
+                    // Read timeout or a closed socket; re-check the deadline.
+                    usleep(20000);
+                    continue;
+                }
+
+                if ($packet['type'] !== MQTT::PACKET_PUBLISH) {
+                    continue;
+                }
+
+                $parsed = MQTT::parsePublish($packet['payload'], $packet['flags']);
+                if ($parsed['qos'] === 1 && $parsed['packetId'] !== null) {
+                    $this->write($socket, MQTT::encodePuback($parsed['packetId']));
+                }
+
+                $onMessage([
+                    'topic' => $parsed['topic'],
+                    'payload' => $parsed['payload'],
+                    'qos' => $parsed['qos'],
+                ]);
+                $handled++;
+            }
+
+            try {
+                $this->write($socket, MQTT::encodeDisconnect());
+            } catch (\Throwable) {
+                // Best effort.
+            }
+
+            return $handled;
+        } finally {
+            $this->close($socket);
+        }
+    }
+
+    /**
      * Pipelined PUBLISH/PUBACK loop.
      *
      * Sends up to `receiveMaximum` PUBLISH packets without waiting for an
