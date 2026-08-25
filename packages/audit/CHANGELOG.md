@@ -4,11 +4,11 @@ All notable changes to `utopia-php/audit` are documented in this file.
 
 ## Unreleased
 
-### ClickHouse adapter — migrated to the utopia-php/query 0.3 builder
+### ClickHouse adapter — migrated to the utopia-php/query 0.6 builder
 
 #### Changed
 
-- `utopia-php/query` bumped from `0.1.*` to `0.3.*` (locked at 0.3.3).
+- `utopia-php/query` bumped from `0.1.*` to `0.6.*` (locked at 0.6.0).
 - `setup()` builds its DDL through `Utopia\Query\Schema\ClickHouse` instead of
   hand-assembled SQL. Column types, `LowCardinality(...)` / `Nullable(...)`
   wrapping, bloom-filter indexes, engine, `ORDER BY`, `PARTITION BY` and

@@ -1058,7 +1058,9 @@ class ClickHouse extends SQL
                 continue;
             }
 
-            $column = $table->addColumn($id, $this->mapAttributeType($attribute));
+            $column = $table->addColumn($id, ($attribute['type'] ?? null) === Database::VAR_DATETIME
+                ? ColumnType::Datetime
+                : ColumnType::String);
             if (\in_array($id, self::LOW_CARDINALITY_COLUMNS, true)) {
                 $column->lowCardinality();
             }
@@ -1127,17 +1129,6 @@ class ClickHouse extends SQL
         }
     }
 
-    /**
-     * Map an audit attribute descriptor to its `Schema\ColumnType`.
-     *
-     * @param  array<string, mixed>  $attribute
-     */
-    private function mapAttributeType(array $attribute): ColumnType
-    {
-        return ($attribute['type'] ?? null) === Database::VAR_DATETIME
-            ? ColumnType::Datetime
-            : ColumnType::String;
-    }
 
     /**
      * Get column names from attributes.
@@ -1275,10 +1266,7 @@ class ClickHouse extends SQL
             ->filter([Query::equal('id', $id)])
             ->limit(1);
 
-        $tenantFilter = $this->getTenantFilter();
-        if ($tenantFilter !== '') {
-            $builder->whereRaw(ltrim($tenantFilter, ' AND'));
-        }
+        $this->applyTenantFilter($builder);
 
         $statement = $builder->build();
         $sql = $statement->query . ' FORMAT JSON';
@@ -1324,10 +1312,7 @@ class ClickHouse extends SQL
             ->selectRaw($selectColumns)
             ->filter($parsed['filters']);
 
-        $tenantFilter = $this->getTenantFilter();
-        if ($tenantFilter !== '') {
-            $builder->whereRaw(ltrim($tenantFilter, ' AND'));
-        }
+        $this->applyTenantFilter($builder);
 
         $cursorDirection = $parsed['cursorDirection'] ?? null;
         $orderAttributes = $parsed['orderAttributes'];
@@ -1447,10 +1432,7 @@ class ClickHouse extends SQL
             ->selectRaw($max !== null ? '1' : 'COUNT(*) AS count')
             ->filter($parsed['filters']);
 
-        $tenantFilter = $this->getTenantFilter();
-        if ($tenantFilter !== '') {
-            $inner->whereRaw(ltrim($tenantFilter, ' AND'));
-        }
+        $this->applyTenantFilter($inner);
 
         if ($max !== null) {
             $inner->limit($max);
@@ -1740,11 +1722,12 @@ class ClickHouse extends SQL
      */
     private function getParamType(string $attribute): string
     {
-        return match (true) {
-            $attribute === 'time' => 'DateTime64(3)',
-            $attribute === 'tenant' && $this->sharedTables => 'UInt64',
-            default => 'String',
-        };
+        // Derived from the same map the builder is given, rather than a second
+        // hardcoded list. The two used to be able to disagree: this matched only
+        // `time`, while getColumnTypeMap() types every VAR_DATETIME attribute, so
+        // a second datetime column would have been bound as String here and
+        // declared DateTime64(3) there.
+        return $this->getColumnTypeMap()[$attribute] ?? 'String';
     }
 
     /**
@@ -2125,14 +2108,13 @@ class ClickHouse extends SQL
      * Build tenant filter clause based on current tenant context.
      * Escapes column name to prevent SQL injection.
      */
-    private function getTenantFilter(): string
+    private function applyTenantFilter(ClickHouseBuilder $builder): void
     {
         if (!$this->sharedTables || $this->tenant === null) {
-            return '';
+            return;
         }
 
-        $escapedTenant = $this->escapeIdentifier('tenant');
-        return " AND {$escapedTenant} = {$this->tenant}";
+        $builder->filter([Query::equal('tenant', [$this->tenant])]);
     }
 
     /**
@@ -2430,10 +2412,7 @@ class ClickHouse extends SQL
             ->into($qualifiedTable)
             ->whereRaw($escapedTimeColumn . ' < {datetime:DateTime64(3)}');
 
-        $tenantFilter = $this->getTenantFilter();
-        if ($tenantFilter !== '') {
-            $builder->whereRaw(ltrim($tenantFilter, ' AND'));
-        }
+        $this->applyTenantFilter($builder);
 
         if ($this->asyncCleanup) {
             $builder->settings(['lightweight_deletes_sync' => '0']);
