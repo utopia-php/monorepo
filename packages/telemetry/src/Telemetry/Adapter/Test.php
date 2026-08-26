@@ -186,7 +186,7 @@ class Test implements Adapter
         return $this->observableGauges[$name]
             ?? $this->unobservedGauges[$name]
             ??= new class ($register) extends ObservableGauge {
-                /** @var list<\Closure> */
+                /** @var list<\Closure(callable(float|int, iterable<non-empty-string, array<mixed>|bool|float|int|string|null>): void): void> */
                 public array $callbacks = [];
 
                 /**
