@@ -32,6 +32,7 @@ Backblaze
 backfills
 backoff
 backpressure
+baseline(?:s|d)?
 Bcrypt
 binlog
 BlackBerry
@@ -49,6 +50,7 @@ Composer
 coroutine(?:s)?
 CRLF(?:s)?
 cURL
+cyclomatic
 datetime
 Debian
 decodable

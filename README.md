@@ -7,11 +7,11 @@ The source of truth for the [utopia-php](https://github.com/utopia-php) librarie
 ```sh
 git clone git@github.com:utopia-php/monorepo.git && cd monorepo
 bin/monorepo test http             # run a package's test suites
-bin/monorepo check http --fix      # apply code style, fix what phpstan/rector surface
+bin/monorepo check http --fix      # run code style, complexity and static-analysis checks
 bin/monorepo validate              # check package conventions (CI enforces this)
 ```
 
-Edit code under `packages/<name>` and open a pull request here — the mirrors are read-only and redirect PRs back. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow. Cross-package changes are fine in a single commit. Code style is monorepo-wide (`pint.json`), as is the PHPStan level-5 floor (the root `phpstan.neon`, enforced for every package). A package adds its own `phpstan.neon` only to raise the level or add settings; rector rules stay per-package (`rector.php`) since they encode per-library decisions. Markdown documentation is linted with [Vale](https://vale.sh) (`.vale.ini` and the vendored `Utopia` style in `.vale/styles`) — errors fail CI, warnings are advisory.
+Edit code under `packages/<name>` and open a pull request here — the mirrors are read-only and redirect PRs back. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow. Cross-package changes are fine in a single commit. Code style (`pint.json`) and the maximum cyclomatic complexity of 10 (`phpcs.xml`) are monorepo-wide, as is the PHPStan level-5 floor (the root `phpstan.neon`, enforced for every package). Existing complexity violations are recorded in `complexity-baseline.json`; new over-limit functions and increases to baselined values fail checks. Refresh selected packages after an intentional complexity increase with `bin/monorepo complexity <name...> --generate-baseline`. A package adds its own `phpstan.neon` only to raise the level or add settings; rector rules stay per-package (`rector.php`) since they encode per-library decisions. Markdown documentation is linted with [Vale](https://vale.sh) (`.vale.ini` and the vendored `Utopia` style in `.vale/styles`) — errors fail CI, warnings are advisory.
 
 Run `bin/monorepo` with no arguments for the full command list — `absorb` and `split` are maintainer operations, covered in [docs/absorbing.md](docs/absorbing.md) and [docs/distribution.md](docs/distribution.md). To start a brand-new library, see [docs/creating.md](docs/creating.md).
 

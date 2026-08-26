@@ -19,7 +19,7 @@ Each library lives in `packages/<name>` and is an independent Composer package. 
 Run the monorepo tooling for every package you touched:
 
 ```bash
-bin/monorepo check <name> --fix   # code style (Pint), PHPStan, Rector
+bin/monorepo check <name> --fix   # code style, complexity and static analysis
 bin/monorepo test <name>          # the package's test suite
 bin/monorepo validate             # package conventions (CI enforces this)
 ```

@@ -10,6 +10,7 @@
         "laravel/pint": "^1.24",
         "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^12",
-        "rector/rector": "^2.4"
+        "rector/rector": "^2.4",
+        "squizlabs/php_codesniffer": "^4.0"
     }
 }
