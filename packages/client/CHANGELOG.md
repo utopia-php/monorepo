@@ -6,6 +6,10 @@ This project follows semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Require `utopia-php/psr7` `^0.2.1` so `Request\Factory::multipart` always sets `Content-Type` with the body boundary.
+
 ### Added
 
 - Initial PSR-18 HTTP client wrapper: `Utopia\Client`.
