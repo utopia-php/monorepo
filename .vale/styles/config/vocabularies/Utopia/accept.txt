@@ -50,7 +50,6 @@ Composer
 coroutine(?:s)?
 CRLF(?:s)?
 cURL
-cyclomatic
 datetime
 Debian
 decodable
