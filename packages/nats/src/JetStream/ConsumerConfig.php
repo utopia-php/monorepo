@@ -12,6 +12,10 @@ final class ConsumerConfig
      * @param float|null $idleHeartbeat Idle heartbeat interval in seconds (push consumers)
      * @param list<string>|null $filterSubjects
      * @param array<string, string>|null $metadata Arbitrary key-value metadata (ADR-33)
+     * @param list<float>|null $backoff Redelivery delays in seconds, one per attempt
+     *        (the last entry repeats). Server rules, not sanitized here: when set
+     *        together with $ackWait the first entry must equal $ackWait, and
+     *        $maxDeliver must exceed the number of entries.
      */
     public function __construct(
         public readonly ?string $name = null,
@@ -38,6 +42,7 @@ final class ConsumerConfig
         public readonly bool $flowControl = false,
         public readonly ?float $idleHeartbeat = null,
         public readonly ?array $metadata = null,
+        public readonly ?array $backoff = null,
     ) {}
 
     public function toArray(): array
@@ -111,6 +116,9 @@ final class ConsumerConfig
         if ($this->metadata !== null) {
             $data['metadata'] = $this->metadata;
         }
+        if ($this->backoff !== null) {
+            $data['backoff'] = array_map(StreamConfig::secondsToNanos(...), $this->backoff);
+        }
 
         return $data;
     }
@@ -142,6 +150,7 @@ final class ConsumerConfig
             flowControl: $data['flow_control'] ?? false,
             idleHeartbeat: isset($data['idle_heartbeat']) ? StreamConfig::nanosToSeconds($data['idle_heartbeat']) : null,
             metadata: $data['metadata'] ?? null,
+            backoff: isset($data['backoff']) ? array_map(StreamConfig::nanosToSeconds(...), $data['backoff']) : null,
         );
     }
 }

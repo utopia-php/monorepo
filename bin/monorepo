@@ -597,7 +597,11 @@ switch ($command) {
 
         $dependents = [];
         foreach (packages() as $candidate) {
-            foreach (manifest($candidate)['require'] ?? [] as $dependency => $constraint) {
+            $manifest = manifest($candidate);
+            // require-dev counts: a dev-only sibling (e.g. queue's optional NATS
+            // broker) still makes the registry combination unbuildable while the
+            // sibling's change is unreleased, so its dependents must run linked.
+            foreach (array_merge($manifest['require'] ?? [], $manifest['require-dev'] ?? []) as $dependency => $constraint) {
                 if (str_starts_with($dependency, ORG . '/')) {
                     $dependents[substr($dependency, strlen(ORG) + 1)][] = $candidate;
                 }

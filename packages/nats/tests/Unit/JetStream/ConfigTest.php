@@ -60,6 +60,33 @@ final class ConfigTest extends TestCase
         $this->assertSame(7, $info->ackFloor->streamSeq);
     }
 
+    public function testBackoffSerializesToNanos(): void
+    {
+        $config = new ConsumerConfig(
+            ackWait: 10.0,
+            maxDeliver: 5,
+            backoff: [10.0, 30.0, 120.0],
+        );
+
+        $arr = $config->toArray();
+        $this->assertSame([10_000_000_000, 30_000_000_000, 120_000_000_000], $arr['backoff']);
+        $this->assertSame(10_000_000_000, $arr['ack_wait']);
+    }
+
+    public function testBackoffOmittedWhenUnset(): void
+    {
+        $this->assertArrayNotHasKey('backoff', (new ConsumerConfig())->toArray());
+    }
+
+    public function testBackoffRoundTrip(): void
+    {
+        $config = ConsumerConfig::fromArray([
+            'backoff' => [5_000_000_000, 60_000_000_000],
+        ]);
+
+        $this->assertSame([5.0, 60.0], $config->backoff);
+    }
+
     public function testStreamMessageDecodesBase64Payload(): void
     {
         $msg = StreamMessage::fromArray([
