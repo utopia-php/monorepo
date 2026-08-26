@@ -11,12 +11,6 @@
         "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^12",
         "rector/rector": "^2.4",
-        "slevomat/coding-standard": "^8.31",
-        "squizlabs/php_codesniffer": "^4.0"
-    },
-    "config": {
-        "allow-plugins": {
-            "dealerdirect/phpcodesniffer-composer-installer": true
-        }
+        "tomasvotruba/cognitive-complexity": "^1.2"
     }
 }

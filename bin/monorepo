@@ -117,12 +117,12 @@ function mirror_workflow(string $package): string
 }
 
 /**
- * Ensure the root toolchain (pint, phpcs, phpstan, rector, phpunit) is installed and
+ * Ensure the root toolchain (pint, phpstan, rector, phpunit) is installed and
  * on PATH, so package scripts resolve `phpunit` to the monorepo's version.
  */
 function toolchain(): void
 {
-    $tools = ['pint', 'phpcs', 'phpstan', 'phpunit', 'rector'];
+    $tools = ['pint', 'phpstan', 'phpunit', 'rector'];
     $missing = array_filter($tools, fn(string $tool): bool => !is_file('vendor/bin/' . $tool));
     if ($missing !== []) {
         $install = is_file('composer.lock') ? 'install' : 'update';
@@ -221,14 +221,15 @@ function complexity_symbol(string $path, int $line): string
 }
 
 /**
- * Run the cognitive-complexity PHPCS ruleset and return its violations.
+ * Run the cognitive-complexity PHPStan rule and return its violations.
  *
  * @return array<int, array{file: string, line: int, complexity: int, message: string}>
  */
 function complexity_findings(string $package): array
 {
     $path = "packages/{$package}/src";
-    $command = 'vendor/bin/phpcs --standard=phpcs.xml --report=json ' . escapeshellarg($path) . ' 2>/dev/null';
+    $command = 'vendor/bin/phpstan analyse --configuration=phpstan-complexity.neon --error-format=json --no-progress '
+        . escapeshellarg($path) . ' 2>/dev/null';
     exec($command, $output, $code);
     if ($code < 0 || $code > 3) {
         fail("complexity scan failed ({$code}) for {$package}");
@@ -242,8 +243,8 @@ function complexity_findings(string $package): array
     foreach ($report['files'] ?? [] as $file => $result) {
         $relative = str_starts_with($file, $root) ? substr($file, strlen($root)) : $file;
         foreach ($result['messages'] ?? [] as $message) {
-            if (($message['source'] ?? '') !== 'SlevomatCodingStandard.Complexity.Cognitive.ComplexityTooHigh'
-                || !preg_match('/ is (\d+) but has to be/', $message['message'] ?? '', $match)) {
+            if (($message['identifier'] ?? '') !== 'complexity.functionLike'
+                || !preg_match('/ is (\d+), keep it under/', $message['message'] ?? '', $match)) {
                 continue;
             }
             $findings[] = [
@@ -728,7 +729,7 @@ switch ($command) {
 
             $fix = isset($options['fix']);
             $checks = ['pint' => '../../vendor/bin/pint --config ../../pint.json' . ($fix ? '' : ' --test')];
-            $checks['phpcs'] = '../../bin/monorepo complexity ' . escapeshellarg($package);
+            $checks['complexity'] = '../../bin/monorepo complexity ' . escapeshellarg($package);
             // A package phpstan.neon overrides the root level-5 baseline; without one, fall back to it.
             $checks['phpstan'] = '../../vendor/bin/phpstan analyse --memory-limit=1G'
                 . (glob("{$directory}/phpstan.neon*") !== [] ? '' : ' -c ../../phpstan.neon');
@@ -970,7 +971,7 @@ switch ($command) {
           release <name> <version> [--dry-run]
                                               preview notes, tag <name>/<version> and push it (CI does the rest)
           validate                            check package composer.json conventions
-          check [name...] [--fix]             run pint, phpcs, phpstan and rector against packages
+          check [name...] [--fix]             run pint, complexity, phpstan and rector against packages
           complexity [name...] [--generate-baseline]
                                               check cognitive complexity or update the baseline
           test [name...] [--linked]           install dependencies and run package test suites

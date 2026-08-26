@@ -1,0 +1,10 @@
+includes:
+    - vendor/tomasvotruba/cognitive-complexity/config/extension.neon
+
+parameters:
+    level: 0
+    cognitive_complexity:
+        class: 1000000
+        function: 20
+        dependency_tree: 1000000
+        dependency_tree_types: []
