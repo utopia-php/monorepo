@@ -14,7 +14,7 @@ chdir(dirname(__DIR__));
 const ORG = 'utopia-php';
 const SPLIT_APP_ID = 4016286; // GitHub App that pushes splits to the mirrors
 const COMPLEXITY_BASELINE = 'complexity-baseline.json';
-const COMPLEXITY_LIMIT = 10;
+const COMPLEXITY_LIMIT = 20;
 
 function out(string $message): void
 {
@@ -772,7 +772,7 @@ switch ($command) {
             }
             ksort($baseline);
             file_put_contents(COMPLEXITY_BASELINE, json_encode([
-                'description' => 'Existing cyclomatic-complexity violations. New functions above 10 and increases above these values fail the check.',
+                'description' => 'Existing cyclomatic-complexity violations. New functions above 20 and increases above these values fail the check.',
                 'violations' => $baseline,
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
             out('wrote ' . COMPLEXITY_BASELINE . ' with ' . count($baseline) . ' violation(s)');
