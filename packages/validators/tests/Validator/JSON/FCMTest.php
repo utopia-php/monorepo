@@ -9,7 +9,7 @@ use Utopia\Validator;
 
 final class FCMTest extends TestCase
 {
-    private const CREDENTIALS = [
+    private const array CREDENTIALS = [
         'type' => 'service_account',
         'project_id' => 'test-project',
         'private_key_id' => 'test-private-key-id',
@@ -66,19 +66,17 @@ final class FCMTest extends TestCase
     }
 
     /**
-     * @return array<string, array{array<string, mixed>, string, string}>
+     * @return \Iterator<string, array{array<string, mixed>, string, string}>
      */
-    public static function missingRequiredFieldProvider(): array
+    public static function missingRequiredFieldProvider(): \Iterator
     {
-        return [
-            'type' => [self::without('type'), 'type', 'identifies the credentials as a Google service account'],
-            'project ID' => [self::without('project_id'), 'project_id', 'identifies the Firebase project receiving messages'],
-            'private key' => [self::without('private_key'), 'private_key', 'signs the OAuth access-token request'],
-            'client email' => [self::without('client_email'), 'client_email', 'identifies the service account used for authentication'],
-            'token URI' => [self::without('token_uri'), 'token_uri', 'identifies the OAuth token endpoint'],
-            'blank project ID' => [array_replace(self::CREDENTIALS, ['project_id' => " \t\n"]), 'project_id', 'identifies the Firebase project receiving messages'],
-            'non-string client email' => [array_replace(self::CREDENTIALS, ['client_email' => 123]), 'client_email', 'identifies the service account used for authentication'],
-        ];
+        yield 'type' => [self::without('type'), 'type', 'identifies the credentials as a Google service account'];
+        yield 'project ID' => [self::without('project_id'), 'project_id', 'identifies the Firebase project receiving messages'];
+        yield 'private key' => [self::without('private_key'), 'private_key', 'signs the OAuth access-token request'];
+        yield 'client email' => [self::without('client_email'), 'client_email', 'identifies the service account used for authentication'];
+        yield 'token URI' => [self::without('token_uri'), 'token_uri', 'identifies the OAuth token endpoint'];
+        yield 'blank project ID' => [array_replace(self::CREDENTIALS, ['project_id' => " \t\n"]), 'project_id', 'identifies the Firebase project receiving messages'];
+        yield 'non-string client email' => [array_replace(self::CREDENTIALS, ['client_email' => 123]), 'client_email', 'identifies the service account used for authentication'];
     }
 
     /**
@@ -94,39 +92,37 @@ final class FCMTest extends TestCase
     }
 
     /**
-     * @return array<string, array{array<string, mixed>, string}>
+     * @return \Iterator<string, array{array<string, mixed>, string}>
      */
-    public static function invalidFieldProvider(): array
+    public static function invalidFieldProvider(): \Iterator
     {
-        return [
-            'credential type' => [
-                array_replace(self::CREDENTIALS, ['type' => 'authorized_user']),
-                "FCM service account JSON field 'type' must be 'service_account'.",
-            ],
-            'client email' => [
-                array_replace(self::CREDENTIALS, ['client_email' => 'not-an-email']),
-                "FCM service account JSON field 'client_email' must contain a valid email address.",
-            ],
-            'private key' => [
-                array_replace(self::CREDENTIALS, ['private_key' => 'not-a-private-key']),
-                "FCM service account JSON field 'private_key' must contain a PEM-encoded private key.",
-            ],
-            'HTTP token URI' => [
-                array_replace(self::CREDENTIALS, ['token_uri' => 'http://oauth2.googleapis.com/token']),
-                "FCM service account JSON field 'token_uri' must contain a valid HTTPS URL.",
-            ],
-            'invalid auth URI' => [
-                array_replace(self::CREDENTIALS, ['auth_uri' => 'not-a-url']),
-                "FCM service account JSON field 'auth_uri' must contain a valid HTTPS URL.",
-            ],
-            'empty optional field' => [
-                array_replace(self::CREDENTIALS, ['private_key_id' => '']),
-                "FCM service account JSON field 'private_key_id' must be a non-empty string when provided.",
-            ],
-            'non-string optional field' => [
-                array_replace(self::CREDENTIALS, ['client_id' => 123]),
-                "FCM service account JSON field 'client_id' must be a non-empty string when provided.",
-            ],
+        yield 'credential type' => [
+            array_replace(self::CREDENTIALS, ['type' => 'authorized_user']),
+            "FCM service account JSON field 'type' must be 'service_account'.",
+        ];
+        yield 'client email' => [
+            array_replace(self::CREDENTIALS, ['client_email' => 'not-an-email']),
+            "FCM service account JSON field 'client_email' must contain a valid email address.",
+        ];
+        yield 'private key' => [
+            array_replace(self::CREDENTIALS, ['private_key' => 'not-a-private-key']),
+            "FCM service account JSON field 'private_key' must contain a PEM-encoded private key.",
+        ];
+        yield 'HTTP token URI' => [
+            array_replace(self::CREDENTIALS, ['token_uri' => 'http://oauth2.googleapis.com/token']),
+            "FCM service account JSON field 'token_uri' must contain a valid HTTPS URL.",
+        ];
+        yield 'invalid auth URI' => [
+            array_replace(self::CREDENTIALS, ['auth_uri' => 'not-a-url']),
+            "FCM service account JSON field 'auth_uri' must contain a valid HTTPS URL.",
+        ];
+        yield 'empty optional field' => [
+            array_replace(self::CREDENTIALS, ['private_key_id' => '']),
+            "FCM service account JSON field 'private_key_id' must be a non-empty string when provided.",
+        ];
+        yield 'non-string optional field' => [
+            array_replace(self::CREDENTIALS, ['client_id' => 123]),
+            "FCM service account JSON field 'client_id' must be a non-empty string when provided.",
         ];
     }
 

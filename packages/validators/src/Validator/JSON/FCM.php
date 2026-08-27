@@ -16,7 +16,7 @@ class FCM extends Validator
      *
      * @var array<string, string>
      */
-    private const REQUIRED_FIELDS = [
+    private const array REQUIRED_FIELDS = [
         'type' => 'identifies the credentials as a Google service account',
         'project_id' => 'identifies the Firebase project receiving messages',
         'private_key' => 'signs the OAuth access-token request',
@@ -29,7 +29,7 @@ class FCM extends Validator
      *
      * @var string[]
      */
-    private const OPTIONAL_FIELDS = [
+    private const array OPTIONAL_FIELDS = [
         'private_key_id',
         'client_id',
         'auth_uri',
@@ -41,7 +41,7 @@ class FCM extends Validator
     /**
      * @var string[]
      */
-    private const URL_FIELDS = [
+    private const array URL_FIELDS = [
         'auth_uri',
         'token_uri',
         'auth_provider_x509_cert_url',
@@ -111,8 +111,8 @@ class FCM extends Validator
             return false;
         }
 
-        if (!str_starts_with($value['private_key'], '-----BEGIN PRIVATE KEY-----')
-            || !str_ends_with(trim($value['private_key']), '-----END PRIVATE KEY-----')) {
+        if (!str_starts_with((string) $value['private_key'], '-----BEGIN PRIVATE KEY-----')
+            || !str_ends_with(trim((string) $value['private_key']), '-----END PRIVATE KEY-----')) {
             $this->error = "FCM service account JSON field 'private_key' must contain a PEM-encoded private key.";
 
             return false;
