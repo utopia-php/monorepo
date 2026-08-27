@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Sentry exporter: deliver envelopes exclusively through PSR-18. It defaults to `utopia-php/client` with its cURL adapter and accepts injected clients such as a coroutine-safe `Utopia\Client\Pool`.
+
 ## 3.0.0
 
 ### Breaking changes
