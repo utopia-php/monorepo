@@ -47,6 +47,7 @@ For advanced flows combine validators with `Multiple`, `AnyOf`, `AllOf`, `NoneOf
 - `Domain`, `Host`, `Hostname`, `IP`, `URL`
 - `HexColor`, `Identifier`, `JSON`, `Phone`, `Text`
 - `JSON\ObjectValidator`, `JSON\ArrayValidator` – JSON shape checks that accept encoded strings
+- `JSON\FCM` – FCM service account JSON with required credential fields
 
 ### Validating JSON shape
 
@@ -68,6 +69,11 @@ $data->isValid('[]');                 // false
 Strings decode to objects rather than associative arrays, so `'{}'` and `'[]'` stay distinguishable. A value
 that arrives already decoded as an empty array is ambiguous — PHP represents both `{}` and `[]` that way — so
 both validators accept it.
+
+Use `JSON\FCM` for Google service account credentials used with the FCM HTTP v1 API. It accepts an encoded
+JSON object, associative array, or `stdClass`. The validator checks the credential type, Firebase project,
+service account email, PEM private key, and OAuth token endpoint. It also validates standard optional service
+account fields when present.
 
 ## Development
 
