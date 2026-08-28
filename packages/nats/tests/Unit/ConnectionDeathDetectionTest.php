@@ -38,24 +38,21 @@ final class ConnectionDeathDetectionTest extends TestCase
     }
 
     // --- -ERR classification (pure) ---
-
     /**
-     * @return list<array{string, bool}>
+     * @return \Iterator<int<0, max>, array{string, bool}>
      */
-    public static function serverErrorProvider(): array
+    public static function serverErrorProvider(): \Iterator
     {
-        return [
-            ['Stale Connection', true],
-            ['stale connection', true],
-            ['Slow Consumer', true],
-            ['Maximum Payload Exceeded', true],
-            ['Invalid Client Protocol', true],
-            // Not connection-closing, or deliberately excluded.
-            ["Permissions Violation for Publish to 'foo'", false],
-            ['Authorization Violation', false],
-            ['Unknown Protocol Operation', false],
-            ['', false],
-        ];
+        yield ['Stale Connection', true];
+        yield ['stale connection', true];
+        yield ['Slow Consumer', true];
+        yield ['Maximum Payload Exceeded', true];
+        yield ['Invalid Client Protocol', true];
+        // Not connection-closing, or deliberately excluded.
+        yield ["Permissions Violation for Publish to 'foo'", false];
+        yield ['Authorization Violation', false];
+        yield ['Unknown Protocol Operation', false];
+        yield ['', false];
     }
 
     #[DataProvider('serverErrorProvider')]
@@ -212,17 +209,14 @@ final class ConnectionDeathDetectionTest extends TestCase
     }
 
     // --- Finding: transports must not raise TypeError on a closed stream ---
-
     /**
-     * @return list<array{class-string}>
+     * @return \Iterator<int<0, max>, array{class-string}>
      */
-    public static function streamTransportProvider(): array
+    public static function streamTransportProvider(): \Iterator
     {
-        return [
-            [TcpTransport::class],
-            [TlsTransport::class],
-            [WebSocketTransport::class],
-        ];
+        yield [TcpTransport::class];
+        yield [TlsTransport::class];
+        yield [WebSocketTransport::class];
     }
 
     /**

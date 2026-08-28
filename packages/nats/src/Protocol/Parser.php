@@ -222,10 +222,7 @@ final class Parser
             $this->poisoned = true;
             $this->buffer = '';
 
-            throw new ConnectionException(
-                "Failed mid-frame, parser desynced from the stream: {$e->getMessage()}",
-                previous: $e,
-            );
+            throw new ConnectionException("Failed mid-frame, parser desynced from the stream: {$e->getMessage()}", $e->getCode(), previous: $e);
         }
     }
 }

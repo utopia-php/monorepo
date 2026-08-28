@@ -31,8 +31,8 @@ final class WriteFailureSemanticsTest extends TestCase
     {
         return Connection::connect(new ConnectionOptions(
             servers: 'nats://127.0.0.1:4222',
-            requestTimeout: 0.02,
             allowReconnect: false,
+            requestTimeout: 0.02,
             transportFactory: fn(string $scheme): FakeTransport => $fake,
         ));
     }
