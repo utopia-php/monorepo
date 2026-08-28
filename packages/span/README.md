@@ -193,25 +193,6 @@ Span::setExporters(new Exporter\Sentry(
 
 Only exports error spans with full stacktraces. Non-error spans are skipped, even if you pass a custom `sampler`.
 
-Events are sent immediately by default (`batchSize: 1`, `batchInterval: null`)
-to preserve synchronous delivery. Set a larger batch size and an interval to
-buffer events. The interval is checked when a new error arrives; call `flush()`
-from a worker's periodic loop for a strict interval and before a graceful
-shutdown. The exporter also flushes pending events when it is destroyed.
-
-```php
-$sentry = new Exporter\Sentry(
-    dsn: 'https://key@sentry.io/123',
-    batchSize: 100,
-    batchInterval: 10,
-);
-
-Span::setExporters($sentry);
-
-// From the worker's periodic loop or shutdown hook:
-$sentry->flush();
-```
-
 Pass any PSR-18 client as `client` to control the HTTP transport. Workers can
 inject a coroutine-safe `Utopia\Client\Pool`. When omitted, the exporter creates
 a `Utopia\Client` using its cURL adapter.
