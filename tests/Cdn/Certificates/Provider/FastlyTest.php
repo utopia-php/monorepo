@@ -34,22 +34,40 @@ class FastlyTest extends TestCase
         $client = new TestClient([
             $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
             $this->json('{"data":[{"id":"sub_1","attributes":{"state":"issued"}}]}'),
+            $this->json('{"data":[{"id":"sub_1","attributes":{"state":"issued"}}]}'),
             $this->json('{"id":"domain_1","fqdn":"example.com","service_id":"new_service"}'),
         ]);
 
         (new Fastly('token', 'new_service', client: $client))->issueCertificate('cert', 'example.com', null);
 
-        $this->assertCount(3, $client->calls);
+        $this->assertCount(4, $client->calls);
         $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[1]['url']);
-        $this->assertSame('PATCH', $client->calls[2]['method']);
-        $this->assertSame('https://api.fastly.com/domain-management/v1/domains/domain_1', $client->calls[2]['url']);
-        $this->assertSame(['service_id' => 'new_service'], $client->calls[2]['body']);
+        $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[2]['url']);
+        $this->assertSame('PATCH', $client->calls[3]['method']);
+        $this->assertSame('https://api.fastly.com/domain-management/v1/domains/domain_1', $client->calls[3]['url']);
+        $this->assertSame(['service_id' => 'new_service'], $client->calls[3]['body']);
+    }
+
+    public function testPendingTlsDoesNotReassignVersionlessDomain(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
+            $this->json('{"data":[{"id":"sub_1","attributes":{"state":"pending"}}]}'),
+            $this->json('{"data":[{"id":"sub_1","attributes":{"state":"pending"}}]}'),
+        ]);
+
+        $this->assertNull((new Fastly('token', 'new_service', client: $client))->issueCertificate('cert', 'example.com', null));
+
+        $this->assertCount(3, $client->calls);
+        $this->assertSame('GET', $client->calls[2]['method']);
+        $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[2]['url']);
     }
 
     public function testFailedVersionlessReassignmentLeavesDomainAndTlsUntouched(): void
     {
         $client = new TestClient([
             $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
+            $this->json('{"data":[{"id":"sub_1","attributes":{"state":"issued"}}]}'),
             $this->json('{"data":[{"id":"sub_1","attributes":{"state":"issued"}}]}'),
             $this->json('{"msg":"service unavailable"}', 503),
         ]);
@@ -61,9 +79,10 @@ class FastlyTest extends TestCase
             $this->assertStringContainsString('reassign Fastly domain', $error->getMessage());
         }
 
-        $this->assertCount(3, $client->calls);
+        $this->assertCount(4, $client->calls);
         $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[1]['url']);
-        $this->assertSame('PATCH', $client->calls[2]['method']);
+        $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[2]['url']);
+        $this->assertSame('PATCH', $client->calls[3]['method']);
     }
 
     public function testTlsFailureStopsBeforeVersionlessDomainReassignment(): void
