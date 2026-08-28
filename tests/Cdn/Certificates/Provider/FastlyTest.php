@@ -64,6 +64,48 @@ class FastlyTest extends TestCase
         $this->assertSame('PATCH', $client->calls[1]['method']);
     }
 
+    public function testTlsFailureRollsVersionlessDomainBackToOriginalService(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
+            $this->json('{"id":"domain_1","fqdn":"example.com","service_id":"new_service"}'),
+            $this->json('{"msg":"TLS unavailable"}', 503),
+            $this->json('{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}'),
+        ]);
+
+        try {
+            (new Fastly('token', 'new_service', client: $client))->issueCertificate('cert', 'example.com', null);
+            $this->fail('Expected TLS issuance to fail.');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('fetch Fastly TLS subscriptions', $error->getMessage());
+        }
+
+        $this->assertCount(4, $client->calls);
+        $this->assertSame(['service_id' => 'new_service'], $client->calls[1]['body']);
+        $this->assertSame(['service_id' => 'old_service'], $client->calls[3]['body']);
+    }
+
+    public function testTlsAndRollbackFailureReportsBothErrors(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
+            $this->json('{"id":"domain_1","fqdn":"example.com","service_id":"new_service"}'),
+            $this->json('{"msg":"TLS unavailable"}', 503),
+            $this->json('{"msg":"rollback unavailable"}', 503),
+        ]);
+
+        try {
+            (new Fastly('token', 'new_service', client: $client))->issueCertificate('cert', 'example.com', null);
+            $this->fail('Expected TLS issuance and rollback to fail.');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('TLS unavailable', $error->getMessage());
+            $this->assertStringContainsString('rollback unavailable', $error->getMessage());
+        }
+
+        $this->assertCount(4, $client->calls);
+        $this->assertSame(['service_id' => 'old_service'], $client->calls[3]['body']);
+    }
+
     public function testDeleteRemovesVersionlessSubscriptionAndDomain(): void
     {
         $client = new TestClient([

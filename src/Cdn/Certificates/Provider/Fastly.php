@@ -55,6 +55,7 @@ class Fastly implements Provider
     {
         $domain = Domain::validate($domain);
         $domainInfo = $this->findDomain($domain);
+        $reassignment = null;
 
         if ($domainInfo !== null) {
             $existingServiceId = $domainInfo['service_id'] ?? null;
@@ -77,6 +78,10 @@ class Fastly implements Provider
                     ['service_id' => $this->serviceId],
                 );
                 $this->assertSuccess('reassign Fastly domain', $result);
+                $reassignment = [
+                    'domainId' => $domainId,
+                    'previousServiceId' => $existingServiceId,
+                ];
             }
         }
 
@@ -88,7 +93,31 @@ class Fastly implements Provider
             $this->assertSuccess('add Fastly domain', $result, [201]);
         }
 
-        return $this->tls->issueCertificate($certName, $domain, $domainType);
+        try {
+            return $this->tls->issueCertificate($certName, $domain, $domainType);
+        } catch (\Throwable $tlsError) {
+            if ($reassignment === null) {
+                throw $tlsError;
+            }
+
+            $result = $this->request(
+                'PATCH',
+                '/domain-management/v1/domains/' . \rawurlencode($reassignment['domainId']),
+                ['service_id' => $reassignment['previousServiceId']],
+            );
+
+            try {
+                $this->assertSuccess('roll back Fastly domain reassignment', $result);
+            } catch (\Throwable $rollbackError) {
+                throw new \RuntimeException(
+                    'Fastly TLS issuance failed after domain reassignment and rollback also failed: '
+                    . $tlsError->getMessage() . '; ' . $rollbackError->getMessage(),
+                    previous: $tlsError,
+                );
+            }
+
+            throw $tlsError;
+        }
     }
 
     public function isInstantGeneration(string $domain, ?string $domainType): bool
