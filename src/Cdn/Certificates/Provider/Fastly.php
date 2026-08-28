@@ -151,10 +151,10 @@ class Fastly implements Provider
             throw new \RuntimeException('Fastly domain response was missing its ID or FQDN.');
         }
 
-        $this->tls->deleteCertificate($domain, $domainType);
-
         $result = $this->request('DELETE', '/domain-management/v1/domains/' . \rawurlencode($domainId));
         $this->assertSuccess('delete Fastly domain', $result, [204]);
+
+        $this->tls->deleteCertificate($domain, $domainType);
     }
 
     private function deleteClassicDomain(string $domain, ?string $domainType): void
@@ -197,7 +197,7 @@ class Fastly implements Provider
         $newVersion = $result['response']['number'];
 
         $result = $this->request('DELETE', $servicePath . $newVersion . '/domain/' . \rawurlencode($domain));
-        $this->assertSuccess('remove classic Fastly domain', $result, [200, 409]);
+        $this->assertSuccess('remove classic Fastly domain', $result, [200]);
 
         $result = $this->request('PUT', $servicePath . $newVersion . '/activate');
         $this->assertSuccess('activate Fastly service version', $result);
