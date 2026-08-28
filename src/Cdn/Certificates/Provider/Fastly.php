@@ -113,6 +113,10 @@ class Fastly implements Provider
             return;
         }
 
+        if ($serviceId !== $this->serviceId) {
+            return;
+        }
+
         $this->deleteVersionlessDomain($domainInfo, $domainType);
     }
 

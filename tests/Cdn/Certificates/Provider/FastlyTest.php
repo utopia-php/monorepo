@@ -84,6 +84,18 @@ class FastlyTest extends TestCase
         $this->assertSame('https://api.fastly.com/domain-management/v1/domains/domain_1', $client->calls[1]['url']);
     }
 
+    public function testVersionlessDomainOwnedByAnotherServiceIsNotDeleted(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"other_service"}]}'),
+        ]);
+
+        (new Fastly('token', 'service_1', client: $client))->deleteCertificate('example.com');
+
+        $this->assertCount(1, $client->calls);
+        $this->assertStringContainsString('/domain-management/v1/domains?', $client->calls[0]['url']);
+    }
+
     public function testDeleteActivatesClassicServiceWithoutDomainBeforeRemovingTls(): void
     {
         $client = new TestClient([
