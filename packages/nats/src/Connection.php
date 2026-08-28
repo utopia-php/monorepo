@@ -264,6 +264,19 @@ final class Connection
     }
 
     /**
+     * Drive connection maintenance without consuming a message: send the
+     * keepalive PING when it is due, and recycle the connection when the server
+     * has stopped answering. A holder that keeps a connection open without
+     * reading from it -- a pooled publisher, say -- must call this on an
+     * interval shorter than the server's ping deadline, because nothing else
+     * in this class runs on its own.
+     */
+    public function tick(): void
+    {
+        $this->checkPings();
+    }
+
+    /**
      * Read and dispatch one server message.
      */
     public function processMessage(?float $timeout = null): ?Message
@@ -634,12 +647,64 @@ final class Connection
     private function handleError(mixed $data): never
     {
         $message = \is_string($data) ? $data : 'Unknown server error';
+        $error = self::mapServerError($message);
 
         if ($this->options->onError instanceof \Closure) {
             ($this->options->onError)(new NatsException($message));
         }
 
-        throw self::mapServerError($message);
+        // The server has already closed the socket for these errors, but the
+        // status still reads "connected", so the next publish() would write into
+        // a dead socket and return success. Recycle the connection here instead.
+        if (self::closesConnection($message)) {
+            $this->recycleDeadConnection();
+        }
+
+        throw $error;
+    }
+
+    /**
+     * Recycle a connection the server has closed under us: reconnect when the
+     * caller allows it, otherwise mark it dead so ensureConnected() refuses the
+     * next call. A reconnect that exhausts its attempts leaves the status at
+     * disconnected, and the -ERR that got us here is the more useful thing to
+     * report, so its ConnectionException is deliberately swallowed.
+     */
+    private function recycleDeadConnection(): void
+    {
+        if ($this->options->allowReconnect && $this->status !== self::STATUS_CLOSED) {
+            try {
+                $this->attemptReconnect();
+            } catch (ConnectionException) {
+                // Status is disconnected; handleError() still throws the -ERR.
+            }
+
+            return;
+        }
+
+        $this->status = self::STATUS_DISCONNECTED;
+
+        if (isset($this->transport)) {
+            $this->transport->close();
+        }
+    }
+
+    /**
+     * Server errors after which NATS closes the connection. Pure so the
+     * classification can be unit tested without a live connection.
+     *
+     * Authorization and authentication failures also close the connection but
+     * are excluded on purpose: retrying with credentials the server just
+     * rejected buys nothing and turns a hard failure into a hot loop.
+     */
+    public static function closesConnection(string $message): bool
+    {
+        $lower = strtolower($message);
+
+        return str_contains($lower, 'stale connection')
+            || str_contains($lower, 'slow consumer')
+            || str_contains($lower, 'maximum payload')
+            || str_contains($lower, 'invalid client protocol');
     }
 
     /**
@@ -802,6 +867,11 @@ final class Connection
         if ($this->status !== self::STATUS_CONNECTED && $this->status !== self::STATUS_DRAINING) {
             throw new ConnectionException("Not connected (status: {$this->status})");
         }
+
+        // Drive the keepalive before the caller writes rather than after. A
+        // connection that has outlived the server's ping deadline is recycled
+        // here, so the write that follows lands on a live socket or raises.
+        $this->checkPings();
     }
 
     private function send(string $data): void

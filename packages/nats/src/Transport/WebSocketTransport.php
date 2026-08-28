@@ -107,7 +107,7 @@ final class WebSocketTransport implements Transport
 
     public function isConnected(): bool
     {
-        return $this->stream !== null && !feof($this->stream);
+        return \is_resource($this->stream) && !feof($this->stream);
     }
 
     public function close(): void
@@ -248,8 +248,7 @@ final class WebSocketTransport implements Transport
         while (\strlen($data) < $length) {
             $chunk = @fread($stream, $length - \strlen($data));
             if ($chunk === false || $chunk === '') {
-                $info = stream_get_meta_data($stream);
-                if ($info['timed_out']) {
+                if ($this->isTimedOut()) {
                     throw new TimeoutException('Read timed out');
                 }
                 throw new ConnectionException('Connection closed by server');
@@ -263,11 +262,27 @@ final class WebSocketTransport implements Transport
     /** @return resource */
     private function ensureConnected()
     {
-        if ($this->stream === null) {
+        // See TcpTransport::ensureConnected(): a concurrently closed stream is
+        // still a resource-typed property but raises TypeError on use, and that
+        // \Error bypasses the reconnect paths in Connection.
+        if (!\is_resource($this->stream)) {
             throw new ConnectionException('Not connected');
         }
 
         return $this->stream;
+    }
+
+    /**
+     * Whether the stream hit its timeout, re-reading the property rather than
+     * trusting a caller's copy that a concurrent close() may have invalidated.
+     */
+    private function isTimedOut(): bool
+    {
+        if (!\is_resource($this->stream)) {
+            return false;
+        }
+
+        return stream_get_meta_data($this->stream)['timed_out'];
     }
 
     /** @param resource $stream */
