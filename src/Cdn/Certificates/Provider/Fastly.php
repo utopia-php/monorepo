@@ -66,8 +66,17 @@ class Fastly implements Provider
             }
 
             if ($existingServiceId !== $this->serviceId) {
-                $this->deleteVersionlessDomain($domainInfo);
-                $domainInfo = null;
+                $domainId = $domainInfo['id'] ?? null;
+                if (!\is_string($domainId) || $domainId === '') {
+                    throw new \RuntimeException('Fastly domain response was missing its ID.');
+                }
+
+                $result = $this->request(
+                    'PATCH',
+                    '/domain-management/v1/domains/' . \rawurlencode($domainId),
+                    ['service_id' => $this->serviceId],
+                );
+                $this->assertSuccess('reassign Fastly domain', $result);
             }
         }
 

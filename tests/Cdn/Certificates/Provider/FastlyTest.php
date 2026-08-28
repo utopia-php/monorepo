@@ -33,20 +33,35 @@ class FastlyTest extends TestCase
     {
         $client = new TestClient([
             $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
-            new Response(204),
+            $this->json('{"id":"domain_1","fqdn":"example.com","service_id":"new_service"}'),
             $this->json('{"data":[{"id":"sub_1","attributes":{"state":"issued"}}]}'),
-            new Response(204),
-            $this->json('{}', 201),
-            $this->json('{"data":[]}'),
-            $this->json('{"data":{"id":"sub_2","attributes":{"state":"pending"}}}', 201),
         ]);
 
         (new Fastly('token', 'new_service', client: $client))->issueCertificate('cert', 'example.com', null);
 
+        $this->assertCount(3, $client->calls);
+        $this->assertSame('PATCH', $client->calls[1]['method']);
         $this->assertSame('https://api.fastly.com/domain-management/v1/domains/domain_1', $client->calls[1]['url']);
-        $this->assertSame('https://api.fastly.com/tls/subscriptions/sub_1?force=true', $client->calls[3]['url']);
-        $this->assertSame('new_service', $client->calls[4]['body']['service_id']);
-        $this->assertSame('https://api.fastly.com/tls/subscriptions', $client->calls[6]['url']);
+        $this->assertSame(['service_id' => 'new_service'], $client->calls[1]['body']);
+        $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[2]['url']);
+    }
+
+    public function testFailedVersionlessReassignmentLeavesDomainAndTlsUntouched(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
+            $this->json('{"msg":"service unavailable"}', 503),
+        ]);
+
+        try {
+            (new Fastly('token', 'new_service', client: $client))->issueCertificate('cert', 'example.com', null);
+            $this->fail('Expected domain reassignment to fail.');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('reassign Fastly domain', $error->getMessage());
+        }
+
+        $this->assertCount(2, $client->calls);
+        $this->assertSame('PATCH', $client->calls[1]['method']);
     }
 
     public function testDeleteRemovesVersionlessSubscriptionAndDomain(): void
