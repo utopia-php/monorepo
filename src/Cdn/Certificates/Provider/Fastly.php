@@ -115,7 +115,23 @@ class Fastly implements Provider
 
     public function isRenewRequired(string $domain, ?string $domainType): bool
     {
-        return $this->tls->isRenewRequired(Domain::validate($domain), $domainType);
+        $domain = Domain::validate($domain);
+        $domainInfo = $this->findDomain($domain);
+
+        if ($domainInfo === null) {
+            return true;
+        }
+
+        $serviceId = $domainInfo['service_id'] ?? null;
+        if (!\is_string($serviceId) || $serviceId === '') {
+            return false;
+        }
+
+        if ($serviceId !== $this->serviceId) {
+            return true;
+        }
+
+        return $this->tls->isRenewRequired($domain, $domainType);
     }
 
     public function deleteCertificate(string $domain, ?string $domainType = null): void

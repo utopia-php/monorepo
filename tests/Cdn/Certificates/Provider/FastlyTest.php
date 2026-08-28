@@ -103,6 +103,46 @@ class FastlyTest extends TestCase
         $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[1]['url']);
     }
 
+    public function testRenewIsRequiredWhenDomainBelongsToAnotherService(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
+        ]);
+
+        $renewRequired = (new Fastly('token', 'new_service', client: $client))
+            ->isRenewRequired('example.com', null);
+
+        $this->assertTrue($renewRequired);
+        $this->assertCount(1, $client->calls);
+    }
+
+    public function testRenewIsNotRequiredForClassicDomain(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com"}]}'),
+        ]);
+
+        $renewRequired = (new Fastly('token', 'service_1', client: $client))
+            ->isRenewRequired('example.com', null);
+
+        $this->assertFalse($renewRequired);
+        $this->assertCount(1, $client->calls);
+    }
+
+    public function testRenewDelegatesToTlsWhenDomainBelongsToService(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"service_1"}]}'),
+            $this->json('{"data":[{"id":"sub_1","attributes":{"state":"issued"}}]}'),
+        ]);
+
+        $renewRequired = (new Fastly('token', 'service_1', client: $client))
+            ->isRenewRequired('example.com', null);
+
+        $this->assertFalse($renewRequired);
+        $this->assertCount(2, $client->calls);
+    }
+
     public function testDeleteRemovesVersionlessSubscriptionAndDomain(): void
     {
         $client = new TestClient([
