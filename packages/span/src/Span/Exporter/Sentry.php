@@ -5,8 +5,8 @@ namespace Utopia\Span\Exporter;
 use Closure;
 use Composer\InstalledVersions;
 use Psr\Http\Client\ClientInterface;
-use Utopia\Client as HttpClient;
 use Utopia\Client\Adapter\Curl\Client as CurlClient;
+use Utopia\Client as HttpClient;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Request\Factory as RequestFactory;
 use Utopia\Span\Exporter\Sentry\Level as SentryLevel;
@@ -55,6 +55,10 @@ use Utopia\Span\Span;
  */
 class Sentry implements Exporter
 {
+    private const int DEFAULT_BATCH_SIZE = 100;
+
+    private const float DEFAULT_BATCH_INTERVAL = 10.0;
+
     private static ?string $sdkVersion = null;
 
     /**
@@ -81,6 +85,11 @@ class Sentry implements Exporter
 
     private readonly RequestFactory $requestFactory;
 
+    /** @var list<string> */
+    private array $pendingEnvelopes = [];
+
+    private int|float|null $batchStartedAt = null;
+
     /**
      * Create a new Sentry exporter.
      *
@@ -94,6 +103,8 @@ class Sentry implements Exporter
      * @param string|null $serverName Optional server name/identifier
      * @param Closure(string): SentryField|null $classifier Optional callback to classify attributes
      * @param ClientInterface|null $client Optional PSR-18 transport; defaults to `utopia-php/client` with its cURL adapter
+     * @param int $batchSize Maximum number of events buffered before they are sent
+     * @param float $batchInterval Maximum age in seconds checked whenever an event is buffered
      */
     public function __construct(
         ?Closure $sampler = null,
@@ -103,14 +114,24 @@ class Sentry implements Exporter
         private readonly ?string $serverName = null,
         ?Closure $classifier = null,
         ?ClientInterface $client = null,
+        private readonly int $batchSize = self::DEFAULT_BATCH_SIZE,
+        private readonly float $batchInterval = self::DEFAULT_BATCH_INTERVAL,
     ) {
+        if ($batchSize < 1) {
+            throw new \InvalidArgumentException('Sentry batch size must be at least 1');
+        }
+
+        if ($batchInterval <= 0 || !is_finite($batchInterval)) {
+            throw new \InvalidArgumentException('Sentry batch interval must be a finite number greater than 0');
+        }
+
         $this->classifier = $classifier ?? static fn(string $key): SentryField => SentryField::Context;
-        $this->client = $client ?? new HttpClient(
+        $this->client = $client ?? (new HttpClient(
             new CurlClient(options: [
                 \CURLOPT_TIMEOUT_MS => 1000,
                 \CURLOPT_CONNECTTIMEOUT_MS => 500,
             ]),
-        );
+        ))->withConnectionReuse();
         $this->requestFactory = new RequestFactory();
         $this->sampler = static function (Span $span) use ($sampler): bool {
             $level = Level::tryFrom((string) $span->get('level'));
@@ -159,7 +180,42 @@ class Sentry implements Exporter
             return;
         }
 
-        $this->sendWithClient($this->client, $envelope);
+        $now = hrtime(true);
+        $this->batchStartedAt ??= $now;
+        $this->pendingEnvelopes[] = $envelope;
+
+        $batchAge = ($now - $this->batchStartedAt) / 1_000_000_000;
+        if (\count($this->pendingEnvelopes) >= $this->batchSize || $batchAge >= $this->batchInterval) {
+            $this->flush();
+        }
+    }
+
+    /**
+     * Send all buffered Sentry events.
+     *
+     * Sentry envelopes may contain at most one error event, so buffered events
+     * are sent as individual envelopes through the configured PSR-18 client.
+     * Call this from a worker's periodic loop when a strict time-based flush is
+     * required; the interval is otherwise checked when new events are exported.
+     */
+    public function flush(): void
+    {
+        if ($this->pendingEnvelopes === []) {
+            return;
+        }
+
+        $envelopes = $this->pendingEnvelopes;
+        $this->pendingEnvelopes = [];
+        $this->batchStartedAt = null;
+
+        foreach ($envelopes as $envelope) {
+            $this->sendWithClient($this->client, $envelope);
+        }
+    }
+
+    public function __destruct()
+    {
+        $this->flush();
     }
 
     private function sendWithClient(ClientInterface $client, string $envelope): void

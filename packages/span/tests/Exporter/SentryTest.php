@@ -17,6 +17,19 @@ use Utopia\Span\Span;
 
 class NamespacedTestException extends \RuntimeException {}
 
+class RecordingClient implements ClientInterface
+{
+    /** @var list<RequestInterface> */
+    public array $requests = [];
+
+    public function sendRequest(RequestInterface $request): ResponseInterface
+    {
+        $this->requests[] = $request;
+
+        return new ResponseFactory()->createResponse(202);
+    }
+}
+
 class SentryTest extends TestCase
 {
     /**
@@ -156,6 +169,7 @@ class SentryTest extends TestCase
         $exporter = new Sentry(
             dsn: 'https://publickey@sentry.example.com:9000/123',
             client: $client,
+            batchSize: 1,
         );
         $span = new Span('test');
         $span->finish(error: new \RuntimeException('Test error'));
@@ -172,6 +186,89 @@ class SentryTest extends TestCase
         );
         $this->assertStringContainsString('"type":"event"', (string) $client->request->getBody());
         $this->assertStringContainsString('"value":"Test error"', (string) $client->request->getBody());
+    }
+
+    public function testExportBuffersUntilBatchSizeIsReached(): void
+    {
+        $client = $this->recordingClient();
+        $exporter = new Sentry(
+            dsn: 'https://key@sentry.io/123',
+            client: $client,
+            batchSize: 2,
+        );
+
+        $exporter->export($this->errorSpan('first'));
+        $this->assertCount(0, $client->requests);
+
+        $exporter->export($this->errorSpan('second'));
+        $this->assertCount(2, $client->requests);
+        $this->assertStringContainsString('"value":"first"', (string) $client->requests[0]->getBody());
+        $this->assertStringContainsString('"value":"second"', (string) $client->requests[1]->getBody());
+    }
+
+    public function testExportFlushesWhenBatchIntervalHasElapsed(): void
+    {
+        $client = $this->recordingClient();
+        $exporter = new Sentry(
+            dsn: 'https://key@sentry.io/123',
+            client: $client,
+            batchSize: 100,
+            batchInterval: 10,
+        );
+
+        $exporter->export($this->errorSpan('first'));
+
+        $batchStartedAt = new \ReflectionProperty(Sentry::class, 'batchStartedAt');
+        $batchStartedAt->setValue($exporter, hrtime(true) - 11_000_000_000);
+
+        $exporter->export($this->errorSpan('second'));
+
+        $this->assertCount(2, $client->requests);
+    }
+
+    public function testFlushSendsPartialBatch(): void
+    {
+        $client = $this->recordingClient();
+        $exporter = new Sentry(
+            dsn: 'https://key@sentry.io/123',
+            client: $client,
+        );
+
+        $exporter->export($this->errorSpan('queued'));
+        $exporter->flush();
+
+        $this->assertCount(1, $client->requests);
+
+        $exporter->flush();
+        $this->assertCount(1, $client->requests);
+    }
+
+    public function testDestructorFlushesPartialBatch(): void
+    {
+        $client = $this->recordingClient();
+        $exporter = new Sentry(
+            dsn: 'https://key@sentry.io/123',
+            client: $client,
+        );
+
+        $exporter->export($this->errorSpan('queued'));
+        unset($exporter);
+
+        $this->assertCount(1, $client->requests);
+    }
+
+    public function testConstructorRejectsInvalidBatchSettings(): void
+    {
+        try {
+            new Sentry(dsn: 'https://key@sentry.io/123', batchSize: 0);
+            $this->fail('Expected invalid batch size to throw');
+        } catch (\InvalidArgumentException $error) {
+            $this->assertSame('Sentry batch size must be at least 1', $error->getMessage());
+        }
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Sentry batch interval must be a finite number greater than 0');
+        new Sentry(dsn: 'https://key@sentry.io/123', batchInterval: 0);
     }
 
     public function testExportHandlesSpanWithAllAttributes(): void
@@ -431,5 +528,18 @@ class SentryTest extends TestCase
         } catch (\RuntimeException $error) {
             return $error;
         }
+    }
+
+    private function errorSpan(string $message): Span
+    {
+        $span = new Span('test');
+        $span->finish(error: new \RuntimeException($message));
+
+        return $span;
+    }
+
+    private function recordingClient(): RecordingClient
+    {
+        return new RecordingClient();
     }
 }
