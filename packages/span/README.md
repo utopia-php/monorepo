@@ -193,11 +193,11 @@ Span::setExporters(new Exporter\Sentry(
 
 Only exports error spans with full stacktraces. Non-error spans are skipped, even if you pass a custom `sampler`.
 
-Events are buffered by default and sent after 100 errors or when a new error
-arrives at least 10 seconds after the batch started. Call `flush()` from a
-worker's periodic loop for a strict interval and before a graceful shutdown;
-the exporter also flushes pending events when it is destroyed. Both limits are
-configurable:
+Events are sent immediately by default (`batchSize: 1`, `batchInterval: null`)
+to preserve synchronous delivery. Set a larger batch size and an interval to
+buffer events. The interval is checked when a new error arrives; call `flush()`
+from a worker's periodic loop for a strict interval and before a graceful
+shutdown. The exporter also flushes pending events when it is destroyed.
 
 ```php
 $sentry = new Exporter\Sentry(

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Sentry exporter: buffer events and flush after 100 errors or when a new event arrives after 10 seconds by default. Batch limits are configurable, partial batches can be sent with `flush()`, and pending events are flushed on destruction.
+- Sentry exporter: optionally buffer events with configurable batch size and interval limits. Immediate synchronous delivery remains the default, partial batches can be sent with `flush()`, and pending events are flushed on destruction.
 - Sentry exporter: deliver envelopes exclusively through PSR-18. It defaults to `utopia-php/client` with its cURL adapter and accepts injected clients such as a coroutine-safe `Utopia\Client\Pool`.
 
 ## 3.0.0

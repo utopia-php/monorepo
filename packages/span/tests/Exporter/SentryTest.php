@@ -202,7 +202,6 @@ class SentryTest extends TestCase
         $exporter = new Sentry(
             dsn: 'https://publickey@sentry.example.com:9000/123',
             client: $client,
-            batchSize: 1,
         );
         $span = new Span('test');
         $span->finish(error: new \RuntimeException('Test error'));
@@ -265,6 +264,7 @@ class SentryTest extends TestCase
         $exporter = new Sentry(
             dsn: 'https://key@sentry.io/123',
             client: $client,
+            batchSize: 100,
         );
 
         $exporter->export($this->errorSpan('queued'));
@@ -282,6 +282,7 @@ class SentryTest extends TestCase
         $exporter = new Sentry(
             dsn: 'https://key@sentry.io/123',
             client: $client,
+            batchSize: 100,
         );
 
         $exporter->export($this->errorSpan('queued'));
