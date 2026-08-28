@@ -135,6 +135,19 @@ class FastlyTest extends TestCase
         $this->assertSame('https://api.fastly.com/service/service_1/version/4/domain/example.com', $client->calls[3]['url']);
     }
 
+    public function testClassicDomainOwnedByAnotherServiceLeavesTlsUntouched(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com"}]}'),
+            $this->json('{"active_version":{"number":3,"domains":[{"name":"other.example.com"}]}}'),
+        ]);
+
+        (new Fastly('token', 'service_1', client: $client))->deleteCertificate('example.com');
+
+        $this->assertCount(2, $client->calls);
+        $this->assertSame('https://api.fastly.com/service/service_1/details', $client->calls[1]['url']);
+    }
+
     public function testDeleteStillRemovesOrphanedTlsSubscription(): void
     {
         $client = new TestClient([

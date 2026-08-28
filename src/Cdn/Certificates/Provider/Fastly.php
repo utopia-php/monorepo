@@ -178,7 +178,9 @@ class Fastly implements Provider
         );
 
         if (!$containsDomain) {
-            $this->tls->deleteCertificate($domain, $domainType);
+            // Classic domain records do not identify their service. An
+            // account-wide FQDN match that is absent from this service may
+            // belong to another service, whose TLS must remain untouched.
             return;
         }
 
