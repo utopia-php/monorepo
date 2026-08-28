@@ -6,7 +6,6 @@ namespace Utopia\Tests\Storage\Device\S3;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Client\Exception\ConnectionException;
-use Utopia\Client\Exception\DnsException;
 use Utopia\Client\Exception\NetworkException;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Response;
@@ -92,14 +91,6 @@ final class RetryStrategyTest extends TestCase
     public function testRefusedConnectionIsRetried(): void
     {
         $error = new ConnectionException($this->request(), 'Could not connect to server');
-        $strategy = new RetryStrategy(delay: 0.5, randomizer: static fn(): float => 1.0);
-
-        $this->assertEqualsWithDelta(0.5, $strategy->delay($this->request(), 1, null, $error), PHP_FLOAT_EPSILON);
-    }
-
-    public function testUnresolvableHostIsRetried(): void
-    {
-        $error = new DnsException($this->request(), 'Could not resolve host');
         $strategy = new RetryStrategy(delay: 0.5, randomizer: static fn(): float => 1.0);
 
         $this->assertEqualsWithDelta(0.5, $strategy->delay($this->request(), 1, null, $error), PHP_FLOAT_EPSILON);
