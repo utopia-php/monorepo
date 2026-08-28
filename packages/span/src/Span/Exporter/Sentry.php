@@ -79,6 +79,8 @@ class Sentry implements Exporter
 
     private readonly ClientInterface $client;
 
+    private readonly RequestFactory $requestFactory;
+
     /**
      * Create a new Sentry exporter.
      *
@@ -109,6 +111,7 @@ class Sentry implements Exporter
                 \CURLOPT_CONNECTTIMEOUT_MS => 500,
             ]),
         );
+        $this->requestFactory = new RequestFactory();
         $this->sampler = static function (Span $span) use ($sampler): bool {
             $level = Level::tryFrom((string) $span->get('level'));
             if ($level === null || !\in_array($level, self::EXPORT_LEVELS, true)) {
@@ -161,7 +164,7 @@ class Sentry implements Exporter
 
     private function sendWithClient(ClientInterface $client, string $envelope): void
     {
-        $request = new RequestFactory()->body(
+        $request = $this->requestFactory->body(
             Method::POST,
             $this->endpoint,
             $envelope,
