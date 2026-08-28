@@ -20,8 +20,7 @@
         "utopia-php/psr7": "^0.1 || ^0.2"
     },
     "require-dev": {
-        "swoole/ide-helper": "^5.0",
-        "utopia-php/pools": "^2.0"
+        "swoole/ide-helper": "^5.0"
     },
     "scripts": {
         "test": "phpunit"
