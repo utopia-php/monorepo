@@ -9,6 +9,9 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Utopia\Client as HttpClient;
+use Utopia\Client\Pool as HttpClientPool;
+use Utopia\Pools\Adapter\Swoole as SwoolePool;
+use Utopia\Pools\Pool as Connections;
 use Utopia\Psr7\Response\Factory as ResponseFactory;
 use Utopia\Span\Exporter\Sentry;
 use Utopia\Span\Exporter\SentryField;
@@ -27,6 +30,36 @@ class RecordingClient implements ClientInterface
         $this->requests[] = $request;
 
         return new ResponseFactory()->createResponse(202);
+    }
+}
+
+class CoroutineRequestRecorder
+{
+    /** @var list<RequestInterface> */
+    public array $requests = [];
+
+    public int $active = 0;
+
+    public int $maxActive = 0;
+}
+
+class YieldingRecordingClient implements ClientInterface
+{
+    public function __construct(private readonly CoroutineRequestRecorder $recorder) {}
+
+    public function sendRequest(RequestInterface $request): ResponseInterface
+    {
+        ++$this->recorder->active;
+        $this->recorder->maxActive = max($this->recorder->maxActive, $this->recorder->active);
+
+        try {
+            \Swoole\Coroutine::sleep(0.001);
+            $this->recorder->requests[] = $request;
+
+            return new ResponseFactory()->createResponse(202);
+        } finally {
+            --$this->recorder->active;
+        }
     }
 }
 
@@ -255,6 +288,65 @@ class SentryTest extends TestCase
         unset($exporter);
 
         $this->assertCount(1, $client->requests);
+    }
+
+    public function testCoroutineFlushesUseDisjointBufferSnapshotsWithPooledClients(): void
+    {
+        if (!\extension_loaded('swoole')) {
+            $this->markTestSkipped('Swoole extension not available');
+        }
+
+        $total = 100;
+        $recorder = new CoroutineRequestRecorder();
+
+        \Swoole\Coroutine\run(function () use ($total, $recorder): void {
+            $client = new HttpClientPool(new Connections(
+                adapter: new SwoolePool(),
+                name: 'sentry-test',
+                size: 4,
+                init: fn(): YieldingRecordingClient => new YieldingRecordingClient($recorder),
+                timeout: 1,
+            ));
+            $exporter = new Sentry(
+                dsn: 'https://key@sentry.io/123',
+                client: $client,
+                batchSize: 5,
+            );
+            $done = new \Swoole\Coroutine\Channel($total);
+
+            for ($index = 0; $index < $total; ++$index) {
+                \Swoole\Coroutine::create(function () use ($done, $exporter, $index): void {
+                    try {
+                        $exporter->export($this->errorSpan(\sprintf('error-%03d', $index)));
+                    } finally {
+                        $done->push(true);
+                    }
+                });
+            }
+
+            for ($index = 0; $index < $total; ++$index) {
+                $done->pop();
+            }
+
+            $exporter->flush();
+        });
+
+        $this->assertGreaterThan(1, $recorder->maxActive, 'The test must exercise overlapping flush I/O');
+        $this->assertLessThanOrEqual(4, $recorder->maxActive, 'The client pool must bound transport concurrency');
+        $this->assertCount($total, $recorder->requests);
+
+        $messages = array_map(function (RequestInterface $request): string {
+            $lines = explode("\n", (string) $request->getBody());
+            $payload = json_decode($lines[2], true, flags: JSON_THROW_ON_ERROR);
+
+            return $payload['exception']['values'][0]['value'];
+        }, $recorder->requests);
+        sort($messages);
+
+        $this->assertSame(
+            array_map(fn(int $index): string => \sprintf('error-%03d', $index), range(0, $total - 1)),
+            $messages,
+        );
     }
 
     public function testConstructorRejectsInvalidBatchSettings(): void
