@@ -193,6 +193,17 @@ Span::setExporters(new Exporter\Sentry(
 
 Only exports error spans with full stacktraces. Non-error spans are skipped, even if you pass a custom `sampler`.
 
+Pass any PSR-18 client as `client` to control the HTTP transport. Workers can
+inject a coroutine-safe `Utopia\Client\Pool`. When omitted, the exporter creates
+a `Utopia\Client` using its cURL adapter.
+
+```php
+Span::setExporters(new Exporter\Sentry(
+    dsn: 'https://key@sentry.io/123',
+    client: $clientPool,
+));
+```
+
 ### Custom exporter
 
 ```php

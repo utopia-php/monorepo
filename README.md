@@ -86,6 +86,8 @@ graph TD
     schedule --> telemetry
     servers --> di
     servers --> validators
+    span --> client
+    span --> psr7
     storage --> telemetry
     storage --> validators
     storage --> client

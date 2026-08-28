@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Utopia\Span\Tests\Exporter;
 
 use PHPUnit\Framework\TestCase;
+use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
+use Utopia\Client as HttpClient;
+use Utopia\Psr7\Response\Factory as ResponseFactory;
 use Utopia\Span\Exporter\Sentry;
 use Utopia\Span\Exporter\SentryField;
 use Utopia\Span\Level;
@@ -42,6 +47,14 @@ class SentryTest extends TestCase
         $exporter = new Sentry(dsn: 'https://publickey@sentry.io/123456');
 
         $this->assertInstanceOf(Sentry::class, $exporter);
+    }
+
+    public function testConstructorDefaultsToUtopiaClient(): void
+    {
+        $exporter = new Sentry(dsn: 'https://publickey@sentry.io/123456');
+        $property = new \ReflectionProperty(Sentry::class, 'client');
+
+        $this->assertInstanceOf(HttpClient::class, $property->getValue($exporter));
     }
 
     public function testConstructorThrowsOnInvalidDsn(): void
@@ -126,6 +139,39 @@ class SentryTest extends TestCase
         $exporter->export($span);
 
         $this->assertTrue(true);
+    }
+
+    public function testExportUsesInjectedPsr18Client(): void
+    {
+        $client = new class implements ClientInterface {
+            public ?RequestInterface $request = null;
+
+            public function sendRequest(RequestInterface $request): ResponseInterface
+            {
+                $this->request = $request;
+
+                return new ResponseFactory()->createResponse(202);
+            }
+        };
+        $exporter = new Sentry(
+            dsn: 'https://publickey@sentry.example.com:9000/123',
+            client: $client,
+        );
+        $span = new Span('test');
+        $span->finish(error: new \RuntimeException('Test error'));
+
+        $exporter->export($span);
+
+        $this->assertNotNull($client->request);
+        $this->assertSame('POST', $client->request->getMethod());
+        $this->assertSame('https://sentry.example.com:9000/api/123/envelope/', (string) $client->request->getUri());
+        $this->assertSame('application/x-sentry-envelope', $client->request->getHeaderLine('Content-Type'));
+        $this->assertSame(
+            'Sentry sentry_version=7, sentry_key=publickey',
+            $client->request->getHeaderLine('X-Sentry-Auth'),
+        );
+        $this->assertStringContainsString('"type":"event"', (string) $client->request->getBody());
+        $this->assertStringContainsString('"value":"Test error"', (string) $client->request->getBody());
     }
 
     public function testExportHandlesSpanWithAllAttributes(): void

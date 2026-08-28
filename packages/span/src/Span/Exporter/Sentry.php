@@ -4,6 +4,11 @@ namespace Utopia\Span\Exporter;
 
 use Closure;
 use Composer\InstalledVersions;
+use Psr\Http\Client\ClientInterface;
+use Utopia\Client as HttpClient;
+use Utopia\Client\Adapter\Curl\Client as CurlClient;
+use Utopia\Psr7\Method;
+use Utopia\Psr7\Request\Factory as RequestFactory;
 use Utopia\Span\Exporter\Sentry\Level as SentryLevel;
 use Utopia\Span\Level;
 use Utopia\Span\Span;
@@ -72,6 +77,10 @@ class Sentry implements Exporter
     /** @var Closure(Span): bool */
     private readonly Closure $sampler;
 
+    private readonly ClientInterface $client;
+
+    private readonly RequestFactory $requestFactory;
+
     /**
      * Create a new Sentry exporter.
      *
@@ -84,6 +93,7 @@ class Sentry implements Exporter
      * @param string|null $release Optional release/version identifier (e.g., commit hash)
      * @param string|null $serverName Optional server name/identifier
      * @param Closure(string): SentryField|null $classifier Optional callback to classify attributes
+     * @param ClientInterface|null $client Optional PSR-18 transport; defaults to `utopia-php/client` with its cURL adapter
      */
     public function __construct(
         ?Closure $sampler = null,
@@ -92,8 +102,16 @@ class Sentry implements Exporter
         private readonly ?string $release = null,
         private readonly ?string $serverName = null,
         ?Closure $classifier = null,
+        ?ClientInterface $client = null,
     ) {
         $this->classifier = $classifier ?? static fn(string $key): SentryField => SentryField::Context;
+        $this->client = $client ?? new HttpClient(
+            new CurlClient(options: [
+                \CURLOPT_TIMEOUT_MS => 1000,
+                \CURLOPT_CONNECTTIMEOUT_MS => 500,
+            ]),
+        );
+        $this->requestFactory = new RequestFactory();
         $this->sampler = static function (Span $span) use ($sampler): bool {
             $level = Level::tryFrom((string) $span->get('level'));
             if ($level === null || !\in_array($level, self::EXPORT_LEVELS, true)) {
@@ -141,36 +159,29 @@ class Sentry implements Exporter
             return;
         }
 
-        $ch = curl_init($this->endpoint);
+        $this->sendWithClient($this->client, $envelope);
+    }
 
-        if ($ch === false) {
-            error_log('Sentry exporter: Failed to initialize curl');
-            return;
-        }
+    private function sendWithClient(ClientInterface $client, string $envelope): void
+    {
+        $request = $this->requestFactory->body(
+            Method::POST,
+            $this->endpoint,
+            $envelope,
+            'application/x-sentry-envelope',
+            ['X-Sentry-Auth' => "Sentry sentry_version=7, sentry_key={$this->publicKey}"],
+        );
 
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $envelope,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/x-sentry-envelope',
-                "X-Sentry-Auth: Sentry sentry_version=7, sentry_key={$this->publicKey}",
-            ],
-            CURLOPT_TIMEOUT_MS => 1000,
-            CURLOPT_CONNECTTIMEOUT_MS => 500,
-        ]);
+        try {
+            $response = $client->sendRequest($request);
+            $statusCode = $response->getStatusCode();
 
-        $result = curl_exec($ch);
-
-        if ($result === false) {
-            error_log('Sentry exporter: ' . curl_error($ch));
-        } else {
-            $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             if ($statusCode >= 400) {
-                error_log("Sentry exporter: HTTP {$statusCode} - {$result}");
+                error_log("Sentry exporter: HTTP {$statusCode} - {$response->getBody()}");
             }
+        } catch (\Throwable $error) {
+            error_log('Sentry exporter: ' . $error->getMessage());
         }
-
     }
 
     private function buildEnvelope(Span $span): ?string
