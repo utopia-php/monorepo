@@ -75,7 +75,7 @@ class FastlyTls implements Provider
 
         $result = $this->request(
             'DELETE',
-            '/tls/subscriptions/' . $subscription['resource']['id']
+            '/tls/subscriptions/' . $subscription['resource']['id'] . '?force=true'
         );
 
         if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
@@ -131,32 +131,37 @@ class FastlyTls implements Provider
      */
     private function createSubscription(string $domain): array
     {
+        $relationships = [
+            'tls_domains' => [
+                'data' => [[
+                    'type' => 'tls_domain',
+                    'id' => $domain,
+                ]],
+            ],
+        ];
+
+        if ($this->tlsConfigurationId !== '') {
+            $relationships['common_name'] = [
+                'data' => [
+                    'type' => 'tls_domain',
+                    'id' => $domain,
+                ],
+            ];
+            $relationships['tls_configuration'] = [
+                'data' => [
+                    'type' => 'tls_configuration',
+                    'id' => $this->tlsConfigurationId,
+                ],
+            ];
+        }
+
         $result = $this->request('POST', '/tls/subscriptions', [
             'data' => [
                 'type' => 'tls_subscription',
                 'attributes' => [
                     'certificate_authority' => $this->certificateAuthority,
                 ],
-                'relationships' => [
-                    'common_name' => [
-                        'data' => [
-                            'type' => 'tls_domain',
-                            'id' => $domain,
-                        ],
-                    ],
-                    'tls_configuration' => [
-                        'data' => [
-                            'type' => 'tls_configuration',
-                            'id' => $this->tlsConfigurationId,
-                        ],
-                    ],
-                    'tls_domains' => [
-                        'data' => [[
-                            'type' => 'tls_domain',
-                            'id' => $domain,
-                        ]],
-                    ],
-                ],
+                'relationships' => $relationships,
             ],
         ]);
 
