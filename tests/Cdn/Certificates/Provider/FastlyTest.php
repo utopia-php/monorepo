@@ -33,23 +33,24 @@ class FastlyTest extends TestCase
     {
         $client = new TestClient([
             $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
-            $this->json('{"id":"domain_1","fqdn":"example.com","service_id":"new_service"}'),
             $this->json('{"data":[{"id":"sub_1","attributes":{"state":"issued"}}]}'),
+            $this->json('{"id":"domain_1","fqdn":"example.com","service_id":"new_service"}'),
         ]);
 
         (new Fastly('token', 'new_service', client: $client))->issueCertificate('cert', 'example.com', null);
 
         $this->assertCount(3, $client->calls);
-        $this->assertSame('PATCH', $client->calls[1]['method']);
-        $this->assertSame('https://api.fastly.com/domain-management/v1/domains/domain_1', $client->calls[1]['url']);
-        $this->assertSame(['service_id' => 'new_service'], $client->calls[1]['body']);
-        $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[2]['url']);
+        $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[1]['url']);
+        $this->assertSame('PATCH', $client->calls[2]['method']);
+        $this->assertSame('https://api.fastly.com/domain-management/v1/domains/domain_1', $client->calls[2]['url']);
+        $this->assertSame(['service_id' => 'new_service'], $client->calls[2]['body']);
     }
 
     public function testFailedVersionlessReassignmentLeavesDomainAndTlsUntouched(): void
     {
         $client = new TestClient([
             $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
+            $this->json('{"data":[{"id":"sub_1","attributes":{"state":"issued"}}]}'),
             $this->json('{"msg":"service unavailable"}', 503),
         ]);
 
@@ -60,17 +61,16 @@ class FastlyTest extends TestCase
             $this->assertStringContainsString('reassign Fastly domain', $error->getMessage());
         }
 
-        $this->assertCount(2, $client->calls);
-        $this->assertSame('PATCH', $client->calls[1]['method']);
+        $this->assertCount(3, $client->calls);
+        $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[1]['url']);
+        $this->assertSame('PATCH', $client->calls[2]['method']);
     }
 
-    public function testTlsFailureRollsVersionlessDomainBackToOriginalService(): void
+    public function testTlsFailureStopsBeforeVersionlessDomainReassignment(): void
     {
         $client = new TestClient([
             $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
-            $this->json('{"id":"domain_1","fqdn":"example.com","service_id":"new_service"}'),
             $this->json('{"msg":"TLS unavailable"}', 503),
-            $this->json('{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}'),
         ]);
 
         try {
@@ -80,30 +80,8 @@ class FastlyTest extends TestCase
             $this->assertStringContainsString('fetch Fastly TLS subscriptions', $error->getMessage());
         }
 
-        $this->assertCount(4, $client->calls);
-        $this->assertSame(['service_id' => 'new_service'], $client->calls[1]['body']);
-        $this->assertSame(['service_id' => 'old_service'], $client->calls[3]['body']);
-    }
-
-    public function testTlsAndRollbackFailureReportsBothErrors(): void
-    {
-        $client = new TestClient([
-            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
-            $this->json('{"id":"domain_1","fqdn":"example.com","service_id":"new_service"}'),
-            $this->json('{"msg":"TLS unavailable"}', 503),
-            $this->json('{"msg":"rollback unavailable"}', 503),
-        ]);
-
-        try {
-            (new Fastly('token', 'new_service', client: $client))->issueCertificate('cert', 'example.com', null);
-            $this->fail('Expected TLS issuance and rollback to fail.');
-        } catch (\RuntimeException $error) {
-            $this->assertStringContainsString('TLS unavailable', $error->getMessage());
-            $this->assertStringContainsString('rollback unavailable', $error->getMessage());
-        }
-
-        $this->assertCount(4, $client->calls);
-        $this->assertSame(['service_id' => 'old_service'], $client->calls[3]['body']);
+        $this->assertCount(2, $client->calls);
+        $this->assertStringStartsWith('https://api.fastly.com/tls/subscriptions?', $client->calls[1]['url']);
     }
 
     public function testDeleteRemovesVersionlessSubscriptionAndDomain(): void
