@@ -170,6 +170,17 @@ $renewRequired = $certificates->isRenewRequired('cdn.example.com', null);
 
 `issueCertificate()` returns a renew date when Fastly already has an issued or renewing certificate. For asynchronous states like `pending` or `processing`, it returns `null`.
 
+When Fastly domain management owns the domain lifecycle, use the managed provider instead. It creates versionless domains on the configured service and removes both the domain and TLS subscription on deletion. Classic domains are removed by cloning and activating their service version first.
+
+```php
+use Utopia\Cdn\Certificates\Provider\Fastly;
+
+$fastlyCertificates = new Fastly(
+    apiToken: 'YOUR_API_TOKEN',
+    serviceId: 'YOUR_SERVICE_ID',
+);
+```
+
 ### Cloudflare certificates
 
 Cloudflare certificates use Cloudflare for SaaS custom hostnames, which must be enabled for the zone and plan.

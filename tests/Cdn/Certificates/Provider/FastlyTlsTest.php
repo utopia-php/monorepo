@@ -29,6 +29,21 @@ class FastlyTlsTest extends TestCase
         $this->assertSame('tls-config-id', $client->calls[1]['body']['data']['relationships']['tls_configuration']['data']['id']);
     }
 
+    public function testIssueCertificateCanUseFastlyDomainManagementWithoutAConfiguration(): void
+    {
+        $client = new TestClient([
+            new Response(200, body: new Stream('{"data":[]}')),
+            new Response(201, body: new Stream('{"data":{"id":"sub_123","attributes":{"state":"pending"}}}')),
+        ]);
+
+        (new FastlyTls('token', '', 'certainly', $client))->issueCertificate('cert', 'example.com', null);
+
+        $relationships = $client->calls[1]['body']['data']['relationships'];
+        $this->assertSame('example.com', $relationships['tls_domains']['data'][0]['id']);
+        $this->assertArrayNotHasKey('common_name', $relationships);
+        $this->assertArrayNotHasKey('tls_configuration', $relationships);
+    }
+
     public function testGetCertificateStatusMapsFastlyState(): void
     {
         $client = new TestClient([
@@ -54,7 +69,7 @@ class FastlyTlsTest extends TestCase
 
         $this->assertCount(2, $client->calls);
         $this->assertSame('DELETE', $client->calls[1]['method']);
-        $this->assertSame('https://api.fastly.com/tls/subscriptions/sub_123', $client->calls[1]['url']);
+        $this->assertSame('https://api.fastly.com/tls/subscriptions/sub_123?force=true', $client->calls[1]['url']);
     }
 
     public function testIssueCertificateReturnsRenewDateFromIncludedCertificate(): void
