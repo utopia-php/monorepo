@@ -116,6 +116,19 @@ class FastlyTest extends TestCase
         $this->assertCount(1, $client->calls);
     }
 
+    public function testRenewIsNotRequiredForClassicDomain(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com"}]}'),
+        ]);
+
+        $renewRequired = (new Fastly('token', 'service_1', client: $client))
+            ->isRenewRequired('example.com', null);
+
+        $this->assertFalse($renewRequired);
+        $this->assertCount(1, $client->calls);
+    }
+
     public function testRenewDelegatesToTlsWhenDomainBelongsToService(): void
     {
         $client = new TestClient([
