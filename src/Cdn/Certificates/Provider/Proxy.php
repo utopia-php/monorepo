@@ -21,6 +21,7 @@ class Proxy implements Provider
 
     public function issueCertificate(string $certName, string $domain, ?string $domainType): ?string
     {
+        $domain = Domain::validate($domain);
         $renewDate = null;
 
         foreach ($this->select($domain, $domainType) as $provider) {
@@ -33,6 +34,8 @@ class Proxy implements Provider
 
     public function isInstantGeneration(string $domain, ?string $domainType): bool
     {
+        $domain = Domain::validate($domain);
+
         foreach ($this->select($domain, $domainType) as $provider) {
             if (!$provider->isInstantGeneration($domain, $domainType)) {
                 return false;
@@ -44,6 +47,8 @@ class Proxy implements Provider
 
     public function getCertificateStatus(string $domain, ?string $domainType): string
     {
+        $domain = Domain::validate($domain);
+
         foreach ($this->select($domain, $domainType) as $provider) {
             if ($provider->isInstantGeneration($domain, $domainType)) {
                 continue;
@@ -60,6 +65,8 @@ class Proxy implements Provider
 
     public function isRenewRequired(string $domain, ?string $domainType): bool
     {
+        $domain = Domain::validate($domain);
+
         foreach ($this->select($domain, $domainType) as $provider) {
             if ($provider->isRenewRequired($domain, $domainType)) {
                 return true;
@@ -71,16 +78,19 @@ class Proxy implements Provider
 
     public function deleteCertificate(string $domain, ?string $domainType = null): void
     {
+        $domain = Domain::validate($domain);
+
         foreach ($this->select($domain, $domainType) as $provider) {
             $provider->deleteCertificate($domain, $domainType);
         }
     }
 
-    /** @return array<int, Provider> */
+    /**
+     * @param string $domain Already normalized by the calling entry point.
+     * @return array<int, Provider>
+     */
     private function select(string $domain, ?string $domainType): array
     {
-        $domain = Domain::validate($domain);
-
         if (\in_array($domainType, ['site', 'network', 'redirect'], true)) {
             return [$this->networkProvider];
         }

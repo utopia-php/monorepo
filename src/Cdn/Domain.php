@@ -4,10 +4,19 @@ namespace Utopia\Cdn;
 
 final class Domain
 {
+    /**
+     * Normalize a domain to its canonical form.
+     *
+     * DNS labels are case-insensitive (RFC 4343), so case carries no meaning
+     * and is folded rather than rejected. Callers must use the returned value:
+     * it is what providers and equality checks are expected to see.
+     */
     public static function validate(string $domain): string
     {
-        if ($domain === '' || $domain !== \strtolower($domain) || \filter_var($domain, \FILTER_VALIDATE_DOMAIN, \FILTER_FLAG_HOSTNAME) === false) {
-            throw new \InvalidArgumentException('Domain must be a lowercase hostname without a scheme, port, path, or trailing slash.');
+        $domain = \strtolower($domain);
+
+        if ($domain === '' || \filter_var($domain, \FILTER_VALIDATE_DOMAIN, \FILTER_FLAG_HOSTNAME) === false) {
+            throw new \InvalidArgumentException('Domain must be a hostname without a scheme, port, path, or trailing slash.');
         }
 
         return $domain;
