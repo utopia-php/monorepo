@@ -1373,16 +1373,16 @@
         },
         {
             "name": "symfony/http-client",
-            "version": "v7.4.17",
+            "version": "v7.4.16",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/http-client.git",
-                "reference": "d0aca330a822fe40376cd04c335cb48a24743d0c"
+                "reference": "c513ed0ba5d1784a6b55fc84190dbe4451b12f41"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/http-client/zipball/d0aca330a822fe40376cd04c335cb48a24743d0c",
-                "reference": "d0aca330a822fe40376cd04c335cb48a24743d0c",
+                "url": "https://api.github.com/repos/symfony/http-client/zipball/c513ed0ba5d1784a6b55fc84190dbe4451b12f41",
+                "reference": "c513ed0ba5d1784a6b55fc84190dbe4451b12f41",
                 "shasum": ""
             },
             "require": {
@@ -1450,7 +1450,7 @@
                 "http"
             ],
             "support": {
-                "source": "https://github.com/symfony/http-client/tree/v7.4.17"
+                "source": "https://github.com/symfony/http-client/tree/v7.4.16"
             },
             "funding": [
                 {
@@ -1470,7 +1470,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-08-21T17:40:08+00:00"
+            "time": "2026-07-29T16:20:51+00:00"
         },
         {
             "name": "symfony/http-client-contracts",
@@ -2094,7 +2094,6 @@
                 "issues": "https://github.com/utopia-php/fetch/issues",
                 "source": "https://github.com/utopia-php/fetch/tree/1.1.2"
             },
-            "abandoned": true,
             "time": "2026-04-29T11:19:19+00:00"
         },
         {
@@ -2155,19 +2154,20 @@
         },
         {
             "name": "utopia-php/telemetry",
-            "version": "0.4.7",
+            "version": "0.4.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/utopia-php/telemetry.git",
-                "reference": "186dc1c1f92fbd15a1aa6a63515d0f4251dc88ff"
+                "reference": "f96778a01792c32df0876fe1f38a79b9588445d8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/utopia-php/telemetry/zipball/186dc1c1f92fbd15a1aa6a63515d0f4251dc88ff",
-                "reference": "186dc1c1f92fbd15a1aa6a63515d0f4251dc88ff",
+                "url": "https://api.github.com/repos/utopia-php/telemetry/zipball/f96778a01792c32df0876fe1f38a79b9588445d8",
+                "reference": "f96778a01792c32df0876fe1f38a79b9588445d8",
                 "shasum": ""
             },
             "require": {
+                "ext-protobuf": "*",
                 "nyholm/psr7": "1.*",
                 "open-telemetry/exporter-otlp": "1.*",
                 "open-telemetry/sdk": "1.*",
@@ -2178,7 +2178,6 @@
                 "swoole/ide-helper": "6.*"
             },
             "suggest": {
-                "ext-protobuf": "For better performance, when dealing with the protobuf format",
                 "ext-sockets": "Required for the Swoole transport implementation",
                 "ext-swoole": "Required for the Swoole transport implementation"
             },
@@ -2200,9 +2199,9 @@
             ],
             "support": {
                 "issues": "https://github.com/utopia-php/telemetry/issues",
-                "source": "https://github.com/utopia-php/telemetry/tree/0.4.7"
+                "source": "https://github.com/utopia-php/telemetry/tree/0.4.6"
             },
-            "time": "2026-08-26T17:59:59+00:00"
+            "time": "2026-08-05T17:56:48+00:00"
         }
     ],
     "packages-dev": [
