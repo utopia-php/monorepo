@@ -28,6 +28,30 @@ Filter semantics are unchanged: `contains` / `notContains` remain substring
 matches (now compiled to ClickHouse `position(col, ?) > 0` / `= 0` rather than
 `LIKE '%needle%'`, which also removes the need for wildcard escaping).
 
+### ClickHouse adapter — repairing schema drift on existing tables
+
+`setup()` only issues `CREATE TABLE IF NOT EXISTS`, so a table created before a
+column joined the schema never gains it. Deployments that provision their tables
+out of band have no other reconciliation step, and the drift surfaces as
+`UNKNOWN_IDENTIFIER` on reads that project the column and
+`NO_SUCH_COLUMN_IN_TABLE` on writes that supply it.
+
+#### Added
+
+- `ClickHouse::getMissingColumns()` reports the schema columns a live table
+  lacks, as a column name to definition map, read from `system.columns`.
+- `ClickHouse::ensureColumns()` adds them in a single
+  `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, and returns the names it added.
+  The `id`, `time` and `tenant` key columns are never touched.
+- `bin/repair-clickhouse-columns.php` applies this from the command line across
+  the namespaced variants of a table. It reports the DDL and stops unless
+  `--execute` is passed.
+
+#### Changed
+
+- `ClickHouse::getTableName()` is public, so callers can name the namespaced
+  table they are repairing.
+
 ## 2.9.0
 
 ### ClickHouse adapter — user-agent columns

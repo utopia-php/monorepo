@@ -851,7 +851,7 @@ class ClickHouse extends SQL
      * Get the table name with namespace prefix.
      * Namespace is used to isolate tables for different projects/applications.
      */
-    private function getTableName(): string
+    public function getTableName(): string
     {
         $tableName = $this->table;
 
@@ -1129,6 +1129,89 @@ class ClickHouse extends SQL
         }
     }
 
+    /**
+     * Column definitions this adapter's schema declares that the live table lacks.
+     *
+     * `setup()` is CREATE TABLE IF NOT EXISTS, so it never reconciles a table
+     * that already exists. A deployment whose tables are provisioned out of
+     * band therefore keeps whatever shape they were created with, and a column
+     * added to the schema in a later release never reaches them: reads that
+     * project it fail with UNKNOWN_IDENTIFIER, and writes that supply it fail
+     * with NO_SUCH_COLUMN_IN_TABLE.
+     *
+     * `id`, `time` and `tenant` are never reported. They are ORDER BY key
+     * columns, so ClickHouse cannot add them after the fact — their absence is
+     * an unusable table rather than recoverable drift.
+     *
+     * @return array<string, string> Column name => ClickHouse column definition
+     * @throws Exception If the table does not exist
+     */
+    public function getMissingColumns(): array
+    {
+        $tableName = $this->getTableName();
+
+        $result = $this->query(
+            'SELECT name FROM system.columns '
+            . 'WHERE database = {database:String} AND table = {table:String} '
+            . 'FORMAT TabSeparated',
+            ['database' => $this->database, 'table' => $tableName],
+        );
+
+        $existing = array_values(array_filter(
+            array_map(trim(...), explode("\n", $result)),
+            static fn(string $name): bool => $name !== '',
+        ));
+
+        // system.columns is empty for a table that isn't there, which is a
+        // different failure from drift and must not read as "nothing missing".
+        if ($existing === []) {
+            throw new Exception("Table {$this->database}.{$tableName} does not exist");
+        }
+
+        $missing = [];
+
+        foreach ($this->getColumnNames() as $columnName) {
+            if ($columnName === 'time') {
+                continue;
+            }
+            if (\in_array($columnName, $existing, true)) {
+                continue;
+            }
+            $missing[$columnName] = $this->getColumnDefinition($columnName);
+        }
+
+        return $missing;
+    }
+
+    /**
+     * Add every schema column the live table lacks, in one ALTER.
+     *
+     * ADD COLUMN IF NOT EXISTS so a concurrent repair, or a re-run after a
+     * partial failure, is not an error.
+     *
+     * @return array<int, string> Names of the columns added, in schema order
+     * @throws Exception
+     */
+    public function ensureColumns(): array
+    {
+        $missing = $this->getMissingColumns();
+
+        if ($missing === []) {
+            return [];
+        }
+
+        $adds = [];
+        foreach ($missing as $definition) {
+            $adds[] = 'ADD COLUMN IF NOT EXISTS ' . $definition;
+        }
+
+        $escapedDatabaseAndTable = $this->escapeIdentifier($this->database)
+            . '.' . $this->escapeIdentifier($this->getTableName());
+
+        $this->query("ALTER TABLE {$escapedDatabaseAndTable} " . implode(', ', $adds));
+
+        return array_keys($missing);
+    }
 
     /**
      * Get column names from attributes.

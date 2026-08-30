@@ -1361,4 +1361,97 @@ final class ClickHouseTest extends TestCase
             $http("DROP TABLE IF EXISTS {$escDb}.{$escTbl}");
         }
     }
+
+    /**
+     * A table provisioned before a column joined the schema keeps its old
+     * shape, because setup() is CREATE TABLE IF NOT EXISTS. Dropping `resource`
+     * reproduces the drift seen on hand-provisioned production tables.
+     */
+    public function testEnsureColumnsAddsMissingSchemaColumn(): void
+    {
+        $host = getenv('CLICKHOUSE_HOST') ?: 'localhost';
+        $username = getenv('CLICKHOUSE_USER') ?: 'default';
+        $password = getenv('CLICKHOUSE_PASSWORD') ?: 'clickhouse';
+        $port = (int) (getenv('CLICKHOUSE_PORT') ?: 18123);
+        $secure = filter_var(getenv('CLICKHOUSE_SECURE') ?: false, FILTER_VALIDATE_BOOLEAN);
+        $database = getenv('CLICKHOUSE_DATABASE') ?: 'default';
+
+        $namespace = 'repairtest_' . uniqid();
+
+        $adapter = new ClickHouse(
+            host: $host,
+            username: $username,
+            password: $password,
+            port: $port,
+            secure: $secure,
+        );
+        $adapter->setDatabase($database);
+        $adapter->setNamespace($namespace);
+
+        $table = $adapter->getTableName();
+
+        $http = function (string $sql) use ($host, $port, $username, $password, $secure, $database): string {
+            $scheme = $secure ? 'https' : 'http';
+            $url = "{$scheme}://{$host}:{$port}/?database=" . rawurlencode($database)
+                . '&user=' . rawurlencode($username)
+                . '&password=' . rawurlencode($password);
+            $ctx = stream_context_create(['http' => [
+                'method' => 'POST',
+                'header' => "Content-Type: text/plain\r\n",
+                'content' => $sql,
+                'timeout' => 15,
+                'ignore_errors' => true,
+            ]]);
+            $out = @file_get_contents($url, false, $ctx);
+
+            return $out === false ? '' : trim($out);
+        };
+
+        $escDb = '`' . str_replace('`', '``', $database) . '`';
+        $escTbl = '`' . str_replace('`', '``', $table) . '`';
+
+        try {
+            $adapter->setup();
+
+            $this->assertSame([], $adapter->getMissingColumns());
+
+            $http("ALTER TABLE {$escDb}.{$escTbl} DROP COLUMN `resource`");
+
+            $this->assertSame(['resource' => 'resource Nullable(String)'], $adapter->getMissingColumns());
+
+            $this->assertSame(['resource'], $adapter->ensureColumns());
+
+            $this->assertSame(
+                'Nullable(String)',
+                $http(
+                    "SELECT type FROM system.columns WHERE database = '{$database}'"
+                    . " AND table = '{$table}' AND name = 'resource'",
+                ),
+            );
+
+            // Re-running must be a no-op rather than an error.
+            $this->assertSame([], $adapter->getMissingColumns());
+            $this->assertSame([], $adapter->ensureColumns());
+        } finally {
+            $http("DROP TABLE IF EXISTS {$escDb}.{$escTbl}");
+        }
+    }
+
+    public function testGetMissingColumnsRejectsUnknownTable(): void
+    {
+        $adapter = new ClickHouse(
+            host: getenv('CLICKHOUSE_HOST') ?: 'localhost',
+            username: getenv('CLICKHOUSE_USER') ?: 'default',
+            password: getenv('CLICKHOUSE_PASSWORD') ?: 'clickhouse',
+            port: (int) (getenv('CLICKHOUSE_PORT') ?: 18123),
+            secure: filter_var(getenv('CLICKHOUSE_SECURE') ?: false, FILTER_VALIDATE_BOOLEAN),
+        );
+        $adapter->setDatabase(getenv('CLICKHOUSE_DATABASE') ?: 'default');
+        $adapter->setNamespace('absent_' . uniqid());
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('does not exist');
+
+        $adapter->getMissingColumns();
+    }
 }

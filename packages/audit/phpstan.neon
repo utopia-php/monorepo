@@ -3,3 +3,7 @@ includes:
 
 parameters:
     treatPhpDocTypesAsCertain: false
+
+    # The repair entrypoint ships with the package, so it is analysed too.
+    paths:
+        - %currentWorkingDirectory%/bin
