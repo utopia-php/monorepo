@@ -93,12 +93,7 @@ class Bitbucket extends Git
 
     protected string $accessToken;
 
-    /**
-     * `/user` is asked for once per adapter; the account behind a token
-     * doesn't change mid-request.
-     *
-     * @var array<string, mixed>|null
-     */
+    /** @var array<string, mixed>|null */
     private ?array $authenticatedUser = null;
 
     /**
@@ -385,8 +380,8 @@ class Bitbucket extends Git
     }
 
     /**
-     * A workspace carries no personal-vs-team flag, so the one the account
-     * itself owns is found by matching the account's own uuid or slug.
+     * A workspace carries no personal-vs-team flag, so the account's own uuid
+     * identifies the personal one.
      *
      * @return array{items: array<array<string, mixed>>, total: int}
      */
@@ -395,8 +390,6 @@ class Bitbucket extends Git
         $url = "/user/workspaces?page={$page}&pagelen={$per_page}";
 
         if ($search !== '' && $search !== '0') {
-            // Bitbucket's filter grammar quotes string literals, so escape the
-            // characters that would otherwise break out of the quoted value.
             $escaped = str_replace(['\\', '"'], ['\\\\', '\\"'], $search);
             $url .= '&q=' . urlencode("slug~\"{$escaped}\"");
         }
@@ -420,8 +413,6 @@ class Bitbucket extends Git
 
         $namespaces = [];
         foreach (($responseBody['values'] ?? []) as $entry) {
-            // Each entry is a workspace_access object that carries the
-            // workspace under its own key rather than at the top level
             $workspace = \is_array($entry) && \is_array($entry['workspace'] ?? null)
                 ? $entry['workspace']
                 : [];
@@ -444,8 +435,6 @@ class Bitbucket extends Git
             ];
         }
 
-        // `size` is optional on Bitbucket's paginated responses, so fall back to
-        // what this page actually carried.
         return [
             'items' => $namespaces,
             'total' => (int) ($responseBody['size'] ?? \count($namespaces)),
