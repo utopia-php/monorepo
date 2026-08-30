@@ -94,6 +94,14 @@ class Bitbucket extends Git
     protected string $accessToken;
 
     /**
+     * `/user` is asked for once per adapter; the account behind a token
+     * doesn't change mid-request.
+     *
+     * @var array<string, mixed>|null
+     */
+    private ?array $authenticatedUser = null;
+
+    /**
      * Global Headers
      *
      * @var array<string, string>
@@ -412,10 +420,11 @@ class Bitbucket extends Git
 
         $namespaces = [];
         foreach (($responseBody['values'] ?? []) as $entry) {
-            $entry = \is_array($entry) ? $entry : [];
             // Each entry is a workspace_access object that carries the
             // workspace under its own key rather than at the top level
-            $workspace = \is_array($entry['workspace'] ?? null) ? $entry['workspace'] : $entry;
+            $workspace = \is_array($entry) && \is_array($entry['workspace'] ?? null)
+                ? $entry['workspace']
+                : [];
 
             $slug = (string) ($workspace['slug'] ?? '');
             if ($slug === '') {
@@ -1395,6 +1404,10 @@ class Bitbucket extends Git
      */
     protected function getAuthenticatedUser(): array
     {
+        if ($this->authenticatedUser !== null) {
+            return $this->authenticatedUser;
+        }
+
         $response = $this->call(self::METHOD_GET, '/user', ['Authorization' => $this->authorizationHeader()]);
 
         $responseHeaders = $response['headers'] ?? [];
@@ -1405,7 +1418,7 @@ class Bitbucket extends Git
 
         $responseBody = $response['body'] ?? [];
 
-        return \is_array($responseBody) ? $responseBody : [];
+        return $this->authenticatedUser = \is_array($responseBody) ? $responseBody : [];
     }
 
     /**
