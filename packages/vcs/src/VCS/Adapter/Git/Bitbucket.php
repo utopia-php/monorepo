@@ -376,6 +376,73 @@ class Bitbucket extends Git
         ];
     }
 
+    /**
+     * A workspace carries no personal-vs-team flag, so the one the account
+     * itself owns is found by matching the account's own uuid or slug.
+     *
+     * @return array{items: array<array<string, mixed>>, total: int}
+     */
+    public function listNamespaces(int $page, int $per_page, string $search = ''): array
+    {
+        $url = "/user/workspaces?page={$page}&pagelen={$per_page}";
+
+        if ($search !== '' && $search !== '0') {
+            // Bitbucket's filter grammar quotes string literals, so escape the
+            // characters that would otherwise break out of the quoted value.
+            $escaped = str_replace(['\\', '"'], ['\\\\', '\\"'], $search);
+            $url .= '&q=' . urlencode("slug~\"{$escaped}\"");
+        }
+
+        $response = $this->call(self::METHOD_GET, $url, ['Authorization' => $this->authorizationHeader()]);
+
+        $responseHeaders = $response['headers'] ?? [];
+        $statusCode = $responseHeaders['status-code'] ?? 0;
+        if ($statusCode >= 400) {
+            throw new Exception("Failed to list namespaces: HTTP {$statusCode}", $statusCode);
+        }
+
+        $responseBody = $response['body'] ?? [];
+        if (!\is_array($responseBody)) {
+            return ['items' => [], 'total' => 0];
+        }
+
+        $user = $this->getAuthenticatedUser();
+        $accountUuid = (string) ($user['uuid'] ?? '');
+        $accountSlug = (string) ($user['username'] ?? ($user['nickname'] ?? ''));
+
+        $namespaces = [];
+        foreach (($responseBody['values'] ?? []) as $entry) {
+            $entry = \is_array($entry) ? $entry : [];
+            // Each entry is a workspace_access object that carries the
+            // workspace under its own key rather than at the top level
+            $workspace = \is_array($entry['workspace'] ?? null) ? $entry['workspace'] : $entry;
+
+            $slug = (string) ($workspace['slug'] ?? '');
+            if ($slug === '') {
+                continue;
+            }
+
+            $uuid = (string) ($workspace['uuid'] ?? '');
+            $personal = ($accountUuid !== '' && $uuid === $accountUuid)
+                || ($accountSlug !== '' && $slug === $accountSlug);
+
+            $namespaces[] = [
+                'id' => $uuid !== '' ? $uuid : $slug,
+                'name' => (string) ($workspace['name'] ?? $slug),
+                'path' => $slug,
+                'kind' => $personal ? 'user' : 'group',
+                'avatarUrl' => (string) ($workspace['links']['avatar']['href'] ?? ''),
+            ];
+        }
+
+        // `size` is optional on Bitbucket's paginated responses, so fall back to
+        // what this page actually carried.
+        return [
+            'items' => $namespaces,
+            'total' => (int) ($responseBody['size'] ?? \count($namespaces)),
+        ];
+    }
+
     public function getRepositoryTree(string $owner, string $repositoryName, string $branch, bool $recursive = false): array
     {
         $suffix = $recursive ? '&max_depth=' . self::MAX_TREE_DEPTH : '';
