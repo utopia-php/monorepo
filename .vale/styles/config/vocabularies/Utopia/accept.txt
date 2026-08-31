@@ -95,6 +95,7 @@ Huawei
 ID
 Infobip
 Inforu
+ICANN
 inlined
 iOS
 iPadOS
@@ -120,9 +121,11 @@ Mailgun
 Mailjet
 Mailpit
 Matomo(?:'s)?
+mbstring
 memoized
 MVC
 namespace(?:s)?
+nameservers?
 NATS
 Nintendo
 OAuth
@@ -130,6 +133,7 @@ OIDC
 OkHttp
 OpenID
 OpenID Connect
+OpenSRS
 OTLP
 Packagist
 parentless
@@ -157,6 +161,7 @@ PUT
 QQ
 README(?:'s)?
 rebases
+registerable
 Rector
 redeclaring
 repo(?:s)?
@@ -171,6 +176,7 @@ Scrypt
 Sentry
 setters?
 Silk
+SimpleXML
 Sinch
 SMS
 stacktrace(?:s)?
