@@ -152,6 +152,30 @@ foreach ($response->answers as $answer) {
 }
 ```
 
+### Querying through the system resolver
+
+`Client::fromSystem()` builds a client from the first `nameserver` in `/etc/resolv.conf`, so queries
+go to the same resolver the host itself uses.
+
+```php
+$client = Client::fromSystem();
+```
+
+Use `Client::systemNameservers()` to read every declared address, for example to fall back to the
+next one when a query times out.
+
+```php
+foreach (Client::systemNameservers() as $nameserver) {
+    // ...
+}
+```
+
+Both accept a path, which keeps them testable and works where the file lives elsewhere.
+
+The `search` list is read but not applied. Expanding a bare name against it would let a public
+hostname resolve to an internal address, and under the `ndots:5` that Kubernetes sets by default it
+also costs several failed lookups before the real one. Pass fully qualified names.
+
 ## Telemetry
 
 `Server::setTelemetry()` accepts any adapter from [`utopia-php/telemetry`](https://github.com/utopia-php/telemetry). Counters (`dns.queries.total`, `dns.responses.total`) and a histogram (`dns.query.duration`) are emitted automatically, enabling Prometheus or OpenTelemetry pipelines with minimal configuration.
