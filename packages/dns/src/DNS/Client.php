@@ -16,6 +16,16 @@ class Client
     public const string SYSTEM_RESOLV_CONF = '/etc/resolv.conf';
 
     /**
+     * Nameservers already parsed out of a given path, against the file's size and
+     * modification time. Revalidating costs a stat where re-reading costs an open,
+     * a read and a pass over every line, so a caller resolving in a loop pays the
+     * parse once while a rewritten resolv.conf is still picked up.
+     *
+     * @var array<string, array{signature: string, nameservers: list<string>}>
+     */
+    private static array $resolvConf = [];
+
+    /**
      * Build a client that queries the system's own resolver.
      *
      * Uses the first nameserver declared in resolv.conf. The `search` list is
@@ -54,6 +64,22 @@ class Client
      */
     public static function systemNameservers(string $path = self::SYSTEM_RESOLV_CONF): array
     {
+        // PHP's stat cache holds one path at a time and its own writes clear it, so
+        // only a resolv.conf rewritten by another process (resolvconf, DHCP, kubelet)
+        // goes stale here -- and only for a caller resolving in a tight loop, which
+        // is the case this cache exists to serve. No unit test reproduces that: any
+        // intervening stat evicts the entry and hides it.
+        clearstatcache(true, $path);
+
+        // Second-resolution mtime cannot distinguish two writes within the same
+        // second, so the size is part of the signature too. resolv.conf changes on
+        // network events, never faster than that.
+        $signature = @filemtime($path) . ':' . @filesize($path);
+
+        if ((self::$resolvConf[$path]['signature'] ?? null) === $signature) {
+            return self::$resolvConf[$path]['nameservers'];
+        }
+
         $contents = @file_get_contents($path);
 
         if ($contents === false) {
@@ -87,7 +113,10 @@ class Client
             $nameservers[] = $fields[1];
         }
 
-        return array_values(array_unique($nameservers));
+        $nameservers = array_values(array_unique($nameservers));
+        self::$resolvConf[$path] = ['signature' => $signature, 'nameservers' => $nameservers];
+
+        return $nameservers;
     }
 
     public function __construct(

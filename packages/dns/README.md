@@ -172,6 +172,9 @@ foreach (Client::systemNameservers() as $nameserver) {
 
 Both accept a path, which keeps them testable and works where the file lives elsewhere.
 
+Results are cached per path and checked against the file's size and modification time, so resolving
+in a loop parses once while a rewritten resolv.conf is still picked up.
+
 The `search` list is read but not applied. Expanding a bare name against it would let a public
 hostname resolve to an internal address, and under the `ndots:5` that Kubernetes sets by default it
 also costs several failed lookups before the real one. Pass fully qualified names.

@@ -149,6 +149,57 @@ final class ClientTest extends TestCase
         Client::fromSystem($path);
     }
 
+    public function testRereadsWhenTheFileIsRewritten(): void
+    {
+        $path = $this->resolvConf("nameserver 8.8.8.8\n");
+
+        $this->assertSame(['8.8.8.8'], Client::systemNameservers($path));
+
+        file_put_contents($path, "nameserver 10.158.32.10\nnameserver 1.1.1.1\n");
+
+        $this->assertSame(['10.158.32.10', '1.1.1.1'], Client::systemNameservers($path));
+    }
+
+    /**
+     * Two writes a second apart are indistinguishable by size alone, so the
+     * modification time has to carry the difference.
+     */
+    public function testRereadsWhenOnlyTheModificationTimeChanges(): void
+    {
+        $path = $this->resolvConf("nameserver 8.8.8.8\n");
+
+        $this->assertSame(['8.8.8.8'], Client::systemNameservers($path));
+
+        file_put_contents($path, "nameserver 8.8.4.4\n"); // same byte length
+        touch($path, time() + 10);
+
+        $this->assertSame(['8.8.4.4'], Client::systemNameservers($path));
+    }
+
+    public function testCachesEachPathSeparately(): void
+    {
+        $first = $this->resolvConf("nameserver 8.8.8.8\n");
+        $second = $this->resolvConf("nameserver 1.1.1.1\n");
+
+        $this->assertSame(['8.8.8.8'], Client::systemNameservers($first));
+        $this->assertSame(['1.1.1.1'], Client::systemNameservers($second));
+        $this->assertSame(['8.8.8.8'], Client::systemNameservers($first));
+    }
+
+    public function testFailsAfterACachedFileIsRemoved(): void
+    {
+        $path = $this->resolvConf("nameserver 8.8.8.8\n");
+
+        $this->assertSame(['8.8.8.8'], Client::systemNameservers($path));
+
+        unlink($path);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("Unable to read {$path}.");
+
+        Client::systemNameservers($path);
+    }
+
     public function testFailsWhenTheFileCannotBeRead(): void
     {
         $path = sys_get_temp_dir() . '/utopia-dns-missing-resolv.conf';
