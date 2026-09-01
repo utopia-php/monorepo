@@ -118,8 +118,6 @@ jobs:
       - if: ${{ !matrix.linked }}
         run: bin/monorepo check ${{ matrix.package }}
 
-      # Hosted providers have no local container to stand up, so their suites
-      # skip themselves when these are absent.
       - env:
           TESTS_GITHUB_PRIVATE_KEY: ${{ secrets.TESTS_GITHUB_PRIVATE_KEY }}
           TESTS_GITHUB_APP_IDENTIFIER: ${{ secrets.TESTS_GITHUB_APP_IDENTIFIER }}
