@@ -91,6 +91,7 @@ jobs:
     needs: changed
     if: needs.changed.outputs.matrix != '[]'
     runs-on: ubuntu-latest
+    environment: ${{ matrix.package == 'vcs' && 'vcs' || '' }}
     strategy:
       fail-fast: false
       matrix:
