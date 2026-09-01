@@ -420,6 +420,107 @@ final class NatsBrokerTest extends TestCase
         $broker->close();
     }
 
+    /**
+     * The default request timeout is 5s, so an ambiguous publish is real: the
+     * server can have stored the message before the client gives up waiting for
+     * the ack. A caller that retries then had no way to say "this is the same
+     * message", and the copy was indistinguishable downstream from a genuine
+     * second one — a duplicate nothing could detect, on a queue that may be
+     * billing someone.
+     */
+    public function testRetriedEnqueueUnderAStableIdStoresOneMessage(): void
+    {
+        $broker = $this->brokerWithStableIds();
+        $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
+
+        $payload = ['id' => 'invoice-4471', 'task' => 'charge'];
+
+        $broker->enqueue($queue, $payload);
+        // The retry a caller makes after an ambiguous timeout: same work, same
+        // identity, no knowledge of whether the first attempt landed.
+        $broker->enqueue($queue, $payload);
+
+        $this->assertSame(1, $broker->getQueueSize($queue), 'a retry under the same id must not become a second message');
+        $this->assertSame(1, $broker->duplicates(), 'the collapsed publish must be counted, not discarded');
+
+        // One delivery, and it is the work rather than an empty placeholder.
+        $message = $broker->receive($queue, 2);
+        $this->assertInstanceOf(Message::class, $message);
+        $this->assertSame('charge', $message->getPayload()['task']);
+        $broker->commit($queue, $message);
+        $this->assertSame(0, $broker->getQueueSize($queue));
+
+        $broker->close();
+    }
+
+    public function testWithoutAStableIdTwoIdenticalPayloadsRemainTwoMessages(): void
+    {
+        // The boundary of the guarantee, asserted so it cannot drift: identical
+        // payloads are not assumed to be the same work. Two stats increments
+        // for the same counter are both real, and collapsing them would lose
+        // one. Deduplication is opt-in through messageId for exactly that
+        // reason — only the caller knows what identifies its work.
+        $this->broker->enqueue($this->queue, ['task' => 'increment']);
+        $this->broker->enqueue($this->queue, ['task' => 'increment']);
+
+        $this->assertSame(2, $this->broker->getQueueSize($this->queue));
+        $this->assertSame(0, $this->broker->duplicates());
+    }
+
+    public function testAMessageIdCannotForgeProtocol(): void
+    {
+        // The id becomes a header value and Headers does not police what it is
+        // given, so a CRLF would close the header block early and inject the
+        // rest into the frame. A caller-supplied key must not be able to do
+        // that, however the caller derived it.
+        $broker = new Nats(
+            Connection::connect(getenv('NATS_URL') ?: 'nats://127.0.0.1:14225'),
+            ackWait: 2.0,
+            maxDeliver: 3,
+            messageId: static fn(array $payload): string => "ok\r\nPUB evil 3\r\nbad\r\n",
+        );
+        $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
+
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('free of CR, LF and NUL');
+            $broker->enqueue($queue, ['task' => 'a']);
+        } finally {
+            $broker->close();
+        }
+    }
+
+    public function testAnEmptyMessageIdIsRejected(): void
+    {
+        $broker = new Nats(
+            Connection::connect(getenv('NATS_URL') ?: 'nats://127.0.0.1:14225'),
+            ackWait: 2.0,
+            maxDeliver: 3,
+            // The shape of a real mistake: a key read from a payload field that
+            // is not there. Publishing under an empty id would deduplicate
+            // every message on the queue against every other one.
+            messageId: static fn(array $payload): string => (string) ($payload['missing'] ?? ''),
+        );
+        $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
+
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $broker->enqueue($queue, ['task' => 'a']);
+        } finally {
+            $broker->close();
+        }
+    }
+
+    private function brokerWithStableIds(): Nats
+    {
+        return new Nats(
+            Connection::connect(getenv('NATS_URL') ?: 'nats://127.0.0.1:14225'),
+            ackWait: 2.0,
+            maxDeliver: 3,
+            messageId: static fn(array $payload): string => (string) $payload['id'],
+        );
+    }
+
     public function testMemoryStorageRoundTrip(): void
     {
         $url = getenv('NATS_URL') ?: 'nats://127.0.0.1:14225';

@@ -65,6 +65,9 @@ class Nats implements Publisher, Consumer
     /** @var array<string, \Utopia\NATS\Subscription> max-deliveries advisory subscription per queue */
     private array $advisories = [];
 
+    /** Publishes the stream recognised as duplicates of an id it already held. */
+    private int $duplicates = 0;
+
     private ?NatsConnection $connection = null;
     private ?JetStream $js = null;
 
@@ -104,6 +107,18 @@ class Nats implements Publisher, Consumer
      * @param float|null $deadMaxAge Dead-letter TTL in seconds: how long a
      *        dead-lettered message stays inspectable/retryable before JetStream
      *        discards it. Null keeps dead messages forever.
+     * @param float $duplicateWindow How far back the work stream remembers
+     *        message ids, in seconds. A retry is only deduplicated if it lands
+     *        inside this window, so it has to cover the whole span over which a
+     *        caller might retry an ambiguous publish — not merely the request
+     *        timeout. Memory on the server scales with ids retained, which is
+     *        why it is a window and not forever.
+     * @param (\Closure(array<string, mixed>): string)|null $messageId Derives a
+     *        message's deduplication id from its payload. Omitted, each publish
+     *        gets a fresh random id, which collapses a republish of the same
+     *        envelope but not a caller retrying enqueue(). Supply this to make
+     *        the caller's own retries idempotent — and make it a function of
+     *        what identifies the work, never of the clock.
      */
     public function __construct(
         private readonly NatsConnection|\Closure $source,
@@ -113,6 +128,8 @@ class Nats implements Publisher, Consumer
         private readonly ?array $backoff = null,
         private readonly StorageType $storage = StorageType::File,
         private readonly ?float $deadMaxAge = null,
+        private readonly float $duplicateWindow = 120.0,
+        private readonly ?\Closure $messageId = null,
     ) {
         if ($this->backoff !== null) {
             if ($this->backoff === [] || min($this->backoff) <= 0) {
@@ -127,6 +144,9 @@ class Nats implements Publisher, Consumer
         }
         if ($this->deadMaxAge !== null && $this->deadMaxAge <= 0) {
             throw new \InvalidArgumentException('deadMaxAge must be a positive number of seconds, or null to keep dead messages forever');
+        }
+        if ($this->duplicateWindow <= 0) {
+            throw new \InvalidArgumentException('duplicateWindow must be a positive number of seconds');
         }
     }
 
@@ -173,7 +193,7 @@ class Nats implements Publisher, Consumer
         $this->ensure($queue);
 
         $subject = $priority ? $this->prioritySubject($queue) : $this->workSubject($queue);
-        $this->js()->publish($subject, (string) json_encode($this->envelope($queue, $payload)));
+        $this->publishEnvelope($subject, $this->envelope($queue, $payload));
 
         return true;
     }
@@ -190,10 +210,56 @@ class Nats implements Publisher, Consumer
         // stream check and the connection checkout rather than the round trips.
         $subject = $priority ? $this->prioritySubject($queue) : $this->workSubject($queue);
         foreach ($payloads as $payload) {
-            $this->js()->publish($subject, (string) json_encode($this->envelope($queue, $payload)));
+            $this->publishEnvelope($subject, $this->envelope($queue, $payload));
         }
 
         return true;
+    }
+
+    /**
+     * Publish one envelope under its own id, so the stream can recognise it.
+     *
+     * The id goes out as Nats-Msg-Id, which is what makes a republish inside
+     * the stream's duplicate window store one message instead of two. Without
+     * it a publish that timed out ambiguously — the default request timeout is
+     * 5s, and the server may well have stored the message before the client
+     * gave up on the ack — can only be retried by creating a second copy that
+     * nothing downstream can tell from a genuine second message.
+     *
+     * @param array<string, mixed> $envelope
+     */
+    private function publishEnvelope(string $subject, array $envelope): void
+    {
+        /** @var string $id */
+        $id = $envelope['pid'];
+
+        $ack = $this->js()->publish(
+            $subject,
+            (string) json_encode($envelope),
+            msgId: $id,
+        );
+
+        // Not discarded: a duplicate ack means the stream already held this id,
+        // so the retry collapsed instead of double-delivering. That is the
+        // deduplication working, and the only signal that it is — worth
+        // counting rather than throwing away, because the alternative reading
+        // of a quiet success is that nothing was deduplicated at all.
+        if ($ack->duplicate) {
+            ++$this->duplicates;
+        }
+    }
+
+    /**
+     * Publishes the stream collapsed as duplicates of an id it already held.
+     *
+     * Zero on a queue whose callers never retry. A number that climbs tracks
+     * retries being absorbed; it climbing on a caller that does not retry means
+     * ids are colliding, which is the failure mode of a messageId function that
+     * is not as unique as its author believed.
+     */
+    public function duplicates(): int
+    {
+        return $this->duplicates;
     }
 
     /**
@@ -205,11 +271,40 @@ class Nats implements Publisher, Consumer
     private function envelope(Queue $queue, array $payload): array
     {
         return [
-            'pid' => uniqid('', true),
+            'pid' => $this->messageId($payload),
             'queue' => $queue->name,
             'timestamp' => time(),
             'payload' => $payload,
         ];
+    }
+
+    /**
+     * The message's identity: its pid, and its deduplication key on the wire.
+     *
+     * A random id per call dedupes a republish of the same envelope but not a
+     * caller that retries enqueue() itself, because that mints a fresh one. A
+     * caller who can name its work — an event id, a billing period, a document
+     * id — supplies $messageId and gets its own retries deduplicated too.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function messageId(array $payload): string
+    {
+        if (!$this->messageId instanceof \Closure) {
+            return uniqid('', true);
+        }
+
+        $id = ($this->messageId)($payload);
+
+        // This value becomes a header, and Headers does not police what it is
+        // given: a CRLF in it would end the header block early and inject
+        // whatever follows into the frame. Rejecting it here keeps a
+        // caller-supplied key from being able to forge protocol.
+        if ($id === '' || preg_match('/[\r\n\x00]/', $id) === 1) {
+            throw new \InvalidArgumentException('messageId must return a non-empty string free of CR, LF and NUL');
+        }
+
+        return $id;
     }
 
     public function receive(Queue $queue, int $timeout): ?Message
@@ -390,6 +485,15 @@ class Nats implements Publisher, Consumer
 
         $maxAge = $queue->jobTtl > 0 ? (float) $queue->jobTtl : null;
 
+        // JetStream refuses a stream whose duplicate window outlives its max
+        // age, and it is right to: an id cannot be recognised as a duplicate of
+        // a message the stream has already discarded. So a queue with a jobTtl
+        // shorter than the configured window gets the shorter of the two, and
+        // its deduplication reaches exactly as far back as its messages do.
+        $duplicateWindow = $maxAge === null
+            ? $this->duplicateWindow
+            : min($this->duplicateWindow, $maxAge);
+
         $this->js()->createOrUpdateStream(new StreamConfig(
             name: $this->workStream($queue),
             subjects: [$this->workSubject($queue), $this->prioritySubject($queue)],
@@ -398,6 +502,10 @@ class Nats implements Publisher, Consumer
             maxAge: $maxAge,
             storage: $this->storage,
             replicas: $this->replicas,
+            // Without this the stream keeps no memory of message ids, so
+            // Nats-Msg-Id is carried on the wire and then ignored, and a
+            // retried publish is stored as a second message.
+            duplicateWindow: $duplicateWindow,
             metadata: [self::METADATA_IDENTITY => $key],
         ));
 
