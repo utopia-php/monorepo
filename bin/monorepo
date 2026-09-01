@@ -234,19 +234,44 @@ function linked_versions(string $package): array
                 continue;
             }
             $sibling = substr($dependency, strlen(ORG) + 1);
-            if (!is_dir("packages/{$sibling}") || isset($seen[$sibling])) {
+            if (!is_dir("packages/{$sibling}")) {
                 continue;
             }
-            $seen[$sibling] = true;
-            if (preg_match('/\d+(?:\.\d+)*/', $constraint, $match)) {
-                $parts = explode('.', $match[0]);
-                $versions[$dependency] = $parts[0] . '.' . ($parts[1] ?? '0') . '.999';
-                $pending[] = $sibling;
+
+            // A cycle back to the package under test is satisfied by telling
+            // Composer which release line the root checkout represents.
+            if ($sibling === $package) {
+                $versions[$dependency] ??= linked_version($constraint);
+
+                continue;
             }
+
+            if (isset($seen[$sibling])) {
+                continue;
+            }
+
+            $seen[$sibling] = true;
+            $versions[$dependency] = linked_version($constraint);
+            $pending[] = $sibling;
         }
     }
 
     return $versions;
+}
+
+/**
+ * Pick the newest release line named by a constraint and reserve its .999
+ * patch for the linked checkout (e.g. "^0.1 || ^0.3" → "0.3.999").
+ */
+function linked_version(string $constraint): string
+{
+    preg_match_all('/\d+(?:\.\d+)*/', $constraint, $matches);
+    $candidates = $matches[0];
+    $candidates !== [] || fail("cannot infer a linked version from constraint: {$constraint}");
+    usort($candidates, 'version_compare');
+    $parts = explode('.', end($candidates));
+
+    return $parts[0] . '.' . ($parts[1] ?? '0') . '.999';
 }
 
 /**
@@ -644,6 +669,8 @@ switch ($command) {
             $environment = '';
             if (isset($options['linked'])) {
                 $versions = linked_versions($package);
+                $rootVersion = $versions[ORG . "/{$package}"] ?? null;
+                unset($versions[ORG . "/{$package}"]);
                 if ($versions === []) {
                     out('no local siblings to link; running registry-resolved');
                 } else {
@@ -655,7 +682,8 @@ switch ($command) {
                         'options' => ['symlink' => false, 'versions' => $versions],
                     ]], $manifest['repositories'] ?? []);
                     file_put_contents("{$directory}/composer.linked.json", json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
-                    $environment = 'COMPOSER=composer.linked.json ';
+                    $environment = ($rootVersion === null ? '' : "COMPOSER_ROOT_VERSION={$rootVersion} ")
+                        . 'COMPOSER=composer.linked.json ';
                     out('linked: ' . implode(', ', array_keys($versions)));
                 }
             }
@@ -716,6 +744,8 @@ switch ($command) {
             $environment = '';
             if (isset($options['linked'])) {
                 $versions = linked_versions($package);
+                $rootVersion = $versions[ORG . "/{$package}"] ?? null;
+                unset($versions[ORG . "/{$package}"]);
                 if ($versions === []) {
                     out('no local siblings to link; running registry-resolved');
                 } else {
@@ -727,7 +757,8 @@ switch ($command) {
                         'options' => ['symlink' => false, 'versions' => $versions],
                     ]], $manifest['repositories'] ?? []);
                     file_put_contents("{$directory}/composer.linked.json", json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
-                    $environment = 'COMPOSER=composer.linked.json ';
+                    $environment = ($rootVersion === null ? '' : "COMPOSER_ROOT_VERSION={$rootVersion} ")
+                        . 'COMPOSER=composer.linked.json ';
                     out('linked: ' . implode(', ', array_keys($versions)));
                 }
             }

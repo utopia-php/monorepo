@@ -324,6 +324,8 @@ abstract class Adapter
             } catch (\Throwable $reportFailure) {
                 $this->reportUnreported($error, $reportFailure, $message);
             }
+        } finally {
+            $this->releaseContext();
         }
     }
 
@@ -352,7 +354,19 @@ abstract class Adapter
             } catch (\Throwable $reportFailure) {
                 $this->reportUnreported($error, $reportFailure, $message);
             }
+        } finally {
+            $this->releaseContext();
         }
+    }
+
+    /**
+     * Drop the per-message container after commit/reject and outcome callbacks.
+     * The next message (or process shutdown) must not inherit the previous
+     * message's resolved graph.
+     */
+    protected function releaseContext(): void
+    {
+        $this->context = null;
     }
 
     /**

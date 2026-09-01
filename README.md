@@ -51,6 +51,7 @@ graph TD
     cache --> circuit-breaker
     cache --> pools
     cache --> telemetry
+    cdn --> client
     cli --> servers
     client --> pools
     client --> psr7
@@ -86,6 +87,8 @@ graph TD
     schedule --> telemetry
     servers --> di
     servers --> validators
+    span --> client
+    span --> psr7
     storage --> telemetry
     storage --> validators
     storage --> client
