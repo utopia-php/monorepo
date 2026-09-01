@@ -59,6 +59,28 @@ readonly class Pool implements Publisher, Consumer
         $this->delegate($this->consumer, __FUNCTION__, \func_get_args());
     }
 
+    /**
+     * Run idle upkeep across both pools.
+     *
+     * Safe to call at any time, including while a receive loop is running: the
+     * sweep reaches only resources sitting idle in the pool, never the one a
+     * caller currently holds. That is the whole difference from calling
+     * {@see Nats::tick()} directly, which needs exclusive access.
+     *
+     * A pooled broker is the case the keepalive exists for — a publisher slot
+     * can sit untouched for longer than the server's ping deadline and be
+     * reaped without anyone noticing until the next publish.
+     */
+    public function maintain(): void
+    {
+        $this->publisher?->maintain();
+
+        // Distinct pools; a broker configured with only one leaves the other null.
+        if ($this->consumer instanceof UtopiaPool && $this->consumer !== $this->publisher) {
+            $this->consumer->maintain();
+        }
+    }
+
     public function close(): void
     {
         // TODO: Implement closing all connections in the pool

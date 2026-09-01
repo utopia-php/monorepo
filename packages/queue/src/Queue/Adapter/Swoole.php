@@ -16,6 +16,15 @@ class Swoole extends Adapter
 {
     protected const string CONTEXT_KEY = '__utopia__';
 
+    /**
+     * Step size the maintenance coroutine sleeps in, so a stop is noticed
+     * within this rather than at the end of a whole MAINTENANCE_INTERVAL.
+     */
+    private const float MAINTENANCE_POLL = 0.5;
+
+    /** Whether the maintenance coroutine should keep looping. */
+    protected bool $maintaining = false;
+
     /** @var Process[] */
     protected array $workers = [];
 
@@ -105,50 +114,60 @@ class Swoole extends Adapter
             throw new \LogicException('At least one queue is required');
         }
 
-        // Single queue: same hot path as pre-multi-queue main — bind
-        // $this->queue/$this->consumer and keep the Coroutine::create capture
-        // list identical (no per-message queue/consumer args).
-        if (\count($queues) === 1) {
-            $spec = $queues[0];
-            $previousConsumer = $this->consumer;
-            $this->queue = $spec['queue'];
-            $this->consumer = $spec['consumer'] ?? $this->consumer;
-            if ($this->consumer !== $previousConsumer) {
-                $this->consumers[] = $this->consumer;
-            }
+        $this->startMaintenance($errorCallback);
 
-            try {
-                $this->consumeBound($spec['maxCoroutines'], $messageCallback, $successCallback, $errorCallback);
-            } finally {
-                $this->consumer = $previousConsumer;
-            }
-
-            return;
-        }
-
-        // Independent loop per queue so each cap is isolated (a databases loop
-        // at maxCoroutines=1 cannot share a pool with functions=8).
-        $waitGroup = new WaitGroup();
-
-        foreach ($queues as $spec) {
-            $waitGroup->add();
-            Coroutine::create(function () use ($spec, $messageCallback, $successCallback, $errorCallback, $waitGroup): void {
-                try {
-                    $this->run(
-                        $spec['queue'],
-                        $spec['maxCoroutines'],
-                        $messageCallback,
-                        $successCallback,
-                        $errorCallback,
-                        $spec['consumer'] ?? $this->consumer,
-                    );
-                } finally {
-                    $waitGroup->done();
+        try {
+            // Single queue: same hot path as pre-multi-queue main — bind
+            // $this->queue/$this->consumer and keep the Coroutine::create capture
+            // list identical (no per-message queue/consumer args).
+            if (\count($queues) === 1) {
+                $spec = $queues[0];
+                $previousConsumer = $this->consumer;
+                $this->queue = $spec['queue'];
+                $this->consumer = $spec['consumer'] ?? $this->consumer;
+                if ($this->consumer !== $previousConsumer) {
+                    $this->consumers[] = $this->consumer;
                 }
-            });
-        }
 
-        $waitGroup->wait();
+                try {
+                    $this->consumeBound($spec['maxCoroutines'], $messageCallback, $successCallback, $errorCallback);
+                } finally {
+                    $this->consumer = $previousConsumer;
+                }
+
+                return;
+            }
+
+            // Independent loop per queue so each cap is isolated (a databases loop
+            // at maxCoroutines=1 cannot share a pool with functions=8).
+            $waitGroup = new WaitGroup();
+
+            foreach ($queues as $spec) {
+                $waitGroup->add();
+                Coroutine::create(function () use ($spec, $messageCallback, $successCallback, $errorCallback, $waitGroup): void {
+                    try {
+                        $this->run(
+                            $spec['queue'],
+                            $spec['maxCoroutines'],
+                            $messageCallback,
+                            $successCallback,
+                            $errorCallback,
+                            $spec['consumer'] ?? $this->consumer,
+                        );
+                    } finally {
+                        $waitGroup->done();
+                    }
+                });
+            }
+
+            $waitGroup->wait();
+        } finally {
+            // The consume loops are done, however they ended. Without this a
+            // throw out of consume() would leave the maintenance coroutine
+            // looping on a flag only stop() ever clears, and Coroutine\run()
+            // would never return — a worker that cannot exit.
+            $this->maintaining = false;
+        }
     }
 
     /**
@@ -250,6 +269,40 @@ class Swoole extends Adapter
         $waitGroup->wait();
     }
 
+    /**
+     * The clock behind {@see Adapter::maintain()}.
+     *
+     * A broker knows how to keep its idle connections alive; what it has no way
+     * to obtain is a periodic call. This is the one place in the stack that
+     * owns a scheduler, so it is where the interval lives — the packages below
+     * stay free of any dependency on a runtime.
+     *
+     * @param callable(?Message, \Throwable): void $errorCallback
+     */
+    protected function startMaintenance(callable $errorCallback): void
+    {
+        $this->maintaining = true;
+
+        Coroutine::create(function () use ($errorCallback): void {
+            while ($this->maintaining && !$this->isStopped()) {
+                // Slept in short steps rather than one long sleep so shutdown
+                // is not held up for the rest of an interval that has already
+                // begun. A worker must not take 30s longer to stop for this.
+                $waited = 0.0;
+                while ($waited < static::MAINTENANCE_INTERVAL && $this->maintaining && !$this->isStopped()) {
+                    Coroutine::sleep(self::MAINTENANCE_POLL);
+                    $waited += self::MAINTENANCE_POLL;
+                }
+
+                if (!$this->maintaining || $this->isStopped()) {
+                    return;
+                }
+
+                $this->maintain($errorCallback);
+            }
+        });
+    }
+
     #[\Override]
     public function context(): Container
     {
@@ -260,6 +313,27 @@ class Swoole extends Adapter
         }
 
         return $this->resources();
+    }
+
+    /**
+     * Every consumer this adapter has bound, not only the one on $consumer:
+     * a multi-queue worker runs an independent loop and its own consumer per
+     * queue, and each of those holds connections that idle between messages.
+     *
+     * @return list<Consumer>
+     */
+    #[\Override]
+    protected function maintenanceTargets(): array
+    {
+        $targets = parent::maintenanceTargets();
+
+        foreach ($this->consumers as $consumer) {
+            if (!\in_array($consumer, $targets, true)) {
+                $targets[] = $consumer;
+            }
+        }
+
+        return $targets;
     }
 
     protected function reap(): void

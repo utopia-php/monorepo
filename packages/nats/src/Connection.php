@@ -37,6 +37,12 @@ final class Connection
     private const CLIENT_LANG = 'php';
     private const CLIENT_VERSION = '0.1.0';
 
+    // Bounds on the read tick() does to collect its own PONGs. Short enough
+    // that a sweep over an idle pool stays in the low milliseconds, and capped
+    // so a connection with live subscription traffic cannot hold maintenance.
+    private const float TICK_READ_TIMEOUT = 0.05;
+    private const int TICK_MAX_READS = 4;
+
     private Transport $transport;
     private Parser $parser;
     private readonly Writer $writer;
@@ -270,10 +276,38 @@ final class Connection
      * reading from it -- a pooled publisher, say -- must call this on an
      * interval shorter than the server's ping deadline, because nothing else
      * in this class runs on its own.
+     *
+     * This reads the socket, so the caller must hold the connection
+     * exclusively for the call. Pool maintenance satisfies that by sweeping
+     * only resources that are idle; a coroutine must never tick a connection
+     * another coroutine is inside a call on.
      */
     public function tick(): void
     {
         $this->checkPings();
+        $this->collectPongs();
+    }
+
+    /**
+     * Consume the PONGs owed for the keepalive PINGs this connection has sent.
+     *
+     * checkPings() only writes: it is the read path that clears
+     * $outstandingPings, and a holder that never reads has none. Ticking such a
+     * connection would therefore march it to maxPingsOut and declare a
+     * perfectly healthy socket stale -- the keepalive would cause the outage it
+     * exists to prevent. Reading here closes that loop.
+     *
+     * Bounded, and only while a PONG is actually owed, so maintenance can never
+     * turn into a receive loop on a connection carrying subscription traffic.
+     */
+    private function collectPongs(): void
+    {
+        // readMessage() rather than processMessage(): the latter checks the
+        // keepalive on entry, so draining through it would send a fresh PING
+        // for every PONG collected and the outstanding count could never fall.
+        for ($read = 0; $this->outstandingPings > 0 && $read < self::TICK_MAX_READS; $read++) {
+            $this->readMessage(self::TICK_READ_TIMEOUT);
+        }
     }
 
     /**
@@ -283,6 +317,15 @@ final class Connection
     {
         $this->checkPings();
 
+        return $this->readMessage($timeout);
+    }
+
+    /**
+     * The read half of {@see self::processMessage()}, without the keepalive
+     * check, so maintenance can drain the socket without writing to it.
+     */
+    private function readMessage(?float $timeout = null): ?Message
+    {
         try {
             [$op, $data] = $this->parser->next($timeout);
         } catch (TimeoutException) {

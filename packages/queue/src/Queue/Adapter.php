@@ -35,6 +35,17 @@ abstract class Adapter
     protected bool $sharedConsumer = false;
 
     /**
+     * How often a running worker sweeps its consumers for idle upkeep.
+     *
+     * Sized against the shortest server-side idle deadline a broker is likely
+     * to be holding: NATS pings every 120s and closes after two go unanswered,
+     * so a sweep every 30s leaves several chances to answer before that runs
+     * out. Cheap enough to be unconditional — a sweep with nothing to do is a
+     * method_exists() per consumer.
+     */
+    protected const float MAINTENANCE_INTERVAL = 30.0;
+
+    /**
      * Prefer a callable factory so each consume loop gets its own receive
      * connection. A bare Consumer is OK for single-queue only.
      *
@@ -179,6 +190,62 @@ abstract class Adapter
         } finally {
             $this->consumer = $previousConsumer;
         }
+    }
+
+    /**
+     * Sweep the consumers this adapter owns for idle upkeep.
+     *
+     * A broker holding connections nobody is using still has servers on the
+     * other end counting silence. The consume loop's own traffic keeps its
+     * receive connection alive, but a pooled broker's spare slots get no
+     * traffic at all, and are reaped on a timer with nothing watching.
+     *
+     * Deliberately maintain() and not tick(): a tick reads the socket and needs
+     * the caller to hold the resource exclusively, which a running receive loop
+     * does not allow. maintain() is the pool-level sweep — it touches only what
+     * is idle, so it is safe to call while the loop is mid-receive. Consumers
+     * that expose neither are skipped, which is why this can run unconditionally.
+     *
+     * Never throws: upkeep failing must not take the worker down with it.
+     *
+     * @param callable(?Message, \Throwable): void|null $errorCallback
+     */
+    public function maintain(?callable $errorCallback = null): void
+    {
+        foreach ($this->maintenanceTargets() as $target) {
+            $sweep = [$target, 'maintain'];
+
+            if (!\is_callable($sweep)) {
+                continue;
+            }
+
+            try {
+                $sweep();
+            } catch (\Throwable $error) {
+                // Reported rather than swallowed: a pool that cannot keep its
+                // idle connections alive will hand the next caller a dead one,
+                // and that is exactly the silent loss this is here to prevent.
+                if ($errorCallback === null) {
+                    continue;
+                }
+
+                try {
+                    $errorCallback(null, $error);
+                } catch (\Throwable) {
+                }
+            }
+        }
+    }
+
+    /**
+     * Consumers eligible for a maintenance sweep. Adapters that hold more than
+     * the one bound consumer override this to include them.
+     *
+     * @return list<Consumer>
+     */
+    protected function maintenanceTargets(): array
+    {
+        return [$this->consumer];
     }
 
     /**

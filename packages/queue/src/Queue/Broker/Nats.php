@@ -334,6 +334,30 @@ class Nats implements Publisher, Consumer
         }
     }
 
+    /**
+     * Keep this broker's connections alive while nothing is using them.
+     *
+     * NATS pings every 120s and closes after two go unanswered, and the client
+     * keepalive only runs while a caller is inside a call — so a broker parked
+     * in a publisher pool between publishes is reaped on a timer nobody is
+     * watching, and the next publish writes into a dead socket.
+     *
+     * Named tick() rather than maintain() on purpose: this reads the socket, so
+     * the caller must hold the broker exclusively. {@see Pool::maintain()} is
+     * what a running worker calls, because it sweeps only idle resources and so
+     * cannot collide with a consume loop. Do not call this on a broker whose
+     * receive loop is running.
+     */
+    public function tick(): void
+    {
+        $this->connection?->tick();
+
+        // Only when it is a distinct socket; a publisher-only broker reuses one.
+        if ($this->controlConnection instanceof NatsConnection && $this->controlConnection !== $this->connection) {
+            $this->controlConnection->tick();
+        }
+    }
+
     public function close(): void
     {
         $this->connection?->close();

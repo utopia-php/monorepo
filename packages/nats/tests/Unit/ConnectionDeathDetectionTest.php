@@ -170,17 +170,61 @@ final class ConnectionDeathDetectionTest extends TestCase
         $handshakes = fn(): int => substr_count($fake->written, 'CONNECT ');
         $this->assertSame(1, $handshakes());
 
-        // First tick sends the PING; the PONG is never read, so the second tick
-        // sees the outstanding ping budget exhausted and recycles.
+        // The handshake needed its PONG; from here the server goes silent.
+        $fake->answerPings = false;
+
+        // First tick sends the PING and collects no answer; the second sees the
+        // outstanding ping budget exhausted and recycles.
         $conn->tick();
         $this->assertSame(1, $handshakes(), 'One unanswered ping is still within budget');
 
-        $conn->tick();
+        // The same silent server serves the reconnect, so it cannot complete
+        // either -- which is the honest outcome. A connection that cannot be
+        // rebuilt must raise rather than report itself healthy.
+        try {
+            $conn->tick();
+            $this->fail('tick() must not return normally once the connection is dead');
+        } catch (ConnectionException) {
+            // expected
+        }
+
         $this->assertGreaterThan(
             1,
             $handshakes(),
             'An unanswered keepalive must recycle the connection',
         );
+
+        $conn->close();
+    }
+
+    public function testTickCollectsItsOwnPongsSoAHealthyConnectionSurvives(): void
+    {
+        $fake = new FakeTransport();
+        $conn = $this->connect($fake, [
+            'pingInterval' => 0.0,
+            'maxPingsOut' => 2,
+        ]);
+
+        $handshakes = fn(): int => substr_count($fake->written, 'CONNECT ');
+
+        // checkPings() only writes. Nothing else clears the outstanding count
+        // on a connection whose holder never reads -- a pooled publisher -- so
+        // without collecting its own PONGs the keepalive would march to
+        // maxPingsOut and declare a live server stale. Far more ticks than the
+        // budget, against a server answering every one of them.
+        for ($i = 0; $i < 20; $i++) {
+            $conn->tick();
+        }
+
+        $this->assertSame(
+            1,
+            $handshakes(),
+            'A server answering every ping must never be recycled, however long the connection idles',
+        );
+
+        // And it is still usable rather than merely un-recycled.
+        $conn->publish('subject', 'payload');
+        $this->assertStringContainsString('PUB subject', $fake->written);
 
         $conn->close();
     }
