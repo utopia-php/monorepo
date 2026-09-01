@@ -48,6 +48,10 @@ class Nats implements Publisher, Consumer
     private const string CONSUMER_RETRY = 'retry';
     private const string ADVISORY_MAX_DELIVERIES = '$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES';
 
+    // Queue group for the advisory subscription, so one worker per queue acts
+    // on an exhausted message rather than every worker acting on it at once.
+    private const string ADVISORY_GROUP = 'utopia_queue_dead_letter';
+
     // JetStream's stream-name byte limit, and the stream-metadata key that records
     // which queue identity owns a stream (the cross-instance collision guard).
     private const int MAX_STREAM_NAME = 255;
@@ -119,6 +123,11 @@ class Nats implements Publisher, Consumer
      *        envelope but not a caller retrying enqueue(). Supply this to make
      *        the caller's own retries idempotent — and make it a function of
      *        what identifies the work, never of the clock.
+     * @param (\Closure(\Throwable): void)|null $onError Where the broker reports
+     *        a failure it cannot raise, because it happens outside any caller's
+     *        call — currently the dead-lettering of a message that exhausted
+     *        maxDeliver while no handler held it. Omitted, those failures go
+     *        nowhere, which is how a lost dead letter becomes invisible.
      */
     public function __construct(
         private readonly NatsConnection|\Closure $source,
@@ -130,6 +139,7 @@ class Nats implements Publisher, Consumer
         private readonly ?float $deadMaxAge = null,
         private readonly float $duplicateWindow = 120.0,
         private readonly ?\Closure $messageId = null,
+        private readonly ?\Closure $onError = null,
     ) {
         if ($this->backoff !== null) {
             if ($this->backoff === [] || min($this->backoff) <= 0) {
@@ -250,6 +260,24 @@ class Nats implements Publisher, Consumer
     }
 
     /**
+     * Hand a failure to the caller's reporter, if it gave one.
+     *
+     * Never throws: a reporting hook that fails must not escalate into the
+     * failure it was called to describe.
+     */
+    private function report(\Throwable $error): void
+    {
+        if (!$this->onError instanceof \Closure) {
+            return;
+        }
+
+        try {
+            ($this->onError)($error);
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
      * Publishes the stream collapsed as duplicates of an id it already held.
      *
      * Zero on a queue whose callers never retry. A number that climbs tracks
@@ -327,7 +355,88 @@ class Nats implements Publisher, Consumer
 
         return new Message($data)
             // JetStream counts deliveries from 1; expose it as the Redis-style attempt count.
-            ->setAttempts(max(0, $jsMessage->metadata()->numDelivered - 1));
+            ->setAttempts(max(0, $jsMessage->metadata()->numDelivered - 1))
+            ->setSequence($jsMessage->metadata()->streamSequence);
+    }
+
+    /**
+     * Tell the server the handler is still working on this message.
+     *
+     * ackWait is a deadline, not a hint: when it passes with no ack the server
+     * assumes the worker died and redelivers, so without this it is a hard
+     * ceiling on how long a job may take. A job that runs past it is not merely
+     * retried later — the redelivery is concurrent with the first attempt still
+     * running, which for anything with a side effect means doing it twice at
+     * once. Every extension buys another ackWait.
+     *
+     * Silent for a message that is no longer in flight: a handler racing its own
+     * completion must not turn into an error on a job that already finished.
+     */
+    public function extend(Queue $queue, Message $message): void
+    {
+        $jsMessage = $this->inFlight[$message->getPid()] ?? null;
+
+        if ($jsMessage instanceof JetStreamMessage) {
+            $jsMessage->inProgress();
+        }
+    }
+
+    /**
+     * How often {@see self::extend()} should be called while a handler runs.
+     *
+     * A third of ackWait, so two consecutive extensions can be lost — to a
+     * scheduling delay, or a hiccup on the socket — before the server gives up
+     * on the message and redelivers it.
+     */
+    public function extendInterval(): float
+    {
+        return max(0.1, $this->ackWait / 3);
+    }
+
+    /**
+     * Rebuild this broker's connections in place.
+     *
+     * Pool::recover() probes a failed resource for reset()/reconnect() and
+     * destroys it when it finds neither, which meant a single failed lease
+     * threw away the whole broker — its provisioning cache, its consumer
+     * handles and its advisory subscriptions — and rebuilt them on next use.
+     * Recovering in place keeps the slot.
+     *
+     * Everything derived from the old sockets is dropped rather than reused:
+     * consumer handles and subscriptions belong to the connection that created
+     * them. In-flight messages are deliberately not carried over — their ack
+     * subjects died with the connection, so the honest outcome is to let the
+     * server redeliver them on ackWait rather than pretend they can still be
+     * acknowledged.
+     */
+    public function reconnect(): bool
+    {
+        try {
+            $this->close();
+        } catch (\Throwable) {
+            // Already gone. The point is to stop using it, not to close it well.
+        }
+
+        // A broker handed a live Connection has nothing to rebuild from: that
+        // socket is the only one it will ever have, and clearing the caches
+        // would just make the next call reach for it again, now closed. Saying
+        // so lets Pool::recover() destroy the resource and construct a fresh
+        // one, which is the only way back for this shape.
+        if (!$this->source instanceof \Closure) {
+            return false;
+        }
+
+        $this->connection = null;
+        $this->js = null;
+        $this->controlConnection = null;
+        $this->controlJs = null;
+        $this->controlConsumers = [];
+        $this->consumers = [];
+        $this->advisories = [];
+        $this->provisioned = [];
+        $this->inFlight = [];
+
+        return true;
     }
 
     public function commit(Queue $queue, Message $message): void
@@ -358,7 +467,28 @@ class Nats implements Publisher, Consumer
         }
 
         // Redeliver later (AckWait/NAK); a crashed worker is reclaimed the same way.
-        $jsMessage->nak();
+        $jsMessage->nak($this->backoffFor($jsMessage->metadata()->numDelivered));
+    }
+
+    /**
+     * The delay this attempt's NAK should carry, from the tier backoff.
+     *
+     * A bare nak() redelivers immediately, so the backoff array governed only
+     * the per-attempt ack timer and never the rescheduling — a permanently
+     * failing job burned its whole maxDeliver budget in a tight loop instead of
+     * spreading over the window the backoff describes, and reached the dead
+     * letter in seconds rather than minutes.
+     *
+     * Attempts are 1-based and the last entry repeats, matching how JetStream
+     * reads the same array for its own timer, so the two agree on every attempt.
+     */
+    private function backoffFor(int $numDelivered): ?float
+    {
+        if ($this->backoff === null) {
+            return null;
+        }
+
+        return $this->backoff[min(max($numDelivered, 1), \count($this->backoff)) - 1];
     }
 
     /**
@@ -545,8 +675,15 @@ class Nats implements Publisher, Consumer
         // and move the stuck message to the dead stream. Caveat: core
         // advisories are ephemeral, so a message that exhausts while no broker is
         // subscribed stays as pending backlog (still visible) rather than dead-lettered.
+        // The queue group is what keeps this to one dead-letter copy. A plain
+        // subscription delivers the advisory to every worker process, and each
+        // of them then publishes its own copy of the exhausted message onto the
+        // dead stream — so the dead letter multiplies by the worker count, on
+        // exactly the messages an operator is trying to read. With a group the
+        // server picks one subscriber.
         $this->advisories[$key] = $this->connection()->subscribe(
             self::ADVISORY_MAX_DELIVERIES . ".{$this->workStream($queue)}.*",
+            queue: self::ADVISORY_GROUP,
         );
 
         $this->provisioned[$key] = true;
@@ -604,8 +741,16 @@ class Nats implements Publisher, Consumer
                 $stored = $this->js()->getMessage($this->workStream($queue), $seq);
                 $this->js()->publish($this->deadSubject($queue), $stored->data);
                 $this->js()->deleteMessage($this->workStream($queue), $seq);
-            } catch (\Throwable) {
-                // Already acked/deleted or raced away — nothing to reclaim.
+            } catch (\Throwable $error) {
+                // Usually benign — the message was acked, deleted or claimed by
+                // another worker between the advisory and this read. But a real
+                // failure here loses the dead letter outright: the message is
+                // past maxDeliver, so nothing will deliver it again, and if it
+                // never reaches the dead stream there is no record of it
+                // anywhere. Reported rather than discarded, because the two
+                // cases are indistinguishable from the outside and only one of
+                // them is fine.
+                $this->report($error);
             }
         }
     }

@@ -74,14 +74,18 @@ class Swoole extends Adapter
 
             Coroutine\run(function () use ($workerId): void {
                 Process::signal(SIGTERM, function (): void {
+                    // Flip the flag and let the loop drain. Closing the consumer
+                    // here landed mid-job: at maxCoroutines=1 the loop is parked
+                    // while a handler runs, so the socket went away underneath
+                    // it. The handler then finished, commit() threw on a closed
+                    // connection, execution fell through to reject() which threw
+                    // too, and both were swallowed — so a job that had just
+                    // succeeded was NAK'd and re-run after the restart. Every
+                    // rolling restart re-ran one.
+                    //
+                    // The loop notices within RECEIVE_TIMEOUT, and workerStop
+                    // closes the consumers once consume() has returned.
                     $this->stopped = true;
-                    $this->consumer->close();
-                    foreach ($this->consumers as $consumer) {
-                        try {
-                            $consumer->close();
-                        } catch (\Throwable) {
-                        }
-                    }
                 });
 
                 foreach ($this->onWorkerStart as $callback) {
@@ -167,6 +171,20 @@ class Swoole extends Adapter
             // looping on a flag only stop() ever clears, and Coroutine\run()
             // would never return — a worker that cannot exit.
             $this->maintaining = false;
+
+            // Now that the loops have drained, the per-queue consumers this
+            // call created can go. SIGTERM used to close them, which is what
+            // made the close land mid-job; closing them here keeps them open
+            // for exactly as long as a handler might still need to ack.
+            // Server's workerStop hook owns the adapter's own consumer.
+            foreach ($this->consumers as $consumer) {
+                try {
+                    $consumer->close();
+                } catch (\Throwable) {
+                }
+            }
+
+            $this->consumers = [];
         }
     }
 
@@ -267,6 +285,68 @@ class Swoole extends Adapter
         }
 
         $waitGroup->wait();
+    }
+
+    /**
+     * Hold the broker's delivery deadline open for as long as the handler runs.
+     *
+     * ackWait is how long the server waits for an ack before deciding the
+     * worker died. Nothing extended it, so it was a hard ceiling on job
+     * duration — and being redelivered while the first attempt is still running
+     * is worse than being retried: two workers do the same side effect at the
+     * same time. Screenshots ran 76.9% of production renders past their old 10s
+     * ackWait with four processes pulling the same durable.
+     *
+     * A coroutine alongside the handler reports progress on the broker's own
+     * cadence, and stops the moment the handler returns, however it returns.
+     * Only brokers that expose both halves are extended; there is no default
+     * interval to fall back on, because guessing one that is longer than the
+     * real ackWait would extend nothing while looking like it did.
+     *
+     * @param \Closure(): void $work
+     */
+    #[\Override]
+    protected function withAckExtension(Consumer $consumer, Queue $queue, Message $message, \Closure $work): void
+    {
+        $extend = [$consumer, 'extend'];
+        $interval = [$consumer, 'extendInterval'];
+
+        if (!\is_callable($extend) || !\is_callable($interval)) {
+            $work();
+
+            return;
+        }
+
+        // The handler signals completion by pushing, so waiting for the next
+        // beat and noticing the handler has finished are the same operation.
+        // A sleep followed by a flag check leaves a window between the two
+        // where the handler can finish and the consume loop can go back to
+        // reading the socket — and extending then would write to a connection
+        // another coroutine is reading. Waiting on the channel closes it, and
+        // ends the heartbeat the moment the handler returns rather than at the
+        // end of an interval it no longer needs.
+        $finished = new Channel(1);
+
+        Coroutine::create(function () use ($finished, $extend, $interval, $queue, $message): void {
+            // pop() yields false when the wait times out, and the pushed value
+            // when the handler is done.
+            while ($finished->pop((float) $interval()) === false) {
+                try {
+                    $extend($queue, $message);
+                } catch (\Throwable) {
+                    // The connection is gone, or the message no longer in
+                    // flight. Either way there is nothing left to extend, and
+                    // the handler's own failure is the one worth reporting.
+                    return;
+                }
+            }
+        });
+
+        try {
+            $work();
+        } finally {
+            $finished->push(true);
+        }
     }
 
     /**

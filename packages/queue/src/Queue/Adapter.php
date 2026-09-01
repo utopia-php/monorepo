@@ -310,25 +310,18 @@ abstract class Adapter
         callable $successCallback,
         callable $errorCallback,
     ): void {
-        try {
-            $messageCallback($message);
-            $this->consumer->commit($this->queue, $message);
-            $successCallback($message);
-        } catch (\Throwable $error) {
-            try {
-                $this->consumer->reject($this->queue, $message);
-            } catch (\Throwable) {
-            }
-            try {
-                $errorCallback($message, $error);
-            } catch (\Throwable $reportFailure) {
-                $this->reportUnreported($error, $reportFailure, $message);
-            }
-        }
+        $this->processFrom($message, $messageCallback, $successCallback, $errorCallback, $this->queue, $this->consumer);
     }
 
     /**
      * Concurrent multi-queue variant of {@see process()}.
+     *
+     * The three phases are separated rather than sharing one try, because only
+     * the first of them means the work failed. Committing and the success hook
+     * run after the handler has already succeeded, and routing their failures
+     * to reject() gives the message back to the broker after the job is done:
+     * the handler runs a second time, or — at the delivery ceiling — a job that
+     * worked is dead-lettered as though it never had.
      */
     protected function processFrom(
         Message $message,
@@ -339,19 +332,70 @@ abstract class Adapter
         Consumer $consumer,
     ): void {
         try {
-            $messageCallback($message);
-            $consumer->commit($queue, $message);
-            $successCallback($message);
+            $this->withAckExtension($consumer, $queue, $message, static function () use ($messageCallback, $message): void {
+                $messageCallback($message);
+            });
         } catch (\Throwable $error) {
+            // The work did not happen, so hand the message back to be retried.
             try {
                 $consumer->reject($queue, $message);
             } catch (\Throwable) {
             }
-            try {
-                $errorCallback($message, $error);
-            } catch (\Throwable $reportFailure) {
-                $this->reportUnreported($error, $reportFailure, $message);
-            }
+
+            $this->report($errorCallback, $error, $message);
+
+            return;
+        }
+
+        try {
+            $consumer->commit($queue, $message);
+        } catch (\Throwable $error) {
+            // A transient ack failure over completed work. Not rejected: the
+            // job is done, and the broker will redeliver on its own deadline if
+            // the ack genuinely never landed — a duplicate the handler can
+            // guard against, where a NAK here is a duplicate guaranteed.
+            $this->report($errorCallback, $error, $message);
+
+            return;
+        }
+
+        try {
+            $successCallback($message);
+        } catch (\Throwable $error) {
+            // Bookkeeping after the message is acked and gone. There is nothing
+            // left to reject, and re-running the job would not fix a shutdown
+            // hook, so this is reported and no more.
+            $this->report($errorCallback, $error, $message);
+        }
+    }
+
+    /**
+     * Run the handler, keeping the broker's delivery deadline extended for as
+     * long as it takes.
+     *
+     * The default is to just run it: extending needs a scheduler to run
+     * alongside the handler, which only a coroutine adapter has. Adapters that
+     * have one override this, and where they do, the broker's ack deadline
+     * stops being a ceiling on how long a job may run.
+     *
+     * @param \Closure(): void $work
+     */
+    protected function withAckExtension(Consumer $consumer, Queue $queue, Message $message, \Closure $work): void
+    {
+        $work();
+    }
+
+    /**
+     * Report a failure, with the last-resort trace when reporting fails too.
+     *
+     * @param callable(?Message, \Throwable): void $errorCallback
+     */
+    private function report(callable $errorCallback, \Throwable $error, Message $message): void
+    {
+        try {
+            $errorCallback($message, $error);
+        } catch (\Throwable $reportFailure) {
+            $this->reportUnreported($error, $reportFailure, $message);
         }
     }
 

@@ -511,6 +511,150 @@ final class NatsBrokerTest extends TestCase
         }
     }
 
+    /**
+     * ackWait is a deadline: with nothing extending it, it is a hard ceiling on
+     * how long a job may take, and a job that runs past it is redelivered while
+     * the first attempt is still going — two workers doing the same side effect
+     * at the same time, not a retry after a failure.
+     */
+    public function testExtendingKeepsALongJobFromBeingRedelivered(): void
+    {
+        $this->broker->enqueue($this->queue, ['task' => 'slow']);
+
+        $message = $this->broker->receive($this->queue, 2);
+        $this->assertInstanceOf(Message::class, $message);
+
+        // ackWait is 2s here. Hold the message well past it, reporting progress
+        // on the broker's own cadence, exactly as the handler heartbeat does.
+        $deadline = microtime(true) + 3.5;
+        while (microtime(true) < $deadline) {
+            usleep((int) ($this->broker->extendInterval() * 1_000_000));
+            $this->broker->extend($this->queue, $message);
+        }
+
+        // Nothing was handed to a second worker while this one was still busy.
+        $this->assertNotInstanceOf(
+            \Utopia\Queue\Message::class,
+            $this->broker->receive($this->queue, 1),
+            'a message under extension must not be redelivered',
+        );
+
+        // And the original delivery can still be acknowledged.
+        $this->broker->commit($this->queue, $message);
+        $this->assertSame(0, $this->broker->getQueueSize($this->queue));
+    }
+
+    public function testRejectSchedulesTheNextAttemptWithTheTierBackoff(): void
+    {
+        // A bare NAK redelivers at once, so the backoff array governed only the
+        // ack timer and never the rescheduling: a permanently failing job burned
+        // its whole maxDeliver budget in a tight loop and dead-lettered in
+        // seconds instead of spreading over the window the backoff describes.
+        $broker = new Nats(
+            Connection::connect(getenv('NATS_URL') ?: 'nats://127.0.0.1:14225'),
+            ackWait: 2.0,
+            maxDeliver: 4,
+            backoff: [2.0, 10.0],
+        );
+        $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
+
+        $broker->enqueue($queue, ['task' => 'always-fails']);
+
+        $first = $broker->receive($queue, 2);
+        $this->assertInstanceOf(Message::class, $first);
+        $broker->reject($queue, $first);
+
+        // The first attempt's entry is 2s, so nothing is due inside one.
+        $this->assertNotInstanceOf(
+            \Utopia\Queue\Message::class,
+            $broker->receive($queue, 1),
+            'a rejected message must wait out its backoff, not come straight back',
+        );
+
+        $broker->close();
+    }
+
+    public function testTheAdvisorySubscriptionCarriesAQueueGroup(): void
+    {
+        // Asserted on the subscription rather than by racing two workers to a
+        // dead letter: the behaviour only diverges once a message has exhausted
+        // maxDeliver on ackWait alone, which is several seconds of wall clock
+        // and exactly the kind of timing-dependent test that fails on a loaded
+        // runner for reasons unrelated to the code.
+        //
+        // Without the group every worker receives the advisory and each
+        // publishes its own copy of the exhausted message, so the dead letter
+        // multiplies by the worker count.
+        $this->broker->enqueue($this->queue, ['task' => 'a']);
+
+        $advisories = new \ReflectionProperty(Nats::class, 'advisories');
+        /** @var array<string, \Utopia\NATS\Subscription> $subscriptions */
+        $subscriptions = $advisories->getValue($this->broker);
+
+        $this->assertCount(1, $subscriptions);
+
+        foreach ($subscriptions as $subscription) {
+            $this->assertNotNull($subscription->queue, 'the advisory subscription must join a queue group');
+            $this->assertStringContainsString('$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES', $subscription->subject);
+        }
+    }
+
+    public function testReceiveExposesTheStreamSequence(): void
+    {
+        $this->broker->enqueue($this->queue, ['task' => 'a']);
+        $this->broker->enqueue($this->queue, ['task' => 'b']);
+
+        $first = $this->broker->receive($this->queue, 2);
+        $this->assertInstanceOf(Message::class, $first);
+        $second = $this->broker->receive($this->queue, 2);
+        $this->assertInstanceOf(Message::class, $second);
+
+        // The stored copy's position, which distinguishes one delivery from
+        // another where the pid deliberately does not.
+        $this->assertNotNull($first->getSequence());
+        $this->assertNotNull($second->getSequence());
+        $this->assertGreaterThan($first->getSequence(), $second->getSequence());
+
+        $this->broker->commit($this->queue, $first);
+        $this->broker->commit($this->queue, $second);
+    }
+
+    public function testReconnectRecoversTheBrokerInPlace(): void
+    {
+        // Pool::recover() probes a failed resource for reset()/reconnect() and
+        // destroys it when it finds neither, so a single failed lease used to
+        // throw away the whole broker and rebuild it on next use.
+        $url = getenv('NATS_URL') ?: 'nats://127.0.0.1:14225';
+        $broker = new Nats(fn(): Connection => Connection::connect($url), ackWait: 2.0, maxDeliver: 3);
+        $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
+
+        $broker->enqueue($queue, ['task' => 'before']);
+
+        $this->assertTrue($broker->reconnect());
+
+        // Usable again on fresh connections, with no state carried over from
+        // the old ones — and the message that was already on the stream is
+        // still there, because reconnecting is about this client, not the queue.
+        $this->assertSame(1, $broker->getQueueSize($queue));
+        $broker->enqueue($queue, ['task' => 'after']);
+        $this->assertSame(2, $broker->getQueueSize($queue));
+
+        $message = $broker->receive($queue, 2);
+        $this->assertInstanceOf(Message::class, $message);
+        $broker->commit($queue, $message);
+
+        $broker->close();
+    }
+
+    public function testReconnectDeclinesWhenThereIsNothingToRebuildFrom(): void
+    {
+        // Handed a live Connection rather than a factory, the broker cannot
+        // make a new socket. Reporting that honestly is what lets the pool
+        // destroy the resource and build a fresh one; claiming success would
+        // return a broker whose every call fails on a closed connection.
+        $this->assertFalse($this->broker->reconnect());
+    }
+
     private function brokerWithStableIds(): Nats
     {
         return new Nats(
