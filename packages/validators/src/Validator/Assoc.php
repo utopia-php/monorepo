@@ -33,7 +33,7 @@ class Assoc extends Validator
      */
     public function isArray(): bool
     {
-        return true;
+        return false;
     }
 
     /**
@@ -43,7 +43,7 @@ class Assoc extends Validator
      */
     public function getType(): string
     {
-        return self::TYPE_ARRAY;
+        return self::TYPE_OBJECT;
     }
 
     /**

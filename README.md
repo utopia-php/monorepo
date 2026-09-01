@@ -51,6 +51,7 @@ graph TD
     cache --> circuit-breaker
     cache --> pools
     cache --> telemetry
+    cdn --> client
     cli --> servers
     client --> pools
     client --> psr7
