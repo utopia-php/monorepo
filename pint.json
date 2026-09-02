@@ -1,5 +1,8 @@
 {
     "preset": "per",
+    "notPath": [
+        "data/data.php"
+    ],
     "rules": {
         "native_function_invocation": {
             "include": ["@compiler_optimized"],
