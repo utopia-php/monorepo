@@ -71,6 +71,9 @@ jobs:
 
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6
       - run: bin/monorepo validate
@@ -84,6 +87,10 @@ jobs:
           version: 3.15.1
           files: '["README.md", "docs", "packages"]'
           fail_on_error: true
+          # github-check with nofilter reports without fetching the PR diff,
+          # which the API refuses above 20k lines (a mass lock-file removal
+          # was enough to hit it).
+          reporter: github-check
           filter_mode: nofilter
 
   test:
