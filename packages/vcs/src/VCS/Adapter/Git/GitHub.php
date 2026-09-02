@@ -640,6 +640,17 @@ class GitHub extends Git
     }
 
     /**
+     * GitHub accepts the App ID only as a JSON integer and the Client ID only
+     * as a string. Both arrive here as strings (environment variables), so a
+     * numeric one has to be cast or the token request fails with
+     * "'Issuer' claim ('iss') must be an Integer".
+     */
+    protected static function issuer(?string $appId): int|string|null
+    {
+        return is_numeric($appId) ? (int) $appId : $appId;
+    }
+
+    /**
      * Generate Access Token
      */
     protected function generateAccessToken(string $privateKey, ?string $appId): void
@@ -650,14 +661,12 @@ class GitHub extends Git
             throw new Exception('Failed to read the GitHub App private key');
         }
 
-        $appIdentifier = $appId;
-
         $iat = time();
         $exp = $iat + self::GITHUB_APP_JWT_EXPIRY;
         $payload = [
             'iat' => $iat,
             'exp' => $exp,
-            'iss' => $appIdentifier,
+            'iss' => self::issuer($appId),
         ];
 
         // generate access token

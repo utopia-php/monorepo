@@ -20,6 +20,7 @@ final class GitHubTest extends Base
     {
         return new GitHub(new Cache(new None()));
     }
+
     protected function signWebhookPayload(string $payload, string $secret): string
     {
         return 'sha256=' . hash_hmac('sha256', $payload, $secret);
@@ -155,6 +156,7 @@ final class GitHubTest extends Base
         );
         $this->assertSame(1, $verified);
         $claims = json_decode(base64_decode(strtr($payload, '-_', '+/')), true);
-        $this->assertSame('5678', $claims['iss']);
+        // GitHub rejects a numeric App ID sent as a JSON string.
+        $this->assertSame(5678, $claims['iss']);
     }
 }
