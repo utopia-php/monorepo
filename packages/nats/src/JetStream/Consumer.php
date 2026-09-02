@@ -24,12 +24,17 @@ final class Consumer
         $timeout ??= 5.0;
         $requestSubject = "{$this->apiPrefix}.CONSUMER.MSG.NEXT.{$this->stream}.{$this->getName()}";
 
-        $request = [
-            'batch' => $batch,
-            'expires' => StreamConfig::secondsToNanos($timeout),
-        ];
+        $request = ['batch' => $batch];
         if ($noWait) {
+            // No 'expires' alongside it. A pull request that carries an expiry
+            // waits the whole window and then answers 408 Request Timeout, so
+            // no_wait does nothing at all; sent on its own it comes back 404 No
+            // Messages immediately, which is the only reason to ask for it. A
+            // caller polling an empty consumer therefore paid the full timeout
+            // per call -- 0.25s of poll is a ceiling of four calls a second.
             $request['no_wait'] = true;
+        } else {
+            $request['expires'] = StreamConfig::secondsToNanos($timeout);
         }
         if ($maxBytes !== null) {
             $request['max_bytes'] = $maxBytes;
