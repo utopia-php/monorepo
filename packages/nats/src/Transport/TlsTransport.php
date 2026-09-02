@@ -47,13 +47,20 @@ final class TlsTransport implements Transport
 
     public function write(string $data): int
     {
-        $stream = $this->ensureConnected();
+        $this->ensureConnected();
         $total = \strlen($data);
         $written = 0;
 
         // Loop until every byte is on the wire: fwrite may perform a short write.
+        // Re-resolved on every pass rather than captured once. fwrite() is a
+        // yield point under Swoole's stream hooks, so a close() can land between
+        // two iterations of a short write -- and the next fwrite() on the
+        // handle the first pass captured raises TypeError, an \Error, which is
+        // precisely what the reconnect paths in Connection do not catch. The
+        // classification helpers below were hardened for this; the write itself
+        // was still holding the stale handle.
         while ($written < $total) {
-            $chunk = @fwrite($stream, substr($data, $written));
+            $chunk = @fwrite($this->ensureConnected(), substr($data, $written));
 
             if ($chunk === false || $chunk === 0) {
                 if ($this->isTimedOut()) {

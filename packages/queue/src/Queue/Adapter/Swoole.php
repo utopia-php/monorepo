@@ -315,6 +315,32 @@ class Swoole extends Adapter
             return;
         }
 
+        // Asked once, not once per beat. A pooled consumer answers this by
+        // leasing a broker, so calling it from inside the heartbeat loop would
+        // take a lease on every beat -- contending with the handler for the
+        // pool it is running on behalf of. ackWait does not change under us,
+        // so the cadence is a constant for the life of this message.
+        //
+        // Null is how a consumer that cannot extend says so after being asked:
+        // a pool only knows once it has a broker in hand. Anything non-positive
+        // is treated the same way, because a heartbeat that fires continuously
+        // would be worse than none.
+        $beat = $interval();
+
+        if (!\is_int($beat) && !\is_float($beat)) {
+            $work();
+
+            return;
+        }
+
+        $beat = (float) $beat;
+
+        if ($beat <= 0.0) {
+            $work();
+
+            return;
+        }
+
         // The handler signals completion by pushing, so waiting for the next
         // beat and noticing the handler has finished are the same operation.
         // A sleep followed by a flag check leaves a window between the two
@@ -325,10 +351,10 @@ class Swoole extends Adapter
         // end of an interval it no longer needs.
         $finished = new Channel(1);
 
-        Coroutine::create(function () use ($finished, $extend, $interval, $queue, $message): void {
+        Coroutine::create(function () use ($finished, $extend, $beat, $queue, $message): void {
             // pop() yields false when the wait times out, and the pushed value
             // when the handler is done.
-            while ($finished->pop((float) $interval()) === false) {
+            while ($finished->pop($beat) === false) {
                 try {
                     $extend($queue, $message);
                 } catch (\Throwable) {

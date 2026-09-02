@@ -322,6 +322,23 @@ abstract class Adapter
      * to reject() gives the message back to the broker after the job is done:
      * the handler runs a second time, or — at the delivery ceiling — a job that
      * worked is dead-lettered as though it never had.
+     *
+     * Contract change for $errorCallback. It used to fire only for work that
+     * had failed, so "reported" and "will be retried" were the same statement.
+     * It now also fires for a failed commit and a throwing success hook, and in
+     * both of those the handler has already run to completion:
+     *
+     *  - handler threw       — the work did not happen; the message is rejected
+     *                          and will be retried.
+     *  - commit threw        — the work happened; nothing is rejected, and the
+     *                          broker may still redeliver on its own deadline.
+     *  - success hook threw  — the work happened and is acked; nothing will
+     *                          redeliver it.
+     *
+     * A callback that treats every report as a failed job will over-count and,
+     * where it drives alerting or compensation, act on work that succeeded.
+     * Implementations that need to tell them apart should key off the phase
+     * rather than the presence of a report.
      */
     protected function processFrom(
         Message $message,

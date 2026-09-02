@@ -227,12 +227,19 @@ final class WebSocketTransport implements Transport
 
     private function rawWrite(string $data): void
     {
-        $stream = $this->ensureConnected();
+        $this->ensureConnected();
         $total = \strlen($data);
         $written = 0;
 
+        // Re-resolved on every pass rather than captured once. fwrite() is a
+        // yield point under Swoole's stream hooks, so a close() can land between
+        // two iterations of a short write -- and the next fwrite() on the
+        // handle the first pass captured raises TypeError, an \Error, which is
+        // precisely what the reconnect paths in Connection do not catch. The
+        // classification helpers below were hardened for this; the write itself
+        // was still holding the stale handle.
         while ($written < $total) {
-            $chunk = @fwrite($stream, substr($data, $written));
+            $chunk = @fwrite($this->ensureConnected(), substr($data, $written));
             if ($chunk === false || $chunk === 0) {
                 throw new ConnectionException('Failed to write to WebSocket');
             }
@@ -242,11 +249,14 @@ final class WebSocketTransport implements Transport
 
     private function rawRead(int $length): string
     {
-        $stream = $this->ensureConnected();
+        $this->ensureConnected();
         $data = '';
 
+        // Re-resolved per pass for the same reason as rawWrite(): fread() yields,
+        // so a partial read spans a window in which close() can invalidate the
+        // handle this loop would otherwise keep using.
         while (\strlen($data) < $length) {
-            $chunk = @fread($stream, $length - \strlen($data));
+            $chunk = @fread($this->ensureConnected(), $length - \strlen($data));
             if ($chunk === false || $chunk === '') {
                 if ($this->isTimedOut()) {
                     throw new TimeoutException('Read timed out');
