@@ -18,7 +18,7 @@ mkdir -p packages/<name>/src/<Ns> packages/<name>/tests
 
 Create these files. They mirror an existing small package (`packages/span` is a
 good reference) — note what the monorepo hoists and therefore **must not** appear
-here: no `pint.json`, and no Pint/PHPStan/Rector/PHPUnit entries in
+here: no package-level `mago.toml`, and no Mago/PHPStan/Rector/PHPUnit entries in
 `require-dev` (the root toolchain supplies them; see `check`/`test` in
 `bin/monorepo`).
 
@@ -94,7 +94,7 @@ carries.
 ## 4. Verify locally
 
 ```sh
-bin/monorepo check <name> --fix   # pint + phpstan + rector
+bin/monorepo check <name> --fix   # Mago + PHPStan + Rector
 bin/monorepo test <name>          # composer test (unit tier)
 bin/monorepo validate             # composer.json conventions + graph freshness
 bin/monorepo graph                # regenerate the README dependency graph

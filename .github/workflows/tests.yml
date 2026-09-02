@@ -85,6 +85,10 @@ jobs:
           files: '["README.md", "docs", "packages"]'
           fail_on_error: true
           filter_mode: nofilter
+          # PR annotation reporting asks GitHub for the unified PR diff, which
+          # is unavailable once a mechanical formatting migration exceeds
+          # GitHub's 300-file limit. A check reporter handles large diffs.
+          reporter: github-check
 
   test:
     name: test (${{ matrix.package }}${{ matrix.linked && ', linked' || '' }})

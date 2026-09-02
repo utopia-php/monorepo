@@ -6,7 +6,7 @@ One command runs the whole playbook:
 bin/monorepo absorb database
 ```
 
-It imports the library with full history, strips the QA tooling the monorepo hoists (Pint/PHPStan/Rector/PHPUnit dependencies, QA scripts and `pint.json`, points test scripts at the root `phpunit`, refreshes a committed `composer.lock`), removes the library's own CI workflows and writes a single `mirror.yml` that redirects pull requests opened against the mirror back here, banners the README, and normalises the mirror's branch ruleset (PR-only, no force-push, split app bypassed). Every step is idempotent — re-run it freely; the ruleset step updates an existing, even differently-named, ruleset in place rather than skipping it.
+It imports the library with full history, strips the QA tooling the monorepo hoists (Mago/PHPStan/Rector/PHPUnit dependencies, QA scripts and package-level formatter configuration, points test scripts at the root `phpunit`, refreshes a committed `composer.lock`), removes the library's own CI workflows and writes a single `mirror.yml` that redirects pull requests opened against the mirror back here, banners the README, and normalises the mirror's branch ruleset (PR-only, no force-push, split app bypassed). Every step is idempotent — re-run it freely; the ruleset step updates an existing, even differently-named, ruleset in place rather than skipping it.
 
 Then, by hand:
 
