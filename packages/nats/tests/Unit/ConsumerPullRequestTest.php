@@ -58,6 +58,29 @@ final class ConsumerPullRequestTest extends TestCase
         return $decoded;
     }
 
+    /**
+     * The sid fetch() is about to give its inbox subscription.
+     *
+     * Inbound frames are routed by sid, and a reply has to be queued on the fake
+     * before the synchronous fetch() starts reading -- by which point the inbox
+     * subject it generated is not observable yet. The sid is, because it comes
+     * from a counter.
+     */
+    private function pendingSid(Connection $conn): string
+    {
+        return (string) (new \ReflectionProperty(Connection::class, 'nextSid'))->getValue($conn);
+    }
+
+    /** Queue a status frame on the inbox fetch() is about to open. */
+    private function pushStatus(FakeTransport $fake, string $sid, string $status, string $replyTo = ''): void
+    {
+        $block = "NATS/1.0 {$status}\r\n\r\n";
+        $length = \strlen($block);
+        $reply = $replyTo === '' ? '' : " {$replyTo}";
+
+        $fake->pushInbound("HMSG _INBOX.scripted {$sid}{$reply} {$length} {$length}\r\n{$block}\r\n");
+    }
+
     public function testNoWaitPullRequestCarriesNoExpiry(): void
     {
         // The server honours the expiry over no_wait: given both, it waits out
@@ -102,5 +125,94 @@ final class ConsumerPullRequestTest extends TestCase
         $this->assertSame(4096, $request['max_bytes']);
         $this->assertTrue($request['no_wait'] ?? null);
         $this->assertArrayNotHasKey('expires', $request);
+    }
+
+    /**
+     * A 503 is what the server sends when the consumer's API subject has no
+     * responder at that instant -- a consumer still being created, or a raft
+     * leader moving. It was not among the codes fetch() named, so it fell
+     * through and was returned as a message with an empty body.
+     */
+    public function testNoRespondersStatusIsNotReturnedAsAMessage(): void
+    {
+        $fake = new FakeTransport();
+        $conn = $this->connect($fake);
+        $consumer = $this->consumer($conn);
+
+        $this->pushStatus($fake, $this->pendingSid($conn), '503 No Responders');
+
+        $batch = $consumer->fetch(1, 0.02, true);
+
+        $this->assertCount(0, $batch, 'A 503 status frame is not a message');
+    }
+
+    /**
+     * The same for a status nobody has enumerated. The rule has to be "a status
+     * frame is not data", not a longer list of numbers, or the next code the
+     * server adds is returned as a job all over again.
+     */
+    public function testAnUnrecognisedStatusIsNotReturnedAsAMessage(): void
+    {
+        $fake = new FakeTransport();
+        $conn = $this->connect($fake);
+        $consumer = $this->consumer($conn);
+
+        $this->pushStatus($fake, $this->pendingSid($conn), '599 Something New');
+
+        $batch = $consumer->fetch(1, 0.02, true);
+
+        $this->assertCount(0, $batch);
+    }
+
+    public function testNoMessagesStatusEndsTheFetchWithoutAMessage(): void
+    {
+        $fake = new FakeTransport();
+        $conn = $this->connect($fake);
+        $consumer = $this->consumer($conn);
+
+        $this->pushStatus($fake, $this->pendingSid($conn), '404 No Messages');
+
+        $batch = $consumer->fetch(1, 0.02, true);
+
+        $this->assertCount(0, $batch);
+    }
+
+    /**
+     * 100 is the one status that means carry on: it is a keep-alive, so it must
+     * not end the fetch, and a real message behind it still has to arrive.
+     */
+    public function testFlowControlStatusIsAcknowledgedAndDoesNotEndTheFetch(): void
+    {
+        $fake = new FakeTransport();
+        $conn = $this->connect($fake);
+        $consumer = $this->consumer($conn);
+
+        $sid = $this->pendingSid($conn);
+        $this->pushStatus($fake, $sid, '100 FlowControl Request', '_FC.reply');
+        $fake->pushInbound("MSG _INBOX.scripted {$sid} 5\r\nhello\r\n");
+
+        $batch = $consumer->fetch(1, 0.5, true);
+
+        $this->assertCount(1, $batch, 'A keep-alive must not end the fetch');
+        foreach ($batch as $message) {
+            $this->assertSame('hello', $message->getData());
+        }
+        $this->assertStringContainsString('PUB _FC.reply', $fake->written, 'The keep-alive is answered');
+    }
+
+    public function testAMessageWithoutAStatusIsStillDelivered(): void
+    {
+        $fake = new FakeTransport();
+        $conn = $this->connect($fake);
+        $consumer = $this->consumer($conn);
+
+        $fake->pushInbound("MSG _INBOX.scripted {$this->pendingSid($conn)} 7\r\npayload\r\n");
+
+        $batch = $consumer->fetch(1, 0.5, true);
+
+        $this->assertCount(1, $batch);
+        foreach ($batch as $message) {
+            $this->assertSame('payload', $message->getData());
+        }
     }
 }

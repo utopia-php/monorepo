@@ -61,18 +61,28 @@ final class Consumer
                 break;
             }
 
-            // Check for status messages (408 = Request Timeout, 404 = No Messages, 409 = Leadership Change)
             if ($msg->headers instanceof \Utopia\NATS\Headers) {
                 $status = $msg->headers->getStatus();
-                if (\in_array($status, ['408', '404', '409'], true)) {
-                    break;
-                }
-                // 100 = flow control / idle heartbeat: keep-alive, not data.
+
+                // 100 = flow control / idle heartbeat: keep-alive, not data, and
+                // the only status that means "carry on waiting".
                 if ($status === '100') {
                     if ($msg->replyTo !== null && $msg->replyTo !== '') {
                         $this->conn->publish($msg->replyTo, '');
                     }
                     continue;
+                }
+
+                // Every other status ends this pull request. Naming the expected
+                // codes (404/408/409) and falling through on the rest handed the
+                // unnamed ones back as data: a 503 No Responders -- which the
+                // server sends while a consumer is still being created or a raft
+                // leader is moving -- became a message with an empty body, and a
+                // caller that json_decode()s the payload got null and died on it.
+                // A status frame carries no payload whatever its number, so it can
+                // never be a message.
+                if ($status !== '') {
+                    break;
                 }
             }
 
