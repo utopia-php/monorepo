@@ -3,3 +3,4 @@
 *.cache
 .history
 .phpactor.json
+composer.lock

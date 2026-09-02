@@ -38,6 +38,8 @@ composer require utopia-php/di:@dev
 
 Revert `composer.json` before committing — `bin/monorepo validate` and CI test against released versions.
 
+Packages never commit a `composer.lock`. A library's lock does not reach its consumers, and every test run (`bin/monorepo test`, in CI or locally) resolves dependencies afresh with `composer update`, so a committed lock only adds churn to every dependency bump. Each package `.gitignore` lists `composer.lock`, and `bin/monorepo validate` rejects a tracked one. The root `composer.lock` is the exception: it pins the QA toolchain (Pint, PHPStan, Rector, PHPUnit) that every package check runs with.
+
 To use an unmerged branch from an *external* consumer (e.g. test a fix in Appwrite before it's released), dispatch the **Split Dev** workflow on the branch: it publishes the package's split to the mirror so the consumer can `composer require utopia-php/<name>:dev-<branch>` — see [docs/distribution.md](docs/distribution.md#dev-branches).
 
 ## Dependency graph

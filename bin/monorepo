@@ -361,10 +361,21 @@ switch ($command) {
         if ($manifest !== $original) {
             file_put_contents($path, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
             out('stripped hoisted QA tooling from composer.json');
-            if (is_file("{$directory}/composer.lock")) {
-                passthru("cd {$directory} && composer update --no-interaction --no-progress --ignore-platform-reqs", $code);
-                $code === 0 || fail("failed to refresh {$package} composer.lock");
-            }
+        }
+
+        // Packages carry no composer.lock: a library's lock never reaches
+        // its consumers, and every test run resolves dependencies afresh
+        // (`bin/monorepo test` always runs `composer update`), so a committed
+        // lock is pure churn. Drop it and make sure the mirror ignores it.
+        if (is_file("{$directory}/composer.lock")) {
+            unlink("{$directory}/composer.lock");
+            out('removed composer.lock (packages are not locked)');
+        }
+        $ignore = "{$directory}/.gitignore";
+        $ignored = is_file($ignore) ? file_get_contents($ignore) : '';
+        if (preg_match('#^/?composer\.lock$#m', $ignored) !== 1) {
+            file_put_contents($ignore, rtrim($ignored) . ($ignored === '' ? '' : "\n") . "composer.lock\n");
+            out('added composer.lock to .gitignore');
         }
 
         // The monorepo owns CI and issue tracking, so the mirror needs no test,
@@ -561,6 +572,17 @@ switch ($command) {
                 if (isset($manifest['version'])) {
                     $problems[] = 'must not declare "version" (versions come from tags)';
                 }
+            }
+
+            // Locks are never committed for packages (see docs/creating.md);
+            // check the index rather than the disk, since a local `composer
+            // update` legitimately writes one.
+            if (sh('git ls-files ' . escapeshellarg("packages/{$package}/composer.lock")) !== '') {
+                $problems[] = 'composer.lock must not be committed (packages are not locked)';
+            }
+            $ignored = is_file("packages/{$package}/.gitignore") ? file_get_contents("packages/{$package}/.gitignore") : '';
+            if (preg_match('#^/?composer\.lock$#m', $ignored) !== 1) {
+                $problems[] = '.gitignore must list composer.lock';
             }
 
             foreach ($problems as $problem) {
