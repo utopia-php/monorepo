@@ -100,7 +100,10 @@ final class ConsumerPullRequestTest extends TestCase
     public function testWaitingPullRequestStillCarriesAnExpiry(): void
     {
         // The other half of the same decision: without no_wait the server needs
-        // the expiry, or it holds the request for its own default.
+        // the expiry, or it holds the request for its own default. It lands
+        // just inside the client deadline -- see
+        // ConsumerFetchLifecycleTest::testServerPullExpiryLandsBeforeTheClientDeadline
+        // for why the two must not share a boundary.
         $fake = new FakeTransport();
         $consumer = $this->consumer($this->connect($fake));
 
@@ -109,7 +112,7 @@ final class ConsumerPullRequestTest extends TestCase
         $request = $this->pullRequest($fake);
 
         $this->assertArrayNotHasKey('no_wait', $request);
-        $this->assertSame(20_000_000, $request['expires']);
+        $this->assertSame(18_000_000, $request['expires']);
     }
 
     public function testBatchSizeAndMaxBytesSurviveTheNoWaitPath(): void

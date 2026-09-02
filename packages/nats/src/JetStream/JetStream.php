@@ -12,6 +12,13 @@ use Utopia\NATS\KeyValue\KeyValueConfig;
 
 final class JetStream
 {
+    /**
+     * JetStream API error code for a rejected optimistic-concurrency publish
+     * ("wrong last sequence"). This is the server evaluating the request and
+     * refusing it, which is the only failure a caller may read as a conflict.
+     */
+    public const ERR_WRONG_LAST_SEQUENCE = 10071;
+
     private readonly string $apiPrefix;
 
     public function __construct(

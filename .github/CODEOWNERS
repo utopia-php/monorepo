@@ -16,6 +16,7 @@
 /packages/config/       @Meldiron @eldadfux
 /packages/console/      @eldadfux @lohanidamodar
 /packages/di/           @eldadfux @ChiragAgg5k
+/packages/domains/      @ChiragAgg5k @eldadfux @lohanidamodar
 /packages/fastly/       @loks0n
 /packages/http/         @lohanidamodar @eldadfux @Meldiron
 /packages/lock/         @abnegate

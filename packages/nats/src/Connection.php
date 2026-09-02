@@ -37,6 +37,50 @@ final class Connection
     private const CLIENT_LANG = 'php';
     private const CLIENT_VERSION = '0.1.0';
 
+    // Bounds on the read tick() does to collect its own PONGs. Short enough
+    // that a sweep over an idle pool stays in the low milliseconds, and capped
+    // so a connection with live subscription traffic cannot hold maintenance.
+    private const float TICK_READ_TIMEOUT = 0.05;
+    private const int TICK_MAX_READS = 4;
+
+    /**
+     * Server -ERR substrings after which NATS closes the connection. Lowercase;
+     * matched as substrings because the server wraps some of them in quotes.
+     *
+     * @var list<string>
+     */
+    private const array CLOSING_ERRORS = [
+        'stale connection',
+        'slow consumer',
+        'maximum payload',
+        'invalid client protocol',
+        'authorization violation',
+        'authentication timeout',
+        'authentication expired',
+        'secure connection - tls required',
+        'maximum connections exceeded',
+        'maximum control line exceeded',
+        'unknown protocol operation',
+        'parser error',
+    ];
+
+    /**
+     * The subset of {@see self::CLOSING_ERRORS} a reconnect cannot fix, so the
+     * connection is marked dead rather than rebuilt in a loop.
+     *
+     * @var list<string>
+     */
+    private const array UNRECOVERABLE_ERRORS = [
+        'authorization violation',
+        'authentication timeout',
+        'authentication expired',
+        'secure connection - tls required',
+        'maximum connections exceeded',
+        'maximum control line exceeded',
+        'unknown protocol operation',
+        'parser error',
+    ];
+
     private Transport $transport;
     private Parser $parser;
     private readonly Writer $writer;
@@ -264,12 +308,62 @@ final class Connection
     }
 
     /**
+     * Drive connection maintenance without consuming a message: send the
+     * keepalive PING when it is due, and recycle the connection when the server
+     * has stopped answering. A holder that keeps a connection open without
+     * reading from it -- a pooled publisher, say -- must call this on an
+     * interval shorter than the server's ping deadline, because nothing else
+     * in this class runs on its own.
+     *
+     * This reads the socket, so the caller must hold the connection
+     * exclusively for the call. Pool maintenance satisfies that by sweeping
+     * only resources that are idle; a coroutine must never tick a connection
+     * another coroutine is inside a call on.
+     */
+    public function tick(): void
+    {
+        $this->checkPings();
+        $this->collectPongs();
+    }
+
+    /**
+     * Consume the PONGs owed for the keepalive PINGs this connection has sent.
+     *
+     * checkPings() only writes: it is the read path that clears
+     * $outstandingPings, and a holder that never reads has none. Ticking such a
+     * connection would therefore march it to maxPingsOut and declare a
+     * perfectly healthy socket stale -- the keepalive would cause the outage it
+     * exists to prevent. Reading here closes that loop.
+     *
+     * Bounded, and only while a PONG is actually owed, so maintenance can never
+     * turn into a receive loop on a connection carrying subscription traffic.
+     */
+    private function collectPongs(): void
+    {
+        // readMessage() rather than processMessage(): the latter checks the
+        // keepalive on entry, so draining through it would send a fresh PING
+        // for every PONG collected and the outstanding count could never fall.
+        for ($read = 0; $this->outstandingPings > 0 && $read < self::TICK_MAX_READS; $read++) {
+            $this->readMessage(self::TICK_READ_TIMEOUT);
+        }
+    }
+
+    /**
      * Read and dispatch one server message.
      */
     public function processMessage(?float $timeout = null): ?Message
     {
         $this->checkPings();
 
+        return $this->readMessage($timeout);
+    }
+
+    /**
+     * The read half of {@see self::processMessage()}, without the keepalive
+     * check, so maintenance can drain the socket without writing to it.
+     */
+    private function readMessage(?float $timeout = null): ?Message
+    {
         try {
             [$op, $data] = $this->parser->next($timeout);
         } catch (TimeoutException) {
@@ -634,12 +728,102 @@ final class Connection
     private function handleError(mixed $data): never
     {
         $message = \is_string($data) ? $data : 'Unknown server error';
+        $error = self::mapServerError($message);
 
         if ($this->options->onError instanceof \Closure) {
             ($this->options->onError)(new NatsException($message));
         }
 
-        throw self::mapServerError($message);
+        // The server has already closed the socket for these errors, but the
+        // status still reads "connected", so the next publish() would write into
+        // a dead socket and return success. Recycle the connection here instead.
+        if (self::closesConnection($message)) {
+            $this->recycleDeadConnection(self::reconnectsAfter($message));
+        }
+
+        throw $error;
+    }
+
+    /**
+     * Recycle a connection the server has closed under us: reconnect when that
+     * can help, otherwise mark it dead so ensureConnected() refuses the next
+     * call. A reconnect that exhausts its attempts leaves the status at
+     * disconnected, and the -ERR that got us here is the more useful thing to
+     * report, so its ConnectionException is deliberately swallowed.
+     *
+     * Marking it dead is the important half. An error we decline to reconnect
+     * after is still an error the server closed the socket for, and leaving the
+     * status at connected would put us back in the state this whole path
+     * exists to remove: a publish that writes into a dead socket and returns
+     * success.
+     */
+    private function recycleDeadConnection(bool $mayReconnect = true): void
+    {
+        if ($mayReconnect && $this->options->allowReconnect && $this->status !== self::STATUS_CLOSED) {
+            try {
+                $this->attemptReconnect();
+            } catch (ConnectionException) {
+                // Status is disconnected; handleError() still throws the -ERR.
+            }
+
+            return;
+        }
+
+        $this->status = self::STATUS_DISCONNECTED;
+
+        if (isset($this->transport)) {
+            $this->transport->close();
+        }
+    }
+
+    /**
+     * Whether NATS closes the connection after this -ERR. Purely a statement
+     * about the socket, deliberately separate from whether reconnecting is
+     * worth doing -- see {@see self::reconnectsAfter()}.
+     *
+     * The two were one predicate at first, which quietly recreated the bug this
+     * class is fixing: an error excluded from reconnect was also excluded from
+     * being recorded as closed, so an authorization failure left the status at
+     * connected over a socket the server had already dropped, and the next
+     * publish() wrote into it and returned success.
+     *
+     * Pure so the classification can be unit tested without a live connection.
+     */
+    public static function closesConnection(string $message): bool
+    {
+        $lower = strtolower($message);
+
+        foreach (self::CLOSING_ERRORS as $needle) {
+            if (str_contains($lower, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether rebuilding the connection can plausibly succeed after this -ERR.
+     *
+     * Only asked of errors that closed the connection. False for the ones a
+     * retry cannot fix -- credentials the server just rejected, a TLS
+     * requirement we are not meeting, a server at its connection ceiling, or
+     * protocol this client got wrong -- because reconnecting there turns a hard
+     * failure into a hot loop against a server that will refuse us identically
+     * every time. Those connections are marked dead instead, which surfaces the
+     * failure to the caller rather than hiding it behind a retry storm.
+     */
+    public static function reconnectsAfter(string $message): bool
+    {
+        $lower = strtolower($message);
+
+        foreach (self::UNRECOVERABLE_ERRORS as $needle) {
+            if (str_contains($lower, $needle)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -704,6 +888,16 @@ final class Connection
         }
     }
 
+    /**
+     * Emit the keepalive PING when one is due, and act on a spent budget first.
+     *
+     * Only called from paths that also read the socket -- {@see
+     * self::processMessage()} and {@see self::tick()} -- because a PING is only
+     * half a keepalive. It is the read that clears $outstandingPings, so a
+     * caller that sends without reading marches the count to maxPingsOut and
+     * declares a healthy connection stale. See {@see self::ensureConnected()}
+     * for the write path, which takes the verdict without the emission.
+     */
     private function checkPings(): void
     {
         if ($this->status !== self::STATUS_CONNECTED) {
@@ -711,26 +905,50 @@ final class Connection
         }
 
         $now = microtime(true);
-        if (($now - $this->lastPingTime) >= $this->options->pingInterval) {
-            if ($this->outstandingPings >= $this->options->maxPingsOut) {
-                // Stale connection
-                if ($this->options->allowReconnect) {
-                    $this->attemptReconnect();
-                    return;
-                }
-                throw new ConnectionException('Stale connection: too many outstanding pings');
-            }
+        if (($now - $this->lastPingTime) < $this->options->pingInterval) {
+            return;
+        }
 
-            try {
-                $this->send($this->writer->ping());
-                $this->outstandingPings++;
-                $this->lastPingTime = $now;
-            } catch (ConnectionException) {
-                if ($this->options->allowReconnect) {
-                    $this->attemptReconnect();
-                }
+        if ($this->checkStale()) {
+            return;
+        }
+
+        try {
+            $this->send($this->writer->ping());
+            $this->outstandingPings++;
+            $this->lastPingTime = $now;
+        } catch (ConnectionException) {
+            if ($this->options->allowReconnect) {
+                $this->attemptReconnect();
             }
         }
+    }
+
+    /**
+     * The staleness verdict on its own: the server has left this many PINGs
+     * unanswered, so the connection is gone. Reconnects where that is allowed
+     * and raises otherwise, and reports whether it acted so callers can stop.
+     *
+     * Split out of checkPings() so the write path can reach the verdict without
+     * the emission that goes with it.
+     */
+    private function checkStale(): bool
+    {
+        if ($this->status !== self::STATUS_CONNECTED) {
+            return false;
+        }
+
+        if ($this->outstandingPings < $this->options->maxPingsOut) {
+            return false;
+        }
+
+        if ($this->options->allowReconnect) {
+            $this->attemptReconnect();
+
+            return true;
+        }
+
+        throw new ConnectionException('Stale connection: too many outstanding pings');
     }
 
     private function attemptReconnect(): void
@@ -802,6 +1020,22 @@ final class Connection
         if ($this->status !== self::STATUS_CONNECTED && $this->status !== self::STATUS_DRAINING) {
             throw new ConnectionException("Not connected (status: {$this->status})");
         }
+
+        // Take the keepalive verdict before the caller writes rather than
+        // after: a connection that has already outlived the server's ping
+        // deadline is recycled here, so the write that follows lands on a live
+        // socket or raises.
+        //
+        // The verdict only, never the PING. checkPings() increments
+        // $outstandingPings and it is the read path that clears it, so emitting
+        // here would make every write-only caller -- a pooled publisher between
+        // maintenance sweeps, most of all -- accumulate one unanswered PING per
+        // interval and reconnect a perfectly healthy socket on a timer. A
+        // connection that is actively publishing is not idle, either: the
+        // server sees its traffic, so there is nothing for a PING from here to
+        // keep alive. Emission belongs to the paths that also read -- see
+        // {@see self::checkPings()}.
+        $this->checkStale();
     }
 
     private function send(string $data): void
