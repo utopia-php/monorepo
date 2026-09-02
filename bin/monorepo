@@ -584,6 +584,11 @@ switch ($command) {
             if (preg_match('#^/?composer\.lock$#m', $ignored) !== 1) {
                 $problems[] = '.gitignore must list composer.lock';
             }
+            foreach (glob("packages/{$package}/Dockerfile*") ?: [] as $dockerfile) {
+                if (str_contains(file_get_contents($dockerfile), 'composer.lock')) {
+                    $problems[] = basename($dockerfile) . ' references composer.lock, which no longer exists';
+                }
+            }
 
             foreach ($problems as $problem) {
                 out("packages/{$package}: {$problem}");
