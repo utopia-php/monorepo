@@ -188,11 +188,17 @@ trait PoolTestScope
     {
         $this->execute(function (): void {
             $i = 0;
-            $object = new Pool($this->getAdapter(), 'testDestroy', 2, function () use (&$i): string {
-                ++$i;
+            $object = new Pool(
+                $this->getAdapter(),
+                'testDestroy',
+                2,
+                function () use (&$i): string {
+                    ++$i;
 
-                return $i <= 2 ? 'x' : 'y';
-            }, timeout: 0.0);
+                    return $i <= 2 ? 'x' : 'y';
+                },
+                timeout: 0.0,
+            );
 
             $this->assertSame(2, $object->count());
 
@@ -247,10 +253,16 @@ trait PoolTestScope
             // does not fall through to a wait. The caller gets init's own
             // exception, untouched, so it keeps the type it needs to act on.
             $calls = 0;
-            $pool = new Pool($this->getAdapter(), 'test-create-fails', 1, function () use (&$calls): string {
-                ++$calls;
-                throw new Exception('connect refused');
-            }, timeout: 0.0);
+            $pool = new Pool(
+                $this->getAdapter(),
+                'test-create-fails',
+                1,
+                function () use (&$calls): string {
+                    ++$calls;
+                    throw new Exception('connect refused');
+                },
+                timeout: 0.0,
+            );
 
             try {
                 $pool->pop();
@@ -271,9 +283,15 @@ trait PoolTestScope
             // pop() reserves capacity before the connection exists. An Error
             // escaping the catch used to keep that slot, draining the pool one
             // failed pop at a time.
-            $pool = new Pool($this->getAdapter(), 'test-error-leak', 2, function (): string {
-                throw new \TypeError('Connection init failed');
-            }, timeout: 0.0);
+            $pool = new Pool(
+                $this->getAdapter(),
+                'test-error-leak',
+                2,
+                function (): string {
+                    throw new \TypeError('Connection init failed');
+                },
+                timeout: 0.0,
+            );
             // More attempts than slots, so a kept reservation shows up as lost
             // capacity by the end. Counted rather than using fail() inside the
             // loop, so a missing throw cannot be confused with the caught one.
@@ -300,11 +318,17 @@ trait PoolTestScope
             // the same connection twice drove the count below the truth and let the
             // pool create beyond its size.
             $created = 0;
-            $pool = new Pool($this->getAdapter(), 'test-double-destroy', 2, function () use (&$created): string {
-                ++$created;
+            $pool = new Pool(
+                $this->getAdapter(),
+                'test-double-destroy',
+                2,
+                function () use (&$created): string {
+                    ++$created;
 
-                return 'x';
-            }, timeout: 0.0);
+                    return 'x';
+                },
+                timeout: 0.0,
+            );
 
             $connection = $pool->pop();
             $pool->destroy($connection);
@@ -351,25 +375,34 @@ trait PoolTestScope
     {
         $this->execute(function (): void {
             $created = 0;
-            $pool = new Pool($this->getAdapter(), 'test-destroy-on-error', 2, function () use (&$created): \Stringable {
-                ++$created;
+            $pool = new Pool(
+                $this->getAdapter(),
+                'test-destroy-on-error',
+                2,
+                function () use (&$created): \Stringable {
+                    ++$created;
 
-                return new readonly class ('resource-' . $created, $created === 1) implements \Stringable {
-                    public function __construct(private string $name, private bool $failRecovery) {}
+                    return new readonly class('resource-' . $created, $created === 1) implements \Stringable {
+                        public function __construct(
+                            private string $name,
+                            private bool $failRecovery,
+                        ) {}
 
-                    public function __toString(): string
-                    {
-                        return $this->name;
-                    }
-
-                    public function reconnect(): void
-                    {
-                        if ($this->failRecovery) {
-                            throw new \RuntimeException('Recovery failed');
+                        public function __toString(): string
+                        {
+                            return $this->name;
                         }
-                    }
-                };
-            }, timeout: 0.0);
+
+                        public function reconnect(): void
+                        {
+                            if ($this->failRecovery) {
+                                throw new \RuntimeException('Recovery failed');
+                            }
+                        }
+                    };
+                },
+                timeout: 0.0,
+            );
             try {
                 $pool->use(function (\Stringable $resource): void {
                     $this->assertSame('resource-1', (string) $resource);
@@ -391,23 +424,31 @@ trait PoolTestScope
     {
         $this->execute(function (): void {
             $created = 0;
-            $pool = new Pool($this->getAdapter(), 'test-destroy-on-false-recovery', 2, function () use (&$created): \Stringable {
-                ++$created;
+            $pool = new Pool(
+                $this->getAdapter(),
+                'test-destroy-on-false-recovery',
+                2,
+                function () use (&$created): \Stringable {
+                    ++$created;
 
-                return new readonly class ('resource-' . $created) implements \Stringable {
-                    public function __construct(private string $name) {}
+                    return new readonly class('resource-' . $created) implements \Stringable {
+                        public function __construct(
+                            private string $name,
+                        ) {}
 
-                    public function __toString(): string
-                    {
-                        return $this->name;
-                    }
+                        public function __toString(): string
+                        {
+                            return $this->name;
+                        }
 
-                    public function reconnect(): bool
-                    {
-                        return false;
-                    }
-                };
-            }, timeout: 0.0);
+                        public function reconnect(): bool
+                        {
+                            return false;
+                        }
+                    };
+                },
+                timeout: 0.0,
+            );
             try {
                 $pool->use(function (\Stringable $resource): void {
                     $this->assertSame('resource-1', (string) $resource);
@@ -429,23 +470,31 @@ trait PoolTestScope
     {
         $this->execute(function (): void {
             $created = 0;
-            $pool = new Pool($this->getAdapter(), 'test-recover-and-reuse', 2, function () use (&$created): \Stringable {
-                ++$created;
+            $pool = new Pool(
+                $this->getAdapter(),
+                'test-recover-and-reuse',
+                2,
+                function () use (&$created): \Stringable {
+                    ++$created;
 
-                return new readonly class ('resource-' . $created) implements \Stringable {
-                    public function __construct(private string $name) {}
+                    return new readonly class('resource-' . $created) implements \Stringable {
+                        public function __construct(
+                            private string $name,
+                        ) {}
 
-                    public function __toString(): string
-                    {
-                        return $this->name;
-                    }
+                        public function __toString(): string
+                        {
+                            return $this->name;
+                        }
 
-                    public function reconnect(): bool
-                    {
-                        return true;
-                    }
-                };
-            }, timeout: 0.0);
+                        public function reconnect(): bool
+                        {
+                            return true;
+                        }
+                    };
+                },
+                timeout: 0.0,
+            );
             try {
                 $pool->use(function (\Stringable $resource): void {
                     $this->assertSame('resource-1', (string) $resource);
@@ -466,18 +515,26 @@ trait PoolTestScope
     {
         $this->execute(function (): void {
             $created = 0;
-            $pool = new Pool($this->getAdapter(), 'test-destroy-without-recovery', 2, function () use (&$created): \Stringable {
-                ++$created;
+            $pool = new Pool(
+                $this->getAdapter(),
+                'test-destroy-without-recovery',
+                2,
+                function () use (&$created): \Stringable {
+                    ++$created;
 
-                return new readonly class ('resource-' . $created) implements \Stringable {
-                    public function __construct(private string $name) {}
+                    return new readonly class('resource-' . $created) implements \Stringable {
+                        public function __construct(
+                            private string $name,
+                        ) {}
 
-                    public function __toString(): string
-                    {
-                        return $this->name;
-                    }
-                };
-            }, timeout: 0.0);
+                        public function __toString(): string
+                        {
+                            return $this->name;
+                        }
+                    };
+                },
+                timeout: 0.0,
+            );
             try {
                 $pool->use(function (\Stringable $resource): void {
                     $this->assertSame('resource-1', (string) $resource);
@@ -499,18 +556,24 @@ trait PoolTestScope
     {
         $this->execute(function (): void {
             $created = 0;
-            $pool = new Pool($this->getAdapter(), 'test-destroy-native-resource', 2, function () use (&$created) {
-                ++$created;
-                $resource = fopen('php://temp', 'r+');
-                if ($resource === false) {
-                    throw new \RuntimeException('Failed to open stream');
-                }
+            $pool = new Pool(
+                $this->getAdapter(),
+                'test-destroy-native-resource',
+                2,
+                function () use (&$created) {
+                    ++$created;
+                    $resource = fopen('php://temp', 'r+');
+                    if ($resource === false) {
+                        throw new \RuntimeException('Failed to open stream');
+                    }
 
-                fwrite($resource, 'resource-' . $created);
-                rewind($resource);
+                    fwrite($resource, 'resource-' . $created);
+                    rewind($resource);
 
-                return $resource;
-            }, timeout: 0.0);
+                    return $resource;
+                },
+                timeout: 0.0,
+            );
             try {
                 $pool->use(function ($resource): void {
                     $this->assertSame('resource-1', stream_get_contents($resource));
@@ -546,18 +609,26 @@ trait PoolTestScope
             };
 
             $created = 0;
-            $pool = new Pool($adapter, 'test-forget-on-destroy-failure', 1, function () use (&$created): \Stringable {
-                ++$created;
+            $pool = new Pool(
+                $adapter,
+                'test-forget-on-destroy-failure',
+                1,
+                function () use (&$created): \Stringable {
+                    ++$created;
 
-                return new readonly class ('resource-' . $created) implements \Stringable {
-                    public function __construct(private string $name) {}
+                    return new readonly class('resource-' . $created) implements \Stringable {
+                        public function __construct(
+                            private string $name,
+                        ) {}
 
-                    public function __toString(): string
-                    {
-                        return $this->name;
-                    }
-                };
-            }, timeout: 0.0);
+                        public function __toString(): string
+                        {
+                            return $this->name;
+                        }
+                    };
+                },
+                timeout: 0.0,
+            );
             try {
                 $pool->use(function (\Stringable $resource) use ($adapter): void {
                     $this->assertSame('resource-1', (string) $resource);
@@ -579,26 +650,34 @@ trait PoolTestScope
     {
         $this->execute(function (): void {
             $created = 0;
-            $pool = new Pool($this->getAdapter(), 'test-preserve-callback-error', 1, function () use (&$created): \Stringable {
-                ++$created;
-                if ($created > 1) {
-                    throw new \TypeError('Replacement failed');
-                }
-
-                return new readonly class ('resource-' . $created) implements \Stringable {
-                    public function __construct(private string $name) {}
-
-                    public function __toString(): string
-                    {
-                        return $this->name;
+            $pool = new Pool(
+                $this->getAdapter(),
+                'test-preserve-callback-error',
+                1,
+                function () use (&$created): \Stringable {
+                    ++$created;
+                    if ($created > 1) {
+                        throw new \TypeError('Replacement failed');
                     }
 
-                    public function reconnect(): never
-                    {
-                        throw new \RuntimeException('Recovery failed');
-                    }
-                };
-            }, timeout: 0.0);
+                    return new readonly class('resource-' . $created) implements \Stringable {
+                        public function __construct(
+                            private string $name,
+                        ) {}
+
+                        public function __toString(): string
+                        {
+                            return $this->name;
+                        }
+
+                        public function reconnect(): never
+                        {
+                            throw new \RuntimeException('Recovery failed');
+                        }
+                    };
+                },
+                timeout: 0.0,
+            );
             $error = null;
             try {
                 $pool->use(function (\Stringable $resource): void {
@@ -618,7 +697,14 @@ trait PoolTestScope
     {
         $this->execute(function (): void {
             $telemetry = new TestTelemetry();
-            $this->poolObject = new Pool($this->getAdapter(), 'test', 5, fn(): string => 'x', timeout: 0.0, telemetry: $telemetry);
+            $this->poolObject = new Pool(
+                $this->getAdapter(),
+                'test',
+                5,
+                fn(): string => 'x',
+                timeout: 0.0,
+                telemetry: $telemetry,
+            );
 
             $this->assertArrayHasKey('pool.connection.open.count', $telemetry->observableGauges);
             $this->assertArrayHasKey('pool.connection.active.count', $telemetry->observableGauges);
@@ -686,7 +772,14 @@ trait PoolTestScope
             // series; a single-callback gauge would drop all but the last pool to bind.
             $telemetry = new TestTelemetry();
 
-            $alpha = new Pool($this->getAdapter(), 'alpha', 5, fn(): string => 'x', timeout: 0.0, telemetry: $telemetry);
+            $alpha = new Pool(
+                $this->getAdapter(),
+                'alpha',
+                5,
+                fn(): string => 'x',
+                timeout: 0.0,
+                telemetry: $telemetry,
+            );
             $beta = new Pool($this->getAdapter(), 'beta', 5, fn(): string => 'x', timeout: 0.0, telemetry: $telemetry);
 
             $alpha->pop();
@@ -718,7 +811,14 @@ trait PoolTestScope
     {
         $this->execute(function (): void {
             $telemetry = new TestTelemetry();
-            $this->poolObject = new Pool($this->getAdapter(), 'test', 5, fn(): string => 'x', timeout: 0.0, telemetry: $telemetry);
+            $this->poolObject = new Pool(
+                $this->getAdapter(),
+                'test',
+                5,
+                fn(): string => 'x',
+                timeout: 0.0,
+                telemetry: $telemetry,
+            );
 
             $this->assertArrayNotHasKey('pool.connection.use_time', $telemetry->histograms);
 

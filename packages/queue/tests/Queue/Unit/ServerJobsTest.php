@@ -62,21 +62,16 @@ final class ServerJobsTest extends TestCase
     {
         $adapter = new RecordingAdapter();
 
-        $adapter->consume(
-            static fn(): null => null,
-            static fn(): null => null,
-            static fn(): null => null,
+        $adapter->consume(static fn(): null => null, static fn(): null => null, static fn(): null => null, [
             [
-                [
-                    'queue' => new Queue('database_db_main'),
-                    'maxCoroutines' => 1,
-                ],
-                [
-                    'queue' => new Queue('v1-functions'),
-                    'maxCoroutines' => 8,
-                ],
+                'queue' => new Queue('database_db_main'),
+                'maxCoroutines' => 1,
             ],
-        );
+            [
+                'queue' => new Queue('v1-functions'),
+                'maxCoroutines' => 8,
+            ],
+        ]);
 
         $this->assertSame(
             [

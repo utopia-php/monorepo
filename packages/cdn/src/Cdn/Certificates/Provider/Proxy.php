@@ -35,7 +35,13 @@ class Proxy implements Provider
     public function isInstantGeneration(string $domain, ?string $domainType): bool
     {
         $domain = Domain::validate($domain);
-        return array_all($this->select($domain, $domainType), fn(\Utopia\Cdn\Certificates\Provider $provider): bool => $provider->isInstantGeneration($domain, $domainType));
+        return array_all(
+            $this->select($domain, $domainType),
+            fn(\Utopia\Cdn\Certificates\Provider $provider): bool => $provider->isInstantGeneration(
+                $domain,
+                $domainType,
+            ),
+        );
     }
 
     public function getCertificateStatus(string $domain, ?string $domainType): string
@@ -59,7 +65,10 @@ class Proxy implements Provider
     public function isRenewRequired(string $domain, ?string $domainType): bool
     {
         $domain = Domain::validate($domain);
-        return array_any($this->select($domain, $domainType), fn(\Utopia\Cdn\Certificates\Provider $provider): bool => $provider->isRenewRequired($domain, $domainType));
+        return array_any(
+            $this->select($domain, $domainType),
+            fn(\Utopia\Cdn\Certificates\Provider $provider): bool => $provider->isRenewRequired($domain, $domainType),
+        );
     }
 
     public function deleteCertificate(string $domain, ?string $domainType = null): void

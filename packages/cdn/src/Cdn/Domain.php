@@ -18,7 +18,9 @@ final class Domain
         $domain = strtolower($domain);
 
         if ($domain === '' || filter_var($domain, \FILTER_VALIDATE_DOMAIN, \FILTER_FLAG_HOSTNAME) === false) {
-            throw new \InvalidArgumentException('Domain must be a hostname without a scheme, port, path, or trailing slash.');
+            throw new \InvalidArgumentException(
+                'Domain must be a hostname without a scheme, port, path, or trailing slash.',
+            );
         }
 
         return $domain;
@@ -31,7 +33,7 @@ final class Domain
     public static function validatePaths(array $paths): array
     {
         foreach ($paths as $path) {
-            if (!\is_string($path) || !str_starts_with($path, '/')) {
+            if (! \is_string($path) || ! str_starts_with($path, '/')) {
                 throw new \InvalidArgumentException('Every cache path must be a string beginning with "/".');
             }
         }

@@ -148,11 +148,25 @@ final class HttpServicesTest extends TestCase
         $params = $route->getParams();
 
         // Verify all Action::param() fields are forwarded to the Route
-        $actionParamKeys = ['default', 'validator', 'description', 'optional', 'injections', 'skipValidation', 'deprecated', 'example', 'aliases'];
+        $actionParamKeys = [
+            'default',
+            'validator',
+            'description',
+            'optional',
+            'injections',
+            'skipValidation',
+            'deprecated',
+            'example',
+            'aliases',
+        ];
 
         foreach ($params as $name => $param) {
             foreach ($actionParamKeys as $key) {
-                $this->assertArrayHasKey($key, $param, "Param '{$name}' is missing '{$key}' on the Route. Platform must forward all Action param fields.");
+                $this->assertArrayHasKey(
+                    $key,
+                    $param,
+                    "Param '{$name}' is missing '{$key}' on the Route. Platform must forward all Action param fields.",
+                );
             }
         }
 

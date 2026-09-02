@@ -33,10 +33,25 @@ $records = [
     new Record(name: 'dev2.appwrite.io', type: Record::TYPE_A, ttl: 1800, rdata: '142.6.0.1'),
     new Record(name: 'dev2.appwrite.io', type: Record::TYPE_A, ttl: 1800, rdata: '142.6.0.2'),
     // Single AAAA
-    new Record(name: 'dev.appwrite.io', type: Record::TYPE_AAAA, ttl: 20, rdata: '2001:0db8:0000:0000:0000:ff00:0042:8329'),
+    new Record(
+        name: 'dev.appwrite.io',
+        type: Record::TYPE_AAAA,
+        ttl: 20,
+        rdata: '2001:0db8:0000:0000:0000:ff00:0042:8329',
+    ),
     // Multiple AAAA
-    new Record(name: 'dev2.appwrite.io', type: Record::TYPE_AAAA, ttl: 20, rdata: '2001:0db8:0000:0000:0000:ff00:0000:0001'),
-    new Record(name: 'dev2.appwrite.io', type: Record::TYPE_AAAA, ttl: 20, rdata: '2001:0db8:0000:0000:0000:ff00:0000:0002'),
+    new Record(
+        name: 'dev2.appwrite.io',
+        type: Record::TYPE_AAAA,
+        ttl: 20,
+        rdata: '2001:0db8:0000:0000:0000:ff00:0000:0001',
+    ),
+    new Record(
+        name: 'dev2.appwrite.io',
+        type: Record::TYPE_AAAA,
+        ttl: 20,
+        rdata: '2001:0db8:0000:0000:0000:ff00:0000:0002',
+    ),
     // Single CNAME
     new Record(name: 'alias.appwrite.io', type: Record::TYPE_CNAME, ttl: 30, rdata: 'cloud.appwrite.io'),
     // Secret TXT
@@ -68,9 +83,11 @@ $localhostZone = File::import($localhostZoneContent);
 /**
  * Simple multi-zone resolver for testing purposes
  */
-$multiZoneResolver = new readonly class ([$appwriteZone, $localhostZone]) implements Resolver {
+$multiZoneResolver = new readonly class([$appwriteZone, $localhostZone]) implements Resolver {
     /** @param list<Zone> $zones */
-    public function __construct(private array $zones) {}
+    public function __construct(
+        private array $zones,
+    ) {}
 
     public function resolve(Query $query): Message
     {

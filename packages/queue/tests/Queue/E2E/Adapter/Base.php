@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\E2E\Adapter;
 
-use function Co\run;
-
 use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\TestCase;
 use Utopia\Queue\Publisher;
 use Utopia\Queue\Queue;
+
+use function Co\run;
 
 abstract class Base extends TestCase
 {
@@ -90,7 +90,11 @@ abstract class Base extends TestCase
     {
         $publisher = $this->getPublisher();
 
-        $result = $publisher->enqueue($this->getQueue(), ['type' => 'test_string', 'value' => 'priority'], priority: true);
+        $result = $publisher->enqueue(
+            $this->getQueue(),
+            ['type' => 'test_string', 'value' => 'priority'],
+            priority: true,
+        );
 
         $this->assertTrue($result);
     }

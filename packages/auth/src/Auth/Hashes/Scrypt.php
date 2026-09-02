@@ -42,14 +42,7 @@ class Scrypt extends Hash
             throw new \InvalidArgumentException('Scrypt cost and length options must be integers');
         }
 
-        $hash = scrypt(
-            $value,
-            $salt,
-            $costCpu,
-            $costMemory,
-            $costParallel,
-            $length,
-        );
+        $hash = scrypt($value, $salt, $costCpu, $costMemory, $costParallel, $length);
 
         if ($hash === false) {
             throw new \RuntimeException('Failed to hash using scrypt');

@@ -36,10 +36,7 @@ final class BatchedEnqueueTest extends TestCase
 
         $broker->enqueueMany(new Queue('mail'), [['to' => 'a@example.com'], ['to' => 'b@example.com']]);
 
-        $envelopes = array_map(
-            static fn(string $encoded): array => json_decode($encoded, true),
-            $connection->pushed,
-        );
+        $envelopes = array_map(static fn(string $encoded): array => json_decode($encoded, true), $connection->pushed);
 
         $this->assertSame(
             ['a@example.com', 'b@example.com'],

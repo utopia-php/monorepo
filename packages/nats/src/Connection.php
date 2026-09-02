@@ -81,7 +81,7 @@ final class Connection
     ): self {
         if ($urlOrOptions instanceof ConnectionOptions) {
             $options = $urlOrOptions;
-        } elseif (!$options instanceof \Utopia\NATS\ConnectionOptions) {
+        } elseif (! $options instanceof \Utopia\NATS\ConnectionOptions) {
             $options = new ConnectionOptions(servers: $urlOrOptions);
         }
 
@@ -100,7 +100,7 @@ final class Connection
 
         $hasHeaders = $headers instanceof \Utopia\NATS\Headers && $headers->all() !== [];
 
-        if ($hasHeaders && isset($this->serverInfo) && !$this->serverInfo->headersSupported) {
+        if ($hasHeaders && isset($this->serverInfo) && ! $this->serverInfo->headersSupported) {
             throw new ProtocolException('Server does not support message headers');
         }
 
@@ -161,8 +161,12 @@ final class Connection
         }
     }
 
-    public function request(string $subject, string $data = '', ?float $timeout = null, ?Headers $headers = null): Message
-    {
+    public function request(
+        string $subject,
+        string $data = '',
+        ?float $timeout = null,
+        ?Headers $headers = null,
+    ): Message {
         $this->ensureConnected();
 
         $timeout ??= $this->options->requestTimeout;
@@ -176,7 +180,7 @@ final class Connection
 
         $deadline = microtime(true) + $timeout;
 
-        while (!$this->pendingRequests[$token]['resolved']) {
+        while (! $this->pendingRequests[$token]['resolved']) {
             $remaining = $deadline - microtime(true);
             if ($remaining <= 0) {
                 unset($this->pendingRequests[$token]);
@@ -240,7 +244,7 @@ final class Connection
             $wait = $stall !== null ? min($remaining, $stall) : $remaining;
 
             $msg = $sub->nextMessage($wait);
-            if (!$msg instanceof Message) {
+            if (! $msg instanceof Message) {
                 // Overall deadline or stall window elapsed with no new reply.
                 break;
             }
@@ -446,10 +450,7 @@ final class Connection
         }
 
         $this->status = self::STATUS_DISCONNECTED;
-        throw new ConnectionException(
-            'Failed to connect to any NATS server',
-            previous: $lastError,
-        );
+        throw new ConnectionException('Failed to connect to any NATS server', previous: $lastError);
     }
 
     private function connectToServer(string $url): void
@@ -482,7 +483,7 @@ final class Connection
 
         // Merge connect_urls into server pool
         foreach ($this->serverInfo->connectUrls as $connectUrl) {
-            if (!\in_array($connectUrl, $this->serverPool, true)) {
+            if (! \in_array($connectUrl, $this->serverPool, true)) {
                 $this->serverPool[] = $this->normalizeUrl($connectUrl);
             }
         }
@@ -491,8 +492,7 @@ final class Connection
         // TLS, or when the caller opted in and the server advertises it is
         // available. A TlsTransport / custom transport handles its own TLS.
         if ($this->transport instanceof TcpTransport && $scheme !== 'tls') {
-            $wantsUpgrade = $this->serverInfo->tlsRequired
-                || ($this->options->tls && $this->serverInfo->tlsAvailable);
+            $wantsUpgrade = $this->serverInfo->tlsRequired || $this->options->tls && $this->serverInfo->tlsAvailable;
             if ($wantsUpgrade) {
                 $this->transport->upgradeTls($this->tlsOptions());
             }
@@ -526,6 +526,7 @@ final class Connection
                 }
                 throw new ConnectionException("Server error: {$errMsg}");
             }
+
             // Skip +OK
         }
 
@@ -611,7 +612,7 @@ final class Connection
             $sub->deliver($msg);
 
             // Clean up auto-unsubscribed subscriptions
-            if (!$sub->isActive()) {
+            if (! $sub->isActive()) {
                 unset($this->subscriptions[$data['sid']]);
             }
         }
@@ -655,7 +656,8 @@ final class Connection
             str_contains($lower, 'authorization violation'),
             str_contains($lower, 'authentication expired'),
             str_contains($lower, 'authorization'),
-            str_contains($lower, 'authentication') => new AuthenticationException($message),
+            str_contains($lower, 'authentication'),
+                => new AuthenticationException($message),
             str_contains($lower, 'maximum payload') => new MaxPayloadException($message),
             default => new ProtocolException("Server error: {$message}"),
         };
@@ -670,7 +672,7 @@ final class Connection
             // ones into the pool so failover has somewhere to go.
             foreach ($this->serverInfo->connectUrls as $connectUrl) {
                 $normalized = $this->normalizeUrl($connectUrl);
-                if (!\in_array($normalized, $this->serverPool, true)) {
+                if (! \in_array($normalized, $this->serverPool, true)) {
                     $this->serverPool[] = $normalized;
                 }
             }
@@ -691,10 +693,7 @@ final class Connection
             ($this->options->onLameDuck)();
         }
 
-        $others = array_values(array_filter(
-            $this->serverPool,
-            fn(string $url): bool => $url !== $this->currentServer,
-        ));
+        $others = array_values(array_filter($this->serverPool, fn(string $url): bool => $url !== $this->currentServer));
 
         // Only proactively reconnect when a different server is available;
         // otherwise ride out the current connection until it is closed.
@@ -830,7 +829,11 @@ final class Connection
      */
     private function bufferPending(string $data): void
     {
-        if (!self::reconnectBufferAccepts($this->pendingBufferBytes, \strlen($data), $this->options->reconnectBufSize)) {
+        if (! self::reconnectBufferAccepts(
+            $this->pendingBufferBytes,
+            \strlen($data),
+            $this->options->reconnectBufSize,
+        )) {
             if ($this->options->onError instanceof \Closure) {
                 ($this->options->onError)(new NatsException('Reconnect buffer full; dropping pending message'));
             }
@@ -881,7 +884,7 @@ final class Connection
 
     private function extractInboxToken(string $subject): ?string
     {
-        if (!str_starts_with($subject, $this->inboxPrefix . '.')) {
+        if (! str_starts_with($subject, $this->inboxPrefix . '.')) {
             return null;
         }
 
@@ -930,7 +933,7 @@ final class Connection
     {
         $servers = array_map($this->normalizeUrl(...), $options->servers);
 
-        if (!$options->noRandomize && \count($servers) > 1) {
+        if (! $options->noRandomize && \count($servers) > 1) {
             shuffle($servers);
         }
 
@@ -961,7 +964,7 @@ final class Connection
 
     private function normalizeUrl(string $url): string
     {
-        if (!preg_match('#^(nats|tls|ws|wss)://#', $url)) {
+        if (! preg_match('#^(nats|tls|ws|wss)://#', $url)) {
             return 'nats://' . $url;
         }
         return $url;

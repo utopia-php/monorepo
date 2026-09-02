@@ -19,8 +19,10 @@ class Proxy implements Resolver
      * @param string $server DNS server IP address
      * @param int $port DNS server port (default: 53)
      */
-    public function __construct(protected string $server, protected int $port = 53)
-    {
+    public function __construct(
+        protected string $server,
+        protected int $port = 53,
+    ) {
         $this->client = new Client($this->server, $this->port);
     }
 

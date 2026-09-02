@@ -50,7 +50,7 @@ final class OrderedConsumer
             }
 
             $msg = $this->sub->nextMessage($remaining);
-            if (!$msg instanceof \Utopia\NATS\Message) {
+            if (! $msg instanceof \Utopia\NATS\Message) {
                 return null;
             }
 
@@ -58,7 +58,7 @@ final class OrderedConsumer
                 // A heartbeat reports the last consumer sequence the server has
                 // delivered; if it is ahead of us we missed messages.
                 $lastConsumer = $msg->headers?->get('Nats-Last-Consumer');
-                if ($lastConsumer !== null && (int) $lastConsumer > $this->expectedConsumerSeq - 1) {
+                if ($lastConsumer !== null && (int) $lastConsumer > ($this->expectedConsumerSeq - 1)) {
                     $this->reset($this->lastStreamSeq + 1);
                 }
                 continue;

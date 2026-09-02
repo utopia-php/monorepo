@@ -23,11 +23,7 @@ final class GEOSMSTest extends Base
         $to = ['+11234567890'];
         $from = 'Sender';
 
-        $message = new SMS(
-            to: $to,
-            content: 'Test Content',
-            from: $from,
-        );
+        $message = new SMS(to: $to, content: 'Test Content', from: $from);
 
         $result = $adapter->send($message);
 
@@ -48,11 +44,7 @@ final class GEOSMSTest extends Base
         $to = ['+911234567890'];
         $from = 'Sender';
 
-        $message = new SMS(
-            to: $to,
-            content: 'Test Content',
-            from: $from,
-        );
+        $message = new SMS(to: $to, content: 'Test Content', from: $from);
 
         $result = $adapter->send($message);
 
@@ -75,11 +67,7 @@ final class GEOSMSTest extends Base
         $to = ['+911234567890', '+11234567890'];
         $from = 'Sender';
 
-        $message = new SMS(
-            to: $to,
-            content: 'Test Content',
-            from: $from,
-        );
+        $message = new SMS(to: $to, content: 'Test Content', from: $from);
 
         $result = $adapter->send($message);
 
@@ -102,11 +90,7 @@ final class GEOSMSTest extends Base
         $to = ['+911234567890', '+11234567890'];
         $from = 'Sender';
 
-        $message = new SMS(
-            to: $to,
-            content: 'Test Content',
-            from: $from,
-        );
+        $message = new SMS(to: $to, content: 'Test Content', from: $from);
 
         $result = $adapter->send($message);
 
@@ -134,11 +118,7 @@ final class GEOSMSTest extends Base
 
         $adapter = new GEOSMS($defaultAdapterMock);
 
-        $message = new SMS(
-            to: ['+11234567890'],
-            content: 'Test Content',
-            metadata: $metadata,
-        );
+        $message = new SMS(to: ['+11234567890'], content: 'Test Content', metadata: $metadata);
 
         $result = $adapter->send($message);
 
@@ -180,11 +160,7 @@ final class GEOSMSTest extends Base
         $adapter = new GEOSMS($defaultAdapterMock);
         $adapter->setLocal(CallingCode::INDIA, $localAdapterMock);
 
-        $message = new SMS(
-            to: ['+911234567890', '+11234567890'],
-            content: 'Test Content',
-            metadata: $metadata,
-        );
+        $message = new SMS(to: ['+911234567890', '+11234567890'], content: 'Test Content', metadata: $metadata);
 
         $result = $adapter->send($message);
 
@@ -196,11 +172,7 @@ final class GEOSMSTest extends Base
             'CRQID' => [],
         ];
 
-        $message = new SMS(
-            to: ['+911234567890', '+11234567890'],
-            content: 'Test Content',
-            metadata: $invalidMetadata,
-        );
+        $message = new SMS(to: ['+911234567890', '+11234567890'], content: 'Test Content', metadata: $invalidMetadata);
 
         try {
             $adapter->send($message);
@@ -209,13 +181,9 @@ final class GEOSMSTest extends Base
             $this->assertStringContainsString('Msg91 CRQID metadata must be a string', $e->getMessage());
         }
 
-        $message = new SMS(
-            to: ['+911234567890', '+11234567890'],
-            content: 'Test Content',
-            metadata: [
-                'CRQID' => '',
-            ],
-        );
+        $message = new SMS(to: ['+911234567890', '+11234567890'], content: 'Test Content', metadata: [
+            'CRQID' => '',
+        ]);
 
         try {
             $adapter->send($message);

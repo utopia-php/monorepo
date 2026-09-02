@@ -13,7 +13,11 @@ use Utopia\Validator;
  */
 class Range extends Numeric
 {
-    public function __construct(protected int|float $min, protected int|float $max, protected string $format = self::TYPE_INTEGER) {}
+    public function __construct(
+        protected int|float $min,
+        protected int|float $max,
+        protected string $format = self::TYPE_INTEGER,
+    ) {}
 
     /**
      * Get Range Minimum Value
@@ -82,7 +86,7 @@ class Range extends Numeric
     #[\Override]
     public function isValid(mixed $value): bool
     {
-        if (!parent::isValid($value)) {
+        if (! parent::isValid($value)) {
             return false;
         }
 
@@ -94,12 +98,12 @@ class Range extends Numeric
                     break; // move to check if value is within range
                 }
                 $value += 0;
-                if (!\is_int($value)) {
+                if (! \is_int($value)) {
                     return false;
                 }
                 break;
             case self::TYPE_FLOAT:
-                if (!is_numeric($value)) {
+                if (! is_numeric($value)) {
                     return false;
                 }
                 $value += 0.0;

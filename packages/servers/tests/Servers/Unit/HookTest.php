@@ -51,9 +51,7 @@ final class HookTest extends TestCase
     {
         $this->assertSame([], $this->hook->getParams());
 
-        $this->hook
-            ->param('x', '', new Text(10))
-            ->param('y', '', new Text(10));
+        $this->hook->param('x', '', new Text(10))->param('y', '', new Text(10));
 
         $this->assertCount(2, $this->hook->getParams());
     }
@@ -69,13 +67,7 @@ final class HookTest extends TestCase
 
     public function testParamAliasesCanBeSet(): void
     {
-        $this->hook->param(
-            'projectId',
-            '',
-            new Text(64),
-            description: '',
-            aliases: ['project', 'project_id'],
-        );
+        $this->hook->param('projectId', '', new Text(64), description: '', aliases: ['project', 'project_id']);
 
         $params = $this->hook->getParams();
         $this->assertSame(['project', 'project_id'], $params['projectId']['aliases']);
@@ -87,14 +79,7 @@ final class HookTest extends TestCase
         $enum->name = 'ArticleStatus';
         $enum->map = ['draft' => 'Draft', 'published' => 'Published'];
 
-        $this->hook->param(
-            'status',
-            'draft',
-            new Text(32),
-            description: 'Status.',
-            optional: true,
-            enum: $enum,
-        );
+        $this->hook->param('status', 'draft', new Text(32), description: 'Status.', optional: true, enum: $enum);
 
         $params = $this->hook->getParams();
         $this->assertSame($enum, $params['status']['enum']);
@@ -118,11 +103,7 @@ final class HookTest extends TestCase
     {
         $this->assertSame([], $this->hook->getDependencies());
 
-        $this->hook
-            ->inject('user')
-            ->param('x', '', new Text(10))
-            ->inject('time')
-            ->inject('locale');
+        $this->hook->inject('user')->param('x', '', new Text(10))->inject('time')->inject('locale');
 
         $this->assertSame(['user', 'time', 'locale'], $this->hook->getDependencies());
     }
@@ -136,9 +117,7 @@ final class HookTest extends TestCase
             'y' => 'world',
         ];
 
-        $this->hook
-            ->param('x', '', new Numeric())
-            ->param('y', '', new Numeric());
+        $this->hook->param('x', '', new Numeric())->param('y', '', new Numeric());
 
         foreach ($values as $key => $value) {
             $this->hook->setParamValue($key, $value);

@@ -140,38 +140,42 @@ final readonly class Record
 
         // 2. Read fixed-length fields
         $limit = \strlen($data);
-        if ($offset + 10 > $limit) {
+        if (($offset + 10) > $limit) {
             throw new DecodingException('Truncated RR header');
         }
         $typeData = unpack('ntype', substr($data, $offset, 2));
-        if (!\is_array($typeData) || !\array_key_exists('type', $typeData) || !\is_int($typeData['type'])) {
+        if (! \is_array($typeData) || ! \array_key_exists('type', $typeData) || ! \is_int($typeData['type'])) {
             throw new DecodingException('Failed to unpack record type');
         }
         $type = $typeData['type'];
         $offset += 2;
 
         $classData = unpack('nclass', substr($data, $offset, 2));
-        if (!\is_array($classData) || !\array_key_exists('class', $classData) || !\is_int($classData['class'])) {
+        if (! \is_array($classData) || ! \array_key_exists('class', $classData) || ! \is_int($classData['class'])) {
             throw new DecodingException('Failed to unpack record class');
         }
         $class = $classData['class'];
         $offset += 2;
 
         $ttlData = unpack('Nttl', substr($data, $offset, 4));
-        if (!\is_array($ttlData) || !\array_key_exists('ttl', $ttlData) || !\is_int($ttlData['ttl'])) {
+        if (! \is_array($ttlData) || ! \array_key_exists('ttl', $ttlData) || ! \is_int($ttlData['ttl'])) {
             throw new DecodingException('Failed to unpack record TTL');
         }
         $ttl = $ttlData['ttl'];
         $offset += 4;
 
         $rdLengthData = unpack('nlength', substr($data, $offset, 2));
-        if (!\is_array($rdLengthData) || !\array_key_exists('length', $rdLengthData) || !\is_int($rdLengthData['length'])) {
+        if (
+            ! \is_array($rdLengthData)
+            || ! \array_key_exists('length', $rdLengthData)
+            || ! \is_int($rdLengthData['length'])
+        ) {
             throw new DecodingException('Failed to unpack record length');
         }
         $rdlength = $rdLengthData['length'];
         $offset += 2;
 
-        if ($offset + $rdlength > $limit) {
+        if (($offset + $rdlength) > $limit) {
             throw new DecodingException('RDATA exceeds packet bounds');
         }
         $rdataRaw = substr($data, $offset, $rdlength);
@@ -216,7 +220,11 @@ final readonly class Record
                     throw new DecodingException('Invalid MX RDATA length: ' . \strlen($rdataRaw));
                 }
                 $priorityData = unpack('npriority', substr($rdataRaw, 0, 2));
-                if (!\is_array($priorityData) || !\array_key_exists('priority', $priorityData) || !\is_int($priorityData['priority'])) {
+                if (
+                    ! \is_array($priorityData)
+                    || ! \array_key_exists('priority', $priorityData)
+                    || ! \is_int($priorityData['priority'])
+                ) {
                     throw new DecodingException('Failed to unpack MX priority');
                 }
                 $priority = $priorityData['priority'];
@@ -231,13 +239,21 @@ final readonly class Record
                 $priorityData = unpack('npriority', substr($rdataRaw, 0, 2));
                 $weightData = unpack('nweight', substr($rdataRaw, 2, 2));
                 $portData = unpack('nport', substr($rdataRaw, 4, 2));
-                if (!\is_array($priorityData) || !\array_key_exists('priority', $priorityData) || !\is_int($priorityData['priority'])) {
+                if (
+                    ! \is_array($priorityData)
+                    || ! \array_key_exists('priority', $priorityData)
+                    || ! \is_int($priorityData['priority'])
+                ) {
                     throw new DecodingException('Failed to unpack SRV priority');
                 }
-                if (!\is_array($weightData) || !\array_key_exists('weight', $weightData) || !\is_int($weightData['weight'])) {
+                if (
+                    ! \is_array($weightData)
+                    || ! \array_key_exists('weight', $weightData)
+                    || ! \is_int($weightData['weight'])
+                ) {
                     throw new DecodingException('Failed to unpack SRV weight');
                 }
-                if (!\is_array($portData) || !\array_key_exists('port', $portData) || !\is_int($portData['port'])) {
+                if (! \is_array($portData) || ! \array_key_exists('port', $portData) || ! \is_int($portData['port'])) {
                     throw new DecodingException('Failed to unpack SRV port');
                 }
                 $priority = $priorityData['priority'];
@@ -259,13 +275,19 @@ final readonly class Record
 
                 $fields = unpack('Nserial/Nrefresh/Nretry/Nexpire/Nminimum', $timingData);
                 if (
-                    !\is_array($fields)
-                    || !isset($fields['serial'], $fields['refresh'], $fields['retry'], $fields['expire'], $fields['minimum'])
-                    || !\is_int($fields['serial'])
-                    || !\is_int($fields['refresh'])
-                    || !\is_int($fields['retry'])
-                    || !\is_int($fields['expire'])
-                    || !\is_int($fields['minimum'])
+                    ! \is_array($fields)
+                    || ! isset(
+                        $fields['serial'],
+                        $fields['refresh'],
+                        $fields['retry'],
+                        $fields['expire'],
+                        $fields['minimum'],
+                    )
+                    || ! \is_int($fields['serial'])
+                    || ! \is_int($fields['refresh'])
+                    || ! \is_int($fields['retry'])
+                    || ! \is_int($fields['expire'])
+                    || ! \is_int($fields['minimum'])
                 ) {
                     throw new DecodingException('Unable to unpack SOA timings');
                 }
@@ -280,16 +302,7 @@ final readonly class Record
                     $serial += 4294967296;
                 }
 
-                $rdata = \sprintf(
-                    '%s %s %u %u %u %u %u',
-                    $mname,
-                    $rname,
-                    $serial,
-                    $refresh,
-                    $retry,
-                    $expire,
-                    $minimum,
-                );
+                $rdata = \sprintf('%s %s %u %u %u %u %u', $mname, $rname, $serial, $refresh, $retry, $expire, $minimum);
                 break;
 
             case Record::TYPE_TXT:
@@ -302,7 +315,7 @@ final readonly class Record
                 $pos = 0;
                 while ($pos < $rdlength) {
                     $len = \ord($rdataRaw[$pos]);
-                    if ($pos + 1 + $len > $rdlength) {
+                    if (($pos + 1 + $len) > $rdlength) {
                         throw new DecodingException('TXT chunk length exceeds RDATA size');
                     }
                     $chunks[] = substr($rdataRaw, $pos + 1, $len);
@@ -318,7 +331,7 @@ final readonly class Record
 
                 $flags = \ord($rdataRaw[0]);
                 $tagLength = \ord($rdataRaw[1]);
-                if ($tagLength > \strlen($rdataRaw) - 2) {
+                if ($tagLength > (\strlen($rdataRaw) - 2)) {
                     throw new DecodingException('Invalid CAA tag length');
                 }
 
@@ -353,7 +366,16 @@ final readonly class Record
      */
     public function withName(string $name): self
     {
-        return new self($name, $this->type, $this->class, $this->ttl, $this->rdata, $this->priority, $this->weight, $this->port);
+        return new self(
+            $name,
+            $this->type,
+            $this->class,
+            $this->ttl,
+            $this->rdata,
+            $this->priority,
+            $this->weight,
+            $this->port,
+        );
     }
 
     /**
@@ -416,9 +438,11 @@ final readonly class Record
             case self::TYPE_MX:
                 $priority = $this->priority ?? 0;
                 if ($priority < 0 || $priority > self::MAX_PRIORITY) {
-                    throw new \InvalidArgumentException(
-                        \sprintf('MX priority must be between 0 and %d, got %d', self::MAX_PRIORITY, $priority),
-                    );
+                    throw new \InvalidArgumentException(\sprintf(
+                        'MX priority must be between 0 and %d, got %d',
+                        self::MAX_PRIORITY,
+                        $priority,
+                    ));
                 }
 
                 return pack('n', $priority) . Domain::encode($this->rdata);
@@ -429,23 +453,28 @@ final readonly class Record
                 $port = $this->port ?? 0;
 
                 if ($priority < 0 || $priority > self::MAX_PRIORITY) {
-                    throw new \InvalidArgumentException(
-                        \sprintf('SRV priority must be between 0 and %d, got %d', self::MAX_PRIORITY, $priority),
-                    );
+                    throw new \InvalidArgumentException(\sprintf(
+                        'SRV priority must be between 0 and %d, got %d',
+                        self::MAX_PRIORITY,
+                        $priority,
+                    ));
                 }
                 if ($weight < 0 || $weight > self::MAX_WEIGHT) {
-                    throw new \InvalidArgumentException(
-                        \sprintf('SRV weight must be between 0 and %d, got %d', self::MAX_WEIGHT, $weight),
-                    );
+                    throw new \InvalidArgumentException(\sprintf(
+                        'SRV weight must be between 0 and %d, got %d',
+                        self::MAX_WEIGHT,
+                        $weight,
+                    ));
                 }
                 if ($port < 0 || $port > self::MAX_PORT) {
-                    throw new \InvalidArgumentException(
-                        \sprintf('SRV port must be between 0 and %d, got %d', self::MAX_PORT, $port),
-                    );
+                    throw new \InvalidArgumentException(\sprintf(
+                        'SRV port must be between 0 and %d, got %d',
+                        self::MAX_PORT,
+                        $port,
+                    ));
                 }
 
-                return pack('nnn', $priority, $weight, $port)
-                    . Domain::encode($this->rdata);
+                return pack('nnn', $priority, $weight, $port) . Domain::encode($this->rdata);
 
             case self::TYPE_TXT:
                 // Split rdata into chunks of up to 255 bytes each per RFC 1035
@@ -523,7 +552,7 @@ final readonly class Record
 
         $numbers = [];
         foreach ([$serial, $refresh, $retry, $expire, $minimum] as $value) {
-            if (!preg_match('/^\d+$/', $value)) {
+            if (! preg_match('/^\d+$/', $value)) {
                 throw new \InvalidArgumentException('SOA timing fields must be unsigned integers');
             }
 
@@ -536,29 +565,27 @@ final readonly class Record
 
         [$serialNum, $refreshNum, $retryNum, $expireNum, $minimumNum] = $numbers;
 
-        return Domain::encode($mname)
+        return (
+            Domain::encode($mname)
             . $this->encodeSoaRname($rname)
-            . pack('NNNNN', $serialNum, $refreshNum, $retryNum, $expireNum, $minimumNum);
+            . pack('NNNNN', $serialNum, $refreshNum, $retryNum, $expireNum, $minimumNum)
+        );
     }
 
     private function encodeSoaRname(string $rname): string
     {
-        if (!str_contains($rname, '@')) {
+        if (! str_contains($rname, '@')) {
             return Domain::encode($rname);
         }
 
         if (substr_count($rname, '@') > 1) {
-            throw new \InvalidArgumentException(
-                'SOA RNAME email must contain exactly one @ separator',
-            );
+            throw new \InvalidArgumentException('SOA RNAME email must contain exactly one @ separator');
         }
 
         [$localPart, $domain] = explode('@', $rname, 2);
 
         if ($localPart === '' || $domain === '') {
-            throw new \InvalidArgumentException(
-                'SOA RNAME email must have non-empty local part and domain',
-            );
+            throw new \InvalidArgumentException('SOA RNAME email must have non-empty local part and domain');
         }
 
         $localLength = \strlen($localPart);
@@ -584,15 +611,17 @@ final readonly class Record
         }
 
         $pattern = '/^(?:(\d+)\s+)?([A-Za-z0-9-]+)\s+"((?:\\\\.|[^"])*)"$/';
-        if (!preg_match($pattern, $input, $matches)) {
+        if (! preg_match($pattern, $input, $matches)) {
             throw new \InvalidArgumentException("Invalid CAA RDATA format: $this->rdata");
         }
 
         $flags = (int) $matches[1];
         if ($flags < 0 || $flags > self::MAX_CAA_FLAGS) {
-            throw new \InvalidArgumentException(
-                \sprintf('CAA flags must be between 0 and %d, got %d', self::MAX_CAA_FLAGS, $flags),
-            );
+            throw new \InvalidArgumentException(\sprintf(
+                'CAA flags must be between 0 and %d, got %d',
+                self::MAX_CAA_FLAGS,
+                $flags,
+            ));
         }
 
         $tag = $matches[2];

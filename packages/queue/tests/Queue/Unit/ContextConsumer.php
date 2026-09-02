@@ -18,7 +18,9 @@ final class ContextConsumer implements Consumer
     public array $rejected = [];
 
     /** @param list<Message> $messages */
-    public function __construct(private array $messages) {}
+    public function __construct(
+        private array $messages,
+    ) {}
 
     #[\Override]
     public function receive(Queue $queue, int $timeout): ?Message

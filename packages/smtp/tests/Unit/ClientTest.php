@@ -67,15 +67,18 @@ final class ClientTest extends TestCase
 
         $result = $client->sendRaw($this->envelope(), "Subject: Hi\r\n\r\nBody");
 
-        $this->assertSame([
-            'EHLO relay.example.test',
-            'MAIL FROM:<jane@example.test>',
-            'RCPT TO:<john@example.test>',
-            'DATA',
-            'Subject: Hi',
-            'Body',
-            '.',
-        ], $transport->commands());
+        $this->assertSame(
+            [
+                'EHLO relay.example.test',
+                'MAIL FROM:<jane@example.test>',
+                'RCPT TO:<john@example.test>',
+                'DATA',
+                'Subject: Hi',
+                'Body',
+                '.',
+            ],
+            $transport->commands(),
+        );
 
         $this->assertSame(['john@example.test'], $result->accepted);
         $this->assertSame([], $result->rejected);
@@ -110,7 +113,10 @@ final class ClientTest extends TestCase
 
         $client->sendRaw($this->envelope(), 'Body');
 
-        $this->assertSame(['EHLO relay.example.test', 'HELO relay.example.test'], \array_slice($transport->commands(), 0, 2));
+        $this->assertSame(
+            ['EHLO relay.example.test', 'HELO relay.example.test'],
+            \array_slice($transport->commands(), 0, 2),
+        );
     }
 
     public function testKeepsSendingWhenOnlySomeRecipientsAreRefused(): void
@@ -161,7 +167,10 @@ final class ClientTest extends TestCase
 
     public function testUpgradesWhenTheServerOffersStartTls(): void
     {
-        $transport = $this->transport(['220 Ready to start TLS', '250 mail.example.test', ...$this->transaction()], 'STARTTLS');
+        $transport = $this->transport(
+            ['220 Ready to start TLS', '250 mail.example.test', ...$this->transaction()],
+            'STARTTLS',
+        );
         $client = new Client($transport, 'relay.example.test');
 
         $client->sendRaw($this->envelope(), 'Body');
@@ -382,16 +391,13 @@ final class ClientTest extends TestCase
         // The terminating dot never reaches the server, so it is still reading
         // message data. Keeping the connection would send the next MAIL FROM as
         // content of this message.
-        $transport = new FakeTransport(
-            [
-                '220 mail.example.test',
-                '250 mail.example.test',
-                '250 Sender ok',
-                '250 Recipient ok',
-                '354 Go ahead',
-            ],
-            failWriting: 'BOOM',
-        );
+        $transport = new FakeTransport([
+            '220 mail.example.test',
+            '250 mail.example.test',
+            '250 Sender ok',
+            '250 Recipient ok',
+            '354 Go ahead',
+        ], failWriting: 'BOOM');
         $client = new Client($transport, encryption: Encryption::None);
 
         try {

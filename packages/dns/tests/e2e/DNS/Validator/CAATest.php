@@ -40,7 +40,10 @@ final class CAATest extends TestCase
         ];
 
         foreach ($invalidValues as $invalidValue) {
-            $this->assertFalse($validator->isValid($invalidValue['value']), "Expected invalid: {$invalidValue['value']}");
+            $this->assertFalse(
+                $validator->isValid($invalidValue['value']),
+                "Expected invalid: {$invalidValue['value']}",
+            );
             $this->assertSame($invalidValue['description'], $validator->getDescription());
         }
     }

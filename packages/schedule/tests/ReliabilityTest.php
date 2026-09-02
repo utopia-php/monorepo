@@ -84,7 +84,7 @@ final class ReliabilityTest extends TestCase
             }
 
             $scheduler->commit();
-            $clock->advance(60.0 + (($tick * 37) % 17) / 20.0 - 0.4);
+            $clock->advance(60.0 + ((($tick * 37) % 17) / 20.0) - 0.4);
         }
 
         $this->assertSame(0, $duplicates);
@@ -98,7 +98,7 @@ final class ReliabilityTest extends TestCase
         foreach ($classes as $index => [$count, $modulus, $remainder]) {
             $slots = 0;
             for ($slot = $firstSlot; $slot <= $lastSlot; ++$slot) {
-                if ($slot % $modulus === $remainder) {
+                if (($slot % $modulus) === $remainder) {
                     ++$slots;
                 }
             }
@@ -124,18 +124,13 @@ final class ReliabilityTest extends TestCase
         };
 
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 13:20:30.000000'));
-        $scheduler = new Scheduler(
-            source: new SnapshotSource(
-                snapshot: $set->list(...),
-                make: function (Row $row) use ($made): Entry {
-                    ++$made->count;
+        $scheduler = new Scheduler(source: new SnapshotSource(snapshot: $set->list(...), make: function (Row $row) use (
+            $made,
+        ): Entry {
+            ++$made->count;
 
-                    return new Entry(new Interval(60));
-                },
-            ),
-            store: new MemoryStore(),
-            clock: $clock,
-        );
+            return new Entry(new Interval(60));
+        }), store: new MemoryStore(), clock: $clock);
 
         $scheduler->reconcile();
         $this->assertSame(10000, $made->count);
@@ -239,10 +234,10 @@ final class ReliabilityTest extends TestCase
         // leaders' windows — was delivered exactly once per schedule,
         // including the five minutes nobody was leading.
         $expected = 0;
-        $spanStart = (new \DateTimeImmutable('2026-08-18 12:00:30'))->getTimestamp();
-        $spanEnd = (new \DateTimeImmutable('2026-08-18 12:19:30'))->getTimestamp();
+        $spanStart = new \DateTimeImmutable('2026-08-18 12:00:30')->getTimestamp();
+        $spanEnd = new \DateTimeImmutable('2026-08-18 12:19:30')->getTimestamp();
         for ($slot = $spanStart; $slot < $spanEnd; ++$slot) {
-            if ($slot % 60 === 0) {
+            if (($slot % 60) === 0) {
                 ++$expected;
             }
         }

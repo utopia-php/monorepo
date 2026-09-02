@@ -52,7 +52,11 @@ final readonly class ProxyProtocol
             return self::parseV1($buffer);
         }
 
-        if ($buffer === '' || str_starts_with(self::SIGNATURE_V2, $buffer) || str_starts_with(self::PREFIX_V1, $buffer)) {
+        if (
+            $buffer === ''
+            || str_starts_with(self::SIGNATURE_V2, $buffer)
+            || str_starts_with(self::PREFIX_V1, $buffer)
+        ) {
             return null;
         }
 
@@ -83,7 +87,7 @@ final readonly class ProxyProtocol
             return new self($length, null, null);
         }
 
-        if (!\in_array($protocol, ['TCP4', 'TCP6'], true) || \count($parts) !== 6) {
+        if (! \in_array($protocol, ['TCP4', 'TCP6'], true) || \count($parts) !== 6) {
             throw new Exception('Invalid PROXY protocol v1 header.');
         }
 
@@ -112,7 +116,7 @@ final readonly class ProxyProtocol
         }
 
         $unpacked = unpack('n', substr($buffer, 14, 2));
-        if (!\is_array($unpacked) || !\is_int($unpacked[1])) {
+        if (! \is_array($unpacked) || ! \is_int($unpacked[1])) {
             throw new Exception('Invalid PROXY protocol v2 header.');
         }
 
@@ -127,7 +131,7 @@ final readonly class ProxyProtocol
         }
 
         $addressSize = match (\ord($buffer[13]) >> 4) {
-            1 => 4,  // AF_INET: src(4) dst(4) src_port(2) dst_port(2)
+            1 => 4, // AF_INET: src(4) dst(4) src_port(2) dst_port(2)
             2 => 16, // AF_INET6: src(16) dst(16) src_port(2) dst_port(2)
             default => null, // AF_UNSPEC / AF_UNIX: no usable address
         };
@@ -136,14 +140,14 @@ final readonly class ProxyProtocol
             return new self($length, null, null);
         }
 
-        if ($unpacked[1] < ($addressSize * 2) + 4) {
+        if ($unpacked[1] < (($addressSize * 2) + 4)) {
             throw new Exception('PROXY protocol v2 header is missing addresses.');
         }
 
         $ip = inet_ntop(substr($buffer, 16, $addressSize));
         $portUnpacked = unpack('n', substr($buffer, 16 + ($addressSize * 2), 2));
 
-        if ($ip === false || !\is_array($portUnpacked) || !\is_int($portUnpacked[1])) {
+        if ($ip === false || ! \is_array($portUnpacked) || ! \is_int($portUnpacked[1])) {
             throw new Exception('Invalid PROXY protocol v2 source address.');
         }
 

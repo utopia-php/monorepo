@@ -111,7 +111,13 @@ class Request extends UtopiaRequest
      */
     public function getPort(): string
     {
-        return $this->getHeaderLine('x-forwarded-port', (string) parse_url($this->getProtocol() . '://' . $this->getHeaderLine('x-forwarded-host', $this->getHeaderLine('host')), PHP_URL_PORT));
+        return $this->getHeaderLine(
+            'x-forwarded-port',
+            (string) parse_url(
+                $this->getProtocol() . '://' . $this->getHeaderLine('x-forwarded-host', $this->getHeaderLine('host')),
+                PHP_URL_PORT,
+            ),
+        );
     }
 
     /**
@@ -121,7 +127,10 @@ class Request extends UtopiaRequest
      */
     public function getHostname(): string
     {
-        $hostname = parse_url($this->getProtocol() . '://' . $this->getHeaderLine('x-forwarded-host', $this->getHeaderLine('host')), PHP_URL_HOST);
+        $hostname = parse_url(
+            $this->getProtocol() . '://' . $this->getHeaderLine('x-forwarded-host', $this->getHeaderLine('host')),
+            PHP_URL_HOST,
+        );
         return strtolower(\strval($hostname));
     }
 
@@ -263,7 +272,7 @@ class Request extends UtopiaRequest
 
             // Get content-type without the charset
             $length = strpos($contentType, ';');
-            $length = (empty($length)) ? \strlen($contentType) : $length;
+            $length = empty($length) ? \strlen($contentType) : $length;
             $contentType = substr($contentType, 0, $length);
 
             $this->payload = match ($contentType) {
@@ -277,10 +286,7 @@ class Request extends UtopiaRequest
         }
 
         return match ($this->getMethod()) {
-            self::METHOD_POST,
-            self::METHOD_PUT,
-            self::METHOD_PATCH,
-            self::METHOD_DELETE => $this->payload,
+            self::METHOD_POST, self::METHOD_PUT, self::METHOD_PATCH, self::METHOD_DELETE => $this->payload,
             default => $this->queryString,
         };
     }

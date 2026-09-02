@@ -83,7 +83,7 @@ class Route extends Hook
     {
         Router::addRouteAlias($path, $this);
 
-        if (!\in_array($path, $this->aliasPaths, true)) {
+        if (! \in_array($path, $this->aliasPaths, true)) {
             $this->aliasPaths[] = $path;
         }
 

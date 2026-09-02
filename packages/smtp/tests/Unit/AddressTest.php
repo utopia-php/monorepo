@@ -17,10 +17,7 @@ final class AddressTest extends TestCase
 
     public function testDisplayNameIsQuoted(): void
     {
-        $this->assertSame(
-            '"Jane Doe" <jane@example.test>',
-            (string) new Address('jane@example.test', 'Jane Doe'),
-        );
+        $this->assertSame('"Jane Doe" <jane@example.test>', (string) new Address('jane@example.test', 'Jane Doe'));
     }
 
     public function testQuotesInsideADisplayNameAreEscaped(): void
@@ -41,12 +38,12 @@ final class AddressTest extends TestCase
 
     public function testAnAsciiAddressIsNotInternational(): void
     {
-        $this->assertFalse((new Address('jane@example.test', 'Jäne'))->isInternational());
+        $this->assertFalse(new Address('jane@example.test', 'Jäne')->isInternational());
     }
 
     public function testANonAsciiLocalPartIsInternational(): void
     {
-        $this->assertTrue((new Address('jäne@example.test'))->isInternational());
+        $this->assertTrue(new Address('jäne@example.test')->isInternational());
     }
 
     public function testRejectsAnAddressWithNoDomain(): void

@@ -28,10 +28,12 @@ final class SESRoutingTest extends TestCase
         $stub = new SESStub('key', 'secret', 'us-east-1');
         $stub->stubResponses[] = [
             'statusCode' => 200,
-            'response' => ['BulkEmailEntryResults' => [
-                ['Status' => 'SUCCESS', 'MessageId' => 'a'],
-                ['Status' => 'SUCCESS', 'MessageId' => 'b'],
-            ]],
+            'response' => [
+                'BulkEmailEntryResults' => [
+                    ['Status' => 'SUCCESS', 'MessageId' => 'a'],
+                    ['Status' => 'SUCCESS', 'MessageId' => 'b'],
+                ],
+            ],
         ];
 
         $message = new Email(
@@ -68,8 +70,14 @@ final class SESRoutingTest extends TestCase
     public function testTemplateNameIsDeterministicForSameContent(): void
     {
         $stub = new SESStub('key', 'secret', 'us-east-1');
-        $stub->stubResponses[] = ['statusCode' => 200, 'response' => ['BulkEmailEntryResults' => [['Status' => 'SUCCESS']]]];
-        $stub->stubResponses[] = ['statusCode' => 200, 'response' => ['BulkEmailEntryResults' => [['Status' => 'SUCCESS']]]];
+        $stub->stubResponses[] = [
+            'statusCode' => 200,
+            'response' => ['BulkEmailEntryResults' => [['Status' => 'SUCCESS']]],
+        ];
+        $stub->stubResponses[] = [
+            'statusCode' => 200,
+            'response' => ['BulkEmailEntryResults' => [['Status' => 'SUCCESS']]],
+        ];
 
         $build = fn(): \Utopia\Messaging\Messages\Email => new Email(
             to: [['email' => 'a@example.com']],
@@ -92,8 +100,14 @@ final class SESRoutingTest extends TestCase
     public function testTemplateNameDiffersForDifferentContent(): void
     {
         $stub = new SESStub('key', 'secret', 'us-east-1');
-        $stub->stubResponses[] = ['statusCode' => 200, 'response' => ['BulkEmailEntryResults' => [['Status' => 'SUCCESS']]]];
-        $stub->stubResponses[] = ['statusCode' => 200, 'response' => ['BulkEmailEntryResults' => [['Status' => 'SUCCESS']]]];
+        $stub->stubResponses[] = [
+            'statusCode' => 200,
+            'response' => ['BulkEmailEntryResults' => [['Status' => 'SUCCESS']]],
+        ];
+        $stub->stubResponses[] = [
+            'statusCode' => 200,
+            'response' => ['BulkEmailEntryResults' => [['Status' => 'SUCCESS']]],
+        ];
 
         $stub->send(new Email(
             to: [['email' => 'a@example.com']],
@@ -270,10 +284,12 @@ final class SESRoutingTest extends TestCase
         $stub = new SESStub('key', 'secret', 'us-east-1');
         $stub->stubResponses[] = [
             'statusCode' => 200,
-            'response' => ['BulkEmailEntryResults' => [
-                ['Status' => 'SUCCESS', 'MessageId' => 'ok'],
-                ['Status' => 'MESSAGE_REJECTED', 'Error' => 'Email address is not verified'],
-            ]],
+            'response' => [
+                'BulkEmailEntryResults' => [
+                    ['Status' => 'SUCCESS', 'MessageId' => 'ok'],
+                    ['Status' => 'MESSAGE_REJECTED', 'Error' => 'Email address is not verified'],
+                ],
+            ],
         ];
 
         $message = new Email(
@@ -385,12 +401,7 @@ final class SESRoutingTest extends TestCase
             content: 'Body',
             fromName: 'Sender',
             fromEmail: 'from@example.com',
-            attachments: [new Attachment(
-                name: 'note.txt',
-                path: '',
-                type: 'text/plain',
-                content: 'hello attachment',
-            )],
+            attachments: [new Attachment(name: 'note.txt', path: '', type: 'text/plain', content: 'hello attachment')],
         );
 
         $response = $stub->send($message);
@@ -423,12 +434,7 @@ final class SESRoutingTest extends TestCase
             content: 'Body',
             fromName: 'Sender',
             fromEmail: 'from@example.com',
-            attachments: [new Attachment(
-                name: 'note.txt',
-                path: '',
-                type: 'text/plain',
-                content: 'hello',
-            )],
+            attachments: [new Attachment(name: 'note.txt', path: '', type: 'text/plain', content: 'hello')],
         );
 
         $response = $stub->send($message);
@@ -456,7 +462,7 @@ final class SESRoutingTest extends TestCase
                 name: 'large.bin',
                 path: '',
                 type: 'application/octet-stream',
-                content: str_repeat('x', 25 * 1024 * 1024 + 1),
+                content: str_repeat('x', (25 * 1024 * 1024) + 1),
             )],
         );
 
@@ -559,10 +565,7 @@ final class SESRoutingTest extends TestCase
         $stub->send($message);
 
         // A name containing RFC 5322 specials must be quoted or SES rejects it.
-        $this->assertSame(
-            '"Acme, Inc." <from@example.com>',
-            $stub->capturedRequests[0]['body']['FromEmailAddress'],
-        );
+        $this->assertSame('"Acme, Inc." <from@example.com>', $stub->capturedRequests[0]['body']['FromEmailAddress']);
     }
 
     public function testTemplateNameRespectsSesLengthLimit(): void

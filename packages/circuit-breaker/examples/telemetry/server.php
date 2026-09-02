@@ -170,9 +170,8 @@ function statusPayload(CircuitBreaker $breaker, array $options): array
 {
     $state = $breaker->getState();
     $openedAt = openedAt($options);
-    $nextRetryIn = $state === CircuitState::OPEN && $openedAt !== null
-        ? max(0, $options['timeout'] - (time() - $openedAt))
-        : 0;
+    $nextRetryIn =
+        $state === CircuitState::OPEN && $openedAt !== null ? max(0, $options['timeout'] - (time() - $openedAt)) : 0;
 
     return [
         'state' => $state->value,
@@ -189,7 +188,8 @@ function statusPayload(CircuitBreaker $breaker, array $options): array
             'timeout' => $options['timeout'],
             'successThreshold' => $options['successThreshold'],
         ],
-        'grafanaUrl' => getenv('BREAKER_GRAFANA_URL') ?: 'http://localhost:3030/d/circuit-breaker/circuit-breaker-telemetry',
+        'grafanaUrl' => getenv('BREAKER_GRAFANA_URL')
+            ?: 'http://localhost:3030/d/circuit-breaker/circuit-breaker-telemetry',
         'prometheusUrl' => getenv('BREAKER_PROMETHEUS_URL') ?: 'http://localhost:9090',
         'timestamp' => time(),
     ];
@@ -224,9 +224,21 @@ function resetBreaker(array $options): void
 function breakerOptions(array $payload): array
 {
     return [
-        'minimumThroughput' => intOption($payload, 'minimumThroughput', (int) (getenv('BREAKER_DEMO_THRESHOLD') ?: 3), 1, 20),
+        'minimumThroughput' => intOption(
+            $payload,
+            'minimumThroughput',
+            (int) (getenv('BREAKER_DEMO_THRESHOLD') ?: 3),
+            1,
+            20,
+        ),
         'timeout' => intOption($payload, 'timeout', (int) (getenv('BREAKER_DEMO_TIMEOUT') ?: 8), 1, 120),
-        'successThreshold' => intOption($payload, 'successThreshold', (int) (getenv('BREAKER_DEMO_SUCCESS_THRESHOLD') ?: 2), 1, 10),
+        'successThreshold' => intOption(
+            $payload,
+            'successThreshold',
+            (int) (getenv('BREAKER_DEMO_SUCCESS_THRESHOLD') ?: 2),
+            1,
+            10,
+        ),
         'key' => normalizeKey($payload['key'] ?? getenv('BREAKER_DEMO_CACHE_KEY') ?: 'local-api'),
         'prefix' => getenv('BREAKER_DEMO_REDIS_PREFIX') ?: 'breaker-demo:',
     ];
@@ -237,7 +249,7 @@ function breakerOptions(array $payload): array
  */
 function intOption(array $payload, string $key, int $default, int $min, int $max): int
 {
-    if (!isset($payload[$key]) || !is_numeric($payload[$key])) {
+    if (! isset($payload[$key]) || ! is_numeric($payload[$key])) {
         return $default;
     }
 
@@ -272,7 +284,7 @@ function redis(): object
         return $redis;
     }
 
-    if (!class_exists('Redis')) {
+    if (! class_exists('Redis')) {
         throw new RuntimeException('The redis extension is required for the telemetry demo server.');
     }
 
@@ -281,7 +293,7 @@ function redis(): object
     $host = getenv('BREAKER_REDIS_HOST') ?: '127.0.0.1';
     $port = (int) (getenv('BREAKER_REDIS_PORT') ?: 6379);
 
-    if (!$redis->connect($host, $port, 2.0)) {
+    if (! $redis->connect($host, $port, 2.0)) {
         throw new RuntimeException(sprintf('Redis is not reachable at %s:%d.', $host, $port));
     }
 
@@ -298,7 +310,7 @@ function requestPayload(): array
 
 function serveFile(string $path, string $contentType): void
 {
-    if (!is_file($path)) {
+    if (! is_file($path)) {
         http_response_code(404);
         return;
     }

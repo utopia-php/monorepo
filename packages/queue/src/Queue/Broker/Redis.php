@@ -82,7 +82,7 @@ class Redis implements Publisher, Consumer
             return null;
         }
 
-        if (!$nextMessage) {
+        if (! $nextMessage) {
             return null;
         }
 
@@ -133,7 +133,7 @@ class Redis implements Publisher, Consumer
 
     private function triggerReconnectCallback(Queue $queue, \Throwable $error, int $attempt, int $sleepMs): void
     {
-        if (!\is_callable($this->reconnectCallback)) {
+        if (! \is_callable($this->reconnectCallback)) {
             return;
         }
 
@@ -145,7 +145,7 @@ class Redis implements Publisher, Consumer
 
     private function triggerReconnectSuccessCallback(Queue $queue, int $attempts): void
     {
-        if (!\is_callable($this->reconnectSuccessCallback)) {
+        if (! \is_callable($this->reconnectSuccessCallback)) {
             return;
         }
 
@@ -234,8 +234,10 @@ class Redis implements Publisher, Consumer
                 break;
             }
 
-            if (($maxAttempts !== null && $job->getAttempts() >= $maxAttempts)
-                || ($newerThan !== null && $job->getTimestamp() < $start - $newerThan)) {
+            if (
+                $maxAttempts !== null && $job->getAttempts() >= $maxAttempts
+                || $newerThan !== null && $job->getTimestamp() < ($start - $newerThan)
+            ) {
                 $this->commands->leftPush("{$queue->namespace}.dead.{$queue->name}", $pid);
                 continue;
             }
@@ -264,8 +266,13 @@ class Redis implements Publisher, Consumer
      *        are requeued; older ones are parked on the dead queue.
      * @return int The number of claims requeued
      */
-    public function reap(Queue $queue, int $olderThan = 90000, ?int $limit = null, ?int $maxAttempts = null, ?int $newerThan = null): int
-    {
+    public function reap(
+        Queue $queue,
+        int $olderThan = 90000,
+        ?int $limit = null,
+        ?int $maxAttempts = null,
+        ?int $newerThan = null,
+    ): int {
         $processingList = "{$queue->namespace}.processing.{$queue->name}";
         $now = time();
         $cutoff = $now - $olderThan;
@@ -278,7 +285,7 @@ class Redis implements Publisher, Consumer
                 break;
             }
 
-            if (!\is_string($pid)) {
+            if (! \is_string($pid)) {
                 continue;
             }
 
@@ -293,8 +300,10 @@ class Redis implements Publisher, Consumer
                 continue;
             }
 
-            if (($maxAttempts !== null && $job->getAttempts() >= $maxAttempts)
-                || ($newerThan !== null && $job->getTimestamp() < $now - $newerThan)) {
+            if (
+                $maxAttempts !== null && $job->getAttempts() >= $maxAttempts
+                || $newerThan !== null && $job->getTimestamp() < ($now - $newerThan)
+            ) {
                 $this->commands->listRemove($processingList, $pid);
                 $this->commands->leftPush("{$queue->namespace}.dead.{$queue->name}", $pid);
                 continue;

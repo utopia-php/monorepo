@@ -23,7 +23,9 @@ class RedirectUris
     /**
      * @param list<non-empty-string> $uris
      */
-    private function __construct(private readonly array $uris) {}
+    private function __construct(
+        private readonly array $uris,
+    ) {}
 
     /**
      * Wrap a client's stored registered URIs. Non-string and empty entries
@@ -61,7 +63,7 @@ class RedirectUris
             return true;
         }
 
-        if (!$allowLoopback) {
+        if (! $allowLoopback) {
             return false;
         }
 
@@ -102,17 +104,19 @@ class RedirectUris
     {
         $parts = parse_url($uri);
 
-        if (!\is_array($parts)) {
+        if (! \is_array($parts)) {
             return null;
         }
 
         $host = strtolower((string) ($parts['host'] ?? ''));
 
-        if (strtolower((string) ($parts['scheme'] ?? '')) !== 'http'
-            || !\in_array($host, self::LOOPBACK_HOSTS, true)
+        if (
+            strtolower((string) ($parts['scheme'] ?? '')) !== 'http'
+            || ! \in_array($host, self::LOOPBACK_HOSTS, true)
             || isset($parts['user'])
             || isset($parts['pass'])
-            || isset($parts['fragment'])) {
+            || isset($parts['fragment'])
+        ) {
             return null;
         }
 

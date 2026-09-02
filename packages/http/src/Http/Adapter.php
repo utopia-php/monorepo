@@ -10,7 +10,9 @@ use Utopia\Telemetry\Adapter as Telemetry;
 abstract class Adapter
 {
     abstract public function onStart(callable $callback): void;
+
     abstract public function onRequest(callable $callback): void;
+
     abstract public function start(): void;
 
     /**

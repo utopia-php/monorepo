@@ -169,13 +169,9 @@ final class DistributedTest extends TestCase
         $this->assertNotNull($token);
 
         $redis = new Redis();
-        $this->assertTrue($redis->connect(
-            getenv('REDIS_HOST') ?: 'redis',
-            (int) (getenv('REDIS_PORT') ?: 6379),
-            1.0,
-        ));
+        $this->assertTrue($redis->connect(getenv('REDIS_HOST') ?: 'redis', (int) (getenv('REDIS_PORT') ?: 6379), 1.0));
 
-        $refresher = (new Distributed($redis, $this->key, 30))->adopt($token);
+        $refresher = new Distributed($redis, $this->key, 30)->adopt($token);
 
         $this->assertSame($token, $refresher->token());
         $this->assertTrue($refresher->refresh());
@@ -193,12 +189,8 @@ final class DistributedTest extends TestCase
         $this->assertNotNull($token);
 
         $redis = new Redis();
-        $this->assertTrue($redis->connect(
-            getenv('REDIS_HOST') ?: 'redis',
-            (int) (getenv('REDIS_PORT') ?: 6379),
-            1.0,
-        ));
-        $refresher = (new Distributed($redis, $this->key, 30))->adopt($token);
+        $this->assertTrue($redis->connect(getenv('REDIS_HOST') ?: 'redis', (int) (getenv('REDIS_PORT') ?: 6379), 1.0));
+        $refresher = new Distributed($redis, $this->key, 30)->adopt($token);
 
         $this->redis->del($this->key);
         $successor = new Distributed($this->redis, $this->key, 30);
@@ -323,10 +315,11 @@ final class DistributedTest extends TestCase
         $this->assertTrue($holder->tryAcquire());
 
         $messages = [];
-        $waiter = (new Distributed($this->redis, $this->key, 30))
-            ->setLogger(function (string $message) use (&$messages): void {
-                $messages[] = $message;
-            });
+        $waiter = new Distributed($this->redis, $this->key, 30)->setLogger(function (string $message) use (
+            &$messages,
+        ): void {
+            $messages[] = $message;
+        });
 
         $waiter->acquire(0.15);
 

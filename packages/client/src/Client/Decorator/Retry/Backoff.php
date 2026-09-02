@@ -52,17 +52,21 @@ final readonly class Backoff implements Strategy
         $this->randomizer = $randomizer ?? static fn(): float => mt_rand() / mt_getrandmax();
     }
 
-    public function delay(RequestInterface $request, int $attempt, ?ResponseInterface $response, ?ClientExceptionInterface $error): ?float
-    {
+    public function delay(
+        RequestInterface $request,
+        int $attempt,
+        ?ResponseInterface $response,
+        ?ClientExceptionInterface $error,
+    ): ?float {
         if ($attempt >= $this->maxAttempts) {
             return null;
         }
 
-        if (!\in_array($request->getMethod(), self::IDEMPOTENT_METHODS, true)) {
+        if (! \in_array($request->getMethod(), self::IDEMPOTENT_METHODS, true)) {
             return null;
         }
 
-        if (!$this->isRetryable($response, $error)) {
+        if (! $this->isRetryable($response, $error)) {
             return null;
         }
 
@@ -75,18 +79,19 @@ final readonly class Backoff implements Strategy
             return $error instanceof NetworkExceptionInterface;
         }
 
-        return $response instanceof \Psr\Http\Message\ResponseInterface && \in_array($response->getStatusCode(), self::RETRYABLE_STATUS_CODES, true);
+        return $response instanceof \Psr\Http\Message\ResponseInterface
+        && \in_array($response->getStatusCode(), self::RETRYABLE_STATUS_CODES, true);
     }
 
     private function retryAfter(?ResponseInterface $response): ?float
     {
-        if (!$response instanceof \Psr\Http\Message\ResponseInterface) {
+        if (! $response instanceof \Psr\Http\Message\ResponseInterface) {
             return null;
         }
 
         $value = $response->getHeaderLine(Header::RETRY_AFTER);
 
-        if (!is_numeric($value)) {
+        if (! is_numeric($value)) {
             return null;
         }
 
@@ -95,7 +100,7 @@ final readonly class Backoff implements Strategy
 
     private function backoff(int $attempt): float
     {
-        $ceiling = min($this->maxDelay, $this->baseDelay * $this->multiplier ** ($attempt - 1));
+        $ceiling = min($this->maxDelay, $this->baseDelay * ($this->multiplier ** ($attempt - 1)));
 
         return ($this->randomizer)() * $ceiling;
     }

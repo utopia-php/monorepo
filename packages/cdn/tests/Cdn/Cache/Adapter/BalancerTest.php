@@ -32,11 +32,20 @@ final class BalancerTest extends TestCase
         $cache->purgePaths('example.com', ['/index.html']);
         $cache->purgeKeys(['domain-example.com']);
 
-        $this->assertSame([
-            'fastly-edge:domain', 'fastly-run:domain', 'cloudflare:domain',
-            'fastly-edge:paths', 'fastly-run:paths', 'cloudflare:paths',
-            'fastly-edge:keys', 'fastly-run:keys', 'cloudflare:keys',
-        ], $calls->getArrayCopy());
+        $this->assertSame(
+            [
+                'fastly-edge:domain',
+                'fastly-run:domain',
+                'cloudflare:domain',
+                'fastly-edge:paths',
+                'fastly-run:paths',
+                'cloudflare:paths',
+                'fastly-edge:keys',
+                'fastly-run:keys',
+                'cloudflare:keys',
+            ],
+            $calls->getArrayCopy(),
+        );
     }
 
     public function testZonePurgeReachesEveryMatchingOption(): void
@@ -47,7 +56,7 @@ final class BalancerTest extends TestCase
             ->addOption(new CdnOption($this->adapter('fastly-run', $calls), CdnOption::PROVIDER_FASTLY))
             ->addOption(new CdnOption($this->adapter('cloudflare', $calls), CdnOption::PROVIDER_CLOUDFLARE));
 
-        $balancer->addFilter(fn(CdnOption $option): bool => !$option->isEdge());
+        $balancer->addFilter(fn(CdnOption $option): bool => ! $option->isEdge());
 
         new Cache(new Balancer($balancer))->purgeZone();
 
@@ -80,7 +89,7 @@ final class BalancerTest extends TestCase
             ->addOption(new CdnOption($this->adapter('fastly-run', $calls), CdnOption::PROVIDER_FASTLY))
             ->addOption(new CdnOption($this->adapter('cloudflare', $calls), CdnOption::PROVIDER_CLOUDFLARE));
 
-        $balancer->addFilter(fn(CdnOption $option): bool => !$option->isEdge());
+        $balancer->addFilter(fn(CdnOption $option): bool => ! $option->isEdge());
 
         new Cache(new Balancer($balancer))->purgeDomain('customer.example.com');
 
@@ -110,7 +119,12 @@ final class BalancerTest extends TestCase
     {
         $calls = new \ArrayObject();
         $balancer = new OptionBalancer(new First())
-            ->addOption(new CdnOption($this->adapter('fastly-no-service', $calls, supportsKeys: false), CdnOption::PROVIDER_FASTLY))
+            ->addOption(
+                new CdnOption(
+                    $this->adapter('fastly-no-service', $calls, supportsKeys: false),
+                    CdnOption::PROVIDER_FASTLY,
+                ),
+            )
             ->addOption(new CdnOption($this->adapter('cloudflare', $calls), CdnOption::PROVIDER_CLOUDFLARE));
 
         new Cache(new Balancer($balancer))->purgeKeys(['domain-example.com']);
@@ -120,8 +134,12 @@ final class BalancerTest extends TestCase
 
     public function testFailsWhenEveryOptionIsUnsupported(): void
     {
-        $balancer = new OptionBalancer(new First())
-            ->addOption(new CdnOption($this->adapter('fastly', new \ArrayObject(), supportsKeys: false), CdnOption::PROVIDER_FASTLY));
+        $balancer = new OptionBalancer(new First())->addOption(
+            new CdnOption(
+                $this->adapter('fastly', new \ArrayObject(), supportsKeys: false),
+                CdnOption::PROVIDER_FASTLY,
+            ),
+        );
 
         $this->expectException(UnsupportedOperation::class);
         new Cache(new Balancer($balancer))->purgeKeys(['domain-example.com']);
@@ -129,8 +147,9 @@ final class BalancerTest extends TestCase
 
     public function testFailsWhenNoOptionMatchesTheFilters(): void
     {
-        $balancer = new OptionBalancer(new First())
-            ->addOption(new CdnOption($this->adapter('fastly', new \ArrayObject()), CdnOption::PROVIDER_FASTLY));
+        $balancer = new OptionBalancer(new First())->addOption(
+            new CdnOption($this->adapter('fastly', new \ArrayObject()), CdnOption::PROVIDER_FASTLY),
+        );
 
         $balancer->addFilter(fn(CdnOption $option): bool => $option->getProvider() === CdnOption::PROVIDER_CLOUDFLARE);
 
@@ -143,8 +162,10 @@ final class BalancerTest extends TestCase
     {
         // A balancer takes any Option, so an untyped one has to be caught here
         // rather than purging against whatever its state happens to hold.
-        $balancer = new OptionBalancer(new First())
-            ->addOption(new Option(['adapter' => $this->adapter('fastly', new \ArrayObject())]));
+        $balancer = new OptionBalancer(new First())->addOption(new Option(['adapter' => $this->adapter(
+            'fastly',
+            new \ArrayObject(),
+        )]));
 
         $this->expectException(Configuration::class);
         $this->expectExceptionMessage('must be instances of');
@@ -154,8 +175,9 @@ final class BalancerTest extends TestCase
     public function testEmptyPurgesTouchNoProvider(): void
     {
         $calls = new \ArrayObject();
-        $balancer = new OptionBalancer(new First())
-            ->addOption(new CdnOption($this->adapter('fastly', $calls), CdnOption::PROVIDER_FASTLY));
+        $balancer = new OptionBalancer(new First())->addOption(
+            new CdnOption($this->adapter('fastly', $calls), CdnOption::PROVIDER_FASTLY),
+        );
 
         $cache = new Cache(new Balancer($balancer));
         $cache->purgePaths('example.com', []);
@@ -166,8 +188,9 @@ final class BalancerTest extends TestCase
 
     public function testRejectsInvalidDomain(): void
     {
-        $balancer = new OptionBalancer(new First())
-            ->addOption(new CdnOption($this->adapter('fastly', new \ArrayObject()), CdnOption::PROVIDER_FASTLY));
+        $balancer = new OptionBalancer(new First())->addOption(
+            new CdnOption($this->adapter('fastly', new \ArrayObject()), CdnOption::PROVIDER_FASTLY),
+        );
 
         $this->expectException(\InvalidArgumentException::class);
         new Balancer($balancer)->purgeDomain('https://example.com');
@@ -176,7 +199,7 @@ final class BalancerTest extends TestCase
     /** @param \ArrayObject<int, mixed> $calls */
     private function adapter(string $name, \ArrayObject $calls, bool $supportsKeys = true, bool $fails = false): Adapter
     {
-        return new readonly class ($name, $calls, $supportsKeys, $fails) implements Adapter {
+        return new readonly class($name, $calls, $supportsKeys, $fails) implements Adapter {
             /** @param \ArrayObject<int, mixed> $calls */
             public function __construct(
                 private string $name,
@@ -197,7 +220,7 @@ final class BalancerTest extends TestCase
 
             public function purgeKeys(array $keys): void
             {
-                if (!$this->supportsKeys) {
+                if (! $this->supportsKeys) {
                     throw new UnsupportedOperation($this->name . ' cannot purge keys.');
                 }
 

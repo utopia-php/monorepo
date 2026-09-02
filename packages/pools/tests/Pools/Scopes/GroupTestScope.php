@@ -122,20 +122,28 @@ trait GroupTestScope
             $this->setUpGroup();
             $created = 0;
             $resources = [];
-            $pool = new Pool($this->getAdapter(), 'pool1', 1, function () use (&$created, &$resources): object {
-                ++$created;
-                $resource = new readonly class ('resource-' . $created) implements \Stringable {
-                    public function __construct(private string $name) {}
+            $pool = new Pool(
+                $this->getAdapter(),
+                'pool1',
+                1,
+                function () use (&$created, &$resources): object {
+                    ++$created;
+                    $resource = new readonly class('resource-' . $created) implements \Stringable {
+                        public function __construct(
+                            private string $name,
+                        ) {}
 
-                    public function __toString(): string
-                    {
-                        return $this->name;
-                    }
-                };
-                $resources[] = $resource;
+                        public function __toString(): string
+                        {
+                            return $this->name;
+                        }
+                    };
+                    $resources[] = $resource;
 
-                return $resource;
-            }, timeout: 0.0);
+                    return $resource;
+                },
+                timeout: 0.0,
+            );
 
             $this->groupObject->add($pool);
 
@@ -162,8 +170,9 @@ trait GroupTestScope
             $this->setUpGroup();
             $telemetry = new TestTelemetry();
 
-            $this->groupObject
-                ->add(new Pool($this->getAdapter(), 'pool1', 1, fn(): string => '1', timeout: 0.0, telemetry: $telemetry));
+            $this->groupObject->add(
+                new Pool($this->getAdapter(), 'pool1', 1, fn(): string => '1', timeout: 0.0, telemetry: $telemetry),
+            );
 
             $this->assertArrayNotHasKey('pool.connection.use_time', $telemetry->histograms);
 
@@ -183,7 +192,7 @@ trait GroupTestScope
         $this->execute(function (): void {
             $this->setUpGroup();
 
-            $pool1 = new class ($this->getAdapter(), 'pool1', 1, fn(): string => '1', 0.0) extends Pool {
+            $pool1 = new class($this->getAdapter(), 'pool1', 1, fn(): string => '1', 0.0) extends Pool {
                 public bool $released = false;
 
                 public function release(Connection $connection, bool $failed = false): static
@@ -193,7 +202,7 @@ trait GroupTestScope
                     return parent::release($connection, $failed);
                 }
             };
-            $pool2 = new class ($this->getAdapter(), 'pool2', 1, fn(): string => '2', 0.0) extends Pool {
+            $pool2 = new class($this->getAdapter(), 'pool2', 1, fn(): string => '2', 0.0) extends Pool {
                 public bool $released = false;
 
                 public function release(Connection $connection, bool $failed = false): static
@@ -203,9 +212,7 @@ trait GroupTestScope
                 }
             };
 
-            $this->groupObject
-                ->add($pool1)
-                ->add($pool2);
+            $this->groupObject->add($pool1)->add($pool2);
 
             $error = null;
             try {

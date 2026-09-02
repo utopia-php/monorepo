@@ -133,7 +133,9 @@ final class Response extends Message implements ResponseInterface
     {
         $contentType = $this->getHeaderLine(Header::CONTENT_TYPE);
 
-        if (preg_match('/(?:^|;\s*)boundary=(?:"(?P<quoted>[^"]+)"|(?P<plain>[^;\s]+))/', $contentType, $matches) !== 1) {
+        if (
+            preg_match('/(?:^|;\s*)boundary=(?:"(?P<quoted>[^"]+)"|(?P<plain>[^;\s]+))/', $contentType, $matches) !== 1
+        ) {
             throw new InvalidArgumentException('Multipart response is missing a boundary.');
         }
 
@@ -206,7 +208,7 @@ final class Response extends Message implements ResponseInterface
         $lines = preg_split("/\r\n|\n|\r/", $rawHeaders);
 
         foreach ($lines === false ? [] : $lines as $line) {
-            if (!str_contains($line, ':')) {
+            if (! str_contains($line, ':')) {
                 continue;
             }
 

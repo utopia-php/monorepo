@@ -57,12 +57,9 @@ class Mailgun extends EmailAdapter
         $toEmails = array_map(fn(array $to): string => $to['email'], $recipients);
 
         $body = [
-            'to' => implode(',', array_map(
-                fn(array $to) => empty($to['name'])
-                    ? $to['email']
-                    : "{$to['name']} <{$to['email']}>",
-                $recipients,
-            )),
+            'to' => implode(',', array_map(fn(array $to) => empty($to['name'])
+                ? $to['email']
+                : "{$to['name']} <{$to['email']}>", $recipients)),
             'from' => "{$message->getFromName()} <{$message->getFromEmail()}>",
             'subject' => $message->getSubject(),
             'text' => $message->isHtml() ? null : $message->getContent(),
@@ -74,37 +71,29 @@ class Mailgun extends EmailAdapter
             $body['recipient-variables'] = json_encode(array_fill_keys($toEmails, []));
         }
 
-        if (!\is_null($message->getCC())) {
+        if (! \is_null($message->getCC())) {
             foreach ($message->getCC() as $cc) {
-                if (!empty($cc['email'])) {
-                    $ccString = empty($cc['name'])
-                        ? $cc['email']
-                        : "{$cc['name']} <{$cc['email']}>";
+                if (! empty($cc['email'])) {
+                    $ccString = empty($cc['name']) ? $cc['email'] : "{$cc['name']} <{$cc['email']}>";
 
-                    $body['cc'] = empty($body['cc'])
-                        ? $ccString
-                        : "{$body['cc']},{$ccString}";
+                    $body['cc'] = empty($body['cc']) ? $ccString : "{$body['cc']},{$ccString}";
                 }
             }
         }
 
-        if (!\is_null($message->getBCC())) {
+        if (! \is_null($message->getBCC())) {
             foreach ($message->getBCC() as $bcc) {
-                if (!empty($bcc['email'])) {
-                    $bccString = empty($bcc['name'])
-                        ? $bcc['email']
-                        : "{$bcc['name']} <{$bcc['email']}>";
+                if (! empty($bcc['email'])) {
+                    $bccString = empty($bcc['name']) ? $bcc['email'] : "{$bcc['name']} <{$bcc['email']}>";
 
-                    $body['bcc'] = empty($body['bcc'])
-                        ? $bccString
-                        : "{$body['bcc']},{$bccString}";
+                    $body['bcc'] = empty($body['bcc']) ? $bccString : "{$body['bcc']},{$bccString}";
                 }
             }
         }
 
         $isMultipart = false;
 
-        if (!\is_null($message->getAttachments())) {
+        if (! \is_null($message->getAttachments())) {
             $size = 0;
 
             foreach ($message->getAttachments() as $attachment) {
@@ -133,7 +122,9 @@ class Mailgun extends EmailAdapter
             'Authorization: Basic ' . base64_encode("api:$this->apiKey"),
         ];
 
-        $headers[] = $isMultipart ? 'Content-Type: multipart/form-data' : 'Content-Type: application/x-www-form-urlencoded';
+        $headers[] = $isMultipart
+            ? 'Content-Type: multipart/form-data'
+            : 'Content-Type: application/x-www-form-urlencoded';
 
         $result = $this->request(
             method: 'POST',

@@ -9,7 +9,9 @@ class Server extends Adapter
 {
     private ?Container $context = null;
 
-    public function __construct(private Container $resources) {}
+    public function __construct(
+        private Container $resources,
+    ) {}
 
     public function onRequest(callable $callback): void
     {

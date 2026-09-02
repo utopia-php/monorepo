@@ -38,14 +38,16 @@ class Name extends Validator
     /**
      * @param int|null $recordType Record type code, or null to apply the general domain name rules.
      */
-    public function __construct(private readonly ?int $recordType = null) {}
+    public function __construct(
+        private readonly ?int $recordType = null,
+    ) {}
 
     /**
      * Check if the provided value matches the Name record format
      */
     public function isValid(mixed $name): bool
     {
-        if (!\is_string($name)) {
+        if (! \is_string($name)) {
             $this->reason = self::FAILURE_REASON_GENERAL;
             return false;
         }
@@ -65,7 +67,7 @@ class Name extends Validator
         }
 
         // If the name ends with '.', strip it (absolute FQDN); allow trailing '.'.
-        $trimmed = (str_ends_with($name, '.')) ? substr($name, 0, -1) : $name;
+        $trimmed = str_ends_with($name, '.') ? substr($name, 0, -1) : $name;
 
         // RFC 4592: a wildcard is a single '*' as the entire leftmost label.
         if ($trimmed === '*') {
@@ -81,11 +83,13 @@ class Name extends Validator
 
         $labels = explode('.', $trimmed);
 
-        $isUnderscoreAllowed = !\in_array($this->recordType, self::RECORD_TYPES_WITH_HOSTNAME_OWNER, true);
+        $isUnderscoreAllowed = ! \in_array($this->recordType, self::RECORD_TYPES_WITH_HOSTNAME_OWNER, true);
 
         foreach ($labels as $label) {
             if ($label === '') {
-                $this->reason = $isUnderscoreAllowed ? self::FAILURE_REASON_INVALID_LABEL_CHARACTERS_WITH_UNDERSCORE : self::FAILURE_REASON_INVALID_LABEL_CHARACTERS_WITHOUT_UNDERSCORE;
+                $this->reason = $isUnderscoreAllowed
+                    ? self::FAILURE_REASON_INVALID_LABEL_CHARACTERS_WITH_UNDERSCORE
+                    : self::FAILURE_REASON_INVALID_LABEL_CHARACTERS_WITHOUT_UNDERSCORE;
                 return false;
             }
 
@@ -96,8 +100,10 @@ class Name extends Validator
 
             $len = \strlen($label);
             for ($i = 0; $i < $len; ++$i) {
-                if (!$this->isValidCharacter($label[$i], $i === 0 || $i === $len - 1, $isUnderscoreAllowed)) {
-                    $this->reason = $isUnderscoreAllowed ? self::FAILURE_REASON_INVALID_LABEL_CHARACTERS_WITH_UNDERSCORE : self::FAILURE_REASON_INVALID_LABEL_CHARACTERS_WITHOUT_UNDERSCORE;
+                if (! $this->isValidCharacter($label[$i], $i === 0 || $i === ($len - 1), $isUnderscoreAllowed)) {
+                    $this->reason = $isUnderscoreAllowed
+                        ? self::FAILURE_REASON_INVALID_LABEL_CHARACTERS_WITH_UNDERSCORE
+                        : self::FAILURE_REASON_INVALID_LABEL_CHARACTERS_WITHOUT_UNDERSCORE;
                     return false;
                 }
             }
@@ -109,9 +115,9 @@ class Name extends Validator
     private function isValidCharacter(string $char, bool $isFirstOrLast, bool $isUnderscoreAllowed): bool
     {
         if ($isFirstOrLast) {
-            return ctype_alnum($char) || ($isUnderscoreAllowed && $char === '_');
+            return ctype_alnum($char) || $isUnderscoreAllowed && $char === '_';
         }
-        return ctype_alnum($char) || $char === '-' || ($isUnderscoreAllowed && $char === '_');
+        return ctype_alnum($char) || $char === '-' || $isUnderscoreAllowed && $char === '_';
     }
 
     /**

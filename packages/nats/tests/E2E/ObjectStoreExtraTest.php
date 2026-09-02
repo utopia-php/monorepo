@@ -25,9 +25,11 @@ final class ObjectStoreExtraTest extends TestCase
         $this->conn = Connection::connect($url);
         $this->js = $this->conn->jetStream();
         $this->bucket = 'objx_' . uniqid();
-        $this->store = ObjectStore::createOrUpdate($this->conn, $this->js, new ObjectStoreConfig(
-            bucket: $this->bucket,
-        ));
+        $this->store = ObjectStore::createOrUpdate(
+            $this->conn,
+            $this->js,
+            new ObjectStoreConfig(bucket: $this->bucket),
+        );
     }
 
     protected function tearDown(): void
@@ -147,7 +149,7 @@ final class ObjectStoreExtraTest extends TestCase
     private function pumpUntil(callable $done, float $timeout = 3.0): void
     {
         $deadline = microtime(true) + $timeout;
-        while (!$done() && microtime(true) < $deadline) {
+        while (! $done() && microtime(true) < $deadline) {
             $this->conn->processMessage(0.2);
         }
     }

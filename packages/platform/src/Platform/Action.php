@@ -142,8 +142,19 @@ abstract class Action
     /**
      * Set Param
      */
-    public function param(string $key, mixed $default, Validator|callable $validator, string $description = '', bool $optional = false, array $injections = [], bool $skipValidation = false, bool $deprecated = false, string $example = '', array $aliases = [], ?Enum $enum = null): self
-    {
+    public function param(
+        string $key,
+        mixed $default,
+        Validator|callable $validator,
+        string $description = '',
+        bool $optional = false,
+        array $injections = [],
+        bool $skipValidation = false,
+        bool $deprecated = false,
+        string $example = '',
+        array $aliases = [],
+        ?Enum $enum = null,
+    ): self {
         $param = [
             'default' => $default,
             'validator' => $validator,

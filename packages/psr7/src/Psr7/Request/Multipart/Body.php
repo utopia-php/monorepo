@@ -72,7 +72,7 @@ final class Body implements StreamInterface, \Stringable
     {
         $contents = '';
 
-        while (!$this->eof()) {
+        while (! $this->eof()) {
             $contents .= $this->read(self::BUFFER_SIZE);
         }
 
@@ -88,7 +88,7 @@ final class Body implements StreamInterface, \Stringable
         while ($this->index < \count($this->segments)) {
             $segment = $this->segments[$this->index];
 
-            if (!$segment->eof()) {
+            if (! $segment->eof()) {
                 $chunk = $segment->read($length);
 
                 if ($chunk !== '') {
@@ -207,7 +207,7 @@ final class Body implements StreamInterface, \Stringable
 
         $resource = fopen($path, 'rb');
 
-        if (!\is_resource($resource)) {
+        if (! \is_resource($resource)) {
             throw new RuntimeException('Unable to open multipart file.');
         }
 

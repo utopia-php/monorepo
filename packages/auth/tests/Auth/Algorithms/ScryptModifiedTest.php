@@ -28,7 +28,8 @@ final class ScryptModifiedTest extends TestCase
 
     public function testCustomOptions(): void
     {
-        $this->scryptModified->setSalt(base64_encode('custom-salt'))
+        $this->scryptModified
+            ->setSalt(base64_encode('custom-salt'))
             ->setSaltSeparator(base64_encode('custom-separator'))
             ->setSignerKey(base64_encode('custom-signer-key'));
 

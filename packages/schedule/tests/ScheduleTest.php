@@ -29,10 +29,13 @@ final class ScheduleTest extends TestCase
     {
         $cron = new Cron('*/15 * * * *');
 
-        $this->assertSame([], $cron->occurrencesBetween(
-            new \DateTimeImmutable('2026-08-17 15:45:00.000001'),
-            new \DateTimeImmutable('2026-08-17 16:00:00.000000'),
-        ));
+        $this->assertSame(
+            [],
+            $cron->occurrencesBetween(
+                new \DateTimeImmutable('2026-08-17 15:45:00.000001'),
+                new \DateTimeImmutable('2026-08-17 16:00:00.000000'),
+            ),
+        );
     }
 
     public function testCronBoundaryOccurrenceSurvivesSubSecondWindowStart(): void
@@ -159,10 +162,16 @@ final class ScheduleTest extends TestCase
         $start = new \DateTimeImmutable('2026-08-17 00:00:01.000000');
         $end = new \DateTimeImmutable('2026-08-31 00:00:00.000000');
 
-        $this->assertEquals($sundayViaZero->occurrencesBetween($start, $end), $sundayViaSeven->occurrencesBetween($start, $end));
+        $this->assertEquals(
+            $sundayViaZero->occurrencesBetween($start, $end),
+            $sundayViaSeven->occurrencesBetween($start, $end),
+        );
         $this->assertSame(
             ['2026-08-23', '2026-08-30'],
-            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d'), $sundayViaSeven->occurrencesBetween($start, $end)),
+            array_map(
+                fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d'),
+                $sundayViaSeven->occurrencesBetween($start, $end),
+            ),
         );
     }
 
@@ -172,10 +181,13 @@ final class ScheduleTest extends TestCase
 
         $this->assertSame(
             ['2026-08-18 00:00:00'],
-            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d H:i:s'), $daily->occurrencesBetween(
-                new \DateTimeImmutable('2026-08-17 00:00:01.000000'),
-                new \DateTimeImmutable('2026-08-19 00:00:00.000000'),
-            )),
+            array_map(
+                fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d H:i:s'),
+                $daily->occurrencesBetween(
+                    new \DateTimeImmutable('2026-08-17 00:00:01.000000'),
+                    new \DateTimeImmutable('2026-08-19 00:00:00.000000'),
+                ),
+            ),
         );
     }
 
@@ -186,10 +198,13 @@ final class ScheduleTest extends TestCase
 
         $this->assertSame(
             ['2026-08-07', '2026-08-13', '2026-08-14'],
-            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d'), $cron->occurrencesBetween(
-                new \DateTimeImmutable('2026-08-01 00:00:01.000000'),
-                new \DateTimeImmutable('2026-08-15 00:00:00.000000'),
-            )),
+            array_map(
+                fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d'),
+                $cron->occurrencesBetween(
+                    new \DateTimeImmutable('2026-08-01 00:00:01.000000'),
+                    new \DateTimeImmutable('2026-08-15 00:00:00.000000'),
+                ),
+            ),
         );
     }
 
@@ -199,10 +214,13 @@ final class ScheduleTest extends TestCase
 
         $this->assertSame(
             ['2028-02-29 12:00:00'],
-            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d H:i:s'), $cron->occurrencesBetween(
-                new \DateTimeImmutable('2026-03-01 00:00:00.000000'),
-                new \DateTimeImmutable('2029-01-01 00:00:00.000000'),
-            )),
+            array_map(
+                fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d H:i:s'),
+                $cron->occurrencesBetween(
+                    new \DateTimeImmutable('2026-03-01 00:00:00.000000'),
+                    new \DateTimeImmutable('2029-01-01 00:00:00.000000'),
+                ),
+            ),
         );
     }
 
@@ -234,13 +252,13 @@ final class ScheduleTest extends TestCase
     {
         $cron = new Cron($expression);
 
-        $this->assertSame(
-            $expected,
-            array_map(fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d'), $cron->occurrencesBetween(
+        $this->assertSame($expected, array_map(
+            fn(\DateTimeImmutable $occurrence): string => $occurrence->format('Y-m-d'),
+            $cron->occurrencesBetween(
                 new \DateTimeImmutable('2026-01-01 00:00:00.000000'),
                 new \DateTimeImmutable('2026-04-01 00:00:00.000000'),
-            )),
-        );
+            ),
+        ));
     }
 
     public function testCronQuestionMarkReadsAsAnyDay(): void
@@ -248,12 +266,12 @@ final class ScheduleTest extends TestCase
         $questionMark = new Cron('0 0 ? * *');
         $star = new Cron('0 0 * * *');
 
-        $window = [new \DateTimeImmutable('2026-01-01 00:00:00.000000'), new \DateTimeImmutable('2026-01-08 00:00:00.000000')];
+        $window = [
+            new \DateTimeImmutable('2026-01-01 00:00:00.000000'),
+            new \DateTimeImmutable('2026-01-08 00:00:00.000000'),
+        ];
 
-        $this->assertEquals(
-            $star->occurrencesBetween(...$window),
-            $questionMark->occurrencesBetween(...$window),
-        );
+        $this->assertEquals($star->occurrencesBetween(...$window), $questionMark->occurrencesBetween(...$window));
     }
 
     /**
@@ -309,7 +327,10 @@ final class ScheduleTest extends TestCase
             $split = $before->modify('+59 seconds')->modify(\sprintf('+%d milliseconds', $step * 37));
 
             $count = 0;
-            foreach ([...$cron->occurrencesBetween($before, $split), ...$cron->occurrencesBetween($split, $after)] as $occurrence) {
+            foreach ([
+                ...$cron->occurrencesBetween($before, $split),
+                ...$cron->occurrencesBetween($split, $after),
+            ] as $occurrence) {
                 if ($occurrence == $boundary) {
                     ++$count;
                 }
@@ -360,35 +381,47 @@ final class ScheduleTest extends TestCase
     {
         $at = new At(new \DateTimeImmutable('2026-08-17 16:00:30.000000'));
 
-        $this->assertSame(['16:00:30'], $this->format($at->occurrencesBetween(
-            new \DateTimeImmutable('2026-08-17 16:00:00.000000'),
-            new \DateTimeImmutable('2026-08-17 16:01:00.000000'),
-        )));
+        $this->assertSame(
+            ['16:00:30'],
+            $this->format($at->occurrencesBetween(
+                new \DateTimeImmutable('2026-08-17 16:00:00.000000'),
+                new \DateTimeImmutable('2026-08-17 16:01:00.000000'),
+            )),
+        );
 
-        $this->assertSame([], $at->occurrencesBetween(
-            new \DateTimeImmutable('2026-08-17 16:01:00.000000'),
-            new \DateTimeImmutable('2026-08-17 16:02:00.000000'),
-        ));
+        $this->assertSame(
+            [],
+            $at->occurrencesBetween(
+                new \DateTimeImmutable('2026-08-17 16:01:00.000000'),
+                new \DateTimeImmutable('2026-08-17 16:02:00.000000'),
+            ),
+        );
     }
 
     public function testInIsAnchoredToItsCreationTime(): void
     {
         $at = At::in(30, new \DateTimeImmutable('2026-08-17 16:00:00.000000'));
 
-        $this->assertSame(['16:00:30'], $this->format($at->occurrencesBetween(
-            new \DateTimeImmutable('2026-08-17 16:00:29.000000'),
-            new \DateTimeImmutable('2026-08-17 16:00:31.000000'),
-        )));
+        $this->assertSame(
+            ['16:00:30'],
+            $this->format($at->occurrencesBetween(
+                new \DateTimeImmutable('2026-08-17 16:00:29.000000'),
+                new \DateTimeImmutable('2026-08-17 16:00:31.000000'),
+            )),
+        );
     }
 
     public function testShiftedMovesEveryOccurrence(): void
     {
         $shifted = new Shifted(new Cron('*/15 * * * *'), 40);
 
-        $this->assertSame(['03:00:40', '03:15:40'], $this->format($shifted->occurrencesBetween(
-            new \DateTimeImmutable('2026-08-18 03:00:00.000000'),
-            new \DateTimeImmutable('2026-08-18 03:16:00.000000'),
-        )));
+        $this->assertSame(
+            ['03:00:40', '03:15:40'],
+            $this->format($shifted->occurrencesBetween(
+                new \DateTimeImmutable('2026-08-18 03:00:00.000000'),
+                new \DateTimeImmutable('2026-08-18 03:16:00.000000'),
+            )),
+        );
     }
 
     /**
@@ -404,10 +437,13 @@ final class ScheduleTest extends TestCase
 
         // Boundaries that fall between the true minute and the shifted one.
         foreach (['03:00:15', '03:01:15', '03:02:15'] as $index => $edge) {
-            $seen = [...$seen, ...$this->format($shifted->occurrencesBetween(
-                new \DateTimeImmutable("2026-08-18 {$edge}.000000"),
-                new \DateTimeImmutable('2026-08-18 ' . ['03:01:15', '03:02:15', '03:03:15'][$index] . '.000000'),
-            ))];
+            $seen = [
+                ...$seen,
+                ...$this->format($shifted->occurrencesBetween(
+                    new \DateTimeImmutable("2026-08-18 {$edge}.000000"),
+                    new \DateTimeImmutable('2026-08-18 ' . ['03:01:15', '03:02:15', '03:03:15'][$index] . '.000000'),
+                )),
+            ];
         }
 
         $this->assertSame(['03:00:30', '03:01:30', '03:02:30'], $seen);
@@ -415,18 +451,21 @@ final class ScheduleTest extends TestCase
 
     public function testShiftedKeepsTheKindOfScheduleItWraps(): void
     {
-        $this->assertTrue((new Shifted(new Cron('* * * * *'), 5))->recurring());
-        $this->assertFalse((new Shifted(new At(new \DateTimeImmutable('2026-08-18 03:00:00')), 5))->recurring());
+        $this->assertTrue(new Shifted(new Cron('* * * * *'), 5)->recurring());
+        $this->assertFalse(new Shifted(new At(new \DateTimeImmutable('2026-08-18 03:00:00')), 5)->recurring());
     }
 
     public function testShiftedByNothingChangesNothing(): void
     {
-        $window = [new \DateTimeImmutable('2026-08-18 03:00:00.000000'), new \DateTimeImmutable('2026-08-18 03:02:00.000000')];
+        $window = [
+            new \DateTimeImmutable('2026-08-18 03:00:00.000000'),
+            new \DateTimeImmutable('2026-08-18 03:02:00.000000'),
+        ];
         $cron = new Cron('* * * * *');
 
         $this->assertSame(
             $this->format($cron->occurrencesBetween(...$window)),
-            $this->format((new Shifted($cron, 0))->occurrencesBetween(...$window)),
+            $this->format(new Shifted($cron, 0)->occurrencesBetween(...$window)),
         );
     }
 
@@ -434,10 +473,13 @@ final class ScheduleTest extends TestCase
     {
         $shifted = new Shifted(new Cron('0 * * * *'), -10);
 
-        $this->assertSame(['02:59:50'], $this->format($shifted->occurrencesBetween(
-            new \DateTimeImmutable('2026-08-18 02:59:00.000000'),
-            new \DateTimeImmutable('2026-08-18 03:00:00.000000'),
-        )));
+        $this->assertSame(
+            ['02:59:50'],
+            $this->format($shifted->occurrencesBetween(
+                new \DateTimeImmutable('2026-08-18 02:59:00.000000'),
+                new \DateTimeImmutable('2026-08-18 03:00:00.000000'),
+            )),
+        );
     }
 
     /**

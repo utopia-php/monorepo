@@ -15,7 +15,7 @@ class YAML extends Parser
      */
     public function parse(mixed $contents, ?\ReflectionClass $reflection = null): array
     {
-        if (!\is_string($contents)) {
+        if (! \is_string($contents)) {
             throw new Parse('Contents must be a string.');
         }
 

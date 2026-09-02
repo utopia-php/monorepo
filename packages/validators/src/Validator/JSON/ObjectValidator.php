@@ -18,7 +18,9 @@ class ObjectValidator extends Validator
     /**
      * Pass an encoded length to cap the size of accepted objects, 0 to allow any size
      */
-    public function __construct(protected int $length = 0) {}
+    public function __construct(
+        protected int $length = 0,
+    ) {}
 
     /**
      * Get Description
@@ -64,7 +66,7 @@ class ObjectValidator extends Validator
     public function isValid(mixed $value): bool
     {
         if (\is_string($value)) {
-            if (!$this->hasValidLength($value)) {
+            if (! $this->hasValidLength($value)) {
                 return false;
             }
 
@@ -79,7 +81,7 @@ class ObjectValidator extends Validator
             return $this->hasValidLength(json_encode($value));
         }
 
-        if (!\is_array($value)) {
+        if (! \is_array($value)) {
             return false;
         }
 

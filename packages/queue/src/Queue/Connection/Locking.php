@@ -51,7 +51,9 @@ class Locking implements Connection
 
     public function rightPopLeftPushArray(string $queue, string $destination, int $timeout): array|false
     {
-        return $this->synchronize(fn(): array|false => $this->connection->rightPopLeftPushArray($queue, $destination, $timeout));
+        return $this->synchronize(
+            fn(): array|false => $this->connection->rightPopLeftPushArray($queue, $destination, $timeout),
+        );
     }
 
     public function leftPushArray(string $queue, array $payload): bool
@@ -86,7 +88,9 @@ class Locking implements Connection
 
     public function rightPopLeftPush(string $queue, string $destination, int $timeout): string|false
     {
-        return $this->synchronize(fn(): string|false => $this->connection->rightPopLeftPush($queue, $destination, $timeout));
+        return $this->synchronize(
+            fn(): string|false => $this->connection->rightPopLeftPush($queue, $destination, $timeout),
+        );
     }
 
     public function leftPush(string $queue, string $payload): bool

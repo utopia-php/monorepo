@@ -84,10 +84,7 @@ final class JetStream
     {
         $payload = $subject !== null ? ['subject' => $subject] : null;
         $data = $this->apiRequest('STREAM.LIST', $payload);
-        return array_map(
-            StreamInfo::fromArray(...),
-            $data['streams'] ?? [],
-        );
+        return array_map(StreamInfo::fromArray(...), $data['streams'] ?? []);
     }
 
     public function purgeStream(string $name, ?string $subject = null): void
@@ -170,9 +167,7 @@ final class JetStream
     public function pushSubscribe(string $stream, ConsumerConfig $config, \Closure $callback): PushSubscription
     {
         if ($config->deliverSubject === null) {
-            $config = ConsumerConfig::fromArray(
-                ['deliver_subject' => $this->conn->newInbox()] + $config->toArray(),
-            );
+            $config = ConsumerConfig::fromArray(['deliver_subject' => $this->conn->newInbox()] + $config->toArray());
         }
 
         $consumer = $this->createConsumer($stream, $config);
@@ -183,8 +178,12 @@ final class JetStream
     /**
      * Create an ordered (ephemeral, in-order, auto-healing) push consumer.
      */
-    public function orderedConsumer(string $stream, DeliverPolicy $deliverPolicy = DeliverPolicy::All, ?string $filterSubject = null, float $idleHeartbeat = 5.0): OrderedConsumer
-    {
+    public function orderedConsumer(
+        string $stream,
+        DeliverPolicy $deliverPolicy = DeliverPolicy::All,
+        ?string $filterSubject = null,
+        float $idleHeartbeat = 5.0,
+    ): OrderedConsumer {
         return new OrderedConsumer($this->conn, $this, $stream, $deliverPolicy, $filterSubject, $idleHeartbeat);
     }
 
@@ -221,8 +220,18 @@ final class JetStream
      *                                 with no responders / 503 (ADR-22). 0 keeps the
      *                                 default single-attempt behavior.
      */
-    public function publish(string $subject, string $data = '', ?Headers $headers = null, ?string $msgId = null, ?string $expectedLastMsgId = null, ?int $expectedLastSeq = null, ?int $expectedLastSubjectSeq = null, ?string $expectedStream = null, int|string|null $ttl = null, int $retryOnNoResponders = 0): PubAck
-    {
+    public function publish(
+        string $subject,
+        string $data = '',
+        ?Headers $headers = null,
+        ?string $msgId = null,
+        ?string $expectedLastMsgId = null,
+        ?int $expectedLastSeq = null,
+        ?int $expectedLastSubjectSeq = null,
+        ?string $expectedStream = null,
+        int|string|null $ttl = null,
+        int $retryOnNoResponders = 0,
+    ): PubAck {
         $headers ??= new Headers();
 
         if ($msgId !== null) {
@@ -333,11 +342,7 @@ final class JetStream
     {
         if (isset($data['error'])) {
             $error = ApiError::fromArray($data['error']);
-            throw new JetStreamException(
-                $error->description,
-                $error->code,
-                apiError: $error,
-            );
+            throw new JetStreamException($error->description, $error->code, apiError: $error);
         }
     }
 }

@@ -62,7 +62,7 @@ final readonly class Header
         $chunk = '';
 
         foreach (preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $character) {
-            if ($chunk !== '' && \strlen($chunk) + \strlen($character) > self::PAYLOAD) {
+            if ($chunk !== '' && (\strlen($chunk) + \strlen($character)) > self::PAYLOAD) {
                 $words[] = self::word($chunk);
                 $chunk = '';
             }
@@ -94,7 +94,9 @@ final readonly class Header
 
         foreach (explode(' ', $line) as $word) {
             if (\strlen($word) > self::HARD) {
-                throw new \InvalidArgumentException("The {$name} header has an unbreakable run of " . \strlen($word) . ' octets');
+                throw new \InvalidArgumentException(
+                    "The {$name} header has an unbreakable run of " . \strlen($word) . ' octets',
+                );
             }
 
             $candidate = $current === '' ? $word : "{$current} {$word}";

@@ -153,10 +153,7 @@ class SentryTest extends TestCase
                 return new ResponseFactory()->createResponse(202);
             }
         };
-        $exporter = new Sentry(
-            dsn: 'https://publickey@sentry.example.com:9000/123',
-            client: $client,
-        );
+        $exporter = new Sentry(dsn: 'https://publickey@sentry.example.com:9000/123', client: $client);
         $span = new Span('test');
         $span->finish(error: new \RuntimeException('Test error'));
 
@@ -264,14 +261,13 @@ class SentryTest extends TestCase
 
     public function testExportWithClassifier(): void
     {
-        $exporter = new Sentry(
-            dsn: 'https://key@sentry.io/123',
-            classifier: fn(string $key): SentryField => match (true) {
-                str_starts_with($key, 'tenant.') => SentryField::Tag,
-                str_starts_with($key, 'user.') => SentryField::Context,
-                default => SentryField::Extra,
-            },
-        );
+        $exporter = new Sentry(dsn: 'https://key@sentry.io/123', classifier: fn(string $key): SentryField => match (
+            true
+        ) {
+            str_starts_with($key, 'tenant.') => SentryField::Tag,
+            str_starts_with($key, 'user.') => SentryField::Context,
+            default => SentryField::Extra,
+        });
 
         $span = new Span('api.request');
         $span->set('tenant.id', 'acme-corp');

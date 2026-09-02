@@ -19,7 +19,7 @@ final readonly class Attachment
         public ?string $path,
         public ?string $cid = null,
     ) {
-        if (preg_match('/[\r\n\x00]/', $name . $type . ($cid)) === 1) {
+        if (preg_match('/[\r\n\x00]/', $name . $type . $cid) === 1) {
             throw new \InvalidArgumentException('An attachment name, type or identifier must not span lines');
         }
     }
@@ -33,12 +33,7 @@ final readonly class Attachment
             throw new \InvalidArgumentException("Cannot read attachment: {$path}");
         }
 
-        return new self(
-            $name ?? basename($path),
-            $type ?? self::detect($path),
-            null,
-            $path,
-        );
+        return new self($name ?? basename($path), $type ?? self::detect($path), null, $path);
     }
 
     public static function fromString(string $content, string $name, string $type = self::FALLBACK_TYPE): self

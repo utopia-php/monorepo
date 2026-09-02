@@ -32,7 +32,11 @@ class DNS extends Validator
      *  When using CAA type, you can provide exact match, or just issuer domain as $target
      * @param string $dnsServer DNS server IP or domain to use for validation
      */
-    public function __construct(protected string $target, protected int $type = Record::TYPE_CNAME, protected string $dnsServer = self::DEFAULT_DNS_SERVER) {}
+    public function __construct(
+        protected string $target,
+        protected int $type = Record::TYPE_CNAME,
+        protected string $dnsServer = self::DEFAULT_DNS_SERVER,
+    ) {}
 
     public function getDescription(): string
     {
@@ -64,7 +68,7 @@ class DNS extends Validator
             8 => 'eight',
             9 => 'nine',
             10 => 'ten',
-            default => $this->count
+            default => $this->count,
         };
 
         if ($this->count === 1) {
@@ -86,7 +90,7 @@ class DNS extends Validator
      */
     public function isValid(mixed $value): bool
     {
-        if (!\is_string($value)) {
+        if (! \is_string($value)) {
             $this->reason = self::FAILURE_REASON_INTERNAL;
             return false;
         }
@@ -106,7 +110,10 @@ class DNS extends Validator
 
             // Some DNS servers return all records, not only type that's asked for
             // Likely occurs when no records of specific type are found
-            $query = array_filter($answers, fn(\Utopia\DNS\Message\Record $record): bool => $record->type === $this->type);
+            $query = array_filter(
+                $answers,
+                fn(\Utopia\DNS\Message\Record $record): bool => $record->type === $this->type,
+            );
         } catch (\Exception) {
             $this->reason = self::FAILURE_REASON_QUERY;
             return false;

@@ -38,12 +38,13 @@ trait BinlogFixtures
         $crc = $checksum ? "\xDE\xAD\xBE\xEF" : '';
         $eventSize = Constants::EVENT_HEADER_SIZE + \strlen($body) + \strlen($crc);
 
-        $header = "\x00\x00\x00\x00"      // timestamp
-            . \chr($type)                 // event type
-            . "\x00\x00\x00\x00"          // server id
-            . pack('V', $eventSize)       // event size
-            . "\x00\x00\x00\x00"          // log position
-            . "\x00\x00";                 // flags
+        $header =
+            "\x00\x00\x00\x00" // timestamp
+            . \chr($type) // event type
+            . "\x00\x00\x00\x00" // server id
+            . pack('V', $eventSize) // event size
+            . "\x00\x00\x00\x00" // log position
+            . "\x00\x00"; // flags
 
         return $header . $body . $crc;
     }
@@ -57,13 +58,16 @@ trait BinlogFixtures
     /** QUERY_EVENT body carrying $query (e.g. "BEGIN" or a DDL statement). */
     private function binlogQueryEvent(string $query, string $schema = ''): string
     {
-        return pack('V', 1)               // thread id
-            . pack('V', 0)                // execution time
-            . \chr(\strlen($schema))      // schema length
-            . pack('v', 0)                // error code
-            . pack('v', 0)                // status-variables length (none)
-            . $schema . "\x00"            // schema name + NUL
-            . $query;                     // the SQL statement
+        return (
+            pack('V', 1) // thread id
+            . pack('V', 0) // execution time
+            . \chr(\strlen($schema)) // schema length
+            . pack('v', 0) // error code
+            . pack('v', 0) // status-variables length (none)
+            . $schema
+            . "\x00" // schema name + NUL
+            . $query // the SQL statement
+        );
     }
 
     /**
@@ -71,8 +75,13 @@ trait BinlogFixtures
      *
      * @param list<Column> $columns each ['type' => int, 'meta' => rawMetaBytes, 'name' => string]
      */
-    private function binlogTableMap(int $tableId, string $schema, string $table, array $columns, string $signedness = ''): string
-    {
+    private function binlogTableMap(
+        int $tableId,
+        string $schema,
+        string $table,
+        array $columns,
+        string $signedness = '',
+    ): string {
         $types = '';
         $meta = '';
         $names = '';
@@ -83,11 +92,19 @@ trait BinlogFixtures
         }
         $count = \count($columns);
 
-        $body = $this->le($tableId, 6) . "\x00\x00"
-            . \chr(\strlen($schema)) . $schema . "\x00"
-            . \chr(\strlen($table)) . $table . "\x00"
-            . \chr($count) . $types
-            . \chr(\strlen($meta)) . $meta
+        $body =
+            $this->le($tableId, 6)
+            . "\x00\x00"
+            . \chr(\strlen($schema))
+            . $schema
+            . "\x00"
+            . \chr(\strlen($table))
+            . $table
+            . "\x00"
+            . \chr($count)
+            . $types
+            . \chr(\strlen($meta))
+            . $meta
             . str_repeat("\x00", intdiv($count + 7, 8)); // null bitmap (all NOT NULL)
 
         if ($signedness !== '') {
@@ -116,7 +133,15 @@ trait BinlogFixtures
     {
         $present = $this->presentBitmap($columnCount, $columnCount);
 
-        return $this->le($tableId, 6) . "\x00\x00" . "\x02\x00" . \chr($columnCount) . $present . $present . implode('', $rows);
+        return (
+            $this->le($tableId, 6)
+            . "\x00\x00"
+            . "\x02\x00"
+            . \chr($columnCount)
+            . $present
+            . $present
+            . implode('', $rows)
+        );
     }
 
     /** A row image: null bitmap (no nulls) over $presentCount columns, then the values. */

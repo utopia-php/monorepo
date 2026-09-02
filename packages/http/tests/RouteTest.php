@@ -62,9 +62,7 @@ final class RouteTest extends TestCase
     {
         $this->assertSame([], $this->route->getParams());
 
-        $this->route
-            ->param('x', '', new Text(10))
-            ->param('y', '', new Text(10));
+        $this->route->param('x', '', new Text(10))->param('y', '', new Text(10));
 
         $this->assertCount(2, $this->route->getParams());
     }

@@ -114,7 +114,7 @@ abstract class Verifier
             throw new VerificationException('Unexpected token type');
         }
 
-        if (!$this->verifySignature("{$encodedHeader}.{$encodedClaims}", $signature)) {
+        if (! $this->verifySignature("{$encodedHeader}.{$encodedClaims}", $signature)) {
             throw new VerificationException('Signature verification failed');
         }
 
@@ -139,35 +139,35 @@ abstract class Verifier
         // issuance is rejected even when expiry is relaxed via allowExpired().
         $nbf = $claims[Claim::NotBefore->value] ?? null;
         if ($nbf !== null) {
-            if (!is_numeric($nbf)) {
+            if (! is_numeric($nbf)) {
                 throw new VerificationException('Invalid "nbf" claim');
             }
-            if ($now + $this->leeway < (int) $nbf) {
+            if (($now + $this->leeway) < (int) $nbf) {
                 throw new VerificationException('Token is not yet valid');
             }
         }
 
         $iat = $claims[Claim::IssuedAt->value] ?? null;
         if ($iat !== null) {
-            if (!is_numeric($iat)) {
+            if (! is_numeric($iat)) {
                 throw new VerificationException('Invalid "iat" claim');
             }
-            if ($now + $this->leeway < (int) $iat) {
+            if (($now + $this->leeway) < (int) $iat) {
                 throw new VerificationException('Token was issued in the future');
             }
         }
 
         // These are bounded-lifetime bearer tokens, so "exp" is required and
         // must be in the future — unless relaxed via $allowExpired.
-        if (!$this->allowExpired) {
+        if (! $this->allowExpired) {
             $exp = $claims[Claim::Expiration->value] ?? null;
             if ($exp === null) {
                 throw new VerificationException('Token is missing the "exp" claim');
             }
-            if (!is_numeric($exp)) {
+            if (! is_numeric($exp)) {
                 throw new VerificationException('Invalid "exp" claim');
             }
-            if ($now >= (int) $exp + $this->leeway) {
+            if ($now >= ((int) $exp + $this->leeway)) {
                 throw new VerificationException('Token has expired');
             }
         }
@@ -176,7 +176,7 @@ abstract class Verifier
             throw new VerificationException('Unexpected token issuer');
         }
 
-        if ($this->audience !== null && !$this->audienceMatches($claims[Claim::Audience->value] ?? null)) {
+        if ($this->audience !== null && ! $this->audienceMatches($claims[Claim::Audience->value] ?? null)) {
             throw new VerificationException('Unexpected token audience');
         }
     }
@@ -224,7 +224,7 @@ abstract class Verifier
         // json_decode(..., true) maps both JSON objects and JSON arrays to PHP
         // arrays; a populated list means the segment was a JSON array, which is
         // not a valid JWT header/claims object.
-        if (!\is_array($data) || (array_is_list($data) && $data !== [])) {
+        if (! \is_array($data) || array_is_list($data) && $data !== []) {
             throw new VerificationException("{$label} must be a JSON object");
         }
 

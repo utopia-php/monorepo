@@ -77,7 +77,7 @@ class ClientIdMetadataDocument
             throw new InvalidClientMetadataException('Client ID Metadata Document is not valid JSON.');
         }
 
-        if (!$decoded instanceof \stdClass) {
+        if (! $decoded instanceof \stdClass) {
             throw new InvalidClientMetadataException('Client ID Metadata Document must be a JSON object.');
         }
 
@@ -112,14 +112,16 @@ class ClientIdMetadataDocument
         // metadata document cannot establish a shared secret, clients need to
         // opt into a compatible method such as none or private_key_jwt.
         $tokenEndpointAuthMethod = $metadata['token_endpoint_auth_method'] ?? null;
-        if (!\is_string($tokenEndpointAuthMethod) || $tokenEndpointAuthMethod === '') {
+        if (! \is_string($tokenEndpointAuthMethod) || $tokenEndpointAuthMethod === '') {
             throw new InvalidClientMetadataException('token_endpoint_auth_method must be explicitly declared.');
         }
 
         // All client_secret_* methods require a pre-established shared secret,
         // which a publicly fetched metadata document cannot securely provide.
         if (str_starts_with($tokenEndpointAuthMethod, 'client_secret_')) {
-            throw new InvalidClientMetadataException('token_endpoint_auth_method must not use a shared symmetric secret.');
+            throw new InvalidClientMetadataException(
+                'token_endpoint_auth_method must not use a shared symmetric secret.',
+            );
         }
 
         $grantTypes = self::stringList($metadata, 'grant_types', ['authorization_code']);
@@ -137,7 +139,7 @@ class ClientIdMetadataDocument
         }
 
         foreach (self::STRING_METADATA_PROPERTIES as $property) {
-            if (\array_key_exists($property, $metadata) && !\is_string($metadata[$property])) {
+            if (\array_key_exists($property, $metadata) && ! \is_string($metadata[$property])) {
                 throw new InvalidClientMetadataException("{$property} must be a string.");
             }
         }
@@ -193,9 +195,7 @@ class ClientIdMetadataDocument
 
     public function get(string $property, mixed $default = null): mixed
     {
-        return \array_key_exists($property, $this->metadata)
-            ? $this->metadata[$property]
-            : $default;
+        return \array_key_exists($property, $this->metadata) ? $this->metadata[$property] : $default;
     }
 
     /**
@@ -213,17 +213,17 @@ class ClientIdMetadataDocument
      */
     private static function stringList(array $metadata, string $property, array $default): array
     {
-        if (!\array_key_exists($property, $metadata)) {
+        if (! \array_key_exists($property, $metadata)) {
             return $default;
         }
 
         $values = $metadata[$property];
-        if (!\is_array($values) || !array_is_list($values)) {
+        if (! \is_array($values) || ! array_is_list($values)) {
             throw new InvalidClientMetadataException("{$property} must be a list of strings.");
         }
 
         foreach ($values as $value) {
-            if (!\is_string($value) || $value === '') {
+            if (! \is_string($value) || $value === '') {
                 throw new InvalidClientMetadataException("{$property} must contain non-empty strings.");
             }
         }
@@ -236,25 +236,32 @@ class ClientIdMetadataDocument
     {
         $parts = parse_url($uri);
 
-        if (!\is_array($parts) || empty($parts['scheme']) || isset($parts['fragment'])) {
+        if (! \is_array($parts) || empty($parts['scheme']) || isset($parts['fragment'])) {
             throw new InvalidClientMetadataException('redirect URIs must be absolute URIs without fragments.');
         }
     }
 
     private static function validateJwks(mixed $jwks): void
     {
-        if (!\is_array($jwks) || !isset($jwks['keys']) || !\is_array($jwks['keys']) || !array_is_list($jwks['keys'])) {
+        if (
+            ! \is_array($jwks)
+            || ! isset($jwks['keys'])
+            || ! \is_array($jwks['keys'])
+            || ! array_is_list($jwks['keys'])
+        ) {
             throw new InvalidClientMetadataException('jwks must be a JSON Web Key Set object.');
         }
 
         foreach ($jwks['keys'] as $jwk) {
-            if (!\is_array($jwk) || array_is_list($jwk)) {
+            if (! \is_array($jwk) || array_is_list($jwk)) {
                 throw new InvalidClientMetadataException('jwks must contain JSON Web Key objects.');
             }
 
             foreach (self::PRIVATE_JWK_PARAMETERS as $parameter) {
                 if (\array_key_exists($parameter, $jwk)) {
-                    throw new InvalidClientMetadataException('jwks must not contain private or symmetric key material.');
+                    throw new InvalidClientMetadataException(
+                        'jwks must not contain private or symmetric key material.',
+                    );
                 }
             }
         }

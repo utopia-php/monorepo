@@ -42,7 +42,6 @@ class Http
 
     public const string MODE_TYPE_PRODUCTION = 'production';
 
-
     /**
      * Current running mode
      */
@@ -245,7 +244,7 @@ class Http
         $routes = Router::getRoutes();
 
         foreach ($methods as $method) {
-            if (!\array_key_exists($method, $routes)) {
+            if (! \array_key_exists($method, $routes)) {
                 throw new \Exception("Method ({$method}) not supported.");
             }
         }
@@ -509,15 +508,11 @@ class Http
 
     public function start(): void
     {
-
-        $this->adapter->onRequest(
-            fn(Request $request, Response $response) => $this->run($request, $response),
-        );
+        $this->adapter->onRequest(fn(Request $request, Response $response) => $this->run($request, $response));
 
         $this->adapter->onStart(function ($server) {
             $this->resources()->set('server', fn() => $server);
             try {
-
                 foreach (self::$startHooks as $hook) {
                     $arguments = $this->getArguments($hook, [], []);
                     \call_user_func_array($hook->getAction(), $arguments);
@@ -531,7 +526,11 @@ class Http
                             $arguments = $this->getArguments($error, [], []);
                             \call_user_func_array($error->getAction(), $arguments);
                         } catch (\Throwable $hookError) {
-                            throw new Exception('Error handler had an error: ' . $hookError::class . ': ' . $hookError->getMessage(), 500, $e);
+                            throw new Exception(
+                                'Error handler had an error: ' . $hookError::class . ': ' . $hookError->getMessage(),
+                                500,
+                                $e,
+                            );
                         }
                     }
                 }
@@ -549,7 +548,7 @@ class Http
         $url = parse_url($request->getURI(), PHP_URL_PATH);
         $url = \is_string($url) ? ($url === '' ? '/' : $url) : '/';
         $method = $request->getMethod();
-        $method = (self::REQUEST_METHOD_HEAD === $method) ? self::REQUEST_METHOD_GET : $method;
+        $method = self::REQUEST_METHOD_HEAD === $method ? self::REQUEST_METHOD_GET : $method;
 
         return Router::match($method, $url);
     }
@@ -586,7 +585,12 @@ class Http
                     foreach (self::$options as $option) { // Group options hooks
                         /** @var Hook $option */
                         if (\in_array($group, $option->getGroups())) {
-                            \call_user_func_array($option->getAction(), $this->getArguments($option, [], $request->getParams(), $match->route));
+                            \call_user_func_array($option->getAction(), $this->getArguments(
+                                $option,
+                                [],
+                                $request->getParams(),
+                                $match->route,
+                            ));
                         }
                     }
                 }
@@ -594,7 +598,12 @@ class Http
                 foreach (self::$options as $option) { // Global options hooks
                     /** @var Hook $option */
                     if (\in_array('*', $option->getGroups())) {
-                        \call_user_func_array($option->getAction(), $this->getArguments($option, [], $request->getParams(), $match?->route));
+                        \call_user_func_array($option->getAction(), $this->getArguments(
+                            $option,
+                            [],
+                            $request->getParams(),
+                            $match?->route,
+                        ));
                     }
                 }
             } catch (\Throwable $e) {
@@ -602,7 +611,12 @@ class Http
                     /** @var Hook $error */
                     if (\in_array('*', $error->getGroups())) {
                         $this->context()->set('error', fn() => $e, []);
-                        \call_user_func_array($error->getAction(), $this->getArguments($error, [], $request->getParams(), $match?->route));
+                        \call_user_func_array($error->getAction(), $this->getArguments(
+                            $error,
+                            [],
+                            $request->getParams(),
+                            $match?->route,
+                        ));
                     }
                 }
             }
@@ -644,7 +658,7 @@ class Http
                 }
             }
 
-            if (!$response->isSent()) {
+            if (! $response->isSent()) {
                 $arguments = $this->getArguments($route, $match->params, $request->getParams(), $route);
                 \call_user_func_array($route->getAction(), $arguments);
             }
@@ -676,7 +690,11 @@ class Http
                             $arguments = $this->getArguments($error, $match->params, $request->getParams(), $route);
                             \call_user_func_array($error->getAction(), $arguments);
                         } catch (\Throwable $hookError) {
-                            throw new Exception('Error handler had an error: ' . $hookError::class . ': ' . $hookError->getMessage(), 500, $e);
+                            throw new Exception(
+                                'Error handler had an error: ' . $hookError::class . ': ' . $hookError->getMessage(),
+                                500,
+                                $e,
+                            );
                         }
                     }
                 }
@@ -688,7 +706,11 @@ class Http
                         $arguments = $this->getArguments($error, $match->params, $request->getParams(), $route);
                         \call_user_func_array($error->getAction(), $arguments);
                     } catch (\Throwable $hookError) {
-                        throw new Exception('Error handler had an error: ' . $hookError::class . ': ' . $hookError->getMessage(), 500, $e);
+                        throw new Exception(
+                            'Error handler had an error: ' . $hookError::class . ': ' . $hookError->getMessage(),
+                            500,
+                            $e,
+                        );
                     }
                 }
             }
@@ -710,7 +732,7 @@ class Http
         $arguments = [];
         foreach ($hook->getParams() as $key => $param) { // Get value from route or request object
             $requestKey = $key;
-            if (!\array_key_exists($key, $requestParams) && !empty($param['aliases'])) {
+            if (! \array_key_exists($key, $requestParams) && ! empty($param['aliases'])) {
                 foreach ($param['aliases'] as $alias) {
                     if (\array_key_exists($alias, $requestParams)) {
                         $requestKey = $alias;
@@ -720,7 +742,7 @@ class Http
             }
 
             $valuesKey = $key;
-            if (!\array_key_exists($key, $values) && !empty($param['aliases'])) {
+            if (! \array_key_exists($key, $values) && ! empty($param['aliases'])) {
                 foreach ($param['aliases'] as $alias) {
                     if (\array_key_exists($alias, $values)) {
                         $valuesKey = $alias;
@@ -734,14 +756,14 @@ class Http
             $paramExists = $existsInRequest || $existsInValues;
 
             $arg = $existsInRequest ? $requestParams[$requestKey] : $param['default'];
-            if (\is_callable($arg) && !\is_string($arg)) {
+            if (\is_callable($arg) && ! \is_string($arg)) {
                 $context = $this->adapter->context();
                 $arg = \call_user_func_array($arg, array_map($context->get(...), $param['injections']));
             }
             $value = $existsInValues ? $values[$valuesKey] : $arg;
 
-            if (!$param['skipValidation']) {
-                if (!$paramExists && !$param['optional']) {
+            if (! $param['skipValidation']) {
+                if (! $paramExists && ! $param['optional']) {
                     throw new Exception('Param "' . $key . '" is not optional.', 400);
                 }
 
@@ -800,7 +822,7 @@ class Http
             'http.request.method' => $request->getMethod(),
             // OTel semantics: http.route is the matched route template, or
             // unset when no template applies (wildcard / no match).
-            'http.route' => ($this->match($request)?->route->getPath() ?: null),
+            'http.route' => $this->match($request)?->route->getPath() ?: null,
             'http.response.status_code' => $response->getStatusCode(),
         ];
         $this->requestDuration->record($requestDuration, $attributes);
@@ -847,14 +869,18 @@ class Http
                         $arguments = $this->getArguments($error, [], []);
                         \call_user_func_array($error->getAction(), $arguments);
                     } catch (\Throwable $hookError) {
-                        throw new Exception('Error handler had an error: ' . $hookError::class . ': ' . $hookError->getMessage(), 500, $e);
+                        throw new Exception(
+                            'Error handler had an error: ' . $hookError::class . ': ' . $hookError->getMessage(),
+                            500,
+                            $e,
+                        );
                     }
                 }
             }
         }
 
         if ($this->isFileLoaded($request->getURI())) {
-            $time = (60 * 60 * 24 * 365 * 2); // 45 days cache
+            $time = 60 * 60 * 24 * 365 * 2; // 45 days cache
 
             $response
                 ->setContentType($this->getFileMimeType($request->getURI()))
@@ -867,7 +893,6 @@ class Http
 
         return $this->execute($request, $response);
     }
-
 
     /**
      * Validate Param
@@ -891,11 +916,11 @@ class Http
             $validator = \call_user_func_array($validator, array_map($context->get(...), $param['injections']));
         }
 
-        if (!$validator instanceof Validator) { // is the validator object an instance of the Validator class
+        if (! $validator instanceof Validator) { // is the validator object an instance of the Validator class
             throw new Exception('Validator object is not an instance of the Validator class', 500);
         }
 
-        if (!$validator->isValid($value)) {
+        if (! $validator->isValid($value)) {
             throw new Exception('Invalid `' . $key . '` param: ' . $validator->getDescription(), 400);
         }
     }

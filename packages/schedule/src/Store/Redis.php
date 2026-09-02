@@ -29,18 +29,18 @@ use Utopia\Schedule\Store;
 final readonly class Redis implements Store
 {
     private const string SWAP = <<<'LUA'
-        local held = redis.call('hget', KEYS[1], 'token')
+    local held = redis.call('hget', KEYS[1], 'token')
 
-        if ARGV[1] == '1' then
-            if held then return 0 end
-        elseif held ~= ARGV[2] then
-            return 0
-        end
+    if ARGV[1] == '1' then
+        if held then return 0 end
+    elseif held ~= ARGV[2] then
+        return 0
+    end
 
-        redis.call('hset', KEYS[1], 'token', ARGV[3], 'expiresAt', ARGV[4], 'coveredUntil', ARGV[5], 'syncedUntil', ARGV[6])
+    redis.call('hset', KEYS[1], 'token', ARGV[3], 'expiresAt', ARGV[4], 'coveredUntil', ARGV[5], 'syncedUntil', ARGV[6])
 
-        return 1
-        LUA;
+    return 1
+    LUA;
 
     public function __construct(
         private Client $redis,
@@ -52,7 +52,7 @@ final readonly class Redis implements Store
     {
         $record = $this->redis->hGetAll($this->key);
 
-        if (!\is_array($record) || !isset($record['token'], $record['expiresAt'])) {
+        if (! \is_array($record) || ! isset($record['token'], $record['expiresAt'])) {
             return null;
         }
 
@@ -75,15 +75,19 @@ final readonly class Redis implements Store
     {
         // An empty token is a released claim, so "no record at all" needs
         // its own flag rather than an empty expected value.
-        $result = $this->redis->eval(self::SWAP, [
-            $this->key,
-            $expected === null ? '1' : '0',
-            $expected ?? '',
-            $next->token,
-            \sprintf('%.6F', $next->expiresAt),
-            $next->coveredUntil === null ? '' : \sprintf('%.6F', $next->coveredUntil),
-            $next->syncedUntil === null ? '' : \sprintf('%.6F', $next->syncedUntil),
-        ], 1);
+        $result = $this->redis->eval(
+            self::SWAP,
+            [
+                $this->key,
+                $expected === null ? '1' : '0',
+                $expected ?? '',
+                $next->token,
+                \sprintf('%.6F', $next->expiresAt),
+                $next->coveredUntil === null ? '' : \sprintf('%.6F', $next->coveredUntil),
+                $next->syncedUntil === null ? '' : \sprintf('%.6F', $next->syncedUntil),
+            ],
+            1,
+        );
 
         return \in_array($result, [1, '1'], true);
     }

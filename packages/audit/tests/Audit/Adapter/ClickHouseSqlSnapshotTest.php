@@ -73,12 +73,7 @@ final class ClickHouseSqlSnapshotTest extends TestCase
         $table->datetime('time', precision: 3);
         $table->addColumn('data', ColumnType::String)->nullable();
 
-        $table->index(
-            columns: ['event'],
-            name: 'idx_event',
-            algorithm: IndexAlgorithm::BloomFilter,
-            granularity: 1,
-        );
+        $table->index(columns: ['event'], name: 'idx_event', algorithm: IndexAlgorithm::BloomFilter, granularity: 1);
         $table->index(
             columns: ['actorId', 'event'],
             name: 'idx_actorId_event',
@@ -110,7 +105,10 @@ final class ClickHouseSqlSnapshotTest extends TestCase
         $this->assertStringNotContainsString('`location`', $sql);
         $this->assertStringNotContainsString('`userId`', $sql);
         $this->assertStringContainsString('INDEX `idx_event` `event` TYPE bloom_filter GRANULARITY 1', $sql);
-        $this->assertStringContainsString('INDEX `idx_actorId_event` (`actorId`, `event`) TYPE bloom_filter GRANULARITY 1', $sql);
+        $this->assertStringContainsString(
+            'INDEX `idx_actorId_event` (`actorId`, `event`) TYPE bloom_filter GRANULARITY 1',
+            $sql,
+        );
         $this->assertStringContainsString('INDEX `_key_actor_type` `actorType` TYPE bloom_filter GRANULARITY 1', $sql);
         $this->assertStringContainsString('ENGINE = MergeTree()', $sql);
         $this->assertStringContainsString('PARTITION BY toYYYYMM(time)', $sql);
@@ -151,7 +149,8 @@ final class ClickHouseSqlSnapshotTest extends TestCase
         $this->assertSame('JSONEachRow', $statement->format);
         $this->assertSame($columns, $statement->columns);
         $this->assertSame(
-            '{"id":"log-1","time":"2025-01-02 03:04:05.678","actorId":"u1","actorType":"users","event":"users.create","data":"{\"foo\":\"bar\"}"}' . "\n"
+            '{"id":"log-1","time":"2025-01-02 03:04:05.678","actorId":"u1","actorType":"users","event":"users.create","data":"{\"foo\":\"bar\"}"}'
+            . "\n"
             . '{"id":"log-2","time":"2025-01-02 03:04:06.000","actorId":"u2","actorType":"users","event":"users.delete","data":"{\"foo\":\"baz\"}"}',
             $statement->body,
         );
@@ -180,15 +179,13 @@ final class ClickHouseSqlSnapshotTest extends TestCase
             ->delete()
             ->query;
 
-        $this->assertSame(
-            'DELETE FROM `default`.`audits` WHERE `time` < {datetime:DateTime64(3)}',
-            $sql,
-        );
+        $this->assertSame('DELETE FROM `default`.`audits` WHERE `time` < {datetime:DateTime64(3)}', $sql);
     }
 
     public function testFindEmitsTypedNamedBindings(): void
     {
-        $statement = $this->newAuditBuilder()
+        $statement = $this
+            ->newAuditBuilder()
             ->from('default.audits')
             ->selectRaw('`id`, `event`, `time`')
             ->filter([
@@ -199,7 +196,8 @@ final class ClickHouseSqlSnapshotTest extends TestCase
             ->limit(25)
             ->build();
 
-        $expectedSql = 'SELECT `id`, `event`, `time` FROM `default`.`audits` '
+        $expectedSql =
+            'SELECT `id`, `event`, `time` FROM `default`.`audits` '
             . 'WHERE `actorId` IN ({param0:String}) '
             . 'AND `time` BETWEEN {param1:DateTime64(3)} AND {param2:DateTime64(3)} '
             . 'ORDER BY `time` DESC '
@@ -219,7 +217,8 @@ final class ClickHouseSqlSnapshotTest extends TestCase
 
     public function testEqualMultiValueEmitsTypedIn(): void
     {
-        $statement = $this->newAuditBuilder()
+        $statement = $this
+            ->newAuditBuilder()
             ->from('default.audits')
             ->selectRaw('`id`, `event`, `time`')
             ->filter([
@@ -228,7 +227,8 @@ final class ClickHouseSqlSnapshotTest extends TestCase
             ->limit(25)
             ->build();
 
-        $expectedSql = 'SELECT `id`, `event`, `time` FROM `default`.`audits` '
+        $expectedSql =
+            'SELECT `id`, `event`, `time` FROM `default`.`audits` '
             . 'WHERE `event` NOT IN ({param0:String}, {param1:String}) '
             . 'LIMIT {param2:Int64}';
 
@@ -250,15 +250,15 @@ final class ClickHouseSqlSnapshotTest extends TestCase
      */
     public function testContainsEmitsPositionPredicate(): void
     {
-        $statement = $this->newAuditBuilder()
+        $statement = $this
+            ->newAuditBuilder()
             ->from('default.audits')
             ->selectRaw('`id`, `event`, `time`')
             ->filter([Query::containsString('event', ['dat'])])
             ->build();
 
         $this->assertSame(
-            'SELECT `id`, `event`, `time` FROM `default`.`audits` '
-            . 'WHERE position(`event`, {param0:String}) > 0',
+            'SELECT `id`, `event`, `time` FROM `default`.`audits` ' . 'WHERE position(`event`, {param0:String}) > 0',
             $statement->query,
         );
         $this->assertSame(['param0' => 'dat'], $statement->namedBindings);
@@ -266,7 +266,8 @@ final class ClickHouseSqlSnapshotTest extends TestCase
 
     public function testContainsMultiValueOrsPositionPredicates(): void
     {
-        $statement = $this->newAuditBuilder()
+        $statement = $this
+            ->newAuditBuilder()
             ->from('default.audits')
             ->selectRaw('`id`')
             ->filter([Query::containsString('event', ['dat', 'ins'])])
@@ -282,7 +283,8 @@ final class ClickHouseSqlSnapshotTest extends TestCase
 
     public function testNotContainsMultiValueAndsNegatedPositionPredicates(): void
     {
-        $statement = $this->newAuditBuilder()
+        $statement = $this
+            ->newAuditBuilder()
             ->from('default.audits')
             ->selectRaw('`id`')
             ->filter([Query::notContains('event', ['update', 'delete'])])
@@ -298,10 +300,12 @@ final class ClickHouseSqlSnapshotTest extends TestCase
 
     public function testFindCursorRawFragmentMergesWithTypedBindings(): void
     {
-        $cursorClause = '((`time` < {cursor_cmp_0:DateTime64(3)}) '
+        $cursorClause =
+            '((`time` < {cursor_cmp_0:DateTime64(3)}) '
             . 'OR (`time` = {cursor_eq_1_0:DateTime64(3)} AND `id` < {cursor_cmp_1:String}))';
 
-        $statement = $this->newAuditBuilder()
+        $statement = $this
+            ->newAuditBuilder()
             ->from('default.audits')
             ->selectRaw('`id`, `event`, `time`')
             ->filter([Query::equal('actorId', ['u1'])])
@@ -311,9 +315,12 @@ final class ClickHouseSqlSnapshotTest extends TestCase
             ->limit(25)
             ->build();
 
-        $expectedSql = 'SELECT `id`, `event`, `time` FROM `default`.`audits` '
+        $expectedSql =
+            'SELECT `id`, `event`, `time` FROM `default`.`audits` '
             . 'WHERE `actorId` IN ({param0:String}) '
-            . 'AND ' . $cursorClause . ' '
+            . 'AND '
+            . $cursorClause
+            . ' '
             . 'ORDER BY `time` DESC, `id` DESC '
             . 'LIMIT {param1:Int64}';
 
@@ -329,7 +336,8 @@ final class ClickHouseSqlSnapshotTest extends TestCase
 
     public function testCountWithMaxWrapsInnerSelect(): void
     {
-        $inner = $this->newAuditBuilder()
+        $inner = $this
+            ->newAuditBuilder()
             ->from('default.audits')
             ->selectRaw('1')
             ->filter([Query::equal('actorId', ['u1'])])
@@ -344,9 +352,6 @@ final class ClickHouseSqlSnapshotTest extends TestCase
             . ') sub FORMAT TabSeparated',
             $sql,
         );
-        $this->assertSame(
-            ['param0' => 'u1', 'param1' => 5000],
-            $inner->namedBindings,
-        );
+        $this->assertSame(['param0' => 'u1', 'param1' => 5000], $inner->namedBindings);
     }
 }

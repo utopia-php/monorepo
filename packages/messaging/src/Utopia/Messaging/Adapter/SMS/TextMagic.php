@@ -42,10 +42,7 @@ class TextMagic extends SMSAdapter
      */
     protected function process(SMSMessage $message): array
     {
-        $to = array_map(
-            fn(string $to): string => ltrim($to, '+'),
-            $message->getTo(),
-        );
+        $to = array_map(fn(string $to): string => ltrim($to, '+'), $message->getTo());
 
         $response = new Response($this->getType());
         $result = $this->request(
@@ -70,7 +67,7 @@ class TextMagic extends SMSAdapter
             }
         } else {
             foreach ($message->getTo() as $to) {
-                if (!\is_null($result['response']['message'] ?? null)) {
+                if (! \is_null($result['response']['message'] ?? null)) {
                     $response->addResult($to, $result['response']['message']);
                 } else {
                     $response->addResult($to, 'Unknown error');

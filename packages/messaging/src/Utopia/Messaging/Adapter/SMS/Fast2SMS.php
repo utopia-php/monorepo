@@ -62,10 +62,7 @@ class Fast2SMS extends SMSAdapter
      */
     protected function process(SMSMessage $message): array
     {
-        $numbers = array_map(
-            $this->removeCountryCode(...),
-            $message->getTo(),
-        );
+        $numbers = array_map($this->removeCountryCode(...), $message->getTo());
         $numbers = implode(',', $numbers);
 
         $payload = [

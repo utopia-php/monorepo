@@ -49,11 +49,12 @@ final class GtidSetTest extends TestCase
     {
         $set = new GtidSet(self::SID . ':1-5');
 
-        $expected = pack('P', 1)                                   // one sid
-            . hex2bin(str_replace('-', '', self::SID))            // 16-byte uuid
-            . pack('P', 1)                                         // one interval
-            . pack('P', 1)                                         // start
-            . pack('P', 6);                                        // end = last + 1
+        $expected =
+            pack('P', 1) // one sid
+            . hex2bin(str_replace('-', '', self::SID)) // 16-byte uuid
+            . pack('P', 1) // one interval
+            . pack('P', 1) // start
+            . pack('P', 6); // end = last + 1
 
         $this->assertSame($expected, $set->encode());
     }
@@ -116,11 +117,14 @@ final class GtidSetTest extends TestCase
     {
         $set = new GtidSet(self::SID . ':1-2:5-6');
 
-        $expected = pack('P', 1)
+        $expected =
+            pack('P', 1)
             . hex2bin(str_replace('-', '', self::SID))
-            . pack('P', 2)        // two intervals
-            . pack('P', 1) . pack('P', 3)   // [1,2] -> half-open [1,3)
-            . pack('P', 5) . pack('P', 7);  // [5,6] -> half-open [5,7)
+            . pack('P', 2) // two intervals
+            . pack('P', 1)
+            . pack('P', 3) // [1,2] -> half-open [1,3)
+            . pack('P', 5)
+            . pack('P', 7); // [5,6] -> half-open [5,7)
 
         $this->assertSame($expected, $set->encode());
     }

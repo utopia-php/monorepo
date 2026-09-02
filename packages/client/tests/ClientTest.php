@@ -25,9 +25,7 @@ final class ClientTest extends TestCase
         $request = new Request\Factory()->createRequest('GET', 'https://example.com');
         $adapter = new RecordingAdapter();
         $client = new Client($adapter);
-        $configured = $client
-            ->withTimeout(5.5)
-            ->withConnectTimeout(1.25);
+        $configured = $client->withTimeout(5.5)->withConnectTimeout(1.25);
 
         $response = $configured->sendRequest($request);
 
@@ -63,7 +61,10 @@ final class ClientTest extends TestCase
 
         $this->assertSame('', $client->sendRequest($request)->getHeaderLine('X-Connection-Reuse'));
         $this->assertSame('on', $configured->sendRequest($request)->getHeaderLine('X-Connection-Reuse'));
-        $this->assertSame('off', $client->withConnectionReuse(false)->sendRequest($request)->getHeaderLine('X-Connection-Reuse'));
+        $this->assertSame(
+            'off',
+            $client->withConnectionReuse(false)->sendRequest($request)->getHeaderLine('X-Connection-Reuse'),
+        );
     }
 
     public function testItDecoratesFollowRedirects(): void
@@ -74,7 +75,10 @@ final class ClientTest extends TestCase
 
         $this->assertSame('', $client->sendRequest($request)->getHeaderLine('X-Follow-Redirects'));
         $this->assertSame('on', $configured->sendRequest($request)->getHeaderLine('X-Follow-Redirects'));
-        $this->assertSame('off', $client->withFollowRedirects(false)->sendRequest($request)->getHeaderLine('X-Follow-Redirects'));
+        $this->assertSame(
+            'off',
+            $client->withFollowRedirects(false)->sendRequest($request)->getHeaderLine('X-Follow-Redirects'),
+        );
     }
 
     public function testItRejectsInvalidTimeouts(): void
@@ -95,13 +99,11 @@ final class ClientTest extends TestCase
             'X-Trace' => ['one', 'two'],
         ]);
 
-        $plain = $client->sendRequest(
-            $requestFactory->createRequest('GET', 'https://example.com'),
-        );
-        $response = $configured->sendRequest(
-            $requestFactory->createRequest('GET', 'https://example.com')
-                ->withHeader('Accept', 'application/xml'),
-        );
+        $plain = $client->sendRequest($requestFactory->createRequest('GET', 'https://example.com'));
+        $response = $configured->sendRequest($requestFactory->createRequest('GET', 'https://example.com')->withHeader(
+            'Accept',
+            'application/xml',
+        ));
 
         $this->assertSame('', $plain->getHeaderLine('X-Request-Accept'));
         $this->assertSame('application/xml', $response->getHeaderLine('X-Request-Accept'));
@@ -121,10 +123,10 @@ final class ClientTest extends TestCase
             ->sendRequest($requestFactory->createRequest('GET', 'https://example.com'));
         $override = $client
             ->withBearerAuth('token')
-            ->sendRequest(
-                $requestFactory->createRequest('GET', 'https://example.com')
-                    ->withHeader('Authorization', 'Digest custom'),
-            );
+            ->sendRequest($requestFactory->createRequest('GET', 'https://example.com')->withHeader(
+                'Authorization',
+                'Digest custom',
+            ));
 
         $this->assertSame('Basic YWRhOnNlY3JldA==', $basic->getHeaderLine('X-Request-Authorization'));
         $this->assertSame('Bearer token', $bearer->getHeaderLine('X-Request-Authorization'));
@@ -134,18 +136,11 @@ final class ClientTest extends TestCase
     public function testItAppliesBaseUriToRelativeRequests(): void
     {
         $requestFactory = new Request\Factory();
-        $client = new Client(new RecordingAdapter())
-            ->withBaseUri('https://api.example.com/v1');
+        $client = new Client(new RecordingAdapter())->withBaseUri('https://api.example.com/v1');
 
-        $relative = $client->sendRequest(
-            $requestFactory->createRequest('GET', 'users?active=1'),
-        );
-        $absolutePath = $client->sendRequest(
-            $requestFactory->createRequest('GET', '/status'),
-        );
-        $absoluteUri = $client->sendRequest(
-            $requestFactory->createRequest('GET', 'https://other.example.com/users'),
-        );
+        $relative = $client->sendRequest($requestFactory->createRequest('GET', 'users?active=1'));
+        $absolutePath = $client->sendRequest($requestFactory->createRequest('GET', '/status'));
+        $absoluteUri = $client->sendRequest($requestFactory->createRequest('GET', 'https://other.example.com/users'));
 
         $this->assertSame('https://api.example.com/v1/users?active=1', $relative->getHeaderLine('X-Request-Uri'));
         $this->assertSame('api.example.com', $relative->getHeaderLine('X-Request-Host'));
@@ -171,13 +166,11 @@ final class ClientTest extends TestCase
         $span = Span::init('http.request');
 
         try {
-            $propagated = $client->sendRequest(
-                $requestFactory->createRequest('GET', 'https://example.com'),
-            );
-            $forwarded = $client->sendRequest(
-                $requestFactory->createRequest('GET', 'https://example.com')
-                    ->withHeader('traceparent', 'incoming'),
-            );
+            $propagated = $client->sendRequest($requestFactory->createRequest('GET', 'https://example.com'));
+            $forwarded = $client->sendRequest($requestFactory->createRequest('GET', 'https://example.com')->withHeader(
+                'traceparent',
+                'incoming',
+            ));
 
             $this->assertSame($span->getTraceparent(), $propagated->getHeaderLine('X-Request-Traceparent'));
             $this->assertSame('incoming', $forwarded->getHeaderLine('X-Request-Traceparent'));
@@ -196,9 +189,7 @@ final class ClientTest extends TestCase
         $span = Span::init('http.request');
 
         try {
-            $response = $client->sendRequest(
-                $requestFactory->createRequest('GET', 'https://example.com'),
-            );
+            $response = $client->sendRequest($requestFactory->createRequest('GET', 'https://example.com'));
 
             $this->assertSame('', $response->getHeaderLine('X-Request-Traceparent'));
         } finally {
@@ -212,9 +203,7 @@ final class ClientTest extends TestCase
         $requestFactory = new Request\Factory();
         $client = new Client(new RecordingAdapter())->withTracePropagation();
 
-        $response = $client->sendRequest(
-            $requestFactory->createRequest('GET', 'https://example.com'),
-        );
+        $response = $client->sendRequest($requestFactory->createRequest('GET', 'https://example.com'));
 
         $this->assertSame('', $response->getHeaderLine('X-Request-Traceparent'));
     }
@@ -227,12 +216,11 @@ final class ClientTest extends TestCase
             ->withBaseUri('https://api.example.com/v1')
             ->withHeaders(['Accept' => 'application/json']);
 
-        $response = $client->stream(
-            $requestFactory->createRequest('GET', 'users'),
-            function (string $chunk) use (&$received): void {
-                $received .= $chunk;
-            },
-        );
+        $response = $client->stream($requestFactory->createRequest('GET', 'users'), function (string $chunk) use (
+            &$received,
+        ): void {
+            $received .= $chunk;
+        });
 
         $this->assertSame('chunk', $received);
         $this->assertSame('https://api.example.com/v1/users', $response->getHeaderLine('X-Request-Uri'));
@@ -255,7 +243,7 @@ final class RecordingAdapter implements Adapter
 
     public function withTimeout(float $seconds): static
     {
-        if ($seconds < 0.0 || !is_finite($seconds)) {
+        if ($seconds < 0.0 || ! is_finite($seconds)) {
             throw new ValueError('Timeout must be a finite number greater than or equal to zero.');
         }
 
@@ -267,7 +255,7 @@ final class RecordingAdapter implements Adapter
 
     public function withConnectTimeout(float $seconds): static
     {
-        if ($seconds < 0.0 || !is_finite($seconds)) {
+        if ($seconds < 0.0 || ! is_finite($seconds)) {
             throw new ValueError('Timeout must be a finite number greater than or equal to zero.');
         }
 

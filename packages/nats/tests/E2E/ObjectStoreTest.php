@@ -24,9 +24,11 @@ final class ObjectStoreTest extends TestCase
         $this->conn = Connection::connect($url);
         $this->js = $this->conn->jetStream();
         $this->bucket = 'obj_' . uniqid();
-        $this->store = ObjectStore::createOrUpdate($this->conn, $this->js, new ObjectStoreConfig(
-            bucket: $this->bucket,
-        ));
+        $this->store = ObjectStore::createOrUpdate(
+            $this->conn,
+            $this->js,
+            new ObjectStoreConfig(bucket: $this->bucket),
+        );
     }
 
     protected function tearDown(): void

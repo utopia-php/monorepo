@@ -15,8 +15,9 @@ class BinaryReader
     private int $position = 0;
     private readonly int $length;
 
-    public function __construct(private readonly string $buffer)
-    {
+    public function __construct(
+        private readonly string $buffer,
+    ) {
         $this->length = \strlen($this->buffer);
     }
 
@@ -97,10 +98,10 @@ class BinaryReader
 
         return match (true) {
             $first < 0xFB => $first,
-            $first === 0xFB => null,        // NULL column
+            $first === 0xFB => null, // NULL column
             $first === 0xFC => $this->readUInt(2),
             $first === 0xFD => $this->readUInt(3),
-            default => $this->readUInt(8),  // 0xFE
+            default => $this->readUInt(8), // 0xFE
         };
     }
 

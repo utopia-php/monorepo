@@ -182,7 +182,7 @@ class Password extends Proof
             self::SHA => new Sha(),
             self::MD5 => new MD5(),
             self::PHPASS => new PHPass(),
-            default => throw new \Exception("Unsupported hash type: {$type}")
+            default => throw new \Exception("Unsupported hash type: {$type}"),
         };
 
         $hash->setOptions($options);

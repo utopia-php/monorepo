@@ -37,7 +37,7 @@ final readonly class Header
      */
     public static function decode(string $data, int $offset = 0): self
     {
-        if (\strlen($data) < $offset + self::LENGTH) {
+        if (\strlen($data) < ($offset + self::LENGTH)) {
             throw new DecodingException('DNS header too short');
         }
 
@@ -45,14 +45,21 @@ final readonly class Header
         $values = unpack('nid/nflags/nqdcount/nancount/nnscount/narcount', $chunk);
 
         if (
-            !\is_array($values)
-            || !isset($values['id'], $values['flags'], $values['qdcount'], $values['ancount'], $values['nscount'], $values['arcount'])
-            || !\is_int($values['id'])
-            || !\is_int($values['flags'])
-            || !\is_int($values['qdcount'])
-            || !\is_int($values['ancount'])
-            || !\is_int($values['nscount'])
-            || !\is_int($values['arcount'])
+            ! \is_array($values)
+            || ! isset(
+                $values['id'],
+                $values['flags'],
+                $values['qdcount'],
+                $values['ancount'],
+                $values['nscount'],
+                $values['arcount'],
+            )
+            || ! \is_int($values['id'])
+            || ! \is_int($values['flags'])
+            || ! \is_int($values['qdcount'])
+            || ! \is_int($values['ancount'])
+            || ! \is_int($values['nscount'])
+            || ! \is_int($values['arcount'])
         ) {
             throw new DecodingException('Failed to unpack DNS header');
         }
@@ -67,7 +74,7 @@ final readonly class Header
         /**
          * Note: Z bits (bits 4-6) are reserved per RFC 1035 and should be zero.
          * However, we intentionally ignore them here for interoperability - many DNS clients and proxies (including Google's infrastructure) set these bits, and strict validation would cause unnecessary failures.
-        */
+         */
         return new self(
             id: $id,
             isResponse: (bool) (($flags >> 15) & 0x1),
@@ -86,13 +93,13 @@ final readonly class Header
 
     public function encode(): string
     {
-        $flags
-            = ($this->isResponse ? 1 : 0) << 15
-            | ($this->opcode & 0xF) << 11
-            | ($this->authoritative ? 1 : 0) << 10
-            | ($this->truncated ? 1 : 0) << 9
-            | ($this->recursionDesired ? 1 : 0) << 8
-            | ($this->recursionAvailable ? 1 : 0) << 7
+        $flags =
+            (($this->isResponse ? 1 : 0) << 15)
+            | (($this->opcode & 0xF) << 11)
+            | (($this->authoritative ? 1 : 0) << 10)
+            | (($this->truncated ? 1 : 0) << 9)
+            | (($this->recursionDesired ? 1 : 0) << 8)
+            | (($this->recursionAvailable ? 1 : 0) << 7)
             | ($this->responseCode & 0xF);
 
         return pack(

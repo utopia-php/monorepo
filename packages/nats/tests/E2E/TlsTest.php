@@ -62,9 +62,6 @@ final class TlsTest extends TestCase
         // the CA must fail the TLS handshake.
         $this->expectException(ConnectionException::class);
 
-        Connection::connect(new ConnectionOptions(
-            servers: $this->url,
-            tlsCaFile: "{$this->certs}/ca.pem",
-        ));
+        Connection::connect(new ConnectionOptions(servers: $this->url, tlsCaFile: "{$this->certs}/ca.pem"));
     }
 }

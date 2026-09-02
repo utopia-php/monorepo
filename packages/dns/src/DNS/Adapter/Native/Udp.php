@@ -13,7 +13,7 @@ class Udp extends Transport
     public function bind(): void
     {
         $socket = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
-        if (!$socket instanceof Socket) {
+        if (! $socket instanceof Socket) {
             throw new Exception('Could not create UDP socket.');
         }
 

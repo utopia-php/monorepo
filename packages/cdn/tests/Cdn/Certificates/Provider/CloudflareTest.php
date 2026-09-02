@@ -24,14 +24,22 @@ final class CloudflareTest extends TestCase
 
     public function testDuplicateHostnameIsIdempotent(): void
     {
-        $provider = new Cloudflare('zone', 'token', new TestClient([new Response(409, body: new Stream('{"success":false,"errors":[{"code":1406,"message":"duplicate"}]}'))]));
+        $provider = new Cloudflare('zone', 'token', new TestClient([new Response(
+            409,
+            body: new Stream('{"success":false,"errors":[{"code":1406,"message":"duplicate"}]}'),
+        )]));
         $this->assertNull($provider->issueCertificate('ignored', 'example.com', null));
     }
 
     public function testLookupExactMatchAndDelete(): void
     {
         $client = new TestClient([
-            new Response(200, body: new Stream('{"success":true,"result":[{"id":"wrong","hostname":"other.com"},{"id":"right","hostname":"example.com"}]}')),
+            new Response(
+                200,
+                body: new Stream(
+                    '{"success":true,"result":[{"id":"wrong","hostname":"other.com"},{"id":"right","hostname":"example.com"}]}',
+                ),
+            ),
             new Response(204),
         ]);
         $provider = new Cloudflare('zone', 'token', $client);
@@ -41,7 +49,10 @@ final class CloudflareTest extends TestCase
 
     public function testRenewalAndUnsupportedStatus(): void
     {
-        $provider = new Cloudflare('zone', 'token', new TestClient([new Response(200, body: new Stream('{"success":true,"result":[]}'))]));
+        $provider = new Cloudflare('zone', 'token', new TestClient([new Response(
+            200,
+            body: new Stream('{"success":true,"result":[]}'),
+        )]));
         $this->assertTrue($provider->isRenewRequired('example.com', null));
 
         $this->expectException(UnsupportedOperation::class);

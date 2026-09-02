@@ -48,8 +48,10 @@ abstract class Adapter
      *         so a bare `new Client(new CurlAdapter())` will not work; configure the adapter with
      *         `new CurlAdapter(options: [CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_2_0])`.
      */
-    public function __construct(?Telemetry $telemetry = null, private readonly ?Closure $clientFactory = null)
-    {
+    public function __construct(
+        ?Telemetry $telemetry = null,
+        private readonly ?Closure $clientFactory = null,
+    ) {
         $this->sendCounter = ($telemetry ?? new NoTelemetry())->createCounter('messaging.send');
     }
 
@@ -90,13 +92,15 @@ abstract class Adapter
      */
     public function send(Message $message): array
     {
-        if (!is_a($message, $this->getMessageType())) {
+        if (! is_a($message, $this->getMessageType())) {
             throw new \Exception('Invalid message type.');
         }
         if (method_exists($message, 'getTo') && \count($message->getTo()) > $this->getMaxMessagesPerRequest()) {
-            throw new \Exception("{$this->getName()} can only send {$this->getMaxMessagesPerRequest()} messages per request.");
+            throw new \Exception(
+                "{$this->getName()} can only send {$this->getMaxMessagesPerRequest()} messages per request.",
+            );
         }
-        if (!method_exists($this, 'process')) {
+        if (! method_exists($this, 'process')) {
             throw new \Exception('Adapter does not implement process method.');
         }
 
@@ -143,7 +147,8 @@ abstract class Adapter
             $attributes['origin'] = $message->getOrigin();
         }
 
-        return $attributes + [
+        return $attributes
+        + [
             'type' => $this->getType(),
             'provider' => strtolower($this->getName()),
         ];
@@ -252,7 +257,7 @@ abstract class Adapter
         $urlCount = \count($urls);
         $bodyCount = \count($bodies);
 
-        if (!($urlCount === $bodyCount || $urlCount === 1 || $bodyCount === 1)) {
+        if (! ($urlCount === $bodyCount || $urlCount === 1 || $bodyCount === 1)) {
             throw new \Exception('URL and body counts must be equal or one must equal 1.');
         }
 
@@ -287,7 +292,10 @@ abstract class Adapter
 
                 Coroutine::create(function () use ($pool, $request, $index, &$results, $group): void {
                     try {
-                        $results[$index] = $pool->use(fn(ClientInterface $client): array => $this->buildResult($client->sendRequest($request), (string) $request->getUri()));
+                        $results[$index] = $pool->use(fn(ClientInterface $client): array => $this->buildResult(
+                            $client->sendRequest($request),
+                            (string) $request->getUri(),
+                        ));
                     } catch (\Throwable $error) {
                         // Throwable rather than the PSR client exception: pool
                         // acquisition and factory failures must also land in
@@ -364,7 +372,7 @@ abstract class Adapter
 
         // On the request rather than the client so injected PSR-18 clients
         // send the same identity.
-        if (!array_any(array_keys($headerMap), fn(string $name): bool => strtolower($name) === 'user-agent')) {
+        if (! array_any(array_keys($headerMap), fn(string $name): bool => strtolower($name) === 'user-agent')) {
             $headerMap['User-Agent'] = "Appwrite {$this->getName()} Message Sender";
         }
 

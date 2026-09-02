@@ -14,7 +14,7 @@ final readonly class Redis implements CircuitBreakerAdapter
         private string $prefix = 'breaker:',
     ) {
         foreach (['get', 'set', 'incrBy', 'del'] as $method) {
-            if (!method_exists($this->redis, $method)) {
+            if (! method_exists($this->redis, $method)) {
                 throw new \InvalidArgumentException(\sprintf(
                     '%s requires a Redis-compatible client with a %s() method.',
                     self::class,
@@ -43,7 +43,7 @@ final readonly class Redis implements CircuitBreakerAdapter
     {
         $result = $this->command('set', [$this->key($key), (string) $value]);
 
-        if (!$this->isSuccessfulSet($result)) {
+        if (! $this->isSuccessfulSet($result)) {
             throw new AdapterException(\sprintf('Failed to set cache key "%s".', $key));
         }
     }

@@ -43,12 +43,12 @@ class ClientIdentifierUrl
     {
         $parts = parse_url($value);
 
-        if (!\is_array($parts) || filter_var($value, \FILTER_VALIDATE_URL) === false) {
+        if (! \is_array($parts) || filter_var($value, \FILTER_VALIDATE_URL) === false) {
             throw new InvalidClientMetadataException('Client Identifier URL is malformed.');
         }
 
         $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        if ($scheme !== 'https' && (!$allowHttp || $scheme !== 'http')) {
+        if ($scheme !== 'https' && (! $allowHttp || $scheme !== 'http')) {
             throw new InvalidClientMetadataException('Client Identifier URL must use the https scheme.');
         }
 

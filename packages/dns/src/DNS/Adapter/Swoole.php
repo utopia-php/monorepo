@@ -40,28 +40,31 @@ class Swoole extends Adapter
 
         // HTTP request events are only dispatched by Swoole\Http\Server,
         // so an HTTP transport must provide the master listener.
-        usort($transports, fn(Transport $a, Transport $b): int => ($b instanceof Http) <=> ($a instanceof Http));
+        usort($transports, fn(Transport $a, Transport $b): int => $b instanceof Http <=> $a instanceof Http);
 
         $master = $transports[0];
         $this->server = $master instanceof Http
             ? new HttpServer($master->host, $master->port, SWOOLE_PROCESS, $master->getSockType())
             : new Server($master->host, $master->port, SWOOLE_PROCESS, $master->getSockType());
 
-        $this->server->set($master->getSettings() + [
-            'worker_num' => $this->workers,
-            'max_coroutine' => $this->maxCoroutines,
-            // RFC 7766 Section 6.2.3: close idle TCP connections so slow
-            // clients cannot hold per-connection buffers open indefinitely
-            'heartbeat_idle_time' => $this->idleTimeout,
-            'heartbeat_check_interval' => max(1, intdiv($this->idleTimeout, 3)),
-        ]);
+        $this->server->set(
+            $master->getSettings()
+            + [
+                'worker_num' => $this->workers,
+                'max_coroutine' => $this->maxCoroutines,
+                // RFC 7766 Section 6.2.3: close idle TCP connections so slow
+                // clients cannot hold per-connection buffers open indefinitely
+                'heartbeat_idle_time' => $this->idleTimeout,
+                'heartbeat_check_interval' => max(1, intdiv($this->idleTimeout, 3)),
+            ],
+        );
 
         $this->listeners[] = [$master, $this->server];
 
         foreach (\array_slice($transports, 1) as $transport) {
             $port = $this->server->addListener($transport->host, $transport->port, $transport->getSockType());
 
-            if (!$port instanceof Port) {
+            if (! $port instanceof Port) {
                 throw new Exception(\sprintf('Could not listen on %s:%d.', $transport->host, $transport->port));
             }
 

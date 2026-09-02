@@ -50,14 +50,23 @@ class Client
      *
      * @throws Exception
      */
-    public function call(string $method, string $path = '', array $headers = [], array $params = [], string $body = ''): array
-    {
+    public function call(
+        string $method,
+        string $path = '',
+        array $headers = [],
+        array $params = [],
+        string $body = '',
+    ): array {
         if ($method === '') {
             throw new Exception('HTTP method is required');
         }
 
         usleep(50000);
-        $ch = curl_init($this->baseUrl . $path . (($method === self::METHOD_GET && !empty($params)) ? '?' . http_build_query($params) : ''));
+        $ch = curl_init(
+            $this->baseUrl
+            . $path
+            . ($method === self::METHOD_GET && ! empty($params) ? '?' . http_build_query($params) : ''),
+        );
         $responseHeaders = [];
         $responseStatus = -1;
         $responseBody = '';
@@ -73,7 +82,11 @@ class Client
         }
 
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36');
+        curl_setopt(
+            $ch,
+            CURLOPT_USERAGENT,
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36',
+        );
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 0);
         curl_setopt($ch, CURLOPT_TIMEOUT, 15);
@@ -99,14 +112,24 @@ class Client
         $responseBody = curl_exec($ch);
         $responseStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
-        if ((curl_errno($ch)/* || 200 != $responseStatus*/)) {
+        if (curl_errno($ch)/* || 200 != $responseStatus*/ ) {
             throw new Exception(curl_error($ch) . ' with status code ' . $responseStatus, $responseStatus);
         }
 
         $responseHeaders['status-code'] = $responseStatus;
 
         if ($responseStatus === 500) {
-            echo 'Server error(' . $method . ': ' . $path . '. Params: ' . json_encode($params) . '): ' . json_encode($responseBody) . "\n";
+            echo
+                'Server error('
+                    . $method
+                    . ': '
+                    . $path
+                    . '. Params: '
+                    . json_encode($params)
+                    . '): '
+                    . json_encode($responseBody)
+                    . "\n"
+            ;
         }
 
         return [
@@ -129,5 +152,4 @@ class Client
 
         return $cookies;
     }
-
 }

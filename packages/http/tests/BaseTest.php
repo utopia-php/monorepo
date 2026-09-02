@@ -72,7 +72,13 @@ trait BaseTest
         ];
 
         foreach ($bodies as $body) {
-            $response = $this->client->call(Client::METHOD_POST, '/object', ['Content-Type: application/json'], [], $body);
+            $response = $this->client->call(
+                Client::METHOD_POST,
+                '/object',
+                ['Content-Type: application/json'],
+                [],
+                $body,
+            );
 
             $this->assertSame(200, $response['headers']['status-code'], $body);
             $this->assertSame($body, $response['body'], 'the echoed object must match the body that was sent');

@@ -27,10 +27,7 @@ final class ClientIdMetadataDocumentTest extends TestCase
             'nullable_extension' => null,
         ];
 
-        $document = ClientIdMetadataDocument::fromJson(
-            $this->clientId(),
-            json_encode($metadata, \JSON_THROW_ON_ERROR),
-        );
+        $document = ClientIdMetadataDocument::fromJson($this->clientId(), json_encode($metadata, \JSON_THROW_ON_ERROR));
 
         $this->assertSame(self::CLIENT_ID, $document->clientId()->toString());
         $this->assertSame('none', $document->tokenEndpointAuthMethod());
@@ -112,29 +109,43 @@ final class ClientIdMetadataDocumentTest extends TestCase
         ];
 
         yield 'missing client id' => ['metadata' => ['token_endpoint_auth_method' => 'none']];
-        yield 'mismatched client id' => ['metadata' => array_replace($valid, ['client_id' => 'https://other.example/metadata'])];
+        yield 'mismatched client id' => ['metadata' => array_replace($valid, [
+            'client_id' => 'https://other.example/metadata',
+        ])];
         yield 'missing auth method' => ['metadata' => ['client_id' => self::CLIENT_ID]];
         yield 'empty auth method' => ['metadata' => array_replace($valid, ['token_endpoint_auth_method' => ''])];
-        yield 'client secret basic' => ['metadata' => array_replace($valid, ['token_endpoint_auth_method' => 'client_secret_basic'])];
-        yield 'future client secret method' => ['metadata' => array_replace($valid, ['token_endpoint_auth_method' => 'client_secret_custom'])];
+        yield 'client secret basic' => ['metadata' => array_replace($valid, [
+            'token_endpoint_auth_method' => 'client_secret_basic',
+        ])];
+        yield 'future client secret method' => ['metadata' => array_replace($valid, [
+            'token_endpoint_auth_method' => 'client_secret_custom',
+        ])];
         yield 'client secret' => ['metadata' => $valid + ['client_secret' => 'secret']];
         yield 'client secret expiry' => ['metadata' => $valid + ['client_secret_expires_at' => 0]];
         yield 'grant types not a list' => ['metadata' => $valid + ['grant_types' => 'authorization_code']];
         yield 'empty grant type' => ['metadata' => $valid + ['grant_types' => ['']]];
         yield 'response types not strings' => ['metadata' => $valid + ['response_types' => [1]]];
-        yield 'redirect URI with fragment' => ['metadata' => $valid + ['redirect_uris' => ['https://client.example/callback#fragment']]];
+        yield 'redirect URI with fragment' => [
+            'metadata' => $valid + ['redirect_uris' => ['https://client.example/callback#fragment']],
+        ];
         yield 'relative redirect URI' => ['metadata' => $valid + ['redirect_uris' => ['/callback']]];
         yield 'contacts not a list' => ['metadata' => $valid + ['contacts' => 'owner@example.com']];
         yield 'client name not a string' => ['metadata' => $valid + ['client_name' => ['Example']]];
         yield 'client name null' => ['metadata' => $valid + ['client_name' => null]];
         yield 'jwks null' => ['metadata' => $valid + ['jwks' => null]];
         yield 'malformed jwks' => ['metadata' => $valid + ['jwks' => ['keys' => 'not-a-list']]];
-        yield 'jwks and jwks uri' => ['metadata' => $valid + [
-            'jwks' => ['keys' => []],
-            'jwks_uri' => 'https://client.example/jwks.json',
-        ]];
+        yield 'jwks and jwks uri' => [
+            'metadata' => $valid
+                + [
+                    'jwks' => ['keys' => []],
+                    'jwks_uri' => 'https://client.example/jwks.json',
+                ],
+        ];
         yield 'symmetric JWK' => ['metadata' => $valid + ['jwks' => ['keys' => [['kty' => 'oct', 'k' => 'secret']]]]];
-        yield 'private RSA JWK' => ['metadata' => $valid + ['jwks' => ['keys' => [['kty' => 'RSA', 'n' => 'n', 'e' => 'AQAB', 'd' => 'private']]]]];
+        yield 'private RSA JWK' => [
+            'metadata' => $valid
+                + ['jwks' => ['keys' => [['kty' => 'RSA', 'n' => 'n', 'e' => 'AQAB', 'd' => 'private']]]],
+        ];
     }
 
     private function clientId(): ClientIdentifierUrl

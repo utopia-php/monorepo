@@ -57,7 +57,9 @@ final class PassthroughDecorator extends Decorator {}
 
 final class SwappableAdapter implements Adapter
 {
-    public function __construct(private int $status = 200) {}
+    public function __construct(
+        private int $status = 200,
+    ) {}
 
     public function withTimeout(float $seconds): static
     {

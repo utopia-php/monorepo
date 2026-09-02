@@ -18,7 +18,10 @@ final class ModeTest extends TestCase
         $this->assertSame(3, $settings[Constant::OPTION_DISPATCH_MODE]);
 
         // Blocking workers need more processes than cores
-        $this->assertGreaterThanOrEqual($settings[Constant::OPTION_REACTOR_NUM], $settings[Constant::OPTION_WORKER_NUM]);
+        $this->assertGreaterThanOrEqual(
+            $settings[Constant::OPTION_REACTOR_NUM],
+            $settings[Constant::OPTION_WORKER_NUM],
+        );
 
         // No coroutine runtime, so hooks would be meaningless here
         $this->assertArrayNotHasKey(Constant::OPTION_HOOK_FLAGS, $settings);

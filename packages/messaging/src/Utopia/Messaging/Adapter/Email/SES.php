@@ -142,37 +142,34 @@ class SES extends EmailAdapter
     {
         $templateName = $this->templateName($message);
 
-        $cc = array_map(
-            fn(array $recipient): string => $this->formatAddress($recipient['email'], $recipient['name'] ?? null),
-            $message->getCC() ?? [],
-        );
-        $bcc = array_map(
-            fn(array $recipient): string => $this->formatAddress($recipient['email'], $recipient['name'] ?? null),
-            $message->getBCC() ?? [],
-        );
+        $cc = array_map(fn(array $recipient): string => $this->formatAddress(
+            $recipient['email'],
+            $recipient['name'] ?? null,
+        ), $message->getCC() ?? []);
+        $bcc = array_map(fn(array $recipient): string => $this->formatAddress(
+            $recipient['email'],
+            $recipient['name'] ?? null,
+        ), $message->getBCC() ?? []);
 
-        $entries = array_map(
-            function (array $to) use ($cc, $bcc): array {
-                $destination = ['ToAddresses' => [$to['email']]];
+        $entries = array_map(function (array $to) use ($cc, $bcc): array {
+            $destination = ['ToAddresses' => [$to['email']]];
 
-                if ($cc !== []) {
-                    $destination['CcAddresses'] = $cc;
-                }
-                if ($bcc !== []) {
-                    $destination['BccAddresses'] = $bcc;
-                }
+            if ($cc !== []) {
+                $destination['CcAddresses'] = $cc;
+            }
+            if ($bcc !== []) {
+                $destination['BccAddresses'] = $bcc;
+            }
 
-                return [
-                    'Destination' => $destination,
-                    'ReplacementEmailContent' => [
-                        'ReplacementTemplate' => [
-                            'ReplacementTemplateData' => '{}',
-                        ],
+            return [
+                'Destination' => $destination,
+                'ReplacementEmailContent' => [
+                    'ReplacementTemplate' => [
+                        'ReplacementTemplateData' => '{}',
                     ],
-                ];
-            },
-            $message->getTo(),
-        );
+                ],
+            ];
+        }, $message->getTo());
 
         $body = [
             'FromEmailAddress' => $this->formatAddress($message->getFromEmail(), $message->getFromName()),
@@ -185,7 +182,7 @@ class SES extends EmailAdapter
             'BulkEmailEntries' => $entries,
         ];
 
-        if (!\in_array($message->getReplyToEmail(), ['', '0'], true)) {
+        if (! \in_array($message->getReplyToEmail(), ['', '0'], true)) {
             $body['ReplyToAddresses'] = [
                 $this->formatAddress($message->getReplyToEmail(), $message->getReplyToName()),
             ];
@@ -236,7 +233,7 @@ class SES extends EmailAdapter
                 ],
             ];
 
-            if (!\in_array($message->getReplyToEmail(), ['', '0'], true)) {
+            if (! \in_array($message->getReplyToEmail(), ['', '0'], true)) {
                 $body['ReplyToAddresses'] = [
                     $this->formatAddress($message->getReplyToEmail(), $message->getReplyToName()),
                 ];
@@ -283,9 +280,7 @@ class SES extends EmailAdapter
             return $response->toArray();
         }
 
-        $entryResults = \is_array($result['response'])
-            ? ($result['response']['BulkEmailEntryResults'] ?? null)
-            : null;
+        $entryResults = \is_array($result['response']) ? $result['response']['BulkEmailEntryResults'] ?? null : null;
 
         if (! \is_array($entryResults)) {
             // 2xx without parseable BulkEmailEntryResults: per-recipient
@@ -303,14 +298,13 @@ class SES extends EmailAdapter
 
         foreach ($recipients as $index => $to) {
             $entry = $entryResults[$index] ?? null;
-            $status = \is_array($entry) ? ($entry['Status'] ?? null) : null;
+            $status = \is_array($entry) ? $entry['Status'] ?? null : null;
 
             if ($status === self::STATUS_SUCCESS) {
                 $response->addResult($to['email']);
                 $deliveredTo++;
             } else {
-                $error = (\is_array($entry) ? ($entry['Error'] ?? null) : null)
-                    ?: ($status ?? 'Unknown error');
+                $error = (\is_array($entry) ? $entry['Error'] ?? null : null) ?: $status ?? 'Unknown error';
                 $response->addResult($to['email'], $error);
             }
         }
@@ -402,12 +396,12 @@ class SES extends EmailAdapter
         }
 
         $entryResults = \is_array($result['response'] ?? null)
-            ? ($result['response']['BulkEmailEntryResults'] ?? null)
+            ? $result['response']['BulkEmailEntryResults'] ?? null
             : null;
 
         if (\is_array($entryResults)) {
             foreach ($entryResults as $entry) {
-                $status = \is_array($entry) ? ($entry['Status'] ?? null) : null;
+                $status = \is_array($entry) ? $entry['Status'] ?? null : null;
                 if ($status === 'TEMPLATE_NOT_FOUND' || $status === 'TEMPLATE_DOES_NOT_EXIST') {
                     return true;
                 }
@@ -483,12 +477,7 @@ class SES extends EmailAdapter
         $headers = $this->signature($method, $host, $path, $payload);
         $headers[] = 'Content-Type: application/json';
 
-        return $this->request(
-            method: $method,
-            url: 'https://' . $host . $path,
-            headers: $headers,
-            body: $body,
-        );
+        return $this->request(method: $method, url: 'https://' . $host . $path, headers: $headers, body: $body);
     }
 
     /**
@@ -514,7 +503,7 @@ class SES extends EmailAdapter
             'x-amz-date' => $amzDate,
         ];
 
-        if (!\in_array($this->sessionToken, [null, '', '0'], true)) {
+        if (! \in_array($this->sessionToken, [null, '', '0'], true)) {
             $signed['x-amz-security-token'] = $this->sessionToken;
         }
 
@@ -526,7 +515,7 @@ class SES extends EmailAdapter
             'Authorization: ' . $authorization,
         ];
 
-        if (!\in_array($this->sessionToken, [null, '', '0'], true)) {
+        if (! \in_array($this->sessionToken, [null, '', '0'], true)) {
             $headers[] = 'X-Amz-Security-Token: ' . $this->sessionToken;
         }
 
@@ -548,8 +537,13 @@ class SES extends EmailAdapter
      *
      * @link https://docs.aws.amazon.com/IAM/latest/UserGuide/create-signed-request.html
      */
-    protected function sign(string $method, string $path, string $payload, array $signedHeaders, string $amzDate): string
-    {
+    protected function sign(
+        string $method,
+        string $path,
+        string $payload,
+        array $signedHeaders,
+        string $amzDate,
+    ): string {
         ksort($signedHeaders);
 
         $canonicalHeaders = '';
@@ -580,10 +574,17 @@ class SES extends EmailAdapter
         $signingKey = $this->signingKey($dateStamp);
         $signature = hash_hmac('sha256', $stringToSign, $signingKey);
 
-        return self::ALGORITHM
-            . ' Credential=' . $this->accessKey . '/' . $credentialScope
-            . ', SignedHeaders=' . $signedHeaderList
-            . ', Signature=' . $signature;
+        return (
+            self::ALGORITHM
+            . ' Credential='
+            . $this->accessKey
+            . '/'
+            . $credentialScope
+            . ', SignedHeaders='
+            . $signedHeaderList
+            . ', Signature='
+            . $signature
+        );
     }
 
     /**

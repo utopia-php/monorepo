@@ -132,11 +132,11 @@ if ($path === '/echo-auth') {
     $cookie = '';
 
     foreach ($headers as $name => $value) {
-        if (!is_string($name)) {
+        if (! is_string($name)) {
             continue;
         }
 
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             continue;
         }
 

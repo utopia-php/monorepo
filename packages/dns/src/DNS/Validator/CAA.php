@@ -27,7 +27,7 @@ class CAA extends Validator
      */
     public function isValid(mixed $data): bool
     {
-        if (!\is_string($data)) {
+        if (! \is_string($data)) {
             $this->reason = self::FAILURE_REASON_INVALID_FORMAT;
             return false;
         }
@@ -44,7 +44,7 @@ class CAA extends Validator
         $value = $parts[2];
 
         // Check flags is a number
-        if (!is_numeric($flags)) {
+        if (! is_numeric($flags)) {
             $this->reason = self::FAILURE_REASON_INVALID_FLAGS;
             return false;
         }

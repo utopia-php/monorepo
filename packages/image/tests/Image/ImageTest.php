@@ -40,9 +40,7 @@ final class ImageTest extends TestCase
         $source->newImage(20, 10, 'red', 'jpg');
         $jpeg = $source->getImageBlob();
 
-        $exif = "Exif\0\0II*\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0"
-            . pack('v', $orientation)
-            . "\0\0\0\0\0\0";
+        $exif = "Exif\0\0II*\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0" . pack('v', $orientation) . "\0\0\0\0\0\0";
         $segment = "\xff\xe1" . pack('n', \strlen($exif) + 2) . $exif;
 
         return substr($jpeg, 0, 2) . $segment . substr($jpeg, 2);
@@ -421,14 +419,20 @@ final class ImageTest extends TestCase
 
         $this->assertSame(2, $result->getImageWidth());
         $this->assertSame(2, $result->getImageHeight());
-        $this->assertGreaterThan($color[match ($expectedChannel) {
-            'r' => 'g',
-            default => 'r',
-        }], $color[$expectedChannel]);
-        $this->assertGreaterThan($color[match ($expectedChannel) {
-            'b' => 'g',
-            default => 'b',
-        }], $color[$expectedChannel]);
+        $this->assertGreaterThan(
+            $color[match ($expectedChannel) {
+                'r' => 'g',
+                default => 'r',
+            }],
+            $color[$expectedChannel],
+        );
+        $this->assertGreaterThan(
+            $color[match ($expectedChannel) {
+                'b' => 'g',
+                default => 'b',
+            }],
+            $color[$expectedChannel],
+        );
     }
 
     public function testCrop100x400(): void

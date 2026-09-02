@@ -11,10 +11,8 @@ use PHPStan\Rules\RestrictedUsage\RestrictedUsage;
 
 class DisallowAssertEqualsExtension implements RestrictedMethodUsageExtension
 {
-    public function isRestrictedMethodUsage(
-        ExtendedMethodReflection $methodReflection,
-        Scope $scope,
-    ): ?RestrictedUsage {
+    public function isRestrictedMethodUsage(ExtendedMethodReflection $methodReflection, Scope $scope): ?RestrictedUsage
+    {
         if ($methodReflection->getName() !== 'assertEquals') {
             return null;
         }

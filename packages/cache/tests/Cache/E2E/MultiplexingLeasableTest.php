@@ -6,12 +6,11 @@ namespace Utopia\Tests\E2E;
 
 use PHPUnit\Framework\TestCase;
 use Redis as Redis;
-
-use function Swoole\Coroutine\run;
-
 use Utopia\Cache\Adapter\Redis\Multiplexing as RedisMultiplexing;
 use Utopia\Cache\Cache;
 use Utopia\Tests\Services;
+
+use function Swoole\Coroutine\run;
 
 final class MultiplexingLeasableTest extends TestCase
 {

@@ -17,11 +17,7 @@ final class AccessTokenTest extends TestCase
     {
         [$privateKey, $this->publicKey] = AccessToken::generateKeyPair();
 
-        $this->accessToken = new AccessToken(
-            $privateKey,
-            $this->publicKey,
-            'https://example.com/v1/oauth2/test',
-        );
+        $this->accessToken = new AccessToken($privateKey, $this->publicKey, 'https://example.com/v1/oauth2/test');
     }
 
     /**
@@ -49,7 +45,14 @@ final class AccessTokenTest extends TestCase
     public function testClaims(): void
     {
         $before = time();
-        $token = $this->accessToken->issue('user-123', ['https://api.example.com'], 'client-abc', 1000, 3600, ['read', 'write']);
+        $token = $this->accessToken->issue(
+            'user-123',
+            ['https://api.example.com'],
+            'client-abc',
+            1000,
+            3600,
+            ['read', 'write'],
+        );
         $after = time();
 
         $claims = $this->decodeSegment(explode('.', $token)[1]);
@@ -110,9 +113,18 @@ final class AccessTokenTest extends TestCase
 
     public function testScopeCannotBeInjectedViaClaimsWhenEmpty(): void
     {
-        $token = $this->accessToken->issue('user-123', ['https://api.example.com'], 'client-abc', 1000, 3600, [], null, [
-            'scope' => 'admin',
-        ]);
+        $token = $this->accessToken->issue(
+            'user-123',
+            ['https://api.example.com'],
+            'client-abc',
+            1000,
+            3600,
+            [],
+            null,
+            [
+                'scope' => 'admin',
+            ],
+        );
         $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertArrayNotHasKey('scope', $claims);
@@ -120,9 +132,18 @@ final class AccessTokenTest extends TestCase
 
     public function testScopeCannotBeOverriddenViaClaims(): void
     {
-        $token = $this->accessToken->issue('user-123', ['https://api.example.com'], 'client-abc', 1000, 3600, ['read'], null, [
-            'scope' => 'admin',
-        ]);
+        $token = $this->accessToken->issue(
+            'user-123',
+            ['https://api.example.com'],
+            'client-abc',
+            1000,
+            3600,
+            ['read'],
+            null,
+            [
+                'scope' => 'admin',
+            ],
+        );
         $claims = $this->decodeSegment(explode('.', $token)[1]);
 
         $this->assertEquals('read', $claims['scope']);
@@ -130,8 +151,12 @@ final class AccessTokenTest extends TestCase
 
     public function testJtiIsGeneratedAndUnique(): void
     {
-        $first = $this->decodeSegment(explode('.', $this->accessToken->issue('user-123', ['aud'], 'client', 1000, 3600))[1]);
-        $second = $this->decodeSegment(explode('.', $this->accessToken->issue('user-123', ['aud'], 'client', 1000, 3600))[1]);
+        $first = $this->decodeSegment(
+            explode('.', $this->accessToken->issue('user-123', ['aud'], 'client', 1000, 3600))[1],
+        );
+        $second = $this->decodeSegment(
+            explode('.', $this->accessToken->issue('user-123', ['aud'], 'client', 1000, 3600))[1],
+        );
 
         $this->assertNotEquals($first['jti'], $second['jti']);
     }

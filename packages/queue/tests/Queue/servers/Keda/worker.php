@@ -20,10 +20,12 @@ $broker = new RedisBroker($connection, $connection);
 $adapter = new KubernetesJob($broker, 1, getenv('QUEUE_NAMESPACE') ?: 'utopia-queue');
 
 $server = new Server($adapter);
-$server->job(getenv('QUEUE_NAME') ?: 'keda')
+$server
+    ->job(getenv('QUEUE_NAME') ?: 'keda')
     ->inject('message')
     ->action(fn(Message $message) => handleRequest($message));
-$server->error()
+$server
+    ->error()
     ->inject('error')
     ->action(fn(\Throwable $error): int|false => fwrite(STDERR, $error->getMessage() . "\n"));
 $server->start();

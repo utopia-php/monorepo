@@ -23,8 +23,9 @@ abstract class Platform
 
     protected Server $worker;
 
-    public function __construct(protected Module $core)
-    {
+    public function __construct(
+        protected Module $core,
+    ) {
         $this->modules[] = $this->core;
     }
 
@@ -95,9 +96,7 @@ abstract class Platform
                         break;
                 }
 
-                $hook
-                    ->groups($action->getGroups())
-                    ->desc($action->getDesc() ?? '');
+                $hook->groups($action->getGroups())->desc($action->getDesc() ?? '');
 
                 if ($hook instanceof Route) {
                     foreach ($action->getHttpAliases() as $alias) {
@@ -109,7 +108,19 @@ abstract class Platform
                     switch ($option['type']) {
                         case 'param':
                             $key = substr((string) $key, stripos((string) $key, ':') + 1);
-                            $hook->param($key, $option['default'], $option['validator'], $option['description'], $option['optional'], $option['injections'], $option['skipValidation'], $option['deprecated'], $option['example'], aliases: $option['aliases'] ?? [], enum: $option['enum'] ?? null);
+                            $hook->param(
+                                $key,
+                                $option['default'],
+                                $option['validator'],
+                                $option['description'],
+                                $option['optional'],
+                                $option['injections'],
+                                $option['skipValidation'],
+                                $option['deprecated'],
+                                $option['example'],
+                                aliases: $option['aliases'] ?? [],
+                                enum: $option['enum'] ?? null,
+                            );
                             break;
                         case 'injection':
                             $hook->inject($option['name']);
@@ -149,15 +160,25 @@ abstract class Platform
                         $hook = $cli->task($key);
                         break;
                 }
-                $hook
-                    ->groups($action->getGroups())
-                    ->desc($action->getDesc() ?? '');
+                $hook->groups($action->getGroups())->desc($action->getDesc() ?? '');
 
                 foreach ($action->getOptions() as $key => $option) {
                     switch ($option['type']) {
                         case 'param':
                             $key = substr((string) $key, stripos((string) $key, ':') + 1);
-                            $hook->param($key, $option['default'], $option['validator'], $option['description'], $option['optional'], $option['injections'], $option['skipValidation'], $option['deprecated'], $option['example'], aliases: $option['aliases'] ?? [], enum: $option['enum'] ?? null);
+                            $hook->param(
+                                $key,
+                                $option['default'],
+                                $option['validator'],
+                                $option['description'],
+                                $option['optional'],
+                                $option['injections'],
+                                $option['skipValidation'],
+                                $option['deprecated'],
+                                $option['example'],
+                                aliases: $option['aliases'] ?? [],
+                                enum: $option['enum'] ?? null,
+                            );
                             break;
                         case 'injection':
                             $hook->inject($option['name']);
@@ -208,7 +229,7 @@ abstract class Platform
             foreach ($service->getActions() as $key => $action) {
                 if ($action->getType() == Action::TYPE_DEFAULT) {
                     $name = strtolower((string) $key);
-                    if (!$all && !\in_array($name, $names, true)) {
+                    if (! $all && ! \in_array($name, $names, true)) {
                         continue;
                     }
                 }
@@ -232,22 +253,29 @@ abstract class Platform
                     default:
                         $name = strtolower((string) $key);
                         $config = $jobs[$name] ?? [];
-                        $queue = $config['queue'] ?? $params['queueName'] ?? ('v1-' . $name);
-                        $hook = $worker->job(
-                            $queue,
-                            max(1, (int) ($config['maxCoroutines'] ?? 1)),
-                        );
+                        $queue = $config['queue'] ?? $params['queueName'] ?? 'v1-' . $name;
+                        $hook = $worker->job($queue, max(1, (int) ($config['maxCoroutines'] ?? 1)));
                         break;
                 }
-                $hook
-                    ->groups($action->getGroups())
-                    ->desc($action->getDesc() ?? '');
+                $hook->groups($action->getGroups())->desc($action->getDesc() ?? '');
 
                 foreach ($action->getOptions() as $key => $option) {
                     switch ($option['type']) {
                         case 'param':
                             $key = substr((string) $key, stripos((string) $key, ':') + 1);
-                            $hook->param($key, $option['default'], $option['validator'], $option['description'], $option['optional'], $option['injections'], $option['skipValidation'], $option['deprecated'], $option['example'], aliases: $option['aliases'] ?? [], enum: $option['enum'] ?? null);
+                            $hook->param(
+                                $key,
+                                $option['default'],
+                                $option['validator'],
+                                $option['description'],
+                                $option['optional'],
+                                $option['injections'],
+                                $option['skipValidation'],
+                                $option['deprecated'],
+                                $option['example'],
+                                aliases: $option['aliases'] ?? [],
+                                enum: $option['enum'] ?? null,
+                            );
                             break;
                         case 'injection':
                             $hook->inject($option['name']);

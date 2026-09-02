@@ -113,11 +113,11 @@ final class Decoder
     private function commitIfStatement(string $body): void
     {
         $reader = new BinaryReader($body);
-        $reader->skip(8);                       // thread id + execution time
+        $reader->skip(8); // thread id + execution time
         $schemaLength = $reader->readUInt8();
-        $reader->skip(2);                       // error code
-        $reader->skip($reader->readUInt16());   // status-variables block
-        $reader->skip($schemaLength + 1);       // schema name + NUL terminator
+        $reader->skip(2); // error code
+        $reader->skip($reader->readUInt16()); // status-variables block
+        $reader->skip($schemaLength + 1); // schema name + NUL terminator
         $query = $reader->read($reader->remaining());
 
         if (strtoupper(trim($query)) !== 'BEGIN') {

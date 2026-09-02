@@ -59,7 +59,9 @@ class Sha extends Hash
     public function setVersion(string $version): static
     {
         if (! \in_array($version, self::VALID_VERSIONS, true)) {
-            throw new \InvalidArgumentException('Invalid SHA version. Valid versions are: ' . implode(', ', self::VALID_VERSIONS));
+            throw new \InvalidArgumentException(
+                'Invalid SHA version. Valid versions are: ' . implode(', ', self::VALID_VERSIONS),
+            );
         }
 
         $this->setOption('version', $version);

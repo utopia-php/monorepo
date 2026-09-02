@@ -171,9 +171,14 @@ final class RedisBrokerRecoveryTest extends TestCase
 
         $this->broker->retry($this->queue);
 
-        $this->assertSame(0, $this->broker->getQueueSize($this->queue, failedJobs: true), 'the expired entry does not block the sweep');
+        $this->assertSame(
+            0,
+            $this->broker->getQueueSize($this->queue, failedJobs: true),
+            'the expired entry does not block the sweep',
+        );
         $this->assertSame(1, $this->broker->getQueueSize($this->queue), 'the recoverable entry is requeued');
     }
+
     public function testRetryParksEntriesOlderThanTheAgeGate(): void
     {
         $this->broker->enqueue($this->queue, ['n' => 1]);

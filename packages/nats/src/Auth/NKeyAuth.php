@@ -12,7 +12,7 @@ final class NKeyAuth implements Authenticator
         private readonly string $publicKey,
         private readonly string $seed,
     ) {
-        if (!\function_exists('sodium_crypto_sign_detached')) {
+        if (! \function_exists('sodium_crypto_sign_detached')) {
             throw new AuthenticationException('NKey authentication requires the sodium PHP extension');
         }
     }

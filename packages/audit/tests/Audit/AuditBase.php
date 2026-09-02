@@ -56,10 +56,38 @@ trait AuditBase
         $requiredAttributes = $this->getRequiredAttributes();
         $dataWithAttributes = array_merge($data, $requiredAttributes);
 
-        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log($userId, 'update', 'database/document/1', $userAgent, $ip, $dataWithAttributes));
-        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log($userId, 'update', 'database/document/2', $userAgent, $ip, $dataWithAttributes));
-        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log($userId, 'delete', 'database/document/2', $userAgent, $ip, $dataWithAttributes));
-        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log(null, 'insert', 'user/null', $userAgent, $ip, $dataWithAttributes));
+        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log(
+            $userId,
+            'update',
+            'database/document/1',
+            $userAgent,
+            $ip,
+            $dataWithAttributes,
+        ));
+        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log(
+            $userId,
+            'update',
+            'database/document/2',
+            $userAgent,
+            $ip,
+            $dataWithAttributes,
+        ));
+        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log(
+            $userId,
+            'delete',
+            'database/document/2',
+            $userAgent,
+            $ip,
+            $dataWithAttributes,
+        ));
+        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log(
+            null,
+            'insert',
+            'user/null',
+            $userAgent,
+            $ip,
+            $dataWithAttributes,
+        ));
     }
 
     public function testPing(): void
@@ -123,12 +151,22 @@ trait AuditBase
         $this->assertEquals(1, $logsCount1);
         $this->assertEquals(2, $logsCount2);
 
-        $logs3 = $this->audit->getLogsByResourceAndEvents('database/document/2', ['update', 'delete'], limit: 1, offset: 1);
+        $logs3 = $this->audit->getLogsByResourceAndEvents(
+            'database/document/2',
+            ['update', 'delete'],
+            limit: 1,
+            offset: 1,
+        );
 
         $this->assertEquals(1, \count($logs3));
         $this->assertEquals($logs3[0]->getId(), $logs2[1]->getId());
 
-        $logs4 = $this->audit->getLogsByResourceAndEvents('database/document/2', ['update', 'delete'], limit: 1, offset: 1);
+        $logs4 = $this->audit->getLogsByResourceAndEvents(
+            'database/document/2',
+            ['update', 'delete'],
+            limit: 1,
+            offset: 1,
+        );
 
         $this->assertEquals(1, \count($logs4));
         $this->assertEquals($logs4[0]->getId(), $logs2[1]->getId());
@@ -401,11 +439,32 @@ trait AuditBase
         $requiredAttributes = $this->getRequiredAttributes();
         $dataWithAttributes = array_merge($data, $requiredAttributes);
 
-        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log($userId, 'update', 'database/document/1', $userAgent, $ip, $dataWithAttributes));
+        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log(
+            $userId,
+            'update',
+            'database/document/1',
+            $userAgent,
+            $ip,
+            $dataWithAttributes,
+        ));
         sleep(5);
-        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log($userId, 'update', 'database/document/2', $userAgent, $ip, $dataWithAttributes));
+        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log(
+            $userId,
+            'update',
+            'database/document/2',
+            $userAgent,
+            $ip,
+            $dataWithAttributes,
+        ));
         sleep(5);
-        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log($userId, 'delete', 'database/document/2', $userAgent, $ip, $dataWithAttributes));
+        $this->assertInstanceOf(\Utopia\Audit\Log::class, $this->audit->log(
+            $userId,
+            'delete',
+            'database/document/2',
+            $userAgent,
+            $ip,
+            $dataWithAttributes,
+        ));
         sleep(5);
 
         // DELETE logs older than 11 seconds and check that status is true
@@ -485,10 +544,7 @@ trait AuditBase
         if (\count($logsDesc) === \count($logsAsc)) {
             $counter = \count($logsDesc);
             for ($i = 0; $i < $counter; $i++) {
-                $this->assertEquals(
-                    $logsDesc[$i]->getId(),
-                    $logsAsc[\count($logsAsc) - 1 - $i]->getId(),
-                );
+                $this->assertEquals($logsDesc[$i]->getId(), $logsAsc[\count($logsAsc) - 1 - $i]->getId());
             }
         }
 
@@ -524,7 +580,7 @@ trait AuditBase
         $this->assertEquals('event_0', $ascLimit2[0]->getAttribute('event'));
 
         // Test 8: Combination of after + before (time range)
-        $afterTimeObj2 = new \DateTime('2024-06-15 12:01:00');  // After 1st log
+        $afterTimeObj2 = new \DateTime('2024-06-15 12:01:00'); // After 1st log
         $beforeTimeObj2 = new \DateTime('2024-06-15 12:04:00'); // Before 4th log
         $logsRange = $this->audit->getLogsByUser($userId, after: $afterTimeObj2, before: $beforeTimeObj2);
         $this->assertGreaterThanOrEqual(1, \count($logsRange));
@@ -564,22 +620,14 @@ trait AuditBase
         $countEvtAll = $this->audit->countLogsByUserAndEvents($userId, ['event_1', 'event_2']);
         $this->assertGreaterThanOrEqual(0, $countEvtAll);
 
-        $countEvtAfter = $this->audit->countLogsByUserAndEvents(
-            $userId,
-            ['event_1', 'event_2'],
-            after: $afterTimeObj,
-        );
+        $countEvtAfter = $this->audit->countLogsByUserAndEvents($userId, ['event_1', 'event_2'], after: $afterTimeObj);
         $this->assertGreaterThanOrEqual(0, $countEvtAfter);
 
         // Test 14: Test countLogsByResourceAndEvents with filters
         $countResEvtAll = $this->audit->countLogsByResourceAndEvents('doc/0', ['event_0']);
         $this->assertEquals(1, $countResEvtAll);
 
-        $countResEvtAfter = $this->audit->countLogsByResourceAndEvents(
-            'doc/0',
-            ['event_0'],
-            after: $afterTimeObj,
-        );
+        $countResEvtAfter = $this->audit->countLogsByResourceAndEvents('doc/0', ['event_0'], after: $afterTimeObj);
         $this->assertGreaterThanOrEqual(0, $countResEvtAfter);
 
         // Test 15: Test getLogsByResourceAndEvents with all parameters
@@ -668,10 +716,7 @@ trait AuditBase
         if (\count($logsDesc) === \count($logsAsc)) {
             $counter = \count($logsDesc);
             for ($i = 0; $i < $counter; $i++) {
-                $this->assertEquals(
-                    $logsDesc[$i]->getId(),
-                    $logsAsc[\count($logsAsc) - 1 - $i]->getId(),
-                );
+                $this->assertEquals($logsDesc[$i]->getId(), $logsAsc[\count($logsAsc) - 1 - $i]->getId());
             }
         }
 

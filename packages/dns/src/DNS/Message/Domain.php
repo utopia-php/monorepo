@@ -99,50 +99,40 @@ final readonly class Domain
 
         while (true) {
             if ($pos >= $dataLength) {
-                throw new DecodingException(
-                    'Unexpected end of data while decoding domain name',
-                );
+                throw new DecodingException('Unexpected end of data while decoding domain name');
             }
 
             $len = \ord($data[$pos]);
             if ($len === 0) {
-                if (!$jumped) {
+                if (! $jumped) {
                     $offset = $pos + 1;
                 }
                 break;
             }
 
             if (($len & 0xC0) === 0xC0) {
-                if ($pos + 1 >= $dataLength) {
-                    throw new DecodingException(
-                        'Truncated compression pointer in domain name',
-                    );
+                if (($pos + 1) >= $dataLength) {
+                    throw new DecodingException('Truncated compression pointer in domain name');
                 }
 
                 $pointer = (($len & 0x3F) << 8) | \ord($data[$pos + 1]);
 
                 // RFC 1035: Pointer must reference earlier in packet (forward refs invalid)
                 if ($pointer >= $pos) {
-                    throw new DecodingException(
-                        'Compression pointer must reference earlier position in packet',
-                    );
+                    throw new DecodingException('Compression pointer must reference earlier position in packet');
                 }
 
                 if ($pointer >= $dataLength) {
-                    throw new DecodingException(
-                        'Compression pointer out of bounds in domain name',
-                    );
+                    throw new DecodingException('Compression pointer out of bounds in domain name');
                 }
 
                 // Detect pointer loops by tracking visited positions
                 if (isset($visitedPointers[$pointer])) {
-                    throw new DecodingException(
-                        'Compression pointer loop detected in domain name',
-                    );
+                    throw new DecodingException('Compression pointer loop detected in domain name');
                 }
                 $visitedPointers[$pointer] = true;
 
-                if (!$jumped) {
+                if (! $jumped) {
                     $offset = $pos + 2;
                 }
                 $pos = $pointer;
@@ -153,15 +143,11 @@ final readonly class Domain
             // Check for reserved label type (RFC 1035: bits 6-7 indicate label type)
             // 00 = standard label, 11 = compression pointer, 01/10 = reserved
             if (($len & 0xC0) !== 0) {
-                throw new DecodingException(
-                    'Reserved label type encountered in domain name',
-                );
+                throw new DecodingException('Reserved label type encountered in domain name');
             }
 
-            if ($pos + 1 + $len > $dataLength) {
-                throw new DecodingException(
-                    'Label length exceeds remaining data while decoding domain name',
-                );
+            if (($pos + 1 + $len) > $dataLength) {
+                throw new DecodingException('Label length exceeds remaining data while decoding domain name');
             }
 
             $labels[] = substr($data, $pos + 1, $len);
@@ -169,12 +155,10 @@ final readonly class Domain
             $pos += $len + 1;
 
             if ($labelCount > self::MAX_LABELS) {
-                throw new DecodingException(
-                    'Domain name exceeds maximum label count',
-                );
+                throw new DecodingException('Domain name exceeds maximum label count');
             }
 
-            if (!$jumped) {
+            if (! $jumped) {
                 $offset = $pos;
             }
         }

@@ -45,7 +45,7 @@ final class Native implements Transport
 
             // Which errno means "timed out" differs by platform, and reading the
             // message is worse. We set the deadline, so we can tell by the clock.
-            throw microtime(true) - $started >= $timeout
+            throw (microtime(true) - $started) >= $timeout
                 ? new TimeoutException($reason, $code ?? 0)
                 : new ConnectionException($reason, $code ?? 0);
         }

@@ -15,9 +15,63 @@ class Text extends Validator
 {
     public const NUMBERS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-    public const ALPHABET_UPPER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
+    public const ALPHABET_UPPER = [
+        'A',
+        'B',
+        'C',
+        'D',
+        'E',
+        'F',
+        'G',
+        'H',
+        'I',
+        'J',
+        'K',
+        'L',
+        'M',
+        'N',
+        'O',
+        'P',
+        'Q',
+        'R',
+        'S',
+        'T',
+        'U',
+        'V',
+        'W',
+        'X',
+        'Y',
+        'Z',
+    ];
 
-    public const ALPHABET_LOWER = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
+    public const ALPHABET_LOWER = [
+        'a',
+        'b',
+        'c',
+        'd',
+        'e',
+        'f',
+        'g',
+        'h',
+        'i',
+        'j',
+        'k',
+        'l',
+        'm',
+        'n',
+        'o',
+        'p',
+        'q',
+        'r',
+        's',
+        't',
+        'u',
+        'v',
+        'w',
+        'x',
+        'y',
+        'z',
+    ];
 
     /**
      * Text constructor.
@@ -94,7 +148,7 @@ class Text extends Validator
      */
     public function isValid(mixed $value): bool
     {
-        if (!\is_string($value)) {
+        if (! \is_string($value)) {
             return false;
         }
 
@@ -112,7 +166,7 @@ class Text extends Validator
 
         if (\count($this->allowList) > 0) {
             foreach (str_split($value) as $char) {
-                if (!\in_array($char, $this->allowList)) {
+                if (! \in_array($char, $this->allowList)) {
                     return false;
                 }
             }

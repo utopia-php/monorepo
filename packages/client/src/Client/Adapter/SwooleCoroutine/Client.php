@@ -198,18 +198,21 @@ class Client implements Adapter
      */
     private function perform(RequestInterface $request, ?callable $sink): ResponseInterface
     {
-        if (!\extension_loaded('swoole')) {
+        if (! \extension_loaded('swoole')) {
             throw new AdapterPreconditionException($request, 'The swoole extension is required.');
         }
 
         if (Coroutine::getCid() < 0) {
-            throw new AdapterPreconditionException($request, 'Swoole coroutine HTTP requests must run inside a coroutine.');
+            throw new AdapterPreconditionException(
+                $request,
+                'Swoole coroutine HTTP requests must run inside a coroutine.',
+            );
         }
 
         $this->validateSettings();
 
         try {
-            if (!$this->followRedirects) {
+            if (! $this->followRedirects) {
                 return $this->exchange($request, $sink);
             }
 
@@ -218,7 +221,7 @@ class Client implements Adapter
             for ($redirects = 0; $redirects <= Redirect::MAX_HOPS; $redirects++) {
                 $response = $this->exchange($current, $sink, suppressRedirectBody: true);
 
-                if (!Redirect::isRedirect($response)) {
+                if (! Redirect::isRedirect($response)) {
                     return $response;
                 }
 
@@ -231,7 +234,7 @@ class Client implements Adapter
 
             throw new ProtocolException($request, 'Too many redirects.');
         } finally {
-            if (!$this->reuseConnections) {
+            if (! $this->reuseConnections) {
                 $this->forgetConnection();
             }
         }
@@ -247,11 +250,14 @@ class Client implements Adapter
      *
      * @throws ClientExceptionInterface
      */
-    private function exchange(RequestInterface $request, ?callable $sink, bool $suppressRedirectBody = false): ResponseInterface
-    {
+    private function exchange(
+        RequestInterface $request,
+        ?callable $sink,
+        bool $suppressRedirectBody = false,
+    ): ResponseInterface {
         $uri = $request->getUri();
 
-        if (!\in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
+        if (! \in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
             throw new InvalidUriException($request, 'Requests must use an absolute URI.');
         }
 
@@ -281,7 +287,11 @@ class Client implements Adapter
                 }
             }
 
-            $settings['write_func'] = function (SwooleClient $client, string $chunk) use ($sink, $suppressRedirectBody, $suppressedBody): void {
+            $settings['write_func'] = function (SwooleClient $client, string $chunk) use (
+                $sink,
+                $suppressRedirectBody,
+                $suppressedBody,
+            ): void {
                 if ($suppressRedirectBody && $this->nativeResponseHasLocation($client)) {
                     if (\is_resource($suppressedBody)) {
                         fwrite($suppressedBody, $chunk);
@@ -308,7 +318,7 @@ class Client implements Adapter
 
             $headers = $this->requestHeaders($request);
 
-            if ($streaming && !$request->hasHeader(Header::ACCEPT_ENCODING)) {
+            if ($streaming && ! $request->hasHeader(Header::ACCEPT_ENCODING)) {
                 $headers[Header::ACCEPT_ENCODING] = 'identity';
             }
 
@@ -346,11 +356,19 @@ class Client implements Adapter
         try {
             $result = $client->execute($this->path($request));
         } catch (Throwable $throwable) {
-            throw $this->networkException($request, $throwable->getMessage(), (int) $throwable->getCode(), null, $throwable);
+            throw $this->networkException(
+                $request,
+                $throwable->getMessage(),
+                (int) $throwable->getCode(),
+                null,
+                $throwable,
+            );
         }
 
         if ($result === false) {
-            $message = \is_string($client->errMsg) && $client->errMsg !== '' ? $client->errMsg : 'Swoole request failed.';
+            $message = \is_string($client->errMsg) && $client->errMsg !== ''
+                ? $client->errMsg
+                : 'Swoole request failed.';
             $code = \is_int($client->errCode) ? $client->errCode : 0;
             $statusCode = $client->statusCode;
 
@@ -363,37 +381,32 @@ class Client implements Adapter
 
         $statusCode = $client->statusCode;
 
-        if (!\is_int($statusCode) || $statusCode < 100 || $statusCode > 599) {
+        if (! \is_int($statusCode) || $statusCode < 100 || $statusCode > 599) {
             throw new InvalidResponseException($request, 'Received an invalid HTTP response.');
         }
 
         $headers = $client->headers;
 
-        if (!\is_array($headers)) {
+        if (! \is_array($headers)) {
             $headers = [];
         }
 
         $headers = $this->headers($headers);
 
-        if (!$streaming) {
+        if (! $streaming) {
             $headers = $this->decoded($headers);
         }
 
         $responseBody = $streaming ? '' : $client->body;
 
-        if (!\is_string($responseBody)) {
+        if (! \is_string($responseBody)) {
             $responseBody = '';
         }
 
         // Swoole keeps or closes the socket itself; never close it here.
-        $response = $this->responseBuilder->build(
-            $statusCode,
-            '',
-            $headers,
-            $responseBody,
-        );
+        $response = $this->responseBuilder->build($statusCode, '', $headers, $responseBody);
 
-        if (\is_resource($suppressedBody) && $sink !== null && !Redirect::isRedirect($response)) {
+        if (\is_resource($suppressedBody) && $sink !== null && ! Redirect::isRedirect($response)) {
             rewind($suppressedBody);
 
             while (($chunk = fread($suppressedBody, 8192)) !== false && $chunk !== '') {
@@ -417,14 +430,14 @@ class Client implements Adapter
             throw new InvalidUriException($request, 'Invalid redirect location.', 0, $invalidArgumentException);
         }
 
-        if (!\in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
+        if (! \in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
             throw new InvalidUriException($request, 'Redirect location must be an absolute HTTP URI.');
         }
 
         $status = $response->getStatusCode();
         $method = strtoupper($request->getMethod());
 
-        if (\in_array($status, [301, 302, 303], true) && !\in_array($method, ['GET', 'HEAD'], true)) {
+        if (\in_array($status, [301, 302, 303], true) && ! \in_array($method, ['GET', 'HEAD'], true)) {
             $request = $request
                 ->withMethod(Method::GET)
                 ->withBody(new Stream\Factory()->createStream(''))
@@ -449,11 +462,19 @@ class Client implements Adapter
 
     private function nativeResponseHasLocation(SwooleClient $client): bool
     {
-        if (!\is_array($client->headers)) {
+        if (! \is_array($client->headers)) {
             return false;
         }
 
-        return array_any($client->headers, fn($value, $name): bool => \is_string($name) && strcasecmp($name, Header::LOCATION) === 0 && \is_string($value) && $value !== '');
+        return array_any(
+            $client->headers,
+            fn($value, $name): bool => (
+                \is_string($name)
+                && strcasecmp($name, Header::LOCATION) === 0
+                && \is_string($value)
+                && $value !== ''
+            ),
+        );
     }
 
     /**
@@ -480,7 +501,12 @@ class Client implements Adapter
         try {
             $client = new SwooleClient($uri->getHost(), $this->port($request), $secure);
         } catch (Throwable $throwable) {
-            throw new AdapterInitializationException($request, $throwable->getMessage(), (int) $throwable->getCode(), $throwable);
+            throw new AdapterInitializationException(
+                $request,
+                $throwable->getMessage(),
+                (int) $throwable->getCode(),
+                $throwable,
+            );
         }
 
         $this->connection = $client;
@@ -509,7 +535,7 @@ class Client implements Adapter
 
     private function seconds(float $seconds): float
     {
-        if ($seconds < 0.0 || !is_finite($seconds)) {
+        if ($seconds < 0.0 || ! is_finite($seconds)) {
             throw new ValueError('Timeout must be a finite number greater than or equal to zero.');
         }
 
@@ -519,22 +545,28 @@ class Client implements Adapter
     private function validateSettings(): void
     {
         foreach ([self::SETTING_TIMEOUT, self::SETTING_CONNECT_TIMEOUT] as $setting) {
-            if (!\array_key_exists($setting, $this->settings)) {
+            if (! \array_key_exists($setting, $this->settings)) {
                 continue;
             }
 
             $value = $this->settings[$setting];
 
-            if (!\is_int($value) && !\is_float($value)) {
-                throw new InvalidArgumentException('Swoole setting "' . $setting . '" must be a finite number greater than or equal to zero.');
+            if (! \is_int($value) && ! \is_float($value)) {
+                throw new InvalidArgumentException(
+                    'Swoole setting "' . $setting . '" must be a finite number greater than or equal to zero.',
+                );
             }
 
-            if ($value < 0 || !is_finite((float) $value)) {
-                throw new InvalidArgumentException('Swoole setting "' . $setting . '" must be a finite number greater than or equal to zero.');
+            if ($value < 0 || ! is_finite((float) $value)) {
+                throw new InvalidArgumentException(
+                    'Swoole setting "' . $setting . '" must be a finite number greater than or equal to zero.',
+                );
             }
         }
 
-        if (\array_key_exists(self::SETTING_HTTP2, $this->settings) && !\is_bool($this->settings[self::SETTING_HTTP2])) {
+        if (
+            \array_key_exists(self::SETTING_HTTP2, $this->settings) && ! \is_bool($this->settings[self::SETTING_HTTP2])
+        ) {
             throw new InvalidArgumentException('Swoole setting "' . self::SETTING_HTTP2 . '" must be a boolean.');
         }
     }
@@ -560,85 +592,126 @@ class Client implements Adapter
             return true;
         }
 
-        return \in_array($code, $this->nativeCodes([
-            'SOCKET_ETIMEDOUT',
-            'SWOOLE_ERROR_SOCKET_POLL_TIMEOUT',
-        ], [110]), true);
+        return \in_array(
+            $code,
+            $this->nativeCodes([
+                'SOCKET_ETIMEDOUT',
+                'SWOOLE_ERROR_SOCKET_POLL_TIMEOUT',
+            ], [110]),
+            true,
+        );
     }
 
-    private function networkException(RequestInterface $request, string $message, int $code, mixed $statusCode = null, ?Throwable $previous = null, mixed $headers = null): NetworkException
-    {
+    private function networkException(
+        RequestInterface $request,
+        string $message,
+        int $code,
+        mixed $statusCode = null,
+        ?Throwable $previous = null,
+        mixed $headers = null,
+    ): NetworkException {
         if ($this->isTimeout($message, $code, $statusCode)) {
             return new TimeoutException($request, $message, $code, $previous);
         }
 
-        if (\in_array($code, $this->nativeCodes([
-            'SWOOLE_ERROR_DNSLOOKUP_RESOLVE_FAILED',
-            'SWOOLE_ERROR_DNSLOOKUP_RESOLVE_TIMEOUT',
-            'SWOOLE_ERROR_DNSLOOKUP_NO_SERVER',
-        ]), true)) {
+        if (\in_array(
+            $code,
+            $this->nativeCodes([
+                'SWOOLE_ERROR_DNSLOOKUP_RESOLVE_FAILED',
+                'SWOOLE_ERROR_DNSLOOKUP_RESOLVE_TIMEOUT',
+                'SWOOLE_ERROR_DNSLOOKUP_NO_SERVER',
+            ]),
+            true,
+        )) {
             return new DnsException($request, $message, $code, $previous);
         }
 
-        if (\in_array($code, $this->nativeCodes([
-            'SWOOLE_ERROR_SSL_NOT_READY',
-            'SWOOLE_ERROR_SSL_EMPTY_PEER_CERTIFICATE',
-            'SWOOLE_ERROR_SSL_VERIFY_FAILED',
-            'SWOOLE_ERROR_SSL_BAD_CLIENT',
-            'SWOOLE_ERROR_SSL_BAD_PROTOCOL',
-            'SWOOLE_ERROR_SSL_RESET',
-            'SWOOLE_ERROR_SSL_HANDSHAKE_FAILED',
-            'SWOOLE_ERROR_SSL_CREATE_CONTEXT_FAILED',
-            'SWOOLE_ERROR_SSL_CREATE_SESSION_FAILED',
-        ]), true)) {
+        if (\in_array(
+            $code,
+            $this->nativeCodes([
+                'SWOOLE_ERROR_SSL_NOT_READY',
+                'SWOOLE_ERROR_SSL_EMPTY_PEER_CERTIFICATE',
+                'SWOOLE_ERROR_SSL_VERIFY_FAILED',
+                'SWOOLE_ERROR_SSL_BAD_CLIENT',
+                'SWOOLE_ERROR_SSL_BAD_PROTOCOL',
+                'SWOOLE_ERROR_SSL_RESET',
+                'SWOOLE_ERROR_SSL_HANDSHAKE_FAILED',
+                'SWOOLE_ERROR_SSL_CREATE_CONTEXT_FAILED',
+                'SWOOLE_ERROR_SSL_CREATE_SESSION_FAILED',
+            ]),
+            true,
+        )) {
             return new TlsException($request, $message, $code, $previous);
         }
 
-        if (\in_array($code, $this->nativeCodes([
-            'SWOOLE_ERROR_HTTP_PROXY_HANDSHAKE_ERROR',
-            'SWOOLE_ERROR_HTTP_PROXY_HANDSHAKE_FAILED',
-            'SWOOLE_ERROR_HTTP_PROXY_BAD_RESPONSE',
-            'SWOOLE_ERROR_SOCKS5_UNSUPPORT_VERSION',
-            'SWOOLE_ERROR_SOCKS5_UNSUPPORT_METHOD',
-            'SWOOLE_ERROR_SOCKS5_AUTH_FAILED',
-            'SWOOLE_ERROR_SOCKS5_SERVER_ERROR',
-            'SWOOLE_ERROR_SOCKS5_HANDSHAKE_FAILED',
-        ]), true)) {
+        if (\in_array(
+            $code,
+            $this->nativeCodes([
+                'SWOOLE_ERROR_HTTP_PROXY_HANDSHAKE_ERROR',
+                'SWOOLE_ERROR_HTTP_PROXY_HANDSHAKE_FAILED',
+                'SWOOLE_ERROR_HTTP_PROXY_BAD_RESPONSE',
+                'SWOOLE_ERROR_SOCKS5_UNSUPPORT_VERSION',
+                'SWOOLE_ERROR_SOCKS5_UNSUPPORT_METHOD',
+                'SWOOLE_ERROR_SOCKS5_AUTH_FAILED',
+                'SWOOLE_ERROR_SOCKS5_SERVER_ERROR',
+                'SWOOLE_ERROR_SOCKS5_HANDSHAKE_FAILED',
+            ]),
+            true,
+        )) {
             return new ProxyException($request, $message, $code, $previous);
         }
 
-        if (\in_array($code, $this->nativeCodes([
-            'SWOOLE_ERROR_PROTOCOL_ERROR',
-            'SWOOLE_ERROR_HTTP_INVALID_PROTOCOL',
-            'SWOOLE_ERROR_PACKAGE_MALFORMED_DATA',
-            'SWOOLE_ERROR_HTTP2_STREAM_NO_HEADER',
-            'SWOOLE_ERROR_HTTP2_SEND_CONTROL_FRAME_FAILED',
-            'SWOOLE_ERROR_HTTP2_INTERNAL_ERROR',
-        ]), true)) {
+        if (\in_array(
+            $code,
+            $this->nativeCodes([
+                'SWOOLE_ERROR_PROTOCOL_ERROR',
+                'SWOOLE_ERROR_HTTP_INVALID_PROTOCOL',
+                'SWOOLE_ERROR_PACKAGE_MALFORMED_DATA',
+                'SWOOLE_ERROR_HTTP2_STREAM_NO_HEADER',
+                'SWOOLE_ERROR_HTTP2_SEND_CONTROL_FRAME_FAILED',
+                'SWOOLE_ERROR_HTTP2_INTERNAL_ERROR',
+            ]),
+            true,
+        )) {
             return new ProtocolException($request, $message, $code, $previous);
         }
 
-        if (\is_array($headers) && \in_array($code, $this->nativeCodes([
-            'SOCKET_ECONNRESET',
-        ], [104]), true)) {
+        if (
+            \is_array($headers)
+            && \in_array(
+                $code,
+                $this->nativeCodes([
+                    'SOCKET_ECONNRESET',
+                ], [104]),
+                true,
+            )
+        ) {
             return new ProtocolException($request, $message, $code, $previous);
         }
 
-        if (\in_array($code, $this->nativeCodes([
-            'SOCKET_EPIPE',
-            'SOCKET_ENETUNREACH',
-            'SOCKET_ECONNRESET',
-            'SOCKET_ECONNREFUSED',
-            'SOCKET_EHOSTUNREACH',
-            'SWOOLE_ERROR_CLIENT_NO_CONNECTION',
-            'SWOOLE_ERROR_SESSION_CLOSED_BY_SERVER',
-            'SWOOLE_ERROR_SESSION_CLOSED_BY_CLIENT',
-            'SWOOLE_ERROR_SESSION_CLOSED',
-        ], [32, 101, 104, 111, 113]), true)) {
+        if (\in_array(
+            $code,
+            $this->nativeCodes([
+                'SOCKET_EPIPE',
+                'SOCKET_ENETUNREACH',
+                'SOCKET_ECONNRESET',
+                'SOCKET_ECONNREFUSED',
+                'SOCKET_EHOSTUNREACH',
+                'SWOOLE_ERROR_CLIENT_NO_CONNECTION',
+                'SWOOLE_ERROR_SESSION_CLOSED_BY_SERVER',
+                'SWOOLE_ERROR_SESSION_CLOSED_BY_CLIENT',
+                'SWOOLE_ERROR_SESSION_CLOSED',
+            ], [32, 101, 104, 111, 113]),
+            true,
+        )) {
             return new ConnectionException($request, $message, $code, $previous);
         }
 
-        if ($this->statusCodeIs($statusCode, 'SWOOLE_HTTP_CLIENT_ESTATUS_CONNECT_FAILED', -1) || $this->statusCodeIs($statusCode, 'SWOOLE_HTTP_CLIENT_ESTATUS_SERVER_RESET', -3) || $this->statusCodeIs($statusCode, 'SWOOLE_HTTP_CLIENT_ESTATUS_SEND_FAILED', -4)) {
+        if (
+            $this->statusCodeIs($statusCode, 'SWOOLE_HTTP_CLIENT_ESTATUS_CONNECT_FAILED', -1)
+            || $this->statusCodeIs($statusCode, 'SWOOLE_HTTP_CLIENT_ESTATUS_SERVER_RESET', -3)
+            || $this->statusCodeIs($statusCode, 'SWOOLE_HTTP_CLIENT_ESTATUS_SEND_FAILED', -4)
+        ) {
             return new ConnectionException($request, $message, $code, $previous);
         }
 
@@ -656,7 +729,7 @@ class Client implements Adapter
         $mask = 0;
 
         foreach ($names as $name) {
-            if (!\defined($name)) {
+            if (! \defined($name)) {
                 continue;
             }
 
@@ -681,7 +754,7 @@ class Client implements Adapter
         $codes = $fallbacks;
 
         foreach ($names as $name) {
-            if (!\defined($name)) {
+            if (! \defined($name)) {
                 continue;
             }
 
@@ -697,7 +770,7 @@ class Client implements Adapter
 
     private function statusCodeIs(mixed $statusCode, string $constant, int $fallback): bool
     {
-        if (!\is_int($statusCode)) {
+        if (! \is_int($statusCode)) {
             return false;
         }
 
@@ -757,7 +830,10 @@ class Client implements Adapter
 
         foreach ($body->parts() as $part) {
             if ($part->path() !== null) {
-                if ($client->addFile($part->path(), $part->name(), $part->contentType() ?? '', $part->filename() ?? '') === false) {
+                if (
+                    $client->addFile($part->path(), $part->name(), $part->contentType() ?? '', $part->filename() ?? '')
+                    === false
+                ) {
                     throw new InvalidArgumentException('Unable to attach Swoole multipart file.');
                 }
 
@@ -765,7 +841,10 @@ class Client implements Adapter
             }
 
             if ($part->filename() !== null) {
-                if ($client->addData($part->content(), $part->name(), $part->contentType() ?? '', $part->filename()) === false) {
+                if (
+                    $client->addData($part->content(), $part->name(), $part->contentType() ?? '', $part->filename())
+                    === false
+                ) {
                     throw new InvalidArgumentException('Unable to attach Swoole multipart data.');
                 }
 
@@ -807,7 +886,7 @@ class Client implements Adapter
             $headers[$name] = implode(', ', $values);
         }
 
-        if (!$request->hasHeader('Host') && $request->getUri()->getHost() !== '') {
+        if (! $request->hasHeader('Host') && $request->getUri()->getHost() !== '') {
             $headers['Host'] = $this->host($request);
         }
 
@@ -851,7 +930,7 @@ class Client implements Adapter
             }
         }
 
-        if (!$decoded) {
+        if (! $decoded) {
             return $headers;
         }
 
@@ -874,7 +953,7 @@ class Client implements Adapter
         $normalized = [];
 
         foreach ($headers as $name => $value) {
-            if (!\is_string($name)) {
+            if (! \is_string($name)) {
                 continue;
             }
 
@@ -884,7 +963,7 @@ class Client implements Adapter
                 continue;
             }
 
-            if (!\is_array($value)) {
+            if (! \is_array($value)) {
                 continue;
             }
 

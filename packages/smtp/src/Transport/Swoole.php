@@ -47,7 +47,7 @@ final class Swoole implements Transport
         if (! $client->connect($this->host, $this->port, $timeout)) {
             $reason = "Cannot reach {$this->host}:{$this->port}: " . $this->error($client);
 
-            throw microtime(true) - $started >= $timeout
+            throw (microtime(true) - $started) >= $timeout
                 ? new TimeoutException($reason)
                 : new ConnectionException($reason);
         }
@@ -73,7 +73,7 @@ final class Swoole implements Transport
                 // SOCKET_ETIMEDOUT would say this outright, but it comes from
                 // ext-sockets, which this package does not require and Swoole
                 // does not provide. The clock is ours either way.
-                throw microtime(true) - $started >= $timeout
+                throw (microtime(true) - $started) >= $timeout
                     ? new TimeoutException('Timed out waiting for the server')
                     : new ConnectionException('The server closed the connection: ' . $this->error($client));
             }
@@ -106,7 +106,7 @@ final class Swoole implements Transport
             if (! \is_int($sent) || $sent < 1) {
                 $reason = 'Failed writing to the server: ' . $this->error($client);
 
-                throw microtime(true) - $started >= $timeout
+                throw (microtime(true) - $started) >= $timeout
                     ? new TimeoutException($reason)
                     : new ConnectionException($reason);
             }
@@ -129,7 +129,7 @@ final class Swoole implements Transport
         if (! $client->enableSSL()) {
             $reason = "STARTTLS handshake with {$this->host} failed: " . $this->error($client);
 
-            throw microtime(true) - $started >= $timeout
+            throw (microtime(true) - $started) >= $timeout
                 ? new TimeoutException($reason)
                 : new ConnectionException($reason);
         }

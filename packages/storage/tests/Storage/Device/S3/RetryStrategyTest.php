@@ -29,7 +29,11 @@ final class RetryStrategyTest extends TestCase
         $body = '<?xml version="1.0" encoding="UTF-8"?><Error><Code>SlowDown</Code><Message>Please reduce your request rate.</Message></Error>';
         $strategy = new RetryStrategy(delay: 0.5, randomizer: static fn(): float => 1.0);
 
-        $this->assertEqualsWithDelta(0.5, $strategy->delay($this->request(), 1, $this->response(503, $body), null), PHP_FLOAT_EPSILON);
+        $this->assertEqualsWithDelta(
+            0.5,
+            $strategy->delay($this->request(), 1, $this->response(503, $body), null),
+            PHP_FLOAT_EPSILON,
+        );
     }
 
     /** The backoff window doubles per attempt (full jitter draws uniformly inside it) and is capped by maxDelay. */

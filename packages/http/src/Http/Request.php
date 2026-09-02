@@ -396,7 +396,9 @@ abstract class Request
         foreach ($headers as $key => $values) {
             $headerStrings[] = $key . ': ' . implode(', ', $values);
         }
-        return mb_strlen(implode("\n", $headerStrings), '8bit') + mb_strlen(file_get_contents('php://input') ?: '', '8bit');
+        return (
+            mb_strlen(implode("\n", $headerStrings), '8bit') + mb_strlen(file_get_contents('php://input') ?: '', '8bit')
+        );
     }
 
     /**
@@ -407,7 +409,7 @@ abstract class Request
     public function getContentRangeStart(): ?int
     {
         $data = $this->parseContentRange();
-        if (!empty($data)) {
+        if (! empty($data)) {
             return $data['start'];
         }
         return null;
@@ -421,7 +423,7 @@ abstract class Request
     public function getContentRangeEnd(): ?int
     {
         $data = $this->parseContentRange();
-        if (!empty($data)) {
+        if (! empty($data)) {
             return $data['end'];
         }
         return null;
@@ -435,7 +437,7 @@ abstract class Request
     public function getContentRangeSize(): ?int
     {
         $data = $this->parseContentRange();
-        if (!empty($data)) {
+        if (! empty($data)) {
             return $data['size'];
         }
         return null;
@@ -449,7 +451,7 @@ abstract class Request
     public function getContentRangeUnit(): ?string
     {
         $data = $this->parseContentRange();
-        if (!empty($data)) {
+        if (! empty($data)) {
             return $data['unit'];
         }
         return null;
@@ -463,7 +465,7 @@ abstract class Request
     public function getRangeStart(): ?int
     {
         $data = $this->parseRange();
-        if (!empty($data)) {
+        if (! empty($data)) {
             return $data['start'];
         }
 
@@ -478,7 +480,7 @@ abstract class Request
     public function getRangeEnd(): ?int
     {
         $data = $this->parseRange();
-        if (!empty($data)) {
+        if (! empty($data)) {
             return $data['end'];
         }
 
@@ -493,7 +495,7 @@ abstract class Request
     public function getRangeUnit(): ?string
     {
         $data = $this->parseRange();
-        if (!empty($data)) {
+        if (! empty($data)) {
             return $data['unit'];
         }
 
@@ -541,7 +543,7 @@ abstract class Request
              * Fallback for environments
              * that do not support getallheaders
              */
-            if (!\function_exists('getallheaders')) {
+            if (! \function_exists('getallheaders')) {
                 foreach ($_SERVER as $name => $value) {
                     if (str_starts_with($name, 'HTTP_')) {
                         $key = str_replace(' ', '-', strtolower(str_replace('_', ' ', substr($name, 5))));
@@ -628,7 +630,7 @@ abstract class Request
     {
         $contentRange = $this->getHeaderLine('content-range', '');
         $data = [];
-        if (!empty($contentRange)) {
+        if (! empty($contentRange)) {
             $contentRange = explode(' ', $contentRange);
             if (\count($contentRange) !== 2) {
                 return null;
@@ -645,7 +647,7 @@ abstract class Request
                 return null;
             }
 
-            if (!ctype_digit($rangeData[1])) {
+            if (! ctype_digit($rangeData[1])) {
                 return null;
             }
 
@@ -655,7 +657,7 @@ abstract class Request
                 return null;
             }
 
-            if (!ctype_digit($parts[0]) || !ctype_digit($parts[1])) {
+            if (! ctype_digit($parts[0]) || ! ctype_digit($parts[1])) {
                 return null;
             }
 
@@ -697,7 +699,7 @@ abstract class Request
             return null;
         }
 
-        if (!ctype_digit($ranges[0])) {
+        if (! ctype_digit($ranges[0])) {
             return null;
         }
 
@@ -706,7 +708,7 @@ abstract class Request
         if ($ranges[1] === '') {
             $data['end'] = null;
         } else {
-            if (!ctype_digit($ranges[1])) {
+            if (! ctype_digit($ranges[1])) {
                 return null;
             }
             $data['end'] = (int) $ranges[1];

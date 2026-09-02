@@ -18,8 +18,8 @@ final class MessageTest extends TestCase
     public function testDecodeParsesStandardAnswer(): void
     {
         // Header: ID=0x1a2b, response, QD=1, AN=1, NS=0, AR=0 followed by question and single A answer
-        $message
-            = "\x1a\x2b\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00"
+        $message =
+            "\x1a\x2b\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00"
             . "\x03www\x07example\x03com\x00\x00\x01\x00\x01"
             . "\x03www\x07example\x03com\x00"
             . "\x00\x01"
@@ -55,8 +55,8 @@ final class MessageTest extends TestCase
     public function testEncodeProducesOriginalBytes(): void
     {
         // Same packet as above to ensure encode() round-trips original bytes
-        $message
-            = "\x1a\x2b\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00"
+        $message =
+            "\x1a\x2b\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00"
             . "\x03www\x07example\x03com\x00\x00\x01\x00\x01"
             . "\x03www\x07example\x03com\x00"
             . "\x00\x01"
@@ -167,9 +167,8 @@ final class MessageTest extends TestCase
     public function testDecodeThrowsForNxDomainWithoutAuthority(): void
     {
         // ID=0x1a2c, NXDOMAIN response with zero answers and zero authority -> should fail validation
-        $message
-            = "\x1a\x2c\x85\x83\x00\x01\x00\x00\x00\x00\x00\x00"
-            . "\x07missing\x07example\x03com\x00\x00\x01\x00\x01";
+        $message =
+            "\x1a\x2c\x85\x83\x00\x01\x00\x00\x00\x00\x00\x00" . "\x07missing\x07example\x03com\x00\x00\x01\x00\x01";
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('NXDOMAIN requires SOA in authority');
@@ -180,9 +179,8 @@ final class MessageTest extends TestCase
     public function testDecodeThrowsForNoDataWithoutAuthority(): void
     {
         // ID=0x1a2d, NOERROR response without SOA in authority -> should fail validation
-        $message
-            = "\x1a\x2d\x85\x80\x00\x01\x00\x00\x00\x00\x00\x00"
-            . "\x05empty\x07example\x03com\x00\x00\x01\x00\x01";
+        $message =
+            "\x1a\x2d\x85\x80\x00\x01\x00\x00\x00\x00\x00\x00" . "\x05empty\x07example\x03com\x00\x00\x01\x00\x01";
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('NODATA should include SOA in authority');
@@ -204,9 +202,7 @@ final class MessageTest extends TestCase
     {
         // Header declares 1 question but packet ends before QTYPE/QCLASS
         // Declares one question but omits QTYPE/QCLASS, causing question decode failure
-        $packet
-            = "\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"
-            . "\x03www\x07example\x03com\x00"; // missing type/class
+        $packet = "\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00" . "\x03www\x07example\x03com\x00"; // missing type/class
 
         try {
             Message::decode($packet);
@@ -224,12 +220,7 @@ final class MessageTest extends TestCase
         $question = "\x03www\x07example\x03com\x00\x00\x01\x00\x01"; // www.example.com IN A
         // Header: ID=0xabcd, QR=1, QD=1, AN=1
         $header = "\xab\xcd\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00";
-        $answer
-            = "\x03www\x07example\x03com\x00"
-            . "\x00\x01"
-            . "\x00\x01"
-            . "\x00\x00\x01\x2C"
-            . "\x00\x04"; // missing 4 bytes of RDATA entirely
+        $answer = "\x03www\x07example\x03com\x00" . "\x00\x01" . "\x00\x01" . "\x00\x00\x01\x2C" . "\x00\x04"; // missing 4 bytes of RDATA entirely
 
         try {
             Message::decode($header . $question . $answer);
@@ -243,8 +234,8 @@ final class MessageTest extends TestCase
     public function testDecodeThrowsPartialDecodingOnExtraBytes(): void
     {
         // Valid response with an extra trailing byte to trigger length validation
-        $message
-            = "\x1a\x2b\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00"
+        $message =
+            "\x1a\x2b\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00"
             . "\x03www\x07example\x03com\x00\x00\x01\x00\x01"
             . "\x03www\x07example\x03com\x00"
             . "\x00\x01"
@@ -263,8 +254,8 @@ final class MessageTest extends TestCase
     public function testDecodeNxDomainWithAuthority(): void
     {
         // SOA RDATA: ns1.example.com hostmaster.example.com 1 3600 900 604800 300
-        $authorityRdata
-            = "\x03ns1\x07example\x03com\x00"
+        $authorityRdata =
+            "\x03ns1\x07example\x03com\x00"
             . "\x0Ahostmaster\x07example\x03com\x00"
             . "\x00\x00\x00\x01"
             . "\x00\x00\x0E\x10"
@@ -272,8 +263,8 @@ final class MessageTest extends TestCase
             . "\x00\x09\x3A\x80"
             . "\x00\x00\x01\x2C";
 
-        $message
-            = "\x1a\x2e\x81\x83\x00\x01\x00\x00\x00\x01\x00\x00"
+        $message =
+            "\x1a\x2e\x81\x83\x00\x01\x00\x00\x00\x01\x00\x00"
             . "\x07missing\x07example\x03com\x00\x00\x01\x00\x01"
             . "\x07example\x03com\x00"
             . "\x00\x06"
@@ -310,7 +301,13 @@ final class MessageTest extends TestCase
         // Create a response with many answers that will exceed 512 bytes
         $answers = [];
         for ($i = 0; $i < 100; $i++) {
-            $answers[] = new Record('example.com', Record::TYPE_A, Record::CLASS_IN, 60, '192.168.' . ($i % 256) . '.' . ($i % 256));
+            $answers[] = new Record(
+                'example.com',
+                Record::TYPE_A,
+                Record::CLASS_IN,
+                60,
+                '192.168.' . ($i % 256) . '.' . ($i % 256),
+            );
         }
 
         $response = Message::response(
@@ -362,7 +359,13 @@ final class MessageTest extends TestCase
         // Large additional section (glue records)
         $additional = [];
         for ($i = 0; $i < 50; $i++) {
-            $additional[] = new Record('mail' . $i . '.example.com', Record::TYPE_A, Record::CLASS_IN, 300, '192.168.1.' . $i);
+            $additional[] = new Record(
+                'mail' . $i . '.example.com',
+                Record::TYPE_A,
+                Record::CLASS_IN,
+                300,
+                '192.168.1.' . $i,
+            );
         }
 
         $response = Message::response(
@@ -404,7 +407,13 @@ final class MessageTest extends TestCase
         // Authority section with NS records
         $authority = [];
         for ($i = 0; $i < 30; $i++) {
-            $authority[] = new Record('example.com', Record::TYPE_NS, Record::CLASS_IN, 3600, 'ns' . $i . '.example.com');
+            $authority[] = new Record(
+                'example.com',
+                Record::TYPE_NS,
+                Record::CLASS_IN,
+                3600,
+                'ns' . $i . '.example.com',
+            );
         }
 
         $response = Message::response(
@@ -513,7 +522,13 @@ final class MessageTest extends TestCase
         // Oversized authority — will not fit
         $authority = [];
         for ($i = 0; $i < 30; $i++) {
-            $authority[] = new Record('example.com', Record::TYPE_NS, Record::CLASS_IN, 3600, 'ns' . $i . '.example.com');
+            $authority[] = new Record(
+                'example.com',
+                Record::TYPE_NS,
+                Record::CLASS_IN,
+                3600,
+                'ns' . $i . '.example.com',
+            );
         }
 
         // Tiny additional — would fit on its own with just the answers
@@ -552,17 +567,35 @@ final class MessageTest extends TestCase
 
         $answers = [];
         for ($i = 0; $i < 100; $i++) {
-            $answers[] = new Record('example.com', Record::TYPE_A, Record::CLASS_IN, 60, '10.0.' . ($i % 256) . '.' . ($i % 256));
+            $answers[] = new Record(
+                'example.com',
+                Record::TYPE_A,
+                Record::CLASS_IN,
+                60,
+                '10.0.' . ($i % 256) . '.' . ($i % 256),
+            );
         }
 
         $authority = [];
         for ($i = 0; $i < 5; $i++) {
-            $authority[] = new Record('example.com', Record::TYPE_NS, Record::CLASS_IN, 3600, 'ns' . $i . '.example.com');
+            $authority[] = new Record(
+                'example.com',
+                Record::TYPE_NS,
+                Record::CLASS_IN,
+                3600,
+                'ns' . $i . '.example.com',
+            );
         }
 
         $additional = [];
         for ($i = 0; $i < 5; $i++) {
-            $additional[] = new Record('ns' . $i . '.example.com', Record::TYPE_A, Record::CLASS_IN, 60, '192.168.2.' . $i);
+            $additional[] = new Record(
+                'ns' . $i . '.example.com',
+                Record::TYPE_A,
+                Record::CLASS_IN,
+                60,
+                '192.168.2.' . $i,
+            );
         }
 
         $response = Message::response(
@@ -667,7 +700,13 @@ final class MessageTest extends TestCase
         // Oversized additional — will be dropped under maxSize=512.
         $additional = [];
         for ($i = 0; $i < 50; $i++) {
-            $additional[] = new Record('mail' . $i . '.example.com', Record::TYPE_A, Record::CLASS_IN, 300, '192.168.1.' . ($i % 256));
+            $additional[] = new Record(
+                'mail' . $i . '.example.com',
+                Record::TYPE_A,
+                Record::CLASS_IN,
+                300,
+                '192.168.1.' . ($i % 256),
+            );
         }
 
         $response = Message::response(
@@ -705,7 +744,13 @@ final class MessageTest extends TestCase
         // so encoding ends up with zero answers and TC=1.
         $answers = [];
         for ($i = 0; $i < 5; $i++) {
-            $answers[] = new Record('verylongname' . $i . '.example.com', Record::TYPE_A, Record::CLASS_IN, 60, '10.0.0.' . $i);
+            $answers[] = new Record(
+                'verylongname' . $i . '.example.com',
+                Record::TYPE_A,
+                Record::CLASS_IN,
+                60,
+                '10.0.0.' . $i,
+            );
         }
 
         $response = Message::response(
@@ -779,7 +824,13 @@ final class MessageTest extends TestCase
 
         $authority = [];
         for ($i = 0; $i < 30; $i++) {
-            $authority[] = new Record('example.com', Record::TYPE_NS, Record::CLASS_IN, 3600, 'ns' . $i . '.example.com');
+            $authority[] = new Record(
+                'example.com',
+                Record::TYPE_NS,
+                Record::CLASS_IN,
+                3600,
+                'ns' . $i . '.example.com',
+            );
         }
 
         $response = Message::response(

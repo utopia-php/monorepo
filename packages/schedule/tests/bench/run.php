@@ -21,7 +21,9 @@ use Utopia\Schedule\Trigger\Cron;
 use Utopia\Schedule\Trigger\Interval;
 
 const SCHEDULES = 10_000;
+
 const TICKS = 30;
+
 const INTERVAL = 60;
 
 $expressions = ['* * * * *', '*/5 * * * *', '*/15 * * * *', '0 * * * *', '30 9 * * MON-FRI', '0 0 1 * *'];
@@ -32,7 +34,7 @@ for ($i = 0; $i < SCHEDULES; ++$i) {
     $rows[] = new Row("s{$i}", 'v1', $i);
 }
 
-$source = new readonly class ($rows, $expressions, $intervals) implements Source {
+$source = new readonly class($rows, $expressions, $intervals) implements Source {
     /**
      * @param list<Row> $rows
      * @param list<string> $expressions
@@ -54,7 +56,7 @@ $source = new readonly class ($rows, $expressions, $intervals) implements Source
         $index = is_int($row->data) ? $row->data : 0;
 
         // 30% cron, 70% interval — roughly the shape of a real fleet.
-        return $index % 10 < 3
+        return ($index % 10) < 3
             ? new Entry(new Cron($this->expressions[$index % count($this->expressions)]))
             : new Entry(new Interval($this->intervals[$index % count($this->intervals)]));
     }
@@ -85,14 +87,24 @@ $measure = function (string $label, string $scale, callable $work, int $times = 
 };
 
 $measure('reconcile: full snapshot, cold (every row made)', SCHEDULES . ' rows', fn() => $scheduler->reconcile());
-$measure('reconcile: full snapshot, warm (version diff)', SCHEDULES . ' rows', fn() => $scheduler->reconcile(full: true), 5);
+$measure(
+    'reconcile: full snapshot, warm (version diff)',
+    SCHEDULES . ' rows',
+    fn() => $scheduler->reconcile(full: true),
+    5,
+);
 
 $occurrences = 0;
-$measure('tick + commit (one minute of coverage)', SCHEDULES . ' schedules', function () use ($scheduler, $clock, &$occurrences): void {
-    $occurrences += count($scheduler->tick());
-    $scheduler->commit();
-    $clock->advance((float) INTERVAL);
-}, TICKS);
+$measure(
+    'tick + commit (one minute of coverage)',
+    SCHEDULES . ' schedules',
+    function () use ($scheduler, $clock, &$occurrences): void {
+        $occurrences += count($scheduler->tick());
+        $scheduler->commit();
+        $clock->advance((float) INTERVAL);
+    },
+    TICKS,
+);
 
 $sparse = new Cron('0 12 29 2 *'); // leap day: the worst-case field-skipping search
 $start = new DateTimeImmutable('2026-08-18 12:00:30.250000');
@@ -116,11 +128,11 @@ foreach ($results as [$label, $scale, $p50, $max]) {
 }
 
 // A tick must finish well inside its interval, or coverage falls behind.
-$duty = $results[2][2] / (INTERVAL * 1000) * 100;
+$duty = ($results[2][2] / (INTERVAL * 1000)) * 100;
 
 $section = sprintf(
     "### schedule — dispatch and reconcile at scale (%s cores, %d schedules: 30%% cron / 70%% interval, %d ticks)\n\n%s\n"
-        . "%d occurrences dispatched, %.0f per tick average. Selecting one minute of coverage spends %.3f%% of the %ds tick interval.\n",
+    . "%d occurrences dispatched, %.0f per tick average. Selecting one minute of coverage spends %.3f%% of the %ds tick interval.\n",
     $cores === '' ? '?' : $cores,
     SCHEDULES,
     TICKS,

@@ -18,7 +18,10 @@ class ArrayList extends Validator
      *
      * Pass a validator that must be applied to each element in this array
      */
-    public function __construct(protected Validator $validator, protected int $length = 0) {}
+    public function __construct(
+        protected Validator $validator,
+        protected int $length = 0,
+    ) {}
 
     /**
      * Get Description
@@ -33,7 +36,7 @@ class ArrayList extends Validator
             $msg .= ' no longer than ' . $this->length . ' items';
         }
 
-        if (!\in_array($this->validator->getDescription(), ['', '0'], true)) {
+        if (! \in_array($this->validator->getDescription(), ['', '0'], true)) {
             $msg .= ' and ' . $this->validator->getDescription();
         }
 
@@ -75,15 +78,15 @@ class ArrayList extends Validator
      */
     public function isValid(mixed $value): bool
     {
-        if (!\is_array($value)) {
+        if (! \is_array($value)) {
             return false;
         }
 
         foreach ($value as $element) {
-            if (!$this->validator->isValid($element)) {
+            if (! $this->validator->isValid($element)) {
                 return false;
             }
         }
-        return !$this->length || \count($value) <= $this->length;
+        return ! $this->length || \count($value) <= $this->length;
     }
 }

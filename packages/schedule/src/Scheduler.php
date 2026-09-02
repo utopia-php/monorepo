@@ -186,9 +186,9 @@ final class Scheduler
         // Derived from the three cadences above, so a caller sets what it
         // knows — how often to tick, how often to read, how much lead time —
         // and nothing else has to restate the arithmetic between them.
-        $this->snapshotSeconds = $snapshotSeconds ?? $syncSeconds * 30;
+        $this->snapshotSeconds = $snapshotSeconds ?? ($syncSeconds * 30);
         $this->recoverSeconds = $recoverSeconds ?? 300;
-        $this->leaseSeconds = $leaseSeconds ?? ($tickSeconds + $leadSeconds) * 3;
+        $this->leaseSeconds = $leaseSeconds ?? (($tickSeconds + $leadSeconds) * 3);
 
         if ($tickSeconds < 1) {
             throw new \InvalidArgumentException('Tick interval must be at least 1 second');
@@ -203,8 +203,10 @@ final class Scheduler
             throw new \InvalidArgumentException('Lead time and recovery ceiling must not be negative');
         }
         // A tick holds its claim through delivery, to the end of the lead time.
-        if ($this->leaseSeconds < ($tickSeconds + $leadSeconds) * 2) {
-            throw new \InvalidArgumentException('A leadership claim must outlive at least two ticks, delivery included');
+        if ($this->leaseSeconds < (($tickSeconds + $leadSeconds) * 2)) {
+            throw new \InvalidArgumentException(
+                'A leadership claim must outlive at least two ticks, delivery included',
+            );
         }
 
         $this->token = $token ?? bin2hex(random_bytes(8));
@@ -248,7 +250,7 @@ final class Scheduler
         // A change feed cannot report a hard delete, so only a full
         // snapshot converges removals; incremental syncs fill the gaps
         // between them.
-        if (!$full && $since instanceof \DateTimeImmutable && $source instanceof Changes) {
+        if (! $full && $since instanceof \DateTimeImmutable && $source instanceof Changes) {
             $feed = $source->since($since);
         } else {
             $full = true;
@@ -261,7 +263,7 @@ final class Scheduler
         }
 
         foreach ($rows as $id => $row) {
-            if (!$row->active) {
+            if (! $row->active) {
                 unset($this->entries[$id], $this->tombstones[$id]);
                 continue;
             }
@@ -293,12 +295,12 @@ final class Scheduler
 
         if ($full) {
             foreach (array_keys($this->entries) as $id) {
-                if (!isset($rows[$id])) {
+                if (! isset($rows[$id])) {
                     unset($this->entries[$id]);
                 }
             }
             foreach (array_keys($this->tombstones) as $id) {
-                if (!isset($rows[$id])) {
+                if (! isset($rows[$id])) {
                     unset($this->tombstones[$id]);
                 }
             }
@@ -329,9 +331,12 @@ final class Scheduler
      * commits coverage past its last read of the source, and every schedule
      * it already knew about would be replayed across that gap on takeover.
      */
-    private function coverFrom(?\DateTimeImmutable $activeFrom, ?\DateTimeImmutable $since, bool $replaced): ?\DateTimeImmutable
-    {
-        if (!$activeFrom instanceof \DateTimeImmutable) {
+    private function coverFrom(
+        ?\DateTimeImmutable $activeFrom,
+        ?\DateTimeImmutable $since,
+        bool $replaced,
+    ): ?\DateTimeImmutable {
+        if (! $activeFrom instanceof \DateTimeImmutable) {
             return null;
         }
 
@@ -341,7 +346,7 @@ final class Scheduler
 
         $seen = $since ?? $this->moment($this->store->load()?->syncedUntil);
 
-        return !$seen instanceof \DateTimeImmutable || $activeFrom > $seen ? $activeFrom : null;
+        return ! $seen instanceof \DateTimeImmutable || $activeFrom > $seen ? $activeFrom : null;
     }
 
     /**
@@ -397,7 +402,7 @@ final class Scheduler
         $started = microtime(true);
 
         $claim = $this->elect();
-        if (!$claim instanceof Claim) {
+        if (! $claim instanceof Claim) {
             $this->clearPending();
 
             return [];
@@ -450,7 +455,7 @@ final class Scheduler
                 $covered[$id] = $entry['version'];
             }
 
-            if ($dues !== [] && !$entry['trigger']->recurring()) {
+            if ($dues !== [] && ! $entry['trigger']->recurring()) {
                 $oneShots[$id] = $entry['version'];
             }
         }
@@ -537,7 +542,7 @@ final class Scheduler
                 $this->wait((float) $at);
 
                 // Only a waited batch can have outlived the tick's election.
-                if (!$this->elect() instanceof Claim) {
+                if (! $this->elect() instanceof Claim) {
                     return;
                 }
             }
@@ -590,7 +595,7 @@ final class Scheduler
      */
     public function commit(): bool
     {
-        if (!$this->pendingCoveredUntil instanceof \DateTimeImmutable) {
+        if (! $this->pendingCoveredUntil instanceof \DateTimeImmutable) {
             return false;
         }
 
@@ -604,10 +609,12 @@ final class Scheduler
             // this tick never saw are already covered. A tick that has not
             // reconciled at all leaves what a predecessor recorded intact,
             // rather than erasing the only view anyone has.
-            $this->pendingSyncedUntil instanceof \DateTimeImmutable ? (float) $this->pendingSyncedUntil->format('U.u') : $this->store->load()?->syncedUntil,
+            $this->pendingSyncedUntil instanceof \DateTimeImmutable
+                ? (float) $this->pendingSyncedUntil->format('U.u')
+                : $this->store->load()?->syncedUntil,
         );
 
-        if (!$this->store->swap($this->token, $next)) {
+        if (! $this->store->swap($this->token, $next)) {
             // Deposed mid-tick: the new leader re-covers this window, so
             // nothing is lost — but a lease shorter than a dispatch takes
             // would do this every tick, which is worth seeing.
@@ -668,7 +675,7 @@ final class Scheduler
 
         try {
             while ($this->running) {
-                if (!$this->elect() instanceof Claim) {
+                if (! $this->elect() instanceof Claim) {
                     $this->clock->sleep((float) $this->tickSeconds);
                     continue;
                 }
@@ -678,7 +685,7 @@ final class Scheduler
                 $this->deliver($this->tick(), $handler);
                 $this->commit();
 
-                if (!$this->running) {
+                if (! $this->running) {
                     break;
                 }
 
@@ -724,11 +731,16 @@ final class Scheduler
                 // covers the dispatch ahead instead of the gap since the
                 // last commit. Half a lease of slack keeps this to one
                 // extra write per lease rather than one per tick.
-                if ($claim->expiresAt - $now >= $this->leaseSeconds / 2) {
+                if (($claim->expiresAt - $now) >= ($this->leaseSeconds / 2)) {
                     return $claim;
                 }
 
-                $renewed = new Claim($this->token, $now + $this->leaseSeconds, $claim->coveredUntil, $claim->syncedUntil);
+                $renewed = new Claim(
+                    $this->token,
+                    $now + $this->leaseSeconds,
+                    $claim->coveredUntil,
+                    $claim->syncedUntil,
+                );
                 if ($this->store->swap($this->token, $renewed)) {
                     return $renewed;
                 }
@@ -751,7 +763,7 @@ final class Scheduler
 
         $next = new Claim($this->token, $now + $this->leaseSeconds, $coveredUntil, $syncedUntil);
 
-        if (!$this->store->swap($expected, $next)) {
+        if (! $this->store->swap($expected, $next)) {
             return null; // lost the takeover race
         }
 
@@ -768,7 +780,7 @@ final class Scheduler
     private function release(): void
     {
         $claim = $this->store->load();
-        if (!$claim instanceof Claim || $claim->token !== $this->token) {
+        if (! $claim instanceof Claim || $claim->token !== $this->token) {
             return;
         }
 
@@ -789,7 +801,7 @@ final class Scheduler
     {
         $this->errorTotal->add(1, ['stage' => $stage]);
 
-        if (!$this->onError instanceof \Closure) {
+        if (! $this->onError instanceof \Closure) {
             throw $error;
         }
 

@@ -18,7 +18,15 @@ class RedisCluster implements Adapter, Retryable
      * @param  array<string>  $seeds
      * @param  string|array<string>|null  $auth  Password string or ['username', 'password'] array for ACL
      */
-    public function __construct(protected Client $redis, protected array $seeds, protected ?string $name = null, private readonly float $timeout = 1.5, private readonly float $readTimeout = 1.5, private readonly bool $persistent = false, private readonly string|array|null $auth = null) {}
+    public function __construct(
+        protected Client $redis,
+        protected array $seeds,
+        protected ?string $name = null,
+        private readonly float $timeout = 1.5,
+        private readonly float $readTimeout = 1.5,
+        private readonly bool $persistent = false,
+        private readonly string|array|null $auth = null,
+    ) {}
 
     /**
      * @param  int  $maxRetries (0-10)
@@ -65,7 +73,7 @@ class RedisCluster implements Adapter, Retryable
             return false;
         }
 
-        if ($cache['time'] + $ttl > time()) { // Cache is valid
+        if (($cache['time'] + $ttl) > time()) { // Cache is valid
             return $cache['data'];
         }
 

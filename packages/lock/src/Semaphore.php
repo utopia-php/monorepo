@@ -15,8 +15,9 @@ final class Semaphore implements Lock
 
     private int $syncHeld = 0;
 
-    public function __construct(private readonly int $permits)
-    {
+    public function __construct(
+        private readonly int $permits,
+    ) {
         if ($permits < 1) {
             throw new InvalidArgumentException('Permits must be at least 1');
         }

@@ -11,10 +11,13 @@ class Memcached implements Adapter, Retryable
     private int $maxRetries = 0;
 
     private int $retryDelay = 1000; // milliseconds
+
     /**
      * Memcached constructor.
      */
-    public function __construct(protected Client $memcached) {}
+    public function __construct(
+        protected Client $memcached,
+    ) {}
 
     /**
      * @param  int  $maxRetries (0-10)
@@ -47,7 +50,7 @@ class Memcached implements Adapter, Retryable
             return false;
         }
 
-        if ($cache['time'] + $ttl > time()) { // Cache is valid
+        if (($cache['time'] + $ttl) > time()) { // Cache is valid
             return $cache['data'];
         }
 
@@ -185,7 +188,10 @@ class Memcached implements Adapter, Retryable
                 $attempts++;
 
                 if ($attempts >= $maxAttempts) {
-                    throw new \MemcachedException('Memcached connection failed after ' . $attempts . ' attempts. Error: ' . $this->memcached->getResultMessage());
+                    throw new \MemcachedException(
+                        'Memcached connection failed after ' . $attempts . ' attempts. Error: '
+                            . $this->memcached->getResultMessage(),
+                    );
                 }
 
                 usleep($this->retryDelay * 1000);

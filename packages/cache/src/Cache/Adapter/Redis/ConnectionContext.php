@@ -28,7 +28,7 @@ class ConnectionContext
         public SplQueue $pending,
         ?float $lastProgressAt = null,
     ) {
-        $this->lastProgressAt = $lastProgressAt ?? hrtime(true) / 1e9;
+        $this->lastProgressAt = $lastProgressAt ?? (hrtime(true) / 1e9);
     }
 
     /**

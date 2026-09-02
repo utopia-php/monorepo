@@ -9,7 +9,8 @@ use Utopia\Queue\Message;
 $connection = new Queue\Connection\Redis('redis');
 $adapter = new Queue\Adapter\Workerman($connection, 12, 'workerman');
 $server = new Queue\Server($adapter);
-$server->job()
+$server
+    ->job()
     ->inject('message')
     ->action(function (Message $message): void {
         handleRequest($message);

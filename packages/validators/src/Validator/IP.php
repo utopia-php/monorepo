@@ -29,7 +29,7 @@ class IP extends Validator
      */
     public function __construct(string $type = self::ALL)
     {
-        if (!\in_array($type, [self::ALL, self::V4, self::V6])) {
+        if (! \in_array($type, [self::ALL, self::V4, self::V6])) {
             throw new Exception('Unsupported IP type');
         }
 

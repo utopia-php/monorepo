@@ -18,7 +18,8 @@ $consumer = new Redis(
 $adapter = new Swoole($consumer, 12);
 $server = new Server($adapter);
 
-$server->job('swoole', 5)
+$server
+    ->job('swoole', 5)
     ->inject('message')
     ->param(
         key: 'aliasValue',
@@ -37,12 +38,16 @@ $server
         echo $th->getMessage() . PHP_EOL;
     });
 
-$server->workerStart()->action(function (): void {
-    echo 'Worker Started' . PHP_EOL;
-});
+$server
+    ->workerStart()
+    ->action(function (): void {
+        echo 'Worker Started' . PHP_EOL;
+    });
 
-$server->workerStop()->action(function (): void {
-    echo 'Worker Stopped' . PHP_EOL;
-});
+$server
+    ->workerStop()
+    ->action(function (): void {
+        echo 'Worker Stopped' . PHP_EOL;
+    });
 
 $server->start();

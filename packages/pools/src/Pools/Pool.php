@@ -85,16 +85,43 @@ class Pool
         $this->adapter->initialize($size);
 
         $telemetry ??= new NoTelemetry();
-        $advisory = ['ExplicitBucketBoundaries' => [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]];
-        $this->waitDuration = $telemetry->createHistogram(name: 'pool.connection.wait_time', unit: 's', advisory: $advisory);
-        $this->useDuration = $telemetry->createHistogram(name: 'pool.connection.use_time', unit: 's', advisory: $advisory);
+        $advisory = ['ExplicitBucketBoundaries' => [
+            0.005,
+            0.01,
+            0.025,
+            0.05,
+            0.075,
+            0.1,
+            0.25,
+            0.5,
+            0.75,
+            1,
+            2.5,
+            5,
+            7.5,
+            10,
+        ]];
+        $this->waitDuration = $telemetry->createHistogram(
+            name: 'pool.connection.wait_time',
+            unit: 's',
+            advisory: $advisory,
+        );
+        $this->useDuration = $telemetry->createHistogram(
+            name: 'pool.connection.use_time',
+            unit: 's',
+            advisory: $advisory,
+        );
         $this->telemetryAttributes = ['pool' => $name, 'size' => $size];
 
         // Connection counts are gauges: only their value at export time matters, so observe
         // them lazily at collection rather than recording on every pop/push/reclaim.
         $this->observeGauge($telemetry, 'pool.connection.active.count', fn(): int => \count($this->active));
         $this->observeGauge($telemetry, 'pool.connection.idle.count', fn(): int => $this->adapter->count());
-        $this->observeGauge($telemetry, 'pool.connection.open.count', fn(): int => \count($this->active) + $this->adapter->count());
+        $this->observeGauge(
+            $telemetry,
+            'pool.connection.open.count',
+            fn(): int => \count($this->active) + $this->adapter->count(),
+        );
         $this->observeGauge($telemetry, 'pool.connection.capacity.count', fn(): int => $this->reserved);
     }
 
@@ -105,7 +132,8 @@ class Pool
      */
     private function observeGauge(Telemetry $telemetry, string $name, callable $sample): void
     {
-        $telemetry->createObservableGauge($name)
+        $telemetry
+            ->createObservableGauge($name)
             ->observe(fn(callable $observe) => $observe($sample(), $this->telemetryAttributes));
     }
 
@@ -381,7 +409,7 @@ class Pool
      */
     public function destroy(?Connection $connection = null): static
     {
-        if (!$connection instanceof \Utopia\Pools\Connection) {
+        if (! $connection instanceof \Utopia\Pools\Connection) {
             foreach (array_values($this->active) as $active) {
                 $this->destroy($active);
             }

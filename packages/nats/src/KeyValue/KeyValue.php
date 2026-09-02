@@ -109,11 +109,7 @@ final class KeyValue
         $subject = "\$KV.{$this->bucket}.{$key}";
 
         try {
-            $ack = $this->js->publish(
-                $subject,
-                $value,
-                expectedLastSubjectSeq: $revision,
-            );
+            $ack = $this->js->publish($subject, $value, expectedLastSubjectSeq: $revision);
         } catch (\Throwable $e) {
             throw new KeyValueException("Wrong last revision for key: {$key}", $e->getCode(), previous: $e);
         }
@@ -210,12 +206,15 @@ final class KeyValue
         $stream = "KV_{$this->bucket}";
         $subject = "\$KV.{$this->bucket}.{$key}";
 
-        $consumer = $this->js->createConsumer($stream, new ConsumerConfig(
-            deliverPolicy: DeliverPolicy::All,
-            ackPolicy: AckPolicy::Explicit,
-            filterSubject: $subject,
-            inactiveThreshold: 30.0,
-        ));
+        $consumer = $this->js->createConsumer(
+            $stream,
+            new ConsumerConfig(
+                deliverPolicy: DeliverPolicy::All,
+                ackPolicy: AckPolicy::Explicit,
+                filterSubject: $subject,
+                inactiveThreshold: 30.0,
+            ),
+        );
 
         try {
             $entries = [];
@@ -295,7 +294,14 @@ final class KeyValue
         $delivered = 0;
         $initSignaled = false;
 
-        $sub = $this->conn->subscribe($deliverSubject, function (Message $msg) use ($callback, $options, $onInitDone, $numPending, &$delivered, &$initSignaled): void {
+        $sub = $this->conn->subscribe($deliverSubject, function (Message $msg) use (
+            $callback,
+            $options,
+            $onInitDone,
+            $numPending,
+            &$delivered,
+            &$initSignaled,
+        ): void {
             // Ignore JetStream idle heartbeats / flow control (100 status).
             if ($msg->headers instanceof Headers && $msg->headers->getStatus() !== '') {
                 return;
@@ -304,13 +310,13 @@ final class KeyValue
             $delivered++;
             $entry = $this->entryFromMessage($msg);
 
-            $isMarker = $entry->operation === KeyValueOperation::Delete
-                || $entry->operation === KeyValueOperation::Purge;
-            if (!$options->ignoreDeletes || !$isMarker) {
+            $isMarker =
+                $entry->operation === KeyValueOperation::Delete || $entry->operation === KeyValueOperation::Purge;
+            if (! $options->ignoreDeletes || ! $isMarker) {
                 $callback($entry);
             }
 
-            if (!$initSignaled && $delivered >= $numPending) {
+            if (! $initSignaled && $delivered >= $numPending) {
                 $initSignaled = true;
                 if ($onInitDone !== null) {
                     $onInitDone();
@@ -318,7 +324,7 @@ final class KeyValue
             }
         });
 
-        if ($numPending === 0 && !$initSignaled) {
+        if ($numPending === 0 && ! $initSignaled) {
             $initSignaled = true;
             if ($onInitDone !== null) {
                 $onInitDone();
@@ -353,7 +359,7 @@ final class KeyValue
                 continue;
             }
 
-            if (!$msg->headers instanceof Headers) {
+            if (! $msg->headers instanceof Headers) {
                 continue;
             }
 
@@ -407,9 +413,7 @@ final class KeyValue
     private function entryFromMessage(Message $msg): KeyValueEntry
     {
         $prefix = "\$KV.{$this->bucket}.";
-        $key = str_starts_with($msg->subject, $prefix)
-            ? substr($msg->subject, \strlen($prefix))
-            : $msg->subject;
+        $key = str_starts_with($msg->subject, $prefix) ? substr($msg->subject, \strlen($prefix)) : $msg->subject;
 
         $revision = 0;
         $created = null;
@@ -447,7 +451,7 @@ final class KeyValue
         JetStream::checkError($data);
 
         $stored = $data['message'] ?? null;
-        if (!\is_array($stored)) {
+        if (! \is_array($stored)) {
             throw new KeyValueException("Revision not found for key: {$key}");
         }
 
@@ -474,7 +478,7 @@ final class KeyValue
 
     private function operationFromHeaders(?Headers $headers): KeyValueOperation
     {
-        if (!$headers instanceof Headers) {
+        if (! $headers instanceof Headers) {
             return KeyValueOperation::Put;
         }
 

@@ -88,7 +88,14 @@ abstract class Base extends TestCase
      * @param array<string> $removed
      * @param array<string> $modified
      */
-    abstract protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false): string;
+    abstract protected function pushPayload(
+        string $branch,
+        array $added = [],
+        array $removed = [],
+        array $modified = [],
+        bool $created = false,
+        bool $deleted = false,
+    ): string;
 
     /**
      * Build a pull request payload shaped the way this provider sends one,
@@ -111,19 +118,25 @@ abstract class Base extends TestCase
     {
         $this->assertSame(static::$supportedWebhookScopes, $this->vcsAdapter->getSupportedWebhookScopes());
     }
+
     public function testValidateWebhookEvent(): void
     {
         $payload = '{"object_kind":"push","action":"push"}';
         $secret = 'my-webhook-secret';
 
-        $this->assertTrue(
-            $this->vcsAdapter->validateWebhookEvent($payload, $this->signWebhookPayload($payload, $secret), $secret),
-        );
+        $this->assertTrue($this->vcsAdapter->validateWebhookEvent(
+            $payload,
+            $this->signWebhookPayload($payload, $secret),
+            $secret,
+        ));
         $this->assertFalse($this->vcsAdapter->validateWebhookEvent($payload, 'not-the-signature', $secret));
-        $this->assertFalse(
-            $this->vcsAdapter->validateWebhookEvent($payload, $this->signWebhookPayload($payload, 'another-secret'), $secret),
-        );
+        $this->assertFalse($this->vcsAdapter->validateWebhookEvent(
+            $payload,
+            $this->signWebhookPayload($payload, 'another-secret'),
+            $secret,
+        ));
     }
+
     public function testGetEventPush(): void
     {
         $events = $this->vcsAdapter->getEvents(
@@ -196,7 +209,10 @@ abstract class Base extends TestCase
 
     public function testGetEventPullRequestDetectsExternal(): void
     {
-        $events = $this->vcsAdapter->getEvents(static::$pullRequestEventName, $this->pullRequestPayload(external: true));
+        $events = $this->vcsAdapter->getEvents(
+            static::$pullRequestEventName,
+            $this->pullRequestPayload(external: true),
+        );
         $this->assertCount(1, $events);
         $result = $events[0];
 

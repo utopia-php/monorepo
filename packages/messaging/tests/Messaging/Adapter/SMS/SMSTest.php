@@ -18,11 +18,7 @@ final class SMSTest extends Base
         $sender = new Mock('username', 'password');
         $sender->setEndpoint('http://127.0.0.1:15000/mock-sms');
 
-        $message = new SMS(
-            to: ['+123456789'],
-            content: 'Test Content',
-            from: '+987654321',
-        );
+        $message = new SMS(to: ['+123456789'], content: 'Test Content', from: '+987654321');
 
         $sender->send($message);
 

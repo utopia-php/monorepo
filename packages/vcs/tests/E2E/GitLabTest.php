@@ -48,9 +48,13 @@ final class GitLabTest extends Base
         if (self::$owner === '' || self::$owner === '0') {
             // GitLab answers its health probe well before the API serves traffic, so
             // give the first call room to get past 502s rather than failing every test.
-            $this->assertEventually(function () use ($adapter): void {
-                self::$owner = $adapter->createOrganization('test-org-' . uniqid());
-            }, 60000, 2000);
+            $this->assertEventually(
+                function () use ($adapter): void {
+                    self::$owner = $adapter->createOrganization('test-org-' . uniqid());
+                },
+                60000,
+                2000,
+            );
         }
 
         $this->vcsAdapter = $adapter;
@@ -112,5 +116,4 @@ final class GitLabTest extends Base
 
         return (int) $pullRequest['iid'];
     }
-
 }

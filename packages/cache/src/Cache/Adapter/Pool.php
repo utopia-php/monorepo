@@ -13,10 +13,11 @@ class Pool implements Adapter, Leasable
      *
      * @throws \Exception
      */
-    public function __construct(protected UtopiaPool $pool)
-    {
+    public function __construct(
+        protected UtopiaPool $pool,
+    ) {
         $this->pool->use(function (mixed $resource): void {
-            if (! ($resource instanceof Adapter)) {
+            if (! $resource instanceof Adapter) {
                 throw new \Exception('Pool must contain instances of ' . Adapter::class);
             }
         });
@@ -51,7 +52,9 @@ class Pool implements Adapter, Leasable
 
     public function getGeneration(string $key): string
     {
-        return $this->pool->use(fn(Adapter $adapter): string => $adapter instanceof Leasable ? $adapter->getGeneration($key) : '0');
+        return $this->pool->use(fn(Adapter $adapter): string => $adapter instanceof Leasable
+            ? $adapter->getGeneration($key)
+            : '0');
     }
 
     public function saveWithLease(string $key, array|string $data, string $hash, string $generation): bool|string|array

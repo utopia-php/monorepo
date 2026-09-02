@@ -18,13 +18,7 @@ final class TcpTransport implements Transport
         $errno = 0;
         $errstr = '';
 
-        $stream = @stream_socket_client(
-            $address,
-            $errno,
-            $errstr,
-            $timeout,
-            STREAM_CLIENT_CONNECT,
-        );
+        $stream = @stream_socket_client($address, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT);
 
         if ($stream === false) {
             throw new ConnectionException("Failed to connect to {$address}: [{$errno}] {$errstr}");
@@ -137,7 +131,11 @@ final class TcpTransport implements Transport
             }
         }
 
-        $result = @stream_socket_enable_crypto($stream, true, STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT);
+        $result = @stream_socket_enable_crypto(
+            $stream,
+            true,
+            STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT,
+        );
 
         if ($result !== true) {
             throw new ConnectionException('Failed to upgrade connection to TLS');
@@ -146,7 +144,7 @@ final class TcpTransport implements Transport
 
     public function isConnected(): bool
     {
-        return $this->stream !== null && !feof($this->stream);
+        return $this->stream !== null && ! feof($this->stream);
     }
 
     public function close(): void

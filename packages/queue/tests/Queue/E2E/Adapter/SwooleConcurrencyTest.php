@@ -74,7 +74,11 @@ final class SwooleConcurrencyTest extends TestCase
         });
 
         $this->assertSame(2, $processed);
-        $this->assertSame(1, $pendingDuringFirstMessage, 'the second message must wait in the broker, not in the consume loop');
+        $this->assertSame(
+            1,
+            $pendingDuringFirstMessage,
+            'the second message must wait in the broker, not in the consume loop',
+        );
     }
 
     /**
@@ -93,7 +97,15 @@ final class SwooleConcurrencyTest extends TestCase
         $maxActive = 0;
         $processed = 0;
 
-        \Swoole\Coroutine\run(function () use ($broker, $queue, $messages, $maxCoroutines, &$active, &$maxActive, &$processed): void {
+        \Swoole\Coroutine\run(function () use (
+            $broker,
+            $queue,
+            $messages,
+            $maxCoroutines,
+            &$active,
+            &$maxActive,
+            &$processed,
+        ): void {
             for ($i = 0; $i < $messages; $i++) {
                 $broker->enqueue($queue, ['n' => $i]);
             }

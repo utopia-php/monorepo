@@ -127,10 +127,7 @@ final class Client
             throw new \InvalidArgumentException('A command must not span lines');
         }
 
-        return $this->exchange(
-            \is_array($expect) ? $expect : [$expect],
-            $command . "\r\n",
-        );
+        return $this->exchange(\is_array($expect) ? $expect : [$expect], $command . "\r\n");
     }
 
     /**
@@ -326,7 +323,9 @@ final class Client
 
         if ($envelope->isInternational()) {
             if (! $this->capabilities->has('SMTPUTF8')) {
-                throw new CapabilityException('The server does not offer SMTPUTF8, so a non-ASCII address cannot be sent');
+                throw new CapabilityException(
+                    'The server does not offer SMTPUTF8, so a non-ASCII address cannot be sent',
+                );
             }
 
             $parameters .= ' SMTPUTF8';

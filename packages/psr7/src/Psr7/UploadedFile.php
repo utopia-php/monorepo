@@ -32,13 +32,11 @@ final class UploadedFile implements UploadedFileInterface
         $normalized = [];
 
         foreach ($files as $key => $file) {
-            if (!\is_array($file)) {
+            if (! \is_array($file)) {
                 continue;
             }
 
-            $normalized[$key] = self::isFileSpec($file)
-                ? self::normalizeFileSpec($file)
-                : self::normalizeFiles($file);
+            $normalized[$key] = self::isFileSpec($file) ? self::normalizeFileSpec($file) : self::normalizeFiles($file);
         }
 
         return $normalized;
@@ -54,10 +52,10 @@ final class UploadedFile implements UploadedFileInterface
             throw new RuntimeException('Uploaded file is not available.');
         }
 
-        if (!$this->stream instanceof StreamInterface) {
+        if (! $this->stream instanceof StreamInterface) {
             $resource = fopen($this->file, 'r');
 
-            if (!\is_resource($resource)) {
+            if (! \is_resource($resource)) {
                 throw new RuntimeException('Unable to open uploaded file stream.');
             }
 
@@ -81,11 +79,9 @@ final class UploadedFile implements UploadedFileInterface
             throw new RuntimeException('Uploaded file is not available.');
         }
 
-        $moved = \PHP_SAPI === 'cli'
-            ? rename($this->file, $targetPath)
-            : move_uploaded_file($this->file, $targetPath);
+        $moved = \PHP_SAPI === 'cli' ? rename($this->file, $targetPath) : move_uploaded_file($this->file, $targetPath);
 
-        if (!$moved) {
+        if (! $moved) {
             throw new RuntimeException('Unable to move uploaded file.');
         }
 
@@ -117,9 +113,11 @@ final class UploadedFile implements UploadedFileInterface
      */
     private static function isFileSpec(array $file): bool
     {
-        return \array_key_exists('tmp_name', $file)
+        return (
+            \array_key_exists('tmp_name', $file)
             || \array_key_exists('error', $file)
-            || \array_key_exists('size', $file);
+            || \array_key_exists('size', $file)
+        );
     }
 
     /**
@@ -134,10 +132,12 @@ final class UploadedFile implements UploadedFileInterface
             foreach (array_keys($file['tmp_name']) as $key) {
                 $normalized[$key] = self::normalizeFileSpec([
                     'tmp_name' => $file['tmp_name'][$key] ?? '',
-                    'size' => \is_array($file['size'] ?? null) ? ($file['size'][$key] ?? 0) : 0,
-                    'error' => \is_array($file['error'] ?? null) ? ($file['error'][$key] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE,
-                    'name' => \is_array($file['name'] ?? null) ? ($file['name'][$key] ?? null) : null,
-                    'type' => \is_array($file['type'] ?? null) ? ($file['type'][$key] ?? null) : null,
+                    'size' => \is_array($file['size'] ?? null) ? $file['size'][$key] ?? 0 : 0,
+                    'error' => \is_array($file['error'] ?? null)
+                        ? $file['error'][$key] ?? UPLOAD_ERR_NO_FILE
+                        : UPLOAD_ERR_NO_FILE,
+                    'name' => \is_array($file['name'] ?? null) ? $file['name'][$key] ?? null : null,
+                    'type' => \is_array($file['type'] ?? null) ? $file['type'][$key] ?? null : null,
                 ]);
             }
 

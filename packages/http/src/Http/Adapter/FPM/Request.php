@@ -108,7 +108,7 @@ class Request extends UtopiaRequest
     public function getHostname(): string
     {
         $hostname = parse_url($this->getProtocol() . '://' . $this->getServer('HTTP_HOST', ''), PHP_URL_HOST);
-        return strtolower((string) ($hostname));
+        return strtolower((string) $hostname);
     }
 
     /**
@@ -241,7 +241,7 @@ class Request extends UtopiaRequest
 
             // Get content-type without the charset
             $length = strpos($contentType, ';');
-            $length = (empty($length)) ? \strlen($contentType) : $length;
+            $length = empty($length) ? \strlen($contentType) : $length;
             $contentType = substr($contentType, 0, $length);
 
             $this->rawPayload = file_get_contents('php://input') ?: '';
@@ -257,10 +257,7 @@ class Request extends UtopiaRequest
         }
 
         return match ($this->getServer('REQUEST_METHOD', '')) {
-            self::METHOD_POST,
-            self::METHOD_PUT,
-            self::METHOD_PATCH,
-            self::METHOD_DELETE => $this->payload,
+            self::METHOD_POST, self::METHOD_PUT, self::METHOD_PATCH, self::METHOD_DELETE => $this->payload,
             default => $this->queryString,
         };
     }

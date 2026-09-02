@@ -40,7 +40,7 @@ final class Envelope
             return false;
         }
 
-        if ($cache['time'] + $ttl > $now) {
+        if (($cache['time'] + $ttl) > $now) {
             return $cache['data'];
         }
 

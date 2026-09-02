@@ -21,10 +21,9 @@ final class NatsPoolTest extends Base
 {
     protected function getPublisher(): Publisher
     {
-        $factory = fn(): Nats => new Nats(
-            fn(): Connection => Connection::connect('nats://127.0.0.1:14225'),
-            maxDeliver: 3,
-        );
+        $factory = fn(): Nats => new Nats(fn(): Connection => Connection::connect(
+            'nats://127.0.0.1:14225',
+        ), maxDeliver: 3);
         $pool = new UtopiaPool(new Stack(), 'nats', 1, $factory, timeout: 0.0);
 
         return new Pool($pool, $pool);

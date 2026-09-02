@@ -41,9 +41,10 @@ final class CertificatesTest extends TestCase
             public function deleteCertificate(string $domain, ?string $domainType = null): void {}
         });
 
-        $this->assertSame(
-            '2027-01-01 00:00:00.000',
-            $certificates->issueCertificate('cert-name', 'cdn.example.com', null),
-        );
+        $this->assertSame('2027-01-01 00:00:00.000', $certificates->issueCertificate(
+            'cert-name',
+            'cdn.example.com',
+            null,
+        ));
     }
 }

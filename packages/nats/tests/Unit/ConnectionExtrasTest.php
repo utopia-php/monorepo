@@ -21,10 +21,7 @@ final class ConnectionExtrasTest extends TestCase
 {
     public function testAuthorizationViolationMapsToAuthenticationException(): void
     {
-        $this->assertInstanceOf(
-            AuthenticationException::class,
-            Connection::mapServerError('Authorization Violation'),
-        );
+        $this->assertInstanceOf(AuthenticationException::class, Connection::mapServerError('Authorization Violation'));
     }
 
     public function testUserAuthenticationExpiredMapsToAuthenticationException(): void
@@ -37,10 +34,7 @@ final class ConnectionExtrasTest extends TestCase
 
     public function testMaximumPayloadMapsToMaxPayloadException(): void
     {
-        $this->assertInstanceOf(
-            MaxPayloadException::class,
-            Connection::mapServerError('Maximum Payload Exceeded'),
-        );
+        $this->assertInstanceOf(MaxPayloadException::class, Connection::mapServerError('Maximum Payload Exceeded'));
     }
 
     public function testPermissionsViolationForSubscriptionMapsToPermissionException(): void
@@ -61,10 +55,7 @@ final class ConnectionExtrasTest extends TestCase
 
     public function testUnknownErrorMapsToProtocolException(): void
     {
-        $this->assertInstanceOf(
-            ProtocolException::class,
-            Connection::mapServerError('some unexpected error'),
-        );
+        $this->assertInstanceOf(ProtocolException::class, Connection::mapServerError('some unexpected error'));
     }
 
     public function testLameDuckInfoInvokesCallback(): void

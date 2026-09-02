@@ -66,7 +66,11 @@ class Config
                 try {
                     $instance->$propertyName = $value;
                 } catch (\TypeError $e) {
-                    throw new Load("Invalid value for {$key->name}: does not match the type of property {$property->name}.", 0, $e);
+                    throw new Load(
+                        "Invalid value for {$key->name}: does not match the type of property {$property->name}.",
+                        0,
+                        $e,
+                    );
                 }
             }
 
@@ -89,13 +93,13 @@ class Config
                 }
 
                 $expectedType = $property->getType();
-                if ($expectedType === null || !method_exists($expectedType, 'getName')) {
+                if ($expectedType === null || ! method_exists($expectedType, 'getName')) {
                     throw new Load("Property {$property->name} is missing a type.");
                 }
 
                 $expectedClass = $expectedType->getName();
 
-                if (!($value instanceof $expectedClass)) {
+                if (! $value instanceof $expectedClass) {
                     throw new Load("Invalid value for {$keyName}: Must be instance of {$expectedClass}.");
                 }
 
@@ -103,7 +107,7 @@ class Config
                 $instance->$propertyName = $value;
             }
 
-            if (!$attributeFound) {
+            if (! $attributeFound) {
                 throw new Load("Property {$property->name} is missing attribute syntax.");
             }
         }
@@ -149,18 +153,18 @@ class Config
             return self::missing();
         }
 
-        if ($index === \count($parts) - 1) {
+        if ($index === (\count($parts) - 1)) {
             return \array_key_exists($parts[$index], $data) ? $data[$parts[$index]] : self::missing();
         }
 
-        for ($length = 1; $length <= \count($parts) - $index; $length++) {
+        for ($length = 1; $length <= (\count($parts) - $index); $length++) {
             $keyParts = \array_slice($parts, $index, $length);
             $key = implode('.', $keyParts);
 
             if (\array_key_exists($key, $data)) {
                 $value = $data[$key];
 
-                if ($index + $length === \count($parts)) {
+                if (($index + $length) === \count($parts)) {
                     return $value;
                 }
 

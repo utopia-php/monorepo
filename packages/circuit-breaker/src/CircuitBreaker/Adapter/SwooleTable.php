@@ -23,7 +23,7 @@ final readonly class SwooleTable implements CircuitBreakerAdapter
         private string $prefix = 'breaker:',
     ) {
         foreach (['get', 'set', 'incr', 'del'] as $method) {
-            if (!method_exists($this->table, $method)) {
+            if (! method_exists($this->table, $method)) {
                 throw new \InvalidArgumentException(\sprintf(
                     '%s requires a Swoole table-compatible object with a %s() method.',
                     self::class,
@@ -33,11 +33,9 @@ final readonly class SwooleTable implements CircuitBreakerAdapter
         }
     }
 
-    public static function createTable(
-        int $size = 1024,
-        int $valueLength = self::DEFAULT_VALUE_LENGTH,
-    ): \Swoole\Table {
-        if (!class_exists(\Swoole\Table::class)) {
+    public static function createTable(int $size = 1024, int $valueLength = self::DEFAULT_VALUE_LENGTH): \Swoole\Table
+    {
+        if (! class_exists(\Swoole\Table::class)) {
             throw new AdapterException('The swoole extension is required to create a Swoole table.');
         }
 
@@ -58,7 +56,7 @@ final readonly class SwooleTable implements CircuitBreakerAdapter
             return null;
         }
 
-        if (!\is_array($row)) {
+        if (! \is_array($row)) {
             throw new AdapterException(\sprintf('Unexpected Swoole table row for cache key "%s".', $key));
         }
 

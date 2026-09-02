@@ -62,11 +62,7 @@ final class ConfigTest extends TestCase
 
     public function testBackoffSerializesToNanos(): void
     {
-        $config = new ConsumerConfig(
-            ackWait: 10.0,
-            maxDeliver: 5,
-            backoff: [10.0, 30.0, 120.0],
-        );
+        $config = new ConsumerConfig(ackWait: 10.0, maxDeliver: 5, backoff: [10.0, 30.0, 120.0]);
 
         $arr = $config->toArray();
         $this->assertSame([10_000_000_000, 30_000_000_000, 120_000_000_000], $arr['backoff']);
@@ -75,7 +71,7 @@ final class ConfigTest extends TestCase
 
     public function testBackoffOmittedWhenUnset(): void
     {
-        $this->assertArrayNotHasKey('backoff', (new ConsumerConfig())->toArray());
+        $this->assertArrayNotHasKey('backoff', new ConsumerConfig()->toArray());
     }
 
     public function testBackoffRoundTrip(): void

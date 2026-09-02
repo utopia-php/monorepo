@@ -58,8 +58,9 @@ class Cache
     /**
      * Initialize with a no-op telemetry adapter by default.
      */
-    public function __construct(private readonly Adapter $adapter)
-    {
+    public function __construct(
+        private readonly Adapter $adapter,
+    ) {
         $this->telemetry = new NoTelemetry();
     }
 

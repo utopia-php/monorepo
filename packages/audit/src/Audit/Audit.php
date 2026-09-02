@@ -16,7 +16,9 @@ class Audit
      *
      * @param Adapter $adapter The adapter to use for storing audit logs
      */
-    public function __construct(private readonly Adapter $adapter) {}
+    public function __construct(
+        private readonly Adapter $adapter,
+    ) {}
 
     /**
      * Get the current adapter.
@@ -43,8 +45,14 @@ class Audit
      *
      * @throws \Exception
      */
-    public function log(?string $userId, string $event, string $resource, string $userAgent, string $ip, array $data = []): Log
-    {
+    public function log(
+        ?string $userId,
+        string $event,
+        string $resource,
+        string $userAgent,
+        string $ip,
+        array $data = [],
+    ): Log {
         /** @var array{userId?: string|null, event: string, resource: string, userAgent: string, ip: string, data?: array<string, mixed>} $log */
         $log = [
             'userId' => $userId,

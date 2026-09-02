@@ -39,7 +39,7 @@ final class Subscription
 
         while (true) {
             // Drain anything already queued before blocking on the socket.
-            if (!$this->pendingMessages->isEmpty()) {
+            if (! $this->pendingMessages->isEmpty()) {
                 $msg = $this->pendingMessages->dequeue();
                 $this->pendingBytes -= \strlen((string) $msg->data);
                 if ($this->pendingBytes < 0) {
@@ -49,7 +49,7 @@ final class Subscription
                 return $msg;
             }
 
-            if (!$this->active || !$this->connection instanceof \Utopia\NATS\Connection) {
+            if (! $this->active || ! $this->connection instanceof \Utopia\NATS\Connection) {
                 return null;
             }
 
@@ -84,8 +84,10 @@ final class Subscription
             // never drains its messages signals slow-consumer and the message is
             // dropped rather than exhausting memory.
             $msgBytes = \strlen($msg->data);
-            if ($this->pendingMessages->count() >= $this->pendingMsgsLimit
-                || ($this->pendingBytes + $msgBytes) > $this->pendingBytesLimit) {
+            if (
+                $this->pendingMessages->count() >= $this->pendingMsgsLimit
+                || ($this->pendingBytes + $msgBytes) > $this->pendingBytesLimit
+            ) {
                 $this->signalSlowConsumer();
                 return;
             }

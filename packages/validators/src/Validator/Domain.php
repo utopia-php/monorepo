@@ -71,17 +71,11 @@ class Domain extends Validator
             return false;
         }
 
-        if (!\is_string($value)) {
+        if (! \is_string($value)) {
             return false;
         }
 
-        if (
-            filter_var(
-                $value,
-                FILTER_VALIDATE_DOMAIN,
-                $this->hostnames ? FILTER_FLAG_HOSTNAME : 0,
-            ) === false
-        ) {
+        if (filter_var($value, FILTER_VALIDATE_DOMAIN, $this->hostnames ? FILTER_FLAG_HOSTNAME : 0) === false) {
             return false;
         }
 
@@ -95,12 +89,12 @@ class Domain extends Validator
             $prefixDenyList = $restriction['prefixDenyList'];
 
             // Only apply restriction rules to relevant domains
-            if (!str_ends_with($value, (string) $hostname)) {
+            if (! str_ends_with($value, (string) $hostname)) {
                 continue;
             }
 
             // Domain-level restriction
-            if (!\is_null($levels)) {
+            if (! \is_null($levels)) {
                 $expectedPartsCount = $levels;
                 $partsCount = \count(explode('.', $value, $expectedPartsCount + 1));
                 if ($partsCount !== $expectedPartsCount) {
@@ -109,7 +103,7 @@ class Domain extends Validator
             }
 
             // Domain prefix (beginning) restriction
-            if (!empty($prefixDenyList)) {
+            if (! empty($prefixDenyList)) {
                 foreach ($prefixDenyList as $deniedPrefix) {
                     if (str_starts_with($value, (string) $deniedPrefix)) {
                         return false;

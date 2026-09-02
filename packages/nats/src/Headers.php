@@ -101,7 +101,7 @@ final class Headers implements \IteratorAggregate, \Countable
 
         // Parse status line: "NATS/1.0" or "NATS/1.0 503" or "NATS/1.0 503 No Responders"
         $statusLine = array_shift($lines);
-        if (!str_starts_with($statusLine, 'NATS/1.0')) {
+        if (! str_starts_with($statusLine, 'NATS/1.0')) {
             throw new ProtocolException("Invalid header version: {$statusLine}");
         }
 

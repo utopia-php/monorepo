@@ -234,13 +234,7 @@ final class ResolverTest extends TestCase
             ttl: 3600,
             rdata: 'ns1.example.com hostmaster.example.com 1 7200 3600 1209600 300',
         );
-        $mxPrimary = new Record(
-            '*.example.com',
-            Record::TYPE_MX,
-            ttl: 3600,
-            rdata: 'mail1.example.com',
-            priority: 10,
-        );
+        $mxPrimary = new Record('*.example.com', Record::TYPE_MX, ttl: 3600, rdata: 'mail1.example.com', priority: 10);
         $mxSecondary = new Record(
             '*.example.com',
             Record::TYPE_MX,
@@ -384,10 +378,19 @@ final class ResolverTest extends TestCase
             rdata: 'ns1-stage.appwrite.zone team.appwrite.io 1 3600 600 86400 300',
         );
 
-        $zone = new Zone('test-dns.appwrite.org', [
-            new Record('test-dns.appwrite.org', Record::TYPE_NS, ttl: 3600, rdata: 'ns1.example.org'),
-            new Record('*.wildcard.test-dns.appwrite.org', Record::TYPE_CNAME, ttl: 3600, rdata: 'stage.appwrite.network'),
-        ], $soa);
+        $zone = new Zone(
+            'test-dns.appwrite.org',
+            [
+                new Record('test-dns.appwrite.org', Record::TYPE_NS, ttl: 3600, rdata: 'ns1.example.org'),
+                new Record(
+                    '*.wildcard.test-dns.appwrite.org',
+                    Record::TYPE_CNAME,
+                    ttl: 3600,
+                    rdata: 'stage.appwrite.network',
+                ),
+            ],
+            $soa,
+        );
 
         $question = new Question('baz.wildcard.test-dns.appwrite.org', Record::TYPE_CNAME);
         $query = Message::query($question);

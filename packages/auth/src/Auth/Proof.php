@@ -8,7 +8,9 @@ use Utopia\Auth\Hashes\Argon2;
 
 abstract class Proof
 {
-    public function __construct(protected Hash $hash = new Argon2()) {}
+    public function __construct(
+        protected Hash $hash = new Argon2(),
+    ) {}
 
     /**
      * Set custom hash

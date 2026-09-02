@@ -47,10 +47,14 @@ final class SESSigningTest extends TestCase
             amzDate: '20150830T123600Z',
         );
 
-        $expected = 'AWS4-HMAC-SHA256 '
-            . 'Credential=' . self::ACCESS_KEY . '/20150830/us-east-1/service/aws4_request, '
+        $expected =
+            'AWS4-HMAC-SHA256 '
+            . 'Credential='
+            . self::ACCESS_KEY
+            . '/20150830/us-east-1/service/aws4_request, '
             . 'SignedHeaders=host;x-amz-date, '
-            . 'Signature=' . self::EXPECTED_SIGNATURE;
+            . 'Signature='
+            . self::EXPECTED_SIGNATURE;
 
         $this->assertSame($expected, $authorization);
     }
@@ -139,8 +143,13 @@ class SESSigningStub extends SES
     /**
      * @param  array<string, string>  $signedHeaders
      */
-    public function callSign(string $method, string $path, string $payload, array $signedHeaders, string $amzDate): string
-    {
+    public function callSign(
+        string $method,
+        string $path,
+        string $payload,
+        array $signedHeaders,
+        string $amzDate,
+    ): string {
         return $this->sign($method, $path, $payload, $signedHeaders, $amzDate);
     }
 }

@@ -17,5 +17,10 @@ interface Strategy
      * Exactly one of $response or $error is non-null: $response when the adapter
      * returned (including 4xx/5xx), $error when it threw.
      */
-    public function delay(RequestInterface $request, int $attempt, ?ResponseInterface $response, ?ClientExceptionInterface $error): ?float;
+    public function delay(
+        RequestInterface $request,
+        int $attempt,
+        ?ResponseInterface $response,
+        ?ClientExceptionInterface $error,
+    ): ?float;
 }

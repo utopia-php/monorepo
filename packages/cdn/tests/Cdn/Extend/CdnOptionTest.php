@@ -44,7 +44,7 @@ final class CdnOptionTest extends TestCase
             ->addOption($run)
             ->addOption($cloudflare);
 
-        $balancer->addFilter(fn(CdnOption $option): bool => !$option->isEdge());
+        $balancer->addFilter(fn(CdnOption $option): bool => ! $option->isEdge());
 
         $this->assertSame([$run, $cloudflare], $balancer->getFilteredOptions());
 

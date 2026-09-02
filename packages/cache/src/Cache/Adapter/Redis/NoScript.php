@@ -31,8 +31,6 @@ final class NoScript extends \RuntimeException
     /** Build the signal from the underlying Redis error (exception or message). */
     public static function from(\Throwable|string $reason): self
     {
-        return $reason instanceof \Throwable
-            ? new self($reason->getMessage(), 0, $reason)
-            : new self($reason);
+        return $reason instanceof \Throwable ? new self($reason->getMessage(), 0, $reason) : new self($reason);
     }
 }

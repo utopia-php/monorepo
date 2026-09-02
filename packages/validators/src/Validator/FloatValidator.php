@@ -17,7 +17,9 @@ class FloatValidator extends Validator
      * Pass true to accept float strings as valid float values
      * This option is good for validating query string params.
      */
-    public function __construct(protected bool $loose = false) {}
+    public function __construct(
+        protected bool $loose = false,
+    ) {}
 
     /**
      * Get Description
@@ -57,7 +59,7 @@ class FloatValidator extends Validator
     public function isValid(mixed $value): bool
     {
         if ($this->loose) {
-            if (!is_numeric($value)) {
+            if (! is_numeric($value)) {
                 return false;
             }
             $value += 0;

@@ -172,7 +172,7 @@ class ClickHouse extends SQL
     private function validateHost(string $host): void
     {
         $validator = new Hostname();
-        if (!$validator->isValid($host)) {
+        if (! $validator->isValid($host)) {
             throw new Exception('ClickHouse host is not a valid hostname or IP address');
         }
     }
@@ -207,8 +207,10 @@ class ClickHouse extends SQL
         }
 
         // ClickHouse identifiers: alphanumeric, underscores, cannot start with number
-        if (!preg_match('/^[a-zA-Z_]\w*$/', $identifier)) {
-            throw new Exception("{$type} must start with a letter or underscore and contain only alphanumeric characters and underscores");
+        if (! preg_match('/^[a-zA-Z_]\w*$/', $identifier)) {
+            throw new Exception(
+                "{$type} must start with a letter or underscore and contain only alphanumeric characters and underscores",
+            );
         }
 
         // Check against SQL keywords (common ones)
@@ -227,6 +229,7 @@ class ClickHouse extends SQL
         // Backtick escaping: replace any backticks in the identifier with double backticks
         return '`' . str_replace('`', '``', $identifier) . '`';
     }
+
     /**
      * Set the namespace for multi-project support.
      * Namespace is used as a prefix for table names.
@@ -881,9 +884,7 @@ class ClickHouse extends SQL
         foreach ($this->getAttributes() as $attribute) {
             /** @var string $id */
             $id = $attribute['$id'];
-            $map[$id] = ($attribute['type'] ?? null) === Database::VAR_DATETIME
-                ? 'DateTime64(3)'
-                : 'String';
+            $map[$id] = ($attribute['type'] ?? null) === Database::VAR_DATETIME ? 'DateTime64(3)' : 'String';
         }
 
         if ($this->sharedTables) {
@@ -959,11 +960,7 @@ class ClickHouse extends SQL
                 }
             }
 
-            $response = $this->client->fetch(
-                url: $url,
-                method: Client::METHOD_POST,
-                body: $body,
-            );
+            $response = $this->client->fetch(url: $url, method: Client::METHOD_POST, body: $body);
 
             if ($response->getStatusCode() !== 200) {
                 $responseBody = $response->getBody();
@@ -974,11 +971,7 @@ class ClickHouse extends SQL
             $responseBody = $response->getBody();
             return \is_string($responseBody) ? $responseBody : '';
         } catch (Exception $e) {
-            throw new Exception(
-                "ClickHouse query execution failed: {$e->getMessage()}",
-                0,
-                $e,
-            );
+            throw new Exception("ClickHouse query execution failed: {$e->getMessage()}", 0, $e);
         }
     }
 
@@ -1058,9 +1051,10 @@ class ClickHouse extends SQL
                 continue;
             }
 
-            $column = $table->addColumn($id, ($attribute['type'] ?? null) === Database::VAR_DATETIME
-                ? ColumnType::Datetime
-                : ColumnType::String);
+            $column = $table->addColumn(
+                $id,
+                ($attribute['type'] ?? null) === Database::VAR_DATETIME ? ColumnType::Datetime : ColumnType::String,
+            );
             if (\in_array($id, self::LOW_CARDINALITY_COLUMNS, true)) {
                 $column->lowCardinality();
             }
@@ -1118,17 +1112,14 @@ class ClickHouse extends SQL
             // that has no TTL, so swallow that specific case to keep setup()
             // idempotent.
             try {
-                $this->query(
-                    "ALTER TABLE {$escapedDatabaseAndTable} REMOVE TTL",
-                );
+                $this->query("ALTER TABLE {$escapedDatabaseAndTable} REMOVE TTL");
             } catch (Exception $e) {
-                if (!str_contains($e->getMessage(), "doesn't have any table TTL expression")) {
+                if (! str_contains($e->getMessage(), "doesn't have any table TTL expression")) {
                     throw $e;
                 }
             }
         }
     }
-
 
     /**
      * Get column names from attributes.
@@ -1232,7 +1223,7 @@ class ClickHouse extends SQL
     {
         // Generate ID if not provided
         $logId = $log['id'] ?? uniqid('', true);
-        if (!\is_string($logId)) {
+        if (! \is_string($logId)) {
             throw new Exception('Log ID must be a string');
         }
         $log['id'] = $logId;
@@ -1242,7 +1233,7 @@ class ClickHouse extends SQL
 
         // Retrieve the created log using getById to ensure consistency
         $createdLog = $this->getById($logId);
-        if (!$createdLog instanceof \Utopia\Audit\Log) {
+        if (! $createdLog instanceof \Utopia\Audit\Log) {
             throw new Exception("Failed to retrieve created log with ID: {$logId}");
         }
 
@@ -1260,7 +1251,8 @@ class ClickHouse extends SQL
         $tableName = $this->getTableName();
         $qualifiedTable = $this->database . '.' . $tableName;
 
-        $builder = $this->newBuilder()
+        $builder = $this
+            ->newBuilder()
             ->from($qualifiedTable)
             ->selectRaw($this->getSelectColumns())
             ->filter([Query::equal('id', $id)])
@@ -1307,10 +1299,7 @@ class ClickHouse extends SQL
         // fall back to the full column list.
         $selectColumns = $this->buildProjection($parsed['select'] ?? null);
 
-        $builder = $this->newBuilder()
-            ->from($qualifiedTable)
-            ->selectRaw($selectColumns)
-            ->filter($parsed['filters']);
+        $builder = $this->newBuilder()->from($qualifiedTable)->selectRaw($selectColumns)->filter($parsed['filters']);
 
         $this->applyTenantFilter($builder);
 
@@ -1320,7 +1309,12 @@ class ClickHouse extends SQL
 
         if (isset($parsed['cursor'])) {
             $orderAttributes = $this->resolveCursorOrder($orderAttributes);
-            $cursorWhere = $this->buildCursorWhere($orderAttributes, $parsed['cursor'], $cursorDirection ?? 'after', []);
+            $cursorWhere = $this->buildCursorWhere(
+                $orderAttributes,
+                $parsed['cursor'],
+                $cursorDirection ?? 'after',
+                [],
+            );
             $builder->whereRaw($cursorWhere['clause']);
             $cursorParams = $cursorWhere['params'];
         }
@@ -1427,7 +1421,8 @@ class ClickHouse extends SQL
         // Parse queries - we only need filters, not ordering/limit/offset/cursor
         $parsed = $this->parseQueries($queries);
 
-        $inner = $this->newBuilder()
+        $inner = $this
+            ->newBuilder()
             ->from($qualifiedTable)
             ->selectRaw($max !== null ? '1' : 'COUNT(*) AS count')
             ->filter($parsed['filters']);
@@ -1486,7 +1481,7 @@ class ClickHouse extends SQL
         $randomOrder = false;
 
         foreach ($queries as $query) {
-            if (!$query instanceof Query) {
+            if (! $query instanceof Query) {
                 $type = get_debug_type($query);
                 throw new \InvalidArgumentException("Invalid query item: expected instance of Query, got {$type}");
             }
@@ -1539,11 +1534,11 @@ class ClickHouse extends SQL
                     // validated and escaped at SQL build time in find().
                     $select ??= [];
                     foreach ($values as $column) {
-                        if (!\is_string($column) || $column === '') {
+                        if (! \is_string($column) || $column === '') {
                             throw new Exception('select columns must be non-empty strings');
                         }
                         $this->validateAttributeName($column);
-                        if (!\in_array($column, $select, true)) {
+                        if (! \in_array($column, $select, true)) {
                             $select[] = $column;
                         }
                     }
@@ -1567,14 +1562,14 @@ class ClickHouse extends SQL
                     break;
 
                 case Method::Limit:
-                    if (!\is_int($values[0])) {
+                    if (! \is_int($values[0])) {
                         throw new \Exception('Invalid limit value. Expected int');
                     }
                     $limit = $values[0];
                     break;
 
                 case Method::Offset:
-                    if (!\is_int($values[0])) {
+                    if (! \is_int($values[0])) {
                         throw new \Exception('Invalid offset value. Expected int');
                     }
                     $offset = $values[0];
@@ -1697,11 +1692,11 @@ class ClickHouse extends SQL
         } else {
             throw new Exception(
                 'Invalid cursor value: expected ArrayObject (Log) or associative array, got '
-                . get_debug_type($rawCursor),
+                    . get_debug_type($rawCursor),
             );
         }
 
-        if (!\array_key_exists('id', $row) && \array_key_exists('$id', $row)) {
+        if (! \array_key_exists('id', $row) && \array_key_exists('$id', $row)) {
             $row['id'] = $row['$id'];
             unset($row['$id']);
         }
@@ -1799,14 +1794,18 @@ class ClickHouse extends SQL
      * @return array{clause: string, params: array<string, mixed>}
      * @throws Exception
      */
-    private function buildCursorWhere(array $orderAttributes, array $cursor, string $cursorDirection, array $params): array
-    {
+    private function buildCursorWhere(
+        array $orderAttributes,
+        array $cursor,
+        string $cursorDirection,
+        array $params,
+    ): array {
         $tuples = [];
         foreach ($orderAttributes as $i => $entry) {
             $attr = $entry['attribute'];
             $direction = $entry['direction'];
 
-            if (!\array_key_exists($attr, $cursor)) {
+            if (! \array_key_exists($attr, $cursor)) {
                 throw new Exception("Cursor is missing required attribute '{$attr}'");
             }
 
@@ -1819,7 +1818,7 @@ class ClickHouse extends SQL
             for ($j = 0; $j < $i; $j++) {
                 $prev = $orderAttributes[$j];
                 $prevAttr = $prev['attribute'];
-                if (!\array_key_exists($prevAttr, $cursor)) {
+                if (! \array_key_exists($prevAttr, $cursor)) {
                     throw new Exception("Cursor is missing required attribute '{$prevAttr}'");
                 }
                 $prevValue = $cursor[$prevAttr];
@@ -1877,8 +1876,12 @@ class ClickHouse extends SQL
         $rows = [];
 
         foreach ($logs as $log) {
-            foreach (['userId' => 'actorId', 'userType' => 'actorType', 'userInternalId' => 'actorInternalId'] as $legacy => $current) {
-                if (isset($log[$legacy]) && !isset($log[$current])) {
+            foreach ([
+                'userId' => 'actorId',
+                'userType' => 'actorType',
+                'userInternalId' => 'actorInternalId',
+            ] as $legacy => $current) {
+                if (isset($log[$legacy]) && ! isset($log[$current])) {
                     $log[$current] = $log[$legacy];
                 }
                 unset($log[$legacy]);
@@ -1887,8 +1890,12 @@ class ClickHouse extends SQL
             /** @var array<string, mixed> $logData */
             $logData = $log['data'] ?? [];
 
-            foreach (['userId' => 'actorId', 'userType' => 'actorType', 'userInternalId' => 'actorInternalId'] as $legacy => $current) {
-                if (\array_key_exists($legacy, $logData) && !\array_key_exists($current, $logData)) {
+            foreach ([
+                'userId' => 'actorId',
+                'userType' => 'actorType',
+                'userInternalId' => 'actorInternalId',
+            ] as $legacy => $current) {
+                if (\array_key_exists($legacy, $logData) && ! \array_key_exists($current, $logData)) {
                     $logData[$current] = $logData[$legacy];
                 }
                 unset($logData[$legacy]);
@@ -1898,7 +1905,7 @@ class ClickHouse extends SQL
             // Separate data for non-schema attributes
             $nonSchemaData = $logData;
             $resourceValue = $log['resource'] ?? null;
-            if (!\is_string($resourceValue)) {
+            if (! \is_string($resourceValue)) {
                 $resourceValue = '';
             }
             $resource = $this->parseResource($resourceValue);
@@ -1913,10 +1920,10 @@ class ClickHouse extends SQL
                     continue;
                 }
                 // If attribute not in main log, check data array
-                if (!isset($processedLog[$columnName]) && isset($logData[$columnName])) {
+                if (! isset($processedLog[$columnName]) && isset($logData[$columnName])) {
                     $processedLog[$columnName] = $logData[$columnName];
                     unset($nonSchemaData[$columnName]);
-                } elseif (!isset($processedLog[$columnName]) && isset($resource[$columnName])) {
+                } elseif (! isset($processedLog[$columnName]) && isset($resource[$columnName])) {
                     // Check parsed resource for resourceType, resourceId, resourceParent
                     $processedLog[$columnName] = $resource[$columnName];
                 } elseif (isset($processedLog[$columnName]) && isset($logData[$columnName])) {
@@ -1945,20 +1952,32 @@ class ClickHouse extends SQL
 
                 // Get attribute metadata to determine if required
                 $attributeMetadata = $this->getAttribute($columnName);
-                $isRequiredAttribute = $attributeMetadata !== null && isset($attributeMetadata['required']) && $attributeMetadata['required'];
+                $isRequiredAttribute =
+                    $attributeMetadata !== null
+                    && isset($attributeMetadata['required'])
+                    && $attributeMetadata['required'];
 
                 if ($columnName === 'data') {
                     // Data column - encode remaining non-schema data as JSON
                     try {
-                        $encodedData = json_encode($nonSchemaData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+                        $encodedData = json_encode(
+                            $nonSchemaData,
+                            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                        );
                     } catch (\JsonException $e) {
-                        throw new Exception('Failed to encode data column to JSON: ' . $e->getMessage(), $e->getCode(), $e);
+                        throw new Exception(
+                            'Failed to encode data column to JSON: ' . $e->getMessage(),
+                            $e->getCode(),
+                            $e,
+                        );
                     }
                     $row['data'] = $encodedData;
                 } elseif (isset($processedLog[$columnName])) {
                     $row[$columnName] = $processedLog[$columnName];
                 } elseif ($isRequiredAttribute) {
-                    throw new \InvalidArgumentException("Required attribute '{$columnName}' is missing in batch log entry");
+                    throw new \InvalidArgumentException(
+                        "Required attribute '{$columnName}' is missing in batch log entry",
+                    );
                 }
             }
 
@@ -1982,9 +2001,7 @@ class ClickHouse extends SQL
 
         // Builder\ClickHouse::bulkInsert() emits the `INSERT INTO ... FORMAT
         // JSONEachRow` envelope and serialises the rows into the request body.
-        $statement = $this->newBuilder()
-            ->into($qualifiedTable)
-            ->bulkInsert(Format::JSONEachRow, $rows, $columns);
+        $statement = $this->newBuilder()->into($qualifiedTable)->bulkInsert(Format::JSONEachRow, $rows, $columns);
 
         $this->query($statement->query, [], $statement->body);
 
@@ -2011,7 +2028,7 @@ class ClickHouse extends SQL
             throw new Exception('Failed to parse ClickHouse JSON response: ' . json_last_error_msg());
         }
 
-        if (!\is_array($decoded) || !isset($decoded['data']) || !\is_array($decoded['data'])) {
+        if (! \is_array($decoded) || ! isset($decoded['data']) || ! \is_array($decoded['data'])) {
             return [];
         }
 
@@ -2020,7 +2037,7 @@ class ClickHouse extends SQL
         $documents = [];
 
         foreach ($data as $row) {
-            if (!\is_array($row)) {
+            if (! \is_array($row)) {
                 continue;
             }
 
@@ -2044,7 +2061,7 @@ class ClickHouse extends SQL
                     // ClickHouse JSON: "2025-12-07 23:33:54.493"
                     // ISO 8601:        "2025-12-07T23:33:54.493+00:00"
                     $parsedTime = \is_string($value) ? $value : (\is_scalar($value) ? (string) $value : '');
-                    if (!str_contains($parsedTime, 'T') && $parsedTime !== '') {
+                    if (! str_contains($parsedTime, 'T') && $parsedTime !== '') {
                         $parsedTime = str_replace(' ', 'T', $parsedTime) . '+00:00';
                     }
                     $document[$columnName] = $parsedTime;
@@ -2060,8 +2077,12 @@ class ClickHouse extends SQL
                 unset($document['id']);
             }
 
-            foreach (['actorId' => 'userId', 'actorType' => 'userType', 'actorInternalId' => 'userInternalId'] as $current => $legacy) {
-                if (\array_key_exists($current, $document) && !\array_key_exists($legacy, $document)) {
+            foreach ([
+                'actorId' => 'userId',
+                'actorType' => 'userType',
+                'actorInternalId' => 'userInternalId',
+            ] as $current => $legacy) {
+                if (\array_key_exists($current, $document) && ! \array_key_exists($legacy, $document)) {
                     $document[$legacy] = $document[$current];
                 }
             }
@@ -2110,7 +2131,7 @@ class ClickHouse extends SQL
      */
     private function applyTenantFilter(ClickHouseBuilder $builder): void
     {
-        if (!$this->sharedTables || $this->tenant === null) {
+        if (! $this->sharedTables || $this->tenant === null) {
             return;
         }
 
@@ -2131,22 +2152,18 @@ class ClickHouse extends SQL
     {
         $attribute = $this->getAttribute($id);
 
-        if (!$attribute) {
+        if (! $attribute) {
             throw new Exception("Attribute {$id} not found");
         }
 
         // Dynamically determine type based on attribute metadata
         // DateTime attributes use DateTime64(3), all others use String
-        $type = (isset($attribute['type']) && $attribute['type'] === Database::VAR_DATETIME)
-            ? 'DateTime64(3)'
-            : 'String';
+        $type = isset($attribute['type']) && $attribute['type'] === Database::VAR_DATETIME ? 'DateTime64(3)' : 'String';
 
         $required = (bool) $attribute['required'];
 
         if ($type === 'String' && \in_array($id, self::LOW_CARDINALITY_COLUMNS, true)) {
-            $columnType = $required
-                ? 'LowCardinality(String)'
-                : 'LowCardinality(Nullable(String))';
+            $columnType = $required ? 'LowCardinality(String)' : 'LowCardinality(Nullable(String))';
 
             return "{$id} {$columnType}";
         }
@@ -2408,7 +2425,8 @@ class ClickHouse extends SQL
         $escapedTimeColumn = $this->escapeIdentifier('time');
         $datetimeString = $datetime->format('Y-m-d H:i:s.v');
 
-        $builder = $this->newBuilder()
+        $builder = $this
+            ->newBuilder()
             ->into($qualifiedTable)
             ->whereRaw($escapedTimeColumn . ' < {datetime:DateTime64(3)}');
 

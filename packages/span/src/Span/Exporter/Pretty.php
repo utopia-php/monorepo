@@ -57,7 +57,7 @@ readonly class Pretty implements Exporter
 
         $attributes = [];
         foreach ($span->getAttributes() as $key => $value) {
-            if (!str_starts_with($key, 'span.')) {
+            if (! str_starts_with($key, 'span.')) {
                 $attributes[$key] = $value;
             }
         }
@@ -146,9 +146,19 @@ readonly class Pretty implements Exporter
         $file = $error->getFile();
         $line = $error->getLine();
 
-        return self::RED . self::BOLD . "  {$type}" . self::RESET
-            . self::RED . ": {$message}" . self::RESET . PHP_EOL
-            . self::DIM . "    at {$file}:{$line}" . self::RESET;
+        return (
+            self::RED
+            . self::BOLD
+            . "  {$type}"
+            . self::RESET
+            . self::RED
+            . ": {$message}"
+            . self::RESET
+            . PHP_EOL
+            . self::DIM
+            . "    at {$file}:{$line}"
+            . self::RESET
+        );
     }
 
     private function formatValue(string|int|float|bool|null $value): string

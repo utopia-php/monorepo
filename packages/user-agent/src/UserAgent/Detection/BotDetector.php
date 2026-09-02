@@ -94,11 +94,13 @@ final class BotDetector
             }
         }
 
-        if (preg_match(
-            '/(?:^|[\s;()+_-])([a-z0-9_-]*(?:bot|crawler|spider|scraper|slurp))(?:[\/\s;()+_-]|$)/i',
-            $userAgent,
-            $matches,
-        ) === 1) {
+        if (
+            preg_match(
+                '/(?:^|[\s;()+_-])([a-z0-9_-]*(?:bot|crawler|spider|scraper|slurp))(?:[\/\s;()+_-]|$)/i',
+                $userAgent,
+                $matches,
+            ) === 1
+        ) {
             return new Bot(trim($matches[1], '_-'), 'crawler');
         }
 

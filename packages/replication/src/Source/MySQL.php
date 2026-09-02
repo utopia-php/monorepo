@@ -63,7 +63,9 @@ class MySQL implements Source
         private readonly string $sslCa = '',
         private readonly float $heartbeat = 15.0,
     ) {
-        $this->parser = new EventParser(fn(string $schema, string $table): array => $this->resolveColumns($schema, $table));
+        $this->parser = new EventParser(
+            fn(string $schema, string $table): array => $this->resolveColumns($schema, $table),
+        );
     }
 
     /**
@@ -75,10 +77,25 @@ class MySQL implements Source
      */
     public function start(?string $position = null): void
     {
-        $this->transport = new Connection($this->host, $this->port, $this->username, $this->password, $this->serverId, $this->ssl, $this->sslVerify, $this->sslCa, $this->heartbeat);
+        $this->transport = new Connection(
+            $this->host,
+            $this->port,
+            $this->username,
+            $this->password,
+            $this->serverId,
+            $this->ssl,
+            $this->sslVerify,
+            $this->sslCa,
+            $this->heartbeat,
+        );
         $this->transport->open($position);
 
-        $this->decoder = new Decoder($this->parser, new GtidSet($this->transport->position()), $this->schema, $this->transport->checksum());
+        $this->decoder = new Decoder(
+            $this->parser,
+            new GtidSet($this->transport->position()),
+            $this->schema,
+            $this->transport->checksum(),
+        );
     }
 
     /**
@@ -119,8 +136,16 @@ class MySQL implements Source
     private function resolveColumns(string $schema, string $table): array
     {
         try {
-            if (!$this->schemaClient instanceof \Utopia\Replication\Source\MySQL\Client) {
-                $this->schemaClient = new Client($this->host, $this->port, $this->username, $this->password, $this->ssl, $this->sslVerify, $this->sslCa);
+            if (! $this->schemaClient instanceof \Utopia\Replication\Source\MySQL\Client) {
+                $this->schemaClient = new Client(
+                    $this->host,
+                    $this->port,
+                    $this->username,
+                    $this->password,
+                    $this->ssl,
+                    $this->sslVerify,
+                    $this->sslCa,
+                );
                 $this->schemaClient->connect();
                 $this->schemaClient->execute('SET SESSION group_concat_max_len = 1048576');
             }
@@ -134,7 +159,7 @@ class MySQL implements Source
                 . " FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = {$schemaHex} AND TABLE_NAME = {$tableHex}",
             );
 
-            return ($names === null || $names === '') ? [] : explode("\0", $names);
+            return $names === null || $names === '' ? [] : explode("\0", $names);
         } catch (\Throwable) {
             $this->schemaClient = null; // drop a broken connection; retried next call
 

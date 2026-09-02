@@ -23,8 +23,9 @@ abstract class Issuer
      *
      * @throws \Exception When the issuer is missing.
      */
-    public function __construct(protected readonly string $issuer)
-    {
+    public function __construct(
+        protected readonly string $issuer,
+    ) {
         if ($issuer === '' || $issuer === '0') {
             throw new \Exception('An issuer is required');
         }
@@ -75,7 +76,8 @@ abstract class Issuer
             ...$this->getHeaders(),
         ];
 
-        $signingInput = $this->base64UrlEncode(json_encode($header, JSON_THROW_ON_ERROR))
+        $signingInput =
+            $this->base64UrlEncode(json_encode($header, JSON_THROW_ON_ERROR))
             . '.'
             . $this->base64UrlEncode(json_encode($claims, JSON_THROW_ON_ERROR));
 

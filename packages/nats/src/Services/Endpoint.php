@@ -49,9 +49,7 @@ final class Endpoint
      */
     public function stats(): array
     {
-        $average = $this->numRequests > 0
-            ? intdiv($this->processingTime, $this->numRequests)
-            : 0;
+        $average = $this->numRequests > 0 ? intdiv($this->processingTime, $this->numRequests) : 0;
 
         return [
             'name' => $this->name,

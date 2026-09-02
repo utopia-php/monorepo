@@ -33,10 +33,29 @@ final class TelemetryTest extends Base
 
         $adapter->send(new SMS(['+1', '+2', '+3'], 'Hello')->setOrigin('external'));
 
-        $this->assertSame([
-            ['amount' => 2, 'attributes' => ['result' => 'success', 'origin' => 'external', 'type' => 'sms', 'provider' => 'test']],
-            ['amount' => 1, 'attributes' => ['result' => 'failure', 'origin' => 'external', 'type' => 'sms', 'provider' => 'test']],
-        ], $telemetry->records);
+        $this->assertSame(
+            [
+                [
+                    'amount' => 2,
+                    'attributes' => [
+                        'result' => 'success',
+                        'origin' => 'external',
+                        'type' => 'sms',
+                        'provider' => 'test',
+                    ],
+                ],
+                [
+                    'amount' => 1,
+                    'attributes' => [
+                        'result' => 'failure',
+                        'origin' => 'external',
+                        'type' => 'sms',
+                        'provider' => 'test',
+                    ],
+                ],
+            ],
+            $telemetry->records,
+        );
     }
 
     public function testRecordsThrownSendAsFailure(): void
@@ -50,9 +69,12 @@ final class TelemetryTest extends Base
         try {
             $adapter->send(new SMS(['+1', '+2'], 'Hello'));
         } finally {
-            $this->assertSame([
-                ['amount' => 2, 'attributes' => ['result' => 'failure', 'type' => 'sms', 'provider' => 'test']],
-            ], $telemetry->records);
+            $this->assertSame(
+                [
+                    ['amount' => 2, 'attributes' => ['result' => 'failure', 'type' => 'sms', 'provider' => 'test']],
+                ],
+                $telemetry->records,
+            );
         }
     }
 
@@ -71,10 +93,13 @@ final class TelemetryTest extends Base
 
         $adapter->send(new SMS(['+1', '+2'], 'Hello'));
 
-        $this->assertSame([
-            ['amount' => 1, 'attributes' => ['result' => 'success', 'type' => 'sms', 'provider' => 'test']],
-            ['amount' => 1, 'attributes' => ['result' => 'failure', 'type' => 'sms', 'provider' => 'test']],
-        ], $telemetry->records);
+        $this->assertSame(
+            [
+                ['amount' => 1, 'attributes' => ['result' => 'success', 'type' => 'sms', 'provider' => 'test']],
+                ['amount' => 1, 'attributes' => ['result' => 'failure', 'type' => 'sms', 'provider' => 'test']],
+            ],
+            $telemetry->records,
+        );
     }
 
     public function testGeosmsPropagatesTelemetryToLocalAdapters(): void
@@ -98,9 +123,20 @@ final class TelemetryTest extends Base
         $adapter->setLocal(CallingCode::INDIA, $local);
         $adapter->send(new SMS(['+911234567890'], 'Hello')->setOrigin('internal'));
 
-        $this->assertSame([
-            ['amount' => 1, 'attributes' => ['result' => 'success', 'origin' => 'internal', 'type' => 'sms', 'provider' => 'test']],
-        ], $telemetry->records);
+        $this->assertSame(
+            [
+                [
+                    'amount' => 1,
+                    'attributes' => [
+                        'result' => 'success',
+                        'origin' => 'internal',
+                        'type' => 'sms',
+                        'provider' => 'test',
+                    ],
+                ],
+            ],
+            $telemetry->records,
+        );
     }
 
     public function testDefaultTelemetryDoesNothing(): void
@@ -150,11 +186,13 @@ class TelemetryAdapter extends SMSAdapter
             throw $this->error;
         }
 
-        return $this->response ?? [
-            'deliveredTo' => 0,
-            'type' => 'sms',
-            'results' => [],
-        ];
+        return (
+            $this->response ?? [
+                'deliveredTo' => 0,
+                'type' => 'sms',
+                'results' => [],
+            ]
+        );
     }
 }
 
@@ -165,40 +203,64 @@ class RecordingTelemetry implements Telemetry
      */
     public array $records = [];
 
-    public function createCounter(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): Counter
-    {
-        return new class ($this) extends Counter {
-            public function __construct(private readonly RecordingTelemetry $telemetry) {}
+    public function createCounter(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): Counter {
+        return new class($this) extends Counter {
+            public function __construct(
+                private readonly RecordingTelemetry $telemetry,
+            ) {}
 
             public function add(float|int $amount, iterable $attributes = []): void
             {
                 $this->telemetry->records[] = [
                     'amount' => $amount,
-                    'attributes' => iterator_to_array((function () use ($attributes) {
-                        yield from $attributes;
-                    })()),
+                    'attributes' => iterator_to_array(
+                        (function () use ($attributes) {
+                            yield from $attributes;
+                        })(),
+                    ),
                 ];
             }
         };
     }
 
-    public function createHistogram(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): Histogram
-    {
+    public function createHistogram(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): Histogram {
         throw new \BadMethodCallException();
     }
 
-    public function createGauge(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): Gauge
-    {
+    public function createGauge(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): Gauge {
         throw new \BadMethodCallException();
     }
 
-    public function createUpDownCounter(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): UpDownCounter
-    {
+    public function createUpDownCounter(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): UpDownCounter {
         throw new \BadMethodCallException();
     }
 
-    public function createObservableGauge(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): ObservableGauge
-    {
+    public function createObservableGauge(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): ObservableGauge {
         throw new \BadMethodCallException();
     }
 

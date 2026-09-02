@@ -74,7 +74,7 @@ final class GlobstarTest extends TestCase
         $this->assertTrue($validator->isValid('v1.0'));
         $this->assertTrue($validator->isValid('v2.5'));
         $this->assertFalse($validator->isValid('v10.0')); // ? matches exactly one char, not two
-        $this->assertFalse($validator->isValid('v1/0'));  // ? does not cross /
+        $this->assertFalse($validator->isValid('v1/0')); // ? does not cross /
     }
 
     public function testQuestionMarkDoesNotCrossSlash(): void
@@ -82,7 +82,7 @@ final class GlobstarTest extends TestCase
         $validator = new Globstar(['feature/?']);
         $this->assertTrue($validator->isValid('feature/a'));
         $this->assertTrue($validator->isValid('feature/z'));
-        $this->assertFalse($validator->isValid('feature/ab'));   // ? matches only one char
+        $this->assertFalse($validator->isValid('feature/ab')); // ? matches only one char
         $this->assertFalse($validator->isValid('feature/a/b')); // ? does not cross /
         $this->assertFalse($validator->isValid('feature/'));
     }
@@ -93,7 +93,7 @@ final class GlobstarTest extends TestCase
         $this->assertTrue($validator->isValid('fix-1.php'));
         $this->assertTrue($validator->isValid('fix-a.js'));
         $this->assertFalse($validator->isValid('fix-12.php')); // ? matches only one char
-        $this->assertFalse($validator->isValid('fix-.php'));   // ? requires exactly one char
+        $this->assertFalse($validator->isValid('fix-.php')); // ? requires exactly one char
     }
 
     public function testQuestionMarkSuffix(): void
@@ -101,7 +101,7 @@ final class GlobstarTest extends TestCase
         // qux? — question mark matches exactly one character as suffix
         $this->assertTrue(new Globstar(['qux?'])->isValid('qux1'));
         $this->assertTrue(new Globstar(['qux?'])->isValid('quxa'));
-        $this->assertFalse(new Globstar(['qux?'])->isValid('qux'));   // requires exactly one char
+        $this->assertFalse(new Globstar(['qux?'])->isValid('qux')); // requires exactly one char
         $this->assertFalse(new Globstar(['qux?'])->isValid('qux12')); // does not match two chars
     }
 
@@ -117,8 +117,8 @@ final class GlobstarTest extends TestCase
     public function testDoubleWildcardInMiddle(): void
     {
         $validator = new Globstar(['a/**/b']);
-        $this->assertTrue($validator->isValid('a/b'));      // zero intermediate dirs
-        $this->assertTrue($validator->isValid('a/x/b'));    // one
+        $this->assertTrue($validator->isValid('a/b')); // zero intermediate dirs
+        $this->assertTrue($validator->isValid('a/x/b')); // one
         $this->assertTrue($validator->isValid('a/x/y/b')); // two
         $this->assertFalse($validator->isValid('a/b/c'));
         $this->assertFalse($validator->isValid('x/a/b'));
@@ -127,9 +127,9 @@ final class GlobstarTest extends TestCase
     public function testDoubleWildcardAtStart(): void
     {
         $validator = new Globstar(['**/foo']);
-        $this->assertTrue($validator->isValid('foo'));       // zero leading dirs
-        $this->assertTrue($validator->isValid('a/foo'));     // one
-        $this->assertTrue($validator->isValid('a/b/foo'));   // two
+        $this->assertTrue($validator->isValid('foo')); // zero leading dirs
+        $this->assertTrue($validator->isValid('a/foo')); // one
+        $this->assertTrue($validator->isValid('a/b/foo')); // two
         $this->assertFalse($validator->isValid('foobar'));
         $this->assertFalse($validator->isValid('a/foobar'));
     }
@@ -189,16 +189,16 @@ final class GlobstarTest extends TestCase
     public function testInclusionTakesPrecedenceWhenBothMatch(): void
     {
         $validator = new Globstar(['!feature/*', 'feature/abc']);
-        $this->assertTrue($validator->isValid('feature/abc'));  // inclusion wins
+        $this->assertTrue($validator->isValid('feature/abc')); // inclusion wins
         $this->assertFalse($validator->isValid('feature/xyz')); // only exclusion matches
-        $this->assertFalse($validator->isValid('main'));        // no inclusion matches
+        $this->assertFalse($validator->isValid('main')); // no inclusion matches
     }
 
     public function testInclusionWithNoMatchFails(): void
     {
         $validator = new Globstar(['main', '!develop']);
         $this->assertTrue($validator->isValid('main'));
-        $this->assertFalse($validator->isValid('develop'));  // excluded even if inclusion didn't match
+        $this->assertFalse($validator->isValid('develop')); // excluded even if inclusion didn't match
         $this->assertFalse($validator->isValid('staging')); // no inclusion match
     }
 
@@ -207,7 +207,7 @@ final class GlobstarTest extends TestCase
         $validator = new Globstar(['feature/*', '!hotfix/*']);
         $this->assertTrue($validator->isValid('feature/foo'));
         $this->assertFalse($validator->isValid('hotfix/urgent')); // no inclusion match, also excluded
-        $this->assertFalse($validator->isValid('main'));          // no inclusion match
+        $this->assertFalse($validator->isValid('main')); // no inclusion match
     }
 
     public function testMultipleInclusionsWithSingleExclusion(): void
@@ -216,7 +216,7 @@ final class GlobstarTest extends TestCase
         $this->assertTrue($validator->isValid('main'));
         $this->assertTrue($validator->isValid('develop'));
         $this->assertTrue($validator->isValid('feature/foo'));
-        $this->assertFalse($validator->isValid('feature/wip'));   // specific exclusion overrides wildcard inclusion
+        $this->assertFalse($validator->isValid('feature/wip')); // specific exclusion overrides wildcard inclusion
         $this->assertFalse($validator->isValid('hotfix/urgent')); // no inclusion match
     }
 
@@ -351,10 +351,10 @@ final class GlobstarTest extends TestCase
     public function testDoubleWildcardMiddleWithTwoSegmentTail(): void
     {
         // a/**/b/c — tail is two segments (b/c)
-        $this->assertTrue(new Globstar(['a/**/b/c'])->isValid('a/b/c'));      // zero intermediate
-        $this->assertTrue(new Globstar(['a/**/b/c'])->isValid('a/x/b/c'));    // one intermediate
+        $this->assertTrue(new Globstar(['a/**/b/c'])->isValid('a/b/c')); // zero intermediate
+        $this->assertTrue(new Globstar(['a/**/b/c'])->isValid('a/x/b/c')); // one intermediate
         $this->assertTrue(new Globstar(['a/**/b/c'])->isValid('a/x/y/b/c')); // two intermediate
-        $this->assertFalse(new Globstar(['a/**/b/c'])->isValid('a/b/d'));     // wrong tail
+        $this->assertFalse(new Globstar(['a/**/b/c'])->isValid('a/b/d')); // wrong tail
     }
 
     public function testDoubleWildcardBothSides(): void
@@ -377,7 +377,9 @@ final class GlobstarTest extends TestCase
     public function testDoubleWildcardDeepNesting(): void
     {
         // Very deep path with ** in the middle
-        $this->assertTrue(new Globstar(['deep/**/logs/*.log'])->isValid('deep/level1/level2/level3/level4/level5/level6/level7/logs/app.log'));
+        $this->assertTrue(new Globstar(['deep/**/logs/*.log'])->isValid(
+            'deep/level1/level2/level3/level4/level5/level6/level7/logs/app.log',
+        ));
     }
 
     // -------------------------------------------------------------------------
@@ -718,10 +720,10 @@ final class GlobstarTest extends TestCase
         // - README-private*.md is re-included by the third pattern
         $patterns = ['*.md', '!README*.md', 'README-private*.md'];
 
-        $this->assertTrue(new Globstar($patterns)->isValid('documentation.md'));      // included, not excluded
-        $this->assertFalse(new Globstar($patterns)->isValid('README.md'));             // excluded by !README*.md
-        $this->assertFalse(new Globstar($patterns)->isValid('README-public.md'));      // excluded by !README*.md
-        $this->assertTrue(new Globstar($patterns)->isValid('README-private.md'));      // re-included by README-private*.md
+        $this->assertTrue(new Globstar($patterns)->isValid('documentation.md')); // included, not excluded
+        $this->assertFalse(new Globstar($patterns)->isValid('README.md')); // excluded by !README*.md
+        $this->assertFalse(new Globstar($patterns)->isValid('README-public.md')); // excluded by !README*.md
+        $this->assertTrue(new Globstar($patterns)->isValid('README-private.md')); // re-included by README-private*.md
         $this->assertTrue(new Globstar($patterns)->isValid('README-private-draft.md')); // re-included by README-private*.md
     }
 }

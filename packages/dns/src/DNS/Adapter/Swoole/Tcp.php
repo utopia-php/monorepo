@@ -56,9 +56,11 @@ class Tcp extends Transport
 
     public function attach(Server|Port $target, callable $onPacket): void
     {
-        if (!$this->proxyProtocol) {
+        if (! $this->proxyProtocol) {
             // Supports larger responses with length-prefixed framing per RFC 5966
-            $target->on('Receive', function (Server $server, int $fd, int $reactorId, string $data) use ($onPacket): void {
+            $target->on('Receive', function (Server $server, int $fd, int $reactorId, string $data) use (
+                $onPacket,
+            ): void {
                 [$ip, $port] = $this->getClientAddress($server, $fd, $reactorId);
                 $payload = substr($data, 2); // strip 2-byte length prefix
 
@@ -75,7 +77,7 @@ class Tcp extends Transport
         $target->on('Receive', function (Server $server, int $fd, int $reactorId, string $data) use ($onPacket): void {
             $buffer = ($this->buffers[$fd] ?? '') . $data;
 
-            if (!\array_key_exists($fd, $this->peers)) {
+            if (! \array_key_exists($fd, $this->peers)) {
                 try {
                     $header = ProxyProtocol::parse($buffer);
                 } catch (\Throwable) {
@@ -83,25 +85,26 @@ class Tcp extends Transport
                     return;
                 }
 
-                if (!$header instanceof \Utopia\DNS\ProxyProtocol) {
+                if (! $header instanceof \Utopia\DNS\ProxyProtocol) {
                     $this->buffers[$fd] = $buffer;
                     return;
                 }
 
                 $buffer = substr($buffer, $header->length);
-                $this->peers[$fd] = $header->ip !== null && $header->port !== null ? [$header->ip, $header->port] : null;
+                $this->peers[$fd] =
+                    $header->ip !== null && $header->port !== null ? [$header->ip, $header->port] : null;
             }
 
             while (\strlen($buffer) >= 2) {
                 $unpacked = unpack('n', substr($buffer, 0, 2));
-                $length = (\is_array($unpacked) && \is_int($unpacked[1])) ? $unpacked[1] : 0;
+                $length = \is_array($unpacked) && \is_int($unpacked[1]) ? $unpacked[1] : 0;
 
                 if ($length === 0 || $length > Message::MAX_SIZE) {
                     $this->disconnect($server, $fd);
                     return;
                 }
 
-                if (\strlen($buffer) < $length + 2) {
+                if (\strlen($buffer) < ($length + 2)) {
                     break;
                 }
 
@@ -131,7 +134,7 @@ class Tcp extends Transport
     protected function getClientAddress(Server $server, int $fd, int $reactorId): array
     {
         $info = $server->getClientInfo($fd, $reactorId);
-        if (!\is_array($info)) {
+        if (! \is_array($info)) {
             return ['', 0];
         }
 

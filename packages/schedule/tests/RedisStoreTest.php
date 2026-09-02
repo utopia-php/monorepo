@@ -22,7 +22,7 @@ final class RedisStoreTest extends TestCase
 
     protected function setUp(): void
     {
-        if (!\extension_loaded('redis')) {
+        if (! \extension_loaded('redis')) {
             $this->markTestSkipped('ext-redis is not loaded');
         }
 
@@ -121,7 +121,12 @@ final class RedisStoreTest extends TestCase
         $claim = $store->load();
         $this->assertInstanceOf(\Utopia\Schedule\Claim::class, $claim);
         $this->assertSame('standby', $claim->token);
-        $this->assertEqualsWithDelta(1787022120.000000, $claim->coveredUntil, PHP_FLOAT_EPSILON, 'a fenced write must not rewind the watermark');
+        $this->assertEqualsWithDelta(
+            1787022120.000000,
+            $claim->coveredUntil,
+            PHP_FLOAT_EPSILON,
+            'a fenced write must not rewind the watermark',
+        );
     }
 
     public function testAReleasedClaimKeepsItsWatermark(): void
@@ -170,7 +175,12 @@ final class RedisStoreTest extends TestCase
 
         $claim = $store->load();
         $this->assertSame('leader', $claim?->token, 'the claim is still readable');
-        $this->assertEqualsWithDelta(1787022060.000000, $claim->coveredUntil, PHP_FLOAT_EPSILON, 'and its watermark intact');
+        $this->assertEqualsWithDelta(
+            1787022060.000000,
+            $claim->coveredUntil,
+            PHP_FLOAT_EPSILON,
+            'and its watermark intact',
+        );
 
         // And the fence still holds across the reconnect.
         $this->assertFalse($store->swap(null, new Claim('other', 400.0, null)));
@@ -230,7 +240,7 @@ final class RedisStoreTest extends TestCase
 
     public function testOnlyOneOfManyContendersTakesAFreshClaim(): void
     {
-        if (!\function_exists('pcntl_fork')) {
+        if (! \function_exists('pcntl_fork')) {
             $this->markTestSkipped('pcntl_fork required');
         }
 

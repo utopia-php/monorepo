@@ -253,10 +253,7 @@ class SpanTest extends TestCase
     public function testSamplerFiltersExport(): void
     {
         $exported = [];
-        $exporter = $this->createExporter(
-            $exported,
-            fn(Span $s): bool => $s->getError() instanceof \Throwable,
-        );
+        $exporter = $this->createExporter($exported, fn(Span $s): bool => $s->getError() instanceof \Throwable);
 
         Span::setExporters($exporter);
 
@@ -274,13 +271,10 @@ class SpanTest extends TestCase
     {
         $exported = [];
         $sampledSpan = null;
-        $exporter = $this->createExporter(
-            $exported,
-            function (Span $s) use (&$sampledSpan): bool {
-                $sampledSpan = $s;
-                return true;
-            },
-        );
+        $exporter = $this->createExporter($exported, function (Span $s) use (&$sampledSpan): bool {
+            $sampledSpan = $s;
+            return true;
+        });
 
         Span::setExporters($exporter);
 
@@ -341,10 +335,7 @@ class SpanTest extends TestCase
     {
         $span = new Span();
 
-        $result = $span
-            ->set('key1', 'value1')
-            ->set('key2', 'value2')
-            ->setError(new RuntimeException('Error'));
+        $result = $span->set('key1', 'value1')->set('key2', 'value2')->setError(new RuntimeException('Error'));
 
         $this->assertSame($span, $result);
     }
@@ -427,10 +418,7 @@ class SpanTest extends TestCase
         $span1 = new Span();
         $span2 = new Span();
 
-        $this->assertNotEquals(
-            $span1->get('span.trace_id'),
-            $span2->get('span.trace_id'),
-        );
+        $this->assertNotEquals($span1->get('span.trace_id'), $span2->get('span.trace_id'));
     }
 
     public function testSpanIdIsUniqueBetweenSpans(): void
@@ -438,10 +426,7 @@ class SpanTest extends TestCase
         $span1 = new Span();
         $span2 = new Span();
 
-        $this->assertNotEquals(
-            $span1->get('span.id'),
-            $span2->get('span.id'),
-        );
+        $this->assertNotEquals($span1->get('span.id'), $span2->get('span.id'));
     }
 
     public function testCanOverwriteBuiltInAttributes(): void
@@ -501,10 +486,7 @@ class SpanTest extends TestCase
     public function testSamplerCanFilterByDuration(): void
     {
         $exported = [];
-        $exporter = $this->createExporter(
-            $exported,
-            fn(Span $s): bool => $s->get('span.duration') > 0.005,
-        );
+        $exporter = $this->createExporter($exported, fn(Span $s): bool => $s->get('span.duration') > 0.005);
 
         Span::setExporters($exporter);
 
@@ -646,7 +628,7 @@ class SpanTest extends TestCase
      */
     private function createExporter(array &$exported, ?Closure $sampler = null): Exporter
     {
-        return new class ($exported, $sampler) implements Exporter {
+        return new class($exported, $sampler) implements Exporter {
             /** @var array<Span> */
             private array $exported;
 

@@ -13,7 +13,7 @@ final class SwooleTableAdapterTest extends TestCase
 {
     protected function setUp(): void
     {
-        if (!class_exists(\Swoole\Table::class)) {
+        if (! class_exists(\Swoole\Table::class)) {
             self::markTestSkipped('The swoole extension is not installed.');
         }
     }
@@ -64,15 +64,24 @@ final class SwooleTableAdapterTest extends TestCase
     public function testCircuitBreakerSharesStateThroughSwooleTable(): void
     {
         $cache = new SwooleTable(SwooleTable::createTable(32), 'breaker-test:');
-        $first = new CircuitBreaker(timeout: 0, successThreshold: 2, cache: $cache, key: 'billing-api', minimumThroughput: 1);
-        $second = new CircuitBreaker(timeout: 0, successThreshold: 2, cache: $cache, key: 'billing-api', minimumThroughput: 1);
-
-        $first->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
+        $first = new CircuitBreaker(
+            timeout: 0,
+            successThreshold: 2,
+            cache: $cache,
+            key: 'billing-api',
+            minimumThroughput: 1,
         );
+        $second = new CircuitBreaker(
+            timeout: 0,
+            successThreshold: 2,
+            cache: $cache,
+            key: 'billing-api',
+            minimumThroughput: 1,
+        );
+
+        $first->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
 
         $this->assertTrue($second->isHalfOpen());
 

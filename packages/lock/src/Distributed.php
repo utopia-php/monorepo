@@ -13,20 +13,20 @@ use Utopia\Lock\Exception\Contention;
 final class Distributed implements Lock
 {
     private const string RELEASE_SCRIPT = <<<'LUA'
-        if redis.call("get", KEYS[1]) == ARGV[1] then
-            return redis.call("del", KEYS[1])
-        else
-            return 0
-        end
-        LUA;
+    if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+    else
+        return 0
+    end
+    LUA;
 
     private const string REFRESH_SCRIPT = <<<'LUA'
-        if redis.call("get", KEYS[1]) == ARGV[1] then
-            return redis.call("expire", KEYS[1], ARGV[2])
-        else
-            return 0
-        end
-        LUA;
+    if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("expire", KEYS[1], ARGV[2])
+    else
+        return 0
+    end
+    LUA;
 
     private const float BACKOFF_MIN = 0.05;
 
@@ -224,7 +224,7 @@ final class Distributed implements Lock
     {
         $half = $delay / 2.0;
 
-        return $half + (random_int(0, PHP_INT_MAX) / PHP_INT_MAX) * $half;
+        return $half + ((random_int(0, PHP_INT_MAX) / PHP_INT_MAX) * $half);
     }
 
     private function generateToken(): string

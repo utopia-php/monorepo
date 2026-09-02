@@ -17,7 +17,6 @@ final class PHPTest extends TestCase
         $this->parser = new PHP();
     }
 
-
     public function testPHPBasicTypes(): void
     {
         $php = <<<PHP
@@ -120,19 +119,10 @@ final class PHPTest extends TestCase
 
         $this->assertArrayHasKey('user', $data['nested_object']);
         $this->assertArrayHasKey('profile', $data['nested_object']['user']);
-        $this->assertArrayHasKey(
-            'settings',
-            $data['nested_object']['user']['profile'],
-        );
+        $this->assertArrayHasKey('settings', $data['nested_object']['user']['profile']);
 
-        $this->assertSame(
-            'Jane',
-            $data['nested_object']['user']['profile']['name'],
-        );
-        $this->assertSame(
-            'dark',
-            $data['nested_object']['user']['profile']['settings']['theme'],
-        );
+        $this->assertSame('Jane', $data['nested_object']['user']['profile']['name']);
+        $this->assertSame('dark', $data['nested_object']['user']['profile']['settings']['theme']);
 
         $this->assertIsArray($data['empty_object']);
         $this->assertCount(0, $data['empty_object']);
@@ -167,7 +157,6 @@ final class PHPTest extends TestCase
         $this->expectException(Parse::class);
         $this->parser->parse(12);
     }
-
 
     public function testPHPParseExceptionBoolean(): void
     {

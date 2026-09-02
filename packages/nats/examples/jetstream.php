@@ -15,10 +15,7 @@ $js = $conn->jetStream();
 echo "Connected to NATS with JetStream\n";
 
 // Create a stream
-$stream = $js->createOrUpdateStream(new StreamConfig(
-    name: 'ORDERS',
-    subjects: ['orders.>'],
-));
+$stream = $js->createOrUpdateStream(new StreamConfig(name: 'ORDERS', subjects: ['orders.>']));
 echo "Stream ORDERS created\n";
 
 // Publish messages
@@ -28,12 +25,15 @@ for ($i = 1; $i <= 5; $i++) {
 }
 
 // Create a pull consumer
-$consumer = $js->createConsumer('ORDERS', new ConsumerConfig(
-    name: 'order-processor',
-    durableName: 'order-processor',
-    ackPolicy: AckPolicy::Explicit,
-    filterSubject: 'orders.>',
-));
+$consumer = $js->createConsumer(
+    'ORDERS',
+    new ConsumerConfig(
+        name: 'order-processor',
+        durableName: 'order-processor',
+        ackPolicy: AckPolicy::Explicit,
+        filterSubject: 'orders.>',
+    ),
+);
 echo "Consumer created: {$consumer->getName()}\n";
 
 // Fetch messages

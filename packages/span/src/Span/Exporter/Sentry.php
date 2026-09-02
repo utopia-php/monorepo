@@ -5,8 +5,8 @@ namespace Utopia\Span\Exporter;
 use Closure;
 use Composer\InstalledVersions;
 use Psr\Http\Client\ClientInterface;
-use Utopia\Client\Adapter\Curl\Client as CurlClient;
 use Utopia\Client as HttpClient;
+use Utopia\Client\Adapter\Curl\Client as CurlClient;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Request\Factory as RequestFactory;
 use Utopia\Span\Exporter\Sentry\Level as SentryLevel;
@@ -105,19 +105,17 @@ class Sentry implements Exporter
         ?ClientInterface $client = null,
     ) {
         $this->classifier = $classifier ?? static fn(string $key): SentryField => SentryField::Context;
-        $this->client = $client ?? new HttpClient(
-            new CurlClient(options: [
-                \CURLOPT_TIMEOUT_MS => 1000,
-                \CURLOPT_CONNECTTIMEOUT_MS => 500,
-            ]),
-        );
+        $this->client = $client ?? new HttpClient(new CurlClient(options: [
+            \CURLOPT_TIMEOUT_MS => 1000,
+            \CURLOPT_CONNECTTIMEOUT_MS => 500,
+        ]));
         $this->requestFactory = new RequestFactory();
         $this->sampler = static function (Span $span) use ($sampler): bool {
             $level = Level::tryFrom((string) $span->get('level'));
-            if ($level === null || !\in_array($level, self::EXPORT_LEVELS, true)) {
+            if ($level === null || ! \in_array($level, self::EXPORT_LEVELS, true)) {
                 return false;
             }
-            return !$sampler instanceof \Closure || $sampler($span);
+            return ! $sampler instanceof \Closure || $sampler($span);
         };
         if ($dsn === '') {
             throw new \InvalidArgumentException('Sentry DSN is required');
@@ -188,7 +186,7 @@ class Sentry implements Exporter
     {
         $error = $span->getError();
 
-        if (!$error instanceof \Throwable) {
+        if (! $error instanceof \Throwable) {
             return null;
         }
 
@@ -258,7 +256,11 @@ class Sentry implements Exporter
             'message' => $error->getMessage(),
             'contexts' => $contexts,
             'exception' => [
-                'values' => $this->buildExceptionValues($error, $level, \is_bool($attributes['span.handled'] ?? null) ? $attributes['span.handled'] : null),
+                'values' => $this->buildExceptionValues(
+                    $error,
+                    $level,
+                    \is_bool($attributes['span.handled'] ?? null) ? $attributes['span.handled'] : null,
+                ),
             ],
         ];
 
@@ -308,14 +310,18 @@ class Sentry implements Exporter
     private function buildExceptionValues(\Throwable $error, Level $level, ?bool $handledOverride = null): array
     {
         $chain = [];
-        for ($current = $error; $current instanceof \Throwable && \count($chain) < self::MAX_CHAIN_DEPTH; $current = $current->getPrevious()) {
+        for (
+            $current = $error;
+            $current instanceof \Throwable && \count($chain) < self::MAX_CHAIN_DEPTH;
+            $current = $current->getPrevious()
+        ) {
             $chain[] = $current;
         }
 
         // A 'span.handled' attribute states the handling state explicitly; the
         // level is only a fallback heuristic (fatal implies a process-level
         // handler, anything reported at warning/error implies user code).
-        $handled = $handledOverride ?? ($level !== Level::Fatal);
+        $handled = $handledOverride ?? $level !== Level::Fatal;
         $chained = \count($chain) > 1;
         $values = [];
 
@@ -365,13 +371,13 @@ class Sentry implements Exporter
 
         $frames = [];
         foreach (array_reverse($trace) as $frame) {
-            if (!isset($frame['file'])) {
+            if (! isset($frame['file'])) {
                 continue;
             }
             $frames[] = [
                 'filename' => $frame['file'],
                 'lineno' => $frame['line'] ?? 0,
-                'in_app' => !str_contains($frame['file'], '/vendor/'),
+                'in_app' => ! str_contains($frame['file'], '/vendor/'),
                 'function' => $this->formatFunction($frame),
             ];
         }
@@ -381,7 +387,7 @@ class Sentry implements Exporter
         $throwSite = [
             'filename' => $error->getFile(),
             'lineno' => $error->getLine(),
-            'in_app' => !str_contains($error->getFile(), '/vendor/'),
+            'in_app' => ! str_contains($error->getFile(), '/vendor/'),
         ];
 
         if (isset($trace[0]['function'])) {

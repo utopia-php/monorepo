@@ -71,12 +71,28 @@ final class FCMTest extends TestCase
     public static function missingRequiredFieldProvider(): \Iterator
     {
         yield 'type' => [self::without('type'), 'type', 'identifies the credentials as a Google service account'];
-        yield 'project ID' => [self::without('project_id'), 'project_id', 'identifies the Firebase project receiving messages'];
+        yield 'project ID' => [
+            self::without('project_id'),
+            'project_id',
+            'identifies the Firebase project receiving messages',
+        ];
         yield 'private key' => [self::without('private_key'), 'private_key', 'signs the OAuth access-token request'];
-        yield 'client email' => [self::without('client_email'), 'client_email', 'identifies the service account used for authentication'];
+        yield 'client email' => [
+            self::without('client_email'),
+            'client_email',
+            'identifies the service account used for authentication',
+        ];
         yield 'token URI' => [self::without('token_uri'), 'token_uri', 'identifies the OAuth token endpoint'];
-        yield 'blank project ID' => [array_replace(self::CREDENTIALS, ['project_id' => " \t\n"]), 'project_id', 'identifies the Firebase project receiving messages'];
-        yield 'non-string client email' => [array_replace(self::CREDENTIALS, ['client_email' => 123]), 'client_email', 'identifies the service account used for authentication'];
+        yield 'blank project ID' => [
+            array_replace(self::CREDENTIALS, ['project_id' => " \t\n"]),
+            'project_id',
+            'identifies the Firebase project receiving messages',
+        ];
+        yield 'non-string client email' => [
+            array_replace(self::CREDENTIALS, ['client_email' => 123]),
+            'client_email',
+            'identifies the service account used for authentication',
+        ];
     }
 
     /**

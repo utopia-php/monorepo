@@ -62,7 +62,7 @@ class GtidSet implements \Stringable
         $merged = [];
         foreach ($intervals as $interval) {
             $index = \count($merged) - 1;
-            if ($index >= 0 && $interval[0] <= $merged[$index][1] + 1) {
+            if ($index >= 0 && $interval[0] <= ($merged[$index][1] + 1)) {
                 $merged[$index] = [$merged[$index][0], max($merged[$index][1], $interval[1])];
             } else {
                 $merged[] = [$interval[0], $interval[1]];

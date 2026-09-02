@@ -77,10 +77,7 @@ final class FPMResponseTest extends TestCase
     {
         ob_start(); //Start of build
 
-        @$this->response
-            ->addHeader('key', 'value')
-            ->addCookie('name', 'value')
-            ->send('body'); //FIXME we have a problem with header printing
+        @$this->response->addHeader('key', 'value')->addCookie('name', 'value')->send('body'); //FIXME we have a problem with header printing
 
         $html = ob_get_contents();
         ob_end_clean(); //End of build
@@ -94,9 +91,7 @@ final class FPMResponseTest extends TestCase
 
         // A cookie with only a name (null value, no SameSite/secure/etc.) must
         // not trigger a TypeError when proxied to setcookie()/Swoole's cookie().
-        @$this->response
-            ->addCookie('name')
-            ->send('body');
+        @$this->response->addCookie('name')->send('body');
 
         $html = ob_get_contents();
         ob_end_clean(); //End of build

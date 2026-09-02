@@ -51,10 +51,19 @@ final class RouterTest extends TestCase
 
         $this->assertEquals($routeBlog, Router::match(Http::REQUEST_METHOD_GET, '/blog')?->route);
         $this->assertEquals($routeBlogAuthors, Router::match(Http::REQUEST_METHOD_GET, '/blog/authors')?->route);
-        $this->assertEquals($routeBlogAuthorsComments, Router::match(Http::REQUEST_METHOD_GET, '/blog/authors/comments')?->route);
+        $this->assertEquals(
+            $routeBlogAuthorsComments,
+            Router::match(Http::REQUEST_METHOD_GET, '/blog/authors/comments')?->route,
+        );
         $this->assertEquals($routeBlogPost, Router::match(Http::REQUEST_METHOD_GET, '/blog/test')?->route);
-        $this->assertEquals($routeBlogPostComments, Router::match(Http::REQUEST_METHOD_GET, '/blog/test/comments')?->route);
-        $this->assertEquals($routeBlogPostCommentsSingle, Router::match(Http::REQUEST_METHOD_GET, '/blog/test/comments/:comment')?->route);
+        $this->assertEquals(
+            $routeBlogPostComments,
+            Router::match(Http::REQUEST_METHOD_GET, '/blog/test/comments')?->route,
+        );
+        $this->assertEquals(
+            $routeBlogPostCommentsSingle,
+            Router::match(Http::REQUEST_METHOD_GET, '/blog/test/comments/:comment')?->route,
+        );
     }
 
     public function testCanMatchUrlWithWildcard(): void
@@ -92,9 +101,7 @@ final class RouterTest extends TestCase
     public function testCanMatchAlias(): void
     {
         $routeGET = new Route(Http::REQUEST_METHOD_GET, '/target');
-        $routeGET
-            ->alias('/alias')
-            ->alias('/alias2');
+        $routeGET->alias('/alias')->alias('/alias2');
 
         Router::addRoute($routeGET);
 
@@ -106,10 +113,7 @@ final class RouterTest extends TestCase
     public function testCanMatchMultipleAliases(): void
     {
         $routeGET = new Route(Http::REQUEST_METHOD_GET, '/target');
-        $routeGET
-            ->alias('/alias1')
-            ->alias('/alias2')
-            ->alias('/alias3');
+        $routeGET->alias('/alias1')->alias('/alias2')->alias('/alias3');
 
         Router::addRoute($routeGET);
 
@@ -173,8 +177,7 @@ final class RouterTest extends TestCase
 
     public function testRoutesCrossPathAliases(): void
     {
-        $route = Http::routes([Http::REQUEST_METHOD_GET, Http::REQUEST_METHOD_POST], '/a')
-            ->alias('/a-old');
+        $route = Http::routes([Http::REQUEST_METHOD_GET, Http::REQUEST_METHOD_POST], '/a')->alias('/a-old');
 
         $this->assertEquals($route, Router::match(Http::REQUEST_METHOD_GET, '/a')?->route);
         $this->assertEquals($route, Router::match(Http::REQUEST_METHOD_POST, '/a')?->route);
@@ -224,11 +227,14 @@ final class RouterTest extends TestCase
             $routePOST = new Route(Http::REQUEST_METHOD_POST, '/userinfo');
             Router::addRoute($routePOST);
 
-            $routeGET = Http::routes([
-                Http::REQUEST_METHOD_GET,
-                Http::REQUEST_METHOD_POST,
-                Http::REQUEST_METHOD_POST,
-            ], '/userinfo');
+            $routeGET = Http::routes(
+                [
+                    Http::REQUEST_METHOD_GET,
+                    Http::REQUEST_METHOD_POST,
+                    Http::REQUEST_METHOD_POST,
+                ],
+                '/userinfo',
+            );
 
             $this->assertEquals($routeGET, Router::match(Http::REQUEST_METHOD_POST, '/userinfo')?->route);
         } finally {

@@ -33,10 +33,15 @@ final class FactoryTest extends TestCase
     {
         $requestFactory = new Request\Factory();
 
-        $request = $requestFactory->json('POST', 'https://example.com/users', ['name' => 'Ada'], [
-            'Accept' => 'application/vnd.api+json',
-            'Content-Type' => 'application/merge-patch+json',
-        ]);
+        $request = $requestFactory->json(
+            'POST',
+            'https://example.com/users',
+            ['name' => 'Ada'],
+            [
+                'Accept' => 'application/vnd.api+json',
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        );
 
         $this->assertSame('application/vnd.api+json', $request->getHeaderLine('Accept'));
         $this->assertSame('application/merge-patch+json', $request->getHeaderLine('Content-Type'));
@@ -94,7 +99,10 @@ final class FactoryTest extends TestCase
             'search' => 'Ada Lovelace',
         ]);
 
-        $this->assertSame('https://example.com/users?active=1&page=2&search=Ada%20Lovelace', (string) $request->getUri());
+        $this->assertSame(
+            'https://example.com/users?active=1&page=2&search=Ada%20Lovelace',
+            (string) $request->getUri(),
+        );
     }
 
     public function testItCreatesMultipartRequests(): void
@@ -165,12 +173,17 @@ final class FactoryTest extends TestCase
     {
         $requestFactory = new Request\Factory();
 
-        $request = $requestFactory->multipart('POST', 'https://example.com/upload', [
-            'name' => 'Ada',
-        ], [
-            'Content-Type' => 'multipart/form-data',
-            'X-Request-Id' => 'abc',
-        ]);
+        $request = $requestFactory->multipart(
+            'POST',
+            'https://example.com/upload',
+            [
+                'name' => 'Ada',
+            ],
+            [
+                'Content-Type' => 'multipart/form-data',
+                'X-Request-Id' => 'abc',
+            ],
+        );
 
         $this->assertSame('abc', $request->getHeaderLine('X-Request-Id'));
         $this->assertMultipartContentTypeMatchesBody($request);
@@ -180,11 +193,16 @@ final class FactoryTest extends TestCase
     {
         $requestFactory = new Request\Factory();
 
-        $request = $requestFactory->multipart('POST', 'https://example.com/upload', [
-            'name' => 'Ada',
-        ], [
-            'Content-Type' => 'multipart/form-data; boundary=stale-boundary',
-        ]);
+        $request = $requestFactory->multipart(
+            'POST',
+            'https://example.com/upload',
+            [
+                'name' => 'Ada',
+            ],
+            [
+                'Content-Type' => 'multipart/form-data; boundary=stale-boundary',
+            ],
+        );
 
         $boundary = $this->assertMultipartContentTypeMatchesBody($request);
 
@@ -197,9 +215,14 @@ final class FactoryTest extends TestCase
     {
         $requestFactory = new Request\Factory();
 
-        $form = $requestFactory->form('POST', 'https://example.com/users', ['name' => 'Ada'], [
-            'Content-Type' => 'application/x-www-form-urlencoded; charset=utf-8',
-        ]);
+        $form = $requestFactory->form(
+            'POST',
+            'https://example.com/users',
+            ['name' => 'Ada'],
+            [
+                'Content-Type' => 'application/x-www-form-urlencoded; charset=utf-8',
+            ],
+        );
         $text = $requestFactory->text('POST', 'https://example.com/notes', 'Hello', [
             'Content-Type' => 'text/plain; charset=utf-8',
         ]);
@@ -223,11 +246,16 @@ final class FactoryTest extends TestCase
         $request = $requestFactory->query('GET', 'https://example.com/users', [
             'page' => 1,
         ]);
-        $typed = $requestFactory->query('GET', 'https://example.com/users', [
-            'page' => 1,
-        ], [
-            'Content-Type' => 'application/json',
-        ]);
+        $typed = $requestFactory->query(
+            'GET',
+            'https://example.com/users',
+            [
+                'page' => 1,
+            ],
+            [
+                'Content-Type' => 'application/json',
+            ],
+        );
 
         $this->assertFalse($request->hasHeader('Content-Type'));
         $this->assertSame('application/json', $typed->getHeaderLine('Content-Type'));
@@ -263,10 +291,7 @@ final class FactoryTest extends TestCase
 
         $boundary = $body->boundary();
         $this->assertNotSame('', $boundary);
-        $this->assertSame(
-            'multipart/form-data; boundary=' . $boundary,
-            $request->getHeaderLine('Content-Type'),
-        );
+        $this->assertSame('multipart/form-data; boundary=' . $boundary, $request->getHeaderLine('Content-Type'));
         $this->assertStringContainsString('--' . $boundary . "\r\n", (string) $body);
         $this->assertStringEndsWith('--' . $boundary . "--\r\n", (string) $body);
 

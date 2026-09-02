@@ -3,17 +3,14 @@
 namespace Tests\Telemetry\Adapter\OpenTelemetry\Swoole;
 
 use Swoole\Coroutine;
-
-use function Swoole\Coroutine\go;
-
 use Swoole\Coroutine\Http\Client;
 use Swoole\Coroutine\Http\Server;
-
-use function Swoole\Coroutine\run;
-
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 use Utopia\Telemetry\Exception;
+
+use function Swoole\Coroutine\go;
+use function Swoole\Coroutine\run;
 
 /**
  * Mock OTLP server for integration testing.
@@ -41,7 +38,7 @@ class MockOtlpServer
 
     public function __construct()
     {
-        $this->port = self::HOST === '127.0.0.1' ? 19318 + (self::$portOffset++) : 19318;
+        $this->port = self::HOST === '127.0.0.1' ? 19318 + self::$portOffset++ : 19318;
     }
 
     /**
@@ -125,7 +122,7 @@ class MockOtlpServer
     private function waitUntilReady(float $timeout = 2.0): void
     {
         $start = microtime(true);
-        while (microtime(true) - $start < $timeout) {
+        while ((microtime(true) - $start) < $timeout) {
             $client = new Client(self::HOST, $this->port);
             $client->set(['timeout' => 0.1]);
             $client->get('/');

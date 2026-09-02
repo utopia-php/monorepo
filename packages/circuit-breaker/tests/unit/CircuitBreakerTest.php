@@ -17,18 +17,12 @@ final class CircuitBreakerTest extends TestCase
     {
         $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, minimumThroughput: 2);
 
-        $first = $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
-        );
-        $second = $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
-        );
+        $first = $breaker->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
+        $second = $breaker->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
 
         $this->assertSame('fallback', $first);
         $this->assertSame('fallback', $second);
@@ -39,21 +33,27 @@ final class CircuitBreakerTest extends TestCase
     public function testCachedStateIsSharedAcrossBreakerInstances(): void
     {
         $cache = $this->createArrayAdapter();
-        $first = new CircuitBreaker(timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api', minimumThroughput: 2);
-        $second = new CircuitBreaker(timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api', minimumThroughput: 2);
+        $first = new CircuitBreaker(
+            timeout: 30,
+            successThreshold: 1,
+            cache: $cache,
+            key: 'users-api',
+            minimumThroughput: 2,
+        );
+        $second = new CircuitBreaker(
+            timeout: 30,
+            successThreshold: 1,
+            cache: $cache,
+            key: 'users-api',
+            minimumThroughput: 2,
+        );
 
-        $first->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
-        );
-        $first->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
-        );
+        $first->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
+        $first->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
 
         $this->assertTrue($second->isOpen());
 
@@ -61,12 +61,9 @@ final class CircuitBreakerTest extends TestCase
         // the second instance did not inherit failures it never saw.
         $this->assertSame(0, $second->getFailureCount());
 
-        $result = $second->call(
-            open: static fn(): string => 'shared fallback',
-            close: function (): never {
-                self::fail('Closed callback should not run while the shared circuit is open.');
-            },
-        );
+        $result = $second->call(open: static fn(): string => 'shared fallback', close: function (): never {
+            self::fail('Closed callback should not run while the shared circuit is open.');
+        });
 
         $this->assertSame('shared fallback', $result);
     }
@@ -101,7 +98,13 @@ final class CircuitBreakerTest extends TestCase
                 $this->writes[] = ['delete', $key, null];
             }
         };
-        $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api', minimumThroughput: 1);
+        $breaker = new CircuitBreaker(
+            timeout: 30,
+            successThreshold: 1,
+            cache: $cache,
+            key: 'users-api',
+            minimumThroughput: 1,
+        );
 
         $this->assertSame('ok', $breaker->call(
             open: static fn(): string => 'fallback',
@@ -151,33 +154,33 @@ final class CircuitBreakerTest extends TestCase
                 unset($this->values[$key]);
             }
         };
-        $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, cache: $cache, key: 'users-api', minimumThroughput: 1);
-
-        $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
+        $breaker = new CircuitBreaker(
+            timeout: 30,
+            successThreshold: 1,
+            cache: $cache,
+            key: 'users-api',
+            minimumThroughput: 1,
         );
 
-        $setWrites = array_values(array_filter(
-            $cache->writes,
-            static fn(array $write): bool => $write[0] === 'set',
-        ));
+        $breaker->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
 
-        $this->assertSame(['set', 'users-api:state', CircuitState::OPEN->value], $setWrites[array_key_last($setWrites)]);
+        $setWrites = array_values(array_filter($cache->writes, static fn(array $write): bool => $write[0] === 'set'));
+
+        $this->assertSame(
+            ['set', 'users-api:state', CircuitState::OPEN->value],
+            $setWrites[array_key_last($setWrites)],
+        );
     }
 
     public function testHalfOpenSuccessesCloseTheCircuit(): void
     {
         $breaker = new CircuitBreaker(timeout: 0, successThreshold: 2, minimumThroughput: 1);
 
-        $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
-        );
+        $breaker->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
 
         $this->assertSame('probe-1', $breaker->call(
             open: static fn(): string => 'fallback',
@@ -203,12 +206,9 @@ final class CircuitBreakerTest extends TestCase
         $telemetry = new TestTelemetry();
         $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, telemetry: $telemetry, minimumThroughput: 1);
 
-        $result = $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
-        );
+        $result = $breaker->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
 
         $this->assertSame('fallback', $result);
         $this->assertSame([1], $telemetry->counters['breaker.calls']->values);
@@ -228,12 +228,9 @@ final class CircuitBreakerTest extends TestCase
         $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, metricPrefix: '.edge.', minimumThroughput: 1);
         $breaker->setTelemetry($telemetry);
 
-        $result = $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
-        );
+        $result = $breaker->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
 
         $this->assertSame('fallback', $result);
         $this->assertSame([1], $telemetry->counters['edge.breaker.calls']->values);
@@ -389,12 +386,9 @@ final class CircuitBreakerTest extends TestCase
         $breaker = new CircuitBreaker(timeout: 30, successThreshold: 1, minimumThroughput: 100);
         $breaker->trip();
 
-        $result = $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: function (): never {
-                self::fail('Closed callback should not run when the breaker has been tripped.');
-            },
-        );
+        $result = $breaker->call(open: static fn(): string => 'fallback', close: function (): never {
+            self::fail('Closed callback should not run when the breaker has been tripped.');
+        });
 
         $this->assertSame('fallback', $result);
         $this->assertTrue($breaker->isOpen());
@@ -478,7 +472,9 @@ final class ActiveCallAttributeStore
 
 final class ActiveCallTelemetry extends TestTelemetry
 {
-    public function __construct(private readonly ActiveCallAttributeStore $store) {}
+    public function __construct(
+        private readonly ActiveCallAttributeStore $store,
+    ) {}
 
     /**
      * @param array<string, mixed> $advisory
@@ -493,8 +489,10 @@ final class ActiveCallTelemetry extends TestTelemetry
             return parent::createUpDownCounter($name, $unit, $description, $advisory);
         }
 
-        $counter = new class ($this->store) extends UpDownCounter {
-            public function __construct(private readonly ActiveCallAttributeStore $store) {}
+        $counter = new class($this->store) extends UpDownCounter {
+            public function __construct(
+                private readonly ActiveCallAttributeStore $store,
+            ) {}
 
             /**
              * @param iterable<non-empty-string, array<mixed>|bool|float|int|string|null> $attributes

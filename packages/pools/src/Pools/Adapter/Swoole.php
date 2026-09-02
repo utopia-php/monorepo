@@ -22,7 +22,6 @@ class Swoole extends Adapter
 
     public function initialize(int $size): static
     {
-
         $this->pool = new Channel($size);
         $this->lock = new Lock();
 

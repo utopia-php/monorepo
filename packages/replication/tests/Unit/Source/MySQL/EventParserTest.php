@@ -23,12 +23,18 @@ final class EventParserTest extends TestCase
      */
     private function tableMapBody(): string
     {
-        $body = $this->uint(self::TABLE_ID, 6)
+        $body =
+            $this->uint(self::TABLE_ID, 6)
             . "\x00\x00" // flags
-            . \chr(\strlen(self::SCHEMA)) . self::SCHEMA . "\x00"
-            . \chr(\strlen(self::TABLE)) . self::TABLE . "\x00"
+            . \chr(\strlen(self::SCHEMA))
+            . self::SCHEMA
+            . "\x00"
+            . \chr(\strlen(self::TABLE))
+            . self::TABLE
+            . "\x00"
             . \chr(2) // column count
-            . \chr(Constants::TYPE_LONGLONG) . \chr(Constants::TYPE_VAR_STRING);
+            . \chr(Constants::TYPE_LONGLONG)
+            . \chr(Constants::TYPE_VAR_STRING);
 
         $metadata = pack('v', 1020); // VAR_STRING max length; LONGLONG has none
         $body .= pack('C', \strlen($metadata)) . $metadata;
@@ -47,12 +53,18 @@ final class EventParserTest extends TestCase
      */
     private function tableMapBodyMinimal(): string
     {
-        $body = $this->uint(self::TABLE_ID, 6)
+        $body =
+            $this->uint(self::TABLE_ID, 6)
             . "\x00\x00"
-            . \chr(\strlen(self::SCHEMA)) . self::SCHEMA . "\x00"
-            . \chr(\strlen(self::TABLE)) . self::TABLE . "\x00"
+            . \chr(\strlen(self::SCHEMA))
+            . self::SCHEMA
+            . "\x00"
+            . \chr(\strlen(self::TABLE))
+            . self::TABLE
+            . "\x00"
             . \chr(2)
-            . \chr(Constants::TYPE_LONGLONG) . \chr(Constants::TYPE_VAR_STRING);
+            . \chr(Constants::TYPE_LONGLONG)
+            . \chr(Constants::TYPE_VAR_STRING);
 
         $metadata = pack('v', 1020);
         $body .= pack('C', \strlen($metadata)) . $metadata; // null bitmap, then no optional metadata
@@ -62,11 +74,13 @@ final class EventParserTest extends TestCase
 
     private function rowsHeader(): string
     {
-        return $this->uint(self::TABLE_ID, 6)
-            . "\x00\x00"   // flags
-            . "\x02\x00"   // v2 extra-data length = 2 (none)
-            . \chr(2)      // column count
-            . \chr(0b11);  // both columns present
+        return (
+            $this->uint(self::TABLE_ID, 6)
+            . "\x00\x00" // flags
+            . "\x02\x00" // v2 extra-data length = 2 (none)
+            . \chr(2) // column count
+            . \chr(0b11) // both columns present
+        );
     }
 
     private function cell(int $id, string $uid): string
@@ -168,7 +182,10 @@ final class EventParserTest extends TestCase
         });
         $parser->parseTableMap($this->tableMapBodyMinimal());
 
-        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->rowsHeader() . $this->cell(100, 'proj123'));
+        $decoded = $parser->parseRows(
+            Constants::WRITE_ROWS_EVENT_V2,
+            $this->rowsHeader() . $this->cell(100, 'proj123'),
+        );
 
         $this->assertNotNull($decoded);
         $this->assertSame(100, $decoded['rows'][0]['_id']);
@@ -184,7 +201,10 @@ final class EventParserTest extends TestCase
         $parser = new EventParser();
         $parser->parseTableMap($this->tableMapBodyMinimal());
 
-        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->rowsHeader() . $this->cell(100, 'proj123'));
+        $decoded = $parser->parseRows(
+            Constants::WRITE_ROWS_EVENT_V2,
+            $this->rowsHeader() . $this->cell(100, 'proj123'),
+        );
 
         $this->assertNotNull($decoded);
         $this->assertSame(100, $decoded['rows'][0][0] ?? null);
@@ -217,23 +237,38 @@ final class EventParserTest extends TestCase
     public function testSignedIntegerDecoding(string $signednessByte, int $rawByte, int $expected): void
     {
         // Single TINYINT column 'n' with an explicit SIGNEDNESS metadata byte.
-        $tableMap = $this->uint(self::TABLE_ID, 6) . "\x00\x00"
-            . \chr(\strlen(self::SCHEMA)) . self::SCHEMA . "\x00"
-            . \chr(\strlen(self::TABLE)) . self::TABLE . "\x00"
-            . \chr(1)                                    // column count
-            . \chr(Constants::TYPE_TINY)                 // types
-            . \chr(0)                                    // metadata block (TINY has none)
-            . "\x00"                                     // null bitmap
-            . \chr(Constants::METADATA_SIGNEDNESS) . \chr(1) . $signednessByte
-            . \chr(Constants::METADATA_COLUMN_NAME) . \chr(2) . \chr(1) . 'n';
+        $tableMap =
+            $this->uint(self::TABLE_ID, 6)
+            . "\x00\x00"
+            . \chr(\strlen(self::SCHEMA))
+            . self::SCHEMA
+            . "\x00"
+            . \chr(\strlen(self::TABLE))
+            . self::TABLE
+            . "\x00"
+            . \chr(1) // column count
+            . \chr(Constants::TYPE_TINY) // types
+            . \chr(0) // metadata block (TINY has none)
+            . "\x00" // null bitmap
+            . \chr(Constants::METADATA_SIGNEDNESS)
+            . \chr(1)
+            . $signednessByte
+            . \chr(Constants::METADATA_COLUMN_NAME)
+            . \chr(2)
+            . \chr(1)
+            . 'n';
 
         $parser = new EventParser();
         $parser->parseTableMap($tableMap);
 
-        $body = $this->uint(self::TABLE_ID, 6) . "\x00\x00" . "\x02\x00"
-            . \chr(1) . \chr(0b1)   // column count + present bitmap
-            . "\x00"                // null bitmap
-            . pack('C', $rawByte);  // TINY value
+        $body =
+            $this->uint(self::TABLE_ID, 6)
+            . "\x00\x00"
+            . "\x02\x00"
+            . \chr(1)
+            . \chr(0b1) // column count + present bitmap
+            . "\x00" // null bitmap
+            . pack('C', $rawByte); // TINY value
 
         $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $body);
         $this->assertNotNull($decoded);
@@ -271,7 +306,11 @@ final class EventParserTest extends TestCase
 
         $this->assertNotNull($decoded);
         $this->assertSame($expected, $decoded['rows'][0]['v']);
-        $this->assertSame(127, $decoded['rows'][0]['sentinel'], 'trailing column misaligned — wrong byte width consumed');
+        $this->assertSame(
+            127,
+            $decoded['rows'][0]['sentinel'],
+            'trailing column misaligned — wrong byte width consumed',
+        );
     }
 
     /**
@@ -295,10 +334,20 @@ final class EventParserTest extends TestCase
         yield 'ENUM' => [Constants::TYPE_ENUM, "\x00\x01", \chr(2), 2];
         // Fixed-width temporals are returned as their raw bytes.
         yield 'TIMESTAMP' => [Constants::TYPE_TIMESTAMP, '', "\x01\x02\x03\x04", "\x01\x02\x03\x04"];
-        yield 'DATETIME' => [Constants::TYPE_DATETIME, '', "\x01\x02\x03\x04\x05\x06\x07\x08", "\x01\x02\x03\x04\x05\x06\x07\x08"];
+        yield 'DATETIME' => [
+            Constants::TYPE_DATETIME,
+            '',
+            "\x01\x02\x03\x04\x05\x06\x07\x08",
+            "\x01\x02\x03\x04\x05\x06\x07\x08",
+        ];
         yield 'DATE' => [Constants::TYPE_DATE, '', "\xAA\xBB\xCC", "\xAA\xBB\xCC"];
         // Fractional temporals: width grows with the fsp metadata byte.
-        yield 'TIMESTAMP2(6)' => [Constants::TYPE_TIMESTAMP2, \chr(6), "\x01\x02\x03\x04\x05\x06\x07", "\x01\x02\x03\x04\x05\x06\x07"];
+        yield 'TIMESTAMP2(6)' => [
+            Constants::TYPE_TIMESTAMP2,
+            \chr(6),
+            "\x01\x02\x03\x04\x05\x06\x07",
+            "\x01\x02\x03\x04\x05\x06\x07",
+        ];
         yield 'DATETIME2(0)' => [Constants::TYPE_DATETIME2, \chr(0), "\x01\x02\x03\x04\x05", "\x01\x02\x03\x04\x05"];
         yield 'TIME2(0)' => [Constants::TYPE_TIME2, \chr(0), "\xAA\xBB\xCC", "\xAA\xBB\xCC"];
         // BIT: metadata packs (bytes, bits) -> 10 bits = ceil(10/8) = 2 bytes.
@@ -353,7 +402,12 @@ final class EventParserTest extends TestCase
 
         // present bitmap 0b101 -> only columns a and c are in the image.
         $row = $this->binlogRow(2, pack('P', 10), pack('P', 30));
-        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogPartialRowsV2(self::TABLE_ID, 3, \chr(0b101), $row));
+        $decoded = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogPartialRowsV2(
+            self::TABLE_ID,
+            3,
+            \chr(0b101),
+            $row,
+        ));
 
         $this->assertNotNull($decoded);
         $this->assertSame(['a' => 10, 'c' => 30], $decoded['rows'][0]);
@@ -363,11 +417,25 @@ final class EventParserTest extends TestCase
     public function testDistinctTablesAreTrackedByTableId(): void
     {
         $parser = new EventParser();
-        $parser->parseTableMap($this->binlogTableMap(1, 'appwrite', 'projects', [['type' => Constants::TYPE_LONGLONG, 'name' => 'id']]));
-        $parser->parseTableMap($this->binlogTableMap(2, 'appwrite', 'users', [['type' => Constants::TYPE_LONGLONG, 'name' => 'id']]));
+        $parser->parseTableMap($this->binlogTableMap(1, 'appwrite', 'projects', [[
+            'type' => Constants::TYPE_LONGLONG,
+            'name' => 'id',
+        ]]));
+        $parser->parseTableMap($this->binlogTableMap(2, 'appwrite', 'users', [[
+            'type' => Constants::TYPE_LONGLONG,
+            'name' => 'id',
+        ]]));
 
-        $projects = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(1, 1, $this->binlogRow(1, pack('P', 1))));
-        $users = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(2, 1, $this->binlogRow(1, pack('P', 2))));
+        $projects = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(
+            1,
+            1,
+            $this->binlogRow(1, pack('P', 1)),
+        ));
+        $users = $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(
+            2,
+            1,
+            $this->binlogRow(1, pack('P', 2)),
+        ));
 
         $this->assertNotNull($projects);
         $this->assertNotNull($users);
@@ -399,11 +467,18 @@ final class EventParserTest extends TestCase
     {
         $parser = new EventParser();
         // 99 is not a MYSQL_TYPE_* the decoder knows.
-        $parser->parseTableMap($this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, [['type' => 99, 'name' => 'weird']]));
+        $parser->parseTableMap($this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, [[
+            'type' => 99,
+            'name' => 'weird',
+        ]]));
 
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Unsupported binlog column type');
 
-        $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(self::TABLE_ID, 1, $this->binlogRow(1, "\x00")));
+        $parser->parseRows(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(
+            self::TABLE_ID,
+            1,
+            $this->binlogRow(1, "\x00"),
+        ));
     }
 }

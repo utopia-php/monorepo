@@ -74,10 +74,7 @@ final class MessageTest extends TestCase
 
     public function testNonAsciiSubjectBecomesAnEncodedWord(): void
     {
-        $this->assertStringContainsString(
-            'Subject: =?UTF-8?B?SGVsbMO2?=',
-            (string) $this->message(subject: 'Hellö'),
-        );
+        $this->assertStringContainsString('Subject: =?UTF-8?B?SGVsbMO2?=', (string) $this->message(subject: 'Hellö'));
     }
 
     public function testTextAloneIsASinglePart(): void
@@ -107,9 +104,7 @@ final class MessageTest extends TestCase
 
     public function testAnAttachmentWrapsTheBodyInAMixedPart(): void
     {
-        $rendered = (string) $this->message(
-            attachments: [Attachment::fromString('hello', 'notes.txt', 'text/plain')],
-        );
+        $rendered = (string) $this->message(attachments: [Attachment::fromString('hello', 'notes.txt', 'text/plain')]);
 
         $this->assertStringContainsString('Content-Type: multipart/mixed;', $rendered);
         $this->assertStringContainsString('Content-Disposition: attachment; filename="notes.txt"', $rendered);
@@ -119,10 +114,11 @@ final class MessageTest extends TestCase
 
     public function testAnInlineAttachmentWrapsTheBodyInARelatedPart(): void
     {
-        $rendered = (string) $this->message(
-            html: '<img src="cid:logo">',
-            attachments: [Attachment::fromString('binary', 'logo.png', 'image/png')->inline('logo')],
-        );
+        $rendered = (string) $this->message(html: '<img src="cid:logo">', attachments: [Attachment::fromString(
+            'binary',
+            'logo.png',
+            'image/png',
+        )->inline('logo')]);
 
         $this->assertStringContainsString('Content-Type: multipart/related;', $rendered);
         $this->assertStringContainsString('Content-ID: <logo>', $rendered);
@@ -132,13 +128,10 @@ final class MessageTest extends TestCase
 
     public function testBothKindsOfAttachmentNestRelatedInsideMixed(): void
     {
-        $rendered = (string) $this->message(
-            html: '<img src="cid:logo">',
-            attachments: [
-                Attachment::fromString('binary', 'logo.png', 'image/png')->inline('logo'),
-                Attachment::fromString('hello', 'notes.txt', 'text/plain'),
-            ],
-        );
+        $rendered = (string) $this->message(html: '<img src="cid:logo">', attachments: [
+            Attachment::fromString('binary', 'logo.png', 'image/png')->inline('logo'),
+            Attachment::fromString('hello', 'notes.txt', 'text/plain'),
+        ]);
 
         $this->assertLessThan(
             strpos($rendered, 'multipart/related'),

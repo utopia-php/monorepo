@@ -8,7 +8,9 @@ use Utopia\Cdn\Cache\Adapter;
 
 class Cache
 {
-    public function __construct(private readonly Adapter $adapter) {}
+    public function __construct(
+        private readonly Adapter $adapter,
+    ) {}
 
     /**
      * @param array<int, string> $paths

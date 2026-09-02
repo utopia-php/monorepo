@@ -73,7 +73,15 @@ class EventParser
         }
         $signed = $this->computeSignedness($types, $signedness);
 
-        $this->tables[$tableId] = ['schema' => $schema, 'table' => $table, 'count' => $count, 'types' => $types, 'metadata' => $metadata, 'names' => $names, 'signed' => $signed];
+        $this->tables[$tableId] = [
+            'schema' => $schema,
+            'table' => $table,
+            'count' => $count,
+            'types' => $types,
+            'metadata' => $metadata,
+            'names' => $names,
+            'signed' => $signed,
+        ];
     }
 
     /**
@@ -144,11 +152,15 @@ class EventParser
             return null; // TABLE_MAP not seen (e.g. mid-stream start) — skip
         }
 
-        $isV2 = \in_array($eventType, [
-            Constants::WRITE_ROWS_EVENT_V2,
-            Constants::UPDATE_ROWS_EVENT_V2,
-            Constants::DELETE_ROWS_EVENT_V2,
-        ], true);
+        $isV2 = \in_array(
+            $eventType,
+            [
+                Constants::WRITE_ROWS_EVENT_V2,
+                Constants::UPDATE_ROWS_EVENT_V2,
+                Constants::DELETE_ROWS_EVENT_V2,
+            ],
+            true,
+        );
         if ($isV2) {
             $extraLength = $reader->readUInt16();
             $reader->skip($extraLength - 2);
@@ -162,7 +174,7 @@ class EventParser
         $presentAfter = $isUpdate ? $reader->read($bitmapSize) : $present;
 
         $rows = [];
-        while (!$reader->eof()) {
+        while (! $reader->eof()) {
             if ($isUpdate) {
                 $this->readRow($reader, $table, $present); // before-image (discarded)
             }
@@ -184,7 +196,7 @@ class EventParser
         $row = [];
         $nullIndex = 0;
         for ($column = 0; $column < $table['count']; $column++) {
-            if (!$this->bitAt($present, $column)) {
+            if (! $this->bitAt($present, $column)) {
                 continue;
             }
 
@@ -194,7 +206,12 @@ class EventParser
 
             $row[$name] = $isNull
                 ? null
-                : $this->decodeValue($reader, $table['types'][$column], $table['metadata'][$column], $table['signed'][$column] ?? false);
+                : $this->decodeValue(
+                    $reader,
+                    $table['types'][$column],
+                    $table['metadata'][$column],
+                    $table['signed'][$column] ?? false,
+                );
         }
 
         return $row;
@@ -277,11 +294,11 @@ class EventParser
      */
     private function maybeSigned(int $value, int $bytes, bool $signed): int
     {
-        if (!$signed) {
+        if (! $signed) {
             return $value;
         }
 
-        $signBit = 1 << ($bytes * 8 - 1);
+        $signBit = 1 << (($bytes * 8) - 1);
 
         return $value >= $signBit ? $value - ($signBit << 1) : $value;
     }
@@ -323,15 +340,13 @@ class EventParser
                 Constants::TYPE_JSON,
                 Constants::TYPE_TIMESTAMP2,
                 Constants::TYPE_DATETIME2,
-                Constants::TYPE_TIME2 => $reader->readUInt8(),
-                Constants::TYPE_VARCHAR,
-                Constants::TYPE_VAR_STRING,
-                Constants::TYPE_BIT => $reader->readUInt16(),
-                Constants::TYPE_NEWDECIMAL,
-                Constants::TYPE_DECIMAL => ($reader->readUInt8() << 8) | $reader->readUInt8(),
-                Constants::TYPE_STRING,
-                Constants::TYPE_ENUM,
-                Constants::TYPE_SET => ($reader->readUInt8() << 8) | $reader->readUInt8(),
+                Constants::TYPE_TIME2,
+                    => $reader->readUInt8(),
+                Constants::TYPE_VARCHAR, Constants::TYPE_VAR_STRING, Constants::TYPE_BIT => $reader->readUInt16(),
+                Constants::TYPE_NEWDECIMAL, Constants::TYPE_DECIMAL => ($reader->readUInt8() << 8)
+                    | $reader->readUInt8(),
+                Constants::TYPE_STRING, Constants::TYPE_ENUM, Constants::TYPE_SET => ($reader->readUInt8() << 8)
+                    | $reader->readUInt8(),
                 default => 0,
             };
         }
@@ -350,14 +365,14 @@ class EventParser
         $names = [];
         $signedness = '';
 
-        while (!$reader->eof()) {
+        while (! $reader->eof()) {
             $fieldType = $reader->readUInt8();
             $fieldLength = $reader->readLengthEncodedInt() ?? 0;
             $field = $reader->read($fieldLength);
 
             if ($fieldType === Constants::METADATA_COLUMN_NAME) {
                 $fieldReader = new BinaryReader($field);
-                while (!$fieldReader->eof()) {
+                while (! $fieldReader->eof()) {
                     $names[] = $fieldReader->readLengthEncodedString() ?? '';
                 }
             } elseif ($fieldType === Constants::METADATA_SIGNEDNESS) {
@@ -385,7 +400,7 @@ class EventParser
             if ($bitmap !== '' && \in_array($type, self::NUMERIC_TYPES, true)) {
                 $byte = \ord($bitmap[$bit >> 3] ?? "\0");
                 $unsigned = ($byte & (0x80 >> ($bit & 7))) !== 0;
-                $signed[] = !$unsigned;
+                $signed[] = ! $unsigned;
                 $bit++;
             } else {
                 $signed[] = false;
@@ -401,13 +416,17 @@ class EventParser
         $integerFull = intdiv($integer, 9);
         $fractionFull = intdiv($scale, 9);
 
-        return $integerFull * 4 + self::DIGITS_TO_BYTES[$integer - $integerFull * 9]
-            + $fractionFull * 4 + self::DIGITS_TO_BYTES[$scale - $fractionFull * 9];
+        return (
+            ($integerFull * 4)
+            + self::DIGITS_TO_BYTES[$integer - ($integerFull * 9)]
+            + ($fractionFull * 4)
+            + self::DIGITS_TO_BYTES[$scale - ($fractionFull * 9)]
+        );
     }
 
     private function bitAt(string $bitmap, int $index): bool
     {
-        return (\ord($bitmap[$index >> 3]) >> ($index & 7) & 1) === 1;
+        return ((\ord($bitmap[$index >> 3]) >> ($index & 7)) & 1) === 1;
     }
 
     private function countBits(string $bitmap): int

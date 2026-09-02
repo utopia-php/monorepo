@@ -84,15 +84,13 @@ final class DotenvTest extends TestCase
 
     public function testDotenvComment(): void
     {
-        $data = $this->parser->parse(
-            <<<DOTENV
-            HOST=127.0.0.1
-            PORT=3306 # A comment
-            # Another comment, with empty line below intentionally
+        $data = $this->parser->parse(<<<DOTENV
+        HOST=127.0.0.1
+        PORT=3306 # A comment
+        # Another comment, with empty line below intentionally
 
-            PASSWORD=secret
-            DOTENV
-        );
+        PASSWORD=secret
+        DOTENV);
 
         $this->assertSame('127.0.0.1', $data['HOST']);
         $this->assertSame('3306', $data['PORT']);
@@ -109,14 +107,12 @@ final class DotenvTest extends TestCase
 
     public function testDotenvHashInsideQuotesPreserved(): void
     {
-        $data = $this->parser->parse(
-            <<<DOTENV
-            PASSWORD="abc#123"
-            TOKEN='x#y#z'
-            URL="https://example.com/path#fragment"
-            PLAIN=value # trailing comment
-            DOTENV
-        );
+        $data = $this->parser->parse(<<<DOTENV
+        PASSWORD="abc#123"
+        TOKEN='x#y#z'
+        URL="https://example.com/path#fragment"
+        PLAIN=value # trailing comment
+        DOTENV);
 
         $this->assertSame('abc#123', $data['PASSWORD']);
         $this->assertSame('x#y#z', $data['TOKEN']);
@@ -153,46 +149,43 @@ final class DotenvTest extends TestCase
 
     public function testValueConvertor(): void
     {
-        $data = $this->parser->parse(
-            <<<DOTENV
-            KEY1=1 # Becomes true
-            KEY2=on # Becomes true
-            KEY3=enabled # Becomes true
-            KEY4=Enabled # Becomes true
-            KEY5=true # Becomes true
-            KEY6=TRUE # Becomes true
-            KEY7=yes # Becomes true
+        $data = $this->parser->parse(<<<DOTENV
+        KEY1=1 # Becomes true
+        KEY2=on # Becomes true
+        KEY3=enabled # Becomes true
+        KEY4=Enabled # Becomes true
+        KEY5=true # Becomes true
+        KEY6=TRUE # Becomes true
+        KEY7=yes # Becomes true
 
-            KEY8=0 # Becomes false
-            KEY9=off # Becomes false
-            KEY10=disabled # Becomes false
-            KEY11=Disabled # Becomes false
-            KEY12=false # Becomes false
-            KEY13=FALSE # Becomes false
-            KEY14=no # Becomes false
+        KEY8=0 # Becomes false
+        KEY9=off # Becomes false
+        KEY10=disabled # Becomes false
+        KEY11=Disabled # Becomes false
+        KEY12=false # Becomes false
+        KEY13=FALSE # Becomes false
+        KEY14=no # Becomes false
 
-            KEY15=11  # Preserves value
-            KEY16=20  # Preserves value
+        KEY15=11  # Preserves value
+        KEY16=20  # Preserves value
 
-            KEY17=online # Preserves value
-            KEY18=offline # Preserves value
+        KEY17=online # Preserves value
+        KEY18=offline # Preserves value
 
-            KEY19=notenabled # Preserves value
-            KEY20=notdisabled # Preserves value
+        KEY19=notenabled # Preserves value
+        KEY20=notdisabled # Preserves value
 
-            KEY21=yesterday # Preserves value
-            KEY22=november # Preserves value
+        KEY21=yesterday # Preserves value
+        KEY22=november # Preserves value
 
-            KEY23=agree # Preserves value
-            KEY24=disagree # Preserves value
-            
-            KEY25=1
-            KEY26=0
-            KEY27=null
+        KEY23=agree # Preserves value
+        KEY24=disagree # Preserves value
 
-            DOTENV,
-            new \ReflectionClass(TestValueConvertorConfig::class),
-        );
+        KEY25=1
+        KEY26=0
+        KEY27=null
+
+        DOTENV, new \ReflectionClass(TestValueConvertorConfig::class));
 
         $expectedValues = [
             'KEY1' => true,

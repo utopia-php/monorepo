@@ -157,7 +157,10 @@ final class PasswordTest extends TestCase
             $this->password->setHash($hash);
             $hash = $this->password->hash($proof);
             $this->assertTrue($this->password->verify($proof, $hash), "Hash {$algo} failed verification");
-            $this->assertFalse($this->password->verify('wrongpassword', $hash), "Hash {$algo} failed wrong password test");
+            $this->assertFalse(
+                $this->password->verify('wrongpassword', $hash),
+                "Hash {$algo} failed wrong password test",
+            );
         }
     }
 

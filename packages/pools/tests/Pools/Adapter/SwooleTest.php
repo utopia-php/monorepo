@@ -46,11 +46,17 @@ final class SwooleTest extends Base
         \Swoole\Coroutine\run(function () use (&$errors, &$successCount): void {
             // Create a pool with 5 connections inside coroutine context
             $connectionCounter = 0;
-            $pool = new Pool(new Swoole(), 'swoole-test', 5, function () use (&$connectionCounter): string {
-                ++$connectionCounter;
+            $pool = new Pool(
+                new Swoole(),
+                'swoole-test',
+                5,
+                function () use (&$connectionCounter): string {
+                    ++$connectionCounter;
 
-                return "connection-{$connectionCounter}";
-            }, timeout: 5.0);
+                    return "connection-{$connectionCounter}";
+                },
+                timeout: 5.0,
+            );
 
             // Set retry attempts to allow waiting for connections to be released
             // Spawn 10 coroutines trying to get connections from a pool of 5
@@ -119,11 +125,17 @@ final class SwooleTest extends Base
         \Swoole\Coroutine\run(function () use ($totalRequests, &$successCount, &$errorCount): void {
             // Create a pool with 3 connections inside coroutine context
             $connectionCounter = 0;
-            $pool = new Pool(new Swoole(), 'swoole-concurrent', 3, function () use (&$connectionCounter): string {
-                ++$connectionCounter;
+            $pool = new Pool(
+                new Swoole(),
+                'swoole-concurrent',
+                3,
+                function () use (&$connectionCounter): string {
+                    ++$connectionCounter;
 
-                return "connection-{$connectionCounter}";
-            }, timeout: 5.0);
+                    return "connection-{$connectionCounter}";
+                },
+                timeout: 5.0,
+            );
             $channels = [];
             for ($i = 0; $i < $totalRequests; ++$i) {
                 $channels[$i] = new Channel(1);
@@ -176,11 +188,17 @@ final class SwooleTest extends Base
         \Swoole\Coroutine\run(function () use (&$seenResources, &$duplicateResources): void {
             // Create a pool with 5 connections inside coroutine context
             $connectionCounter = 0;
-            $pool = new Pool(new Swoole(), 'swoole-uniqueness', 5, function () use (&$connectionCounter): string {
-                ++$connectionCounter;
+            $pool = new Pool(
+                new Swoole(),
+                'swoole-uniqueness',
+                5,
+                function () use (&$connectionCounter): string {
+                    ++$connectionCounter;
 
-                return "connection-{$connectionCounter}";
-            }, timeout: 5.0);
+                    return "connection-{$connectionCounter}";
+                },
+                timeout: 5.0,
+            );
             $channels = [];
             for ($i = 0; $i < 5; ++$i) {
                 $channels[$i] = new Channel(1);
@@ -216,7 +234,10 @@ final class SwooleTest extends Base
             }
 
             // Assertions inside coroutine context
-            $this->assertEmpty($duplicateResources, 'Duplicate resources detected: ' . implode(', ', $duplicateResources));
+            $this->assertEmpty(
+                $duplicateResources,
+                'Duplicate resources detected: ' . implode(', ', $duplicateResources),
+            );
             $this->assertCount(5, $seenResources, 'Should have exactly 5 unique connections');
 
             // Verify each connection has a unique resource
@@ -236,11 +257,17 @@ final class SwooleTest extends Base
 
         \Swoole\Coroutine\run(function () use (&$connectionIds, &$connectionCounter): void {
             // Create a pool with 3 connections inside coroutine context
-            $pool = new Pool(new Swoole(), 'swoole-reuse', 3, function () use (&$connectionCounter): string {
-                ++$connectionCounter;
+            $pool = new Pool(
+                new Swoole(),
+                'swoole-reuse',
+                3,
+                function () use (&$connectionCounter): string {
+                    ++$connectionCounter;
 
-                return "connection-{$connectionCounter}";
-            }, timeout: 5.0);
+                    return "connection-{$connectionCounter}";
+                },
+                timeout: 5.0,
+            );
             // First wave: Create 3 connections
             $firstWave = [];
             for ($i = 0; $i < 3; ++$i) {
@@ -275,7 +302,11 @@ final class SwooleTest extends Base
             // Second wave should reuse connections from first wave
             sort($connectionIds['first']);
             sort($connectionIds['second']);
-            $this->assertSame($connectionIds['first'], $connectionIds['second'], 'Second wave should reuse same connection IDs');
+            $this->assertSame(
+                $connectionIds['first'],
+                $connectionIds['second'],
+                'Second wave should reuse same connection IDs',
+            );
         });
     }
 
@@ -290,13 +321,24 @@ final class SwooleTest extends Base
         $errorCount = 0;
         $connectionCounter = 0;
 
-        \Swoole\Coroutine\run(function () use ($totalRequests, &$successCount, &$errorCount, &$connectionCounter): void {
+        \Swoole\Coroutine\run(function () use (
+            $totalRequests,
+            &$successCount,
+            &$errorCount,
+            &$connectionCounter,
+        ): void {
             // Create a pool with 10 connections inside coroutine context
-            $pool = new Pool(new Swoole(), 'swoole-stress', 10, function () use (&$connectionCounter): string {
-                ++$connectionCounter;
+            $pool = new Pool(
+                new Swoole(),
+                'swoole-stress',
+                10,
+                function () use (&$connectionCounter): string {
+                    ++$connectionCounter;
 
-                return "connection-{$connectionCounter}";
-            }, timeout: 5.0);
+                    return "connection-{$connectionCounter}";
+                },
+                timeout: 5.0,
+            );
             $channels = [];
             for ($i = 0; $i < $totalRequests; ++$i) {
                 $channels[$i] = new Channel(1);

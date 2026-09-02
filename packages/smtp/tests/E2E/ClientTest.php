@@ -176,10 +176,7 @@ final class ClientTest extends Server
 
         $client->close();
 
-        $this->assertSame(
-            ['john@example.test', 'ada@example.test', 'eve@example.test'],
-            $result->accepted,
-        );
+        $this->assertSame(['john@example.test', 'ada@example.test', 'eve@example.test'], $result->accepted);
 
         $delivered = $this->delivered();
         $this->assertCount(1, $this->listOf($delivered, 'To'));
@@ -245,7 +242,10 @@ final class ClientTest extends Server
         $client = $this->client();
 
         try {
-            $client->sendRaw(new Envelope('jane@example.test', ['blocked@example.invalid']), "Subject: X\r\n\r\nBody\r\n");
+            $client->sendRaw(
+                new Envelope('jane@example.test', ['blocked@example.invalid']),
+                "Subject: X\r\n\r\nBody\r\n",
+            );
             $this->fail('Expected the send to fail');
         } catch (TransactionException $exception) {
             $this->assertTrue($exception->isPermanent());

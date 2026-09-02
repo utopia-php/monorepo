@@ -21,7 +21,7 @@ final class TcpTransportWriteTest extends TestCase
         PartialWriteStream::$chunk = 3;
         PartialWriteStream::$writeCalls = 0;
 
-        if (!\in_array('partialwrite', stream_get_wrappers(), true)) {
+        if (! \in_array('partialwrite', stream_get_wrappers(), true)) {
             stream_wrapper_register('partialwrite', PartialWriteStream::class);
         }
     }

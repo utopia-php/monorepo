@@ -21,7 +21,9 @@ abstract class Git extends Adapter
      */
     protected $headers = ['content-type' => 'application/json'];
 
-    public function __construct(protected Cache $cache) {}
+    public function __construct(
+        protected Cache $cache,
+    ) {}
 
     /**
      * Get Adapter Type
@@ -41,7 +43,14 @@ abstract class Git extends Adapter
      * @param string $message Commit message
      * @return array<mixed> Response from API
      */
-    abstract public function createFile(string $owner, string $repositoryName, string $filepath, string $content, string $message = 'Add file', string $branch = ''): array;
+    abstract public function createFile(
+        string $owner,
+        string $repositoryName,
+        string $filepath,
+        string $content,
+        string $message = 'Add file',
+        string $branch = '',
+    ): array;
 
     /**
      * Create a branch in a repository
@@ -52,20 +61,32 @@ abstract class Git extends Adapter
      * @param string $oldBranchName Name of the branch to branch from
      * @return array<mixed> Response from API
      */
-    abstract public function createBranch(string $owner, string $repositoryName, string $newBranchName, string $oldBranchName): array;
+    abstract public function createBranch(
+        string $owner,
+        string $repositoryName,
+        string $newBranchName,
+        string $oldBranchName,
+    ): array;
 
     /**
-    * Create a pull request
-    *
-    * @param  string  $owner  Owner of the repository
-    * @param  string  $repositoryName  Name of the repository
-    * @param  string  $title  PR title
-    * @param  string  $head  Source branch
-    * @param  string  $base  Target branch
-    * @param  string  $body  PR description (optional)
-    * @return array<mixed> Created PR details
-    */
-    abstract public function createPullRequest(string $owner, string $repositoryName, string $title, string $head, string $base, string $body = ''): array;
+     * Create a pull request
+     *
+     * @param  string  $owner  Owner of the repository
+     * @param  string  $repositoryName  Name of the repository
+     * @param  string  $title  PR title
+     * @param  string  $head  Source branch
+     * @param  string  $base  Target branch
+     * @param  string  $body  PR description (optional)
+     * @return array<mixed> Created PR details
+     */
+    abstract public function createPullRequest(
+        string $owner,
+        string $repositoryName,
+        string $title,
+        string $head,
+        string $base,
+        string $body = '',
+    ): array;
 
     /**
      * Create a webhook on a repository
@@ -79,8 +100,13 @@ abstract class Git extends Adapter
      *                    the providers that number their hooks, a string where
      *                    they don't (Bitbucket identifies them by UUID)
      */
-    abstract public function createWebhook(string $owner, string $repositoryName, string $url, string $secret, array $events = ['push', 'pull_request']): int|string;
-
+    abstract public function createWebhook(
+        string $owner,
+        string $repositoryName,
+        string $url,
+        string $secret,
+        array $events = ['push', 'pull_request'],
+    ): int|string;
 
     /**
      * Create a tag in a repository
@@ -92,7 +118,13 @@ abstract class Git extends Adapter
      * @param string $message Tag message (optional)
      * @return array<mixed> Created tag details
      */
-    abstract public function createTag(string $owner, string $repositoryName, string $tagName, string $target, string $message = ''): array;
+    abstract public function createTag(
+        string $owner,
+        string $repositoryName,
+        string $tagName,
+        string $target,
+        string $message = '',
+    ): array;
 
     /**
      * Whether the provider lets this integration create repositories. Some
@@ -188,8 +220,12 @@ abstract class Git extends Adapter
      * @param string $ref Branch, tag or commit to archive
      * @param string $format Either 'tarball' or 'zipball'
      */
-    public function getRepositoryPresignedUrl(string $owner, string $repositoryName, string $ref = '', string $format = 'tarball'): string
-    {
+    public function getRepositoryPresignedUrl(
+        string $owner,
+        string $repositoryName,
+        string $ref = '',
+        string $format = 'tarball',
+    ): string {
         throw new Exception('getRepositoryPresignedUrl() is not supported by ' . $this->getName());
     }
 
@@ -297,10 +333,7 @@ abstract class Git extends Adapter
      */
     protected function normalizeRepositoryPath(string $path): string
     {
-        $segments = array_filter(
-            explode('/', $path),
-            fn(string $segment): bool => $segment !== '' && $segment !== '.',
-        );
+        $segments = array_filter(explode('/', $path), fn(string $segment): bool => $segment !== '' && $segment !== '.');
 
         return implode('/', $segments);
     }

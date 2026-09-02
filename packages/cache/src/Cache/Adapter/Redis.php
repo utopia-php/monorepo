@@ -52,7 +52,7 @@ class Redis extends Leasable implements Adapter, Retryable
         $this->host = $redis->getHost();
         $this->port = $redis->getPort();
         $timeout = $redis->getTimeout();
-        $this->timeout = ($timeout !== false) ? $timeout : 0.0;
+        $this->timeout = $timeout !== false ? $timeout : 0.0;
         $this->persistentId = $redis->getPersistentId();
         $this->readTimeout = $redis->getReadTimeout();
 
@@ -331,23 +331,9 @@ class Redis extends Leasable implements Adapter, Retryable
         $newRedis = new Client();
 
         if ($this->persistent) {
-            $newRedis->pconnect(
-                $this->host,
-                $this->port,
-                $this->timeout,
-                $this->persistentId,
-                0,
-                $this->readTimeout,
-            );
+            $newRedis->pconnect($this->host, $this->port, $this->timeout, $this->persistentId, 0, $this->readTimeout);
         } else {
-            $newRedis->connect(
-                $this->host,
-                $this->port,
-                $this->timeout,
-                $this->persistentId,
-                0,
-                $this->readTimeout,
-            );
+            $newRedis->connect($this->host, $this->port, $this->timeout, $this->persistentId, 0, $this->readTimeout);
         }
 
         if ($this->auth !== []) {

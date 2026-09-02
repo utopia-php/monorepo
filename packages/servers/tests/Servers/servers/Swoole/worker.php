@@ -10,7 +10,8 @@ $connection = new Queue\Connection\Redis('redis');
 $adapter = new Queue\Adapter\Swoole($connection, 12, 'swoole');
 $server = new Queue\Server($adapter);
 
-$server->job()
+$server
+    ->job()
     ->inject('message')
     ->action(function (Message $message): void {
         handleRequest($message);

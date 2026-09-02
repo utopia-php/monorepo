@@ -79,12 +79,12 @@ class FCM extends Validator
 
         if ($value instanceof \stdClass) {
             $value = get_object_vars($value);
-        } elseif (!\is_array($value) || ($value !== [] && array_is_list($value))) {
+        } elseif (! \is_array($value) || $value !== [] && array_is_list($value)) {
             return false;
         }
 
         foreach (self::REQUIRED_FIELDS as $field => $purpose) {
-            if (!$this->isNonEmptyString($value[$field] ?? null)) {
+            if (! $this->isNonEmptyString($value[$field] ?? null)) {
                 $this->error = "FCM service account JSON must include a non-empty '{$field}' field, which {$purpose}.";
 
                 return false;
@@ -92,7 +92,7 @@ class FCM extends Validator
         }
 
         foreach (self::OPTIONAL_FIELDS as $field) {
-            if (\array_key_exists($field, $value) && !$this->isNonEmptyString($value[$field])) {
+            if (\array_key_exists($field, $value) && ! $this->isNonEmptyString($value[$field])) {
                 $this->error = "FCM service account JSON field '{$field}' must be a non-empty string when provided.";
 
                 return false;
@@ -111,15 +111,17 @@ class FCM extends Validator
             return false;
         }
 
-        if (!str_starts_with((string) $value['private_key'], '-----BEGIN PRIVATE KEY-----')
-            || !str_ends_with(trim((string) $value['private_key']), '-----END PRIVATE KEY-----')) {
+        if (
+            ! str_starts_with((string) $value['private_key'], '-----BEGIN PRIVATE KEY-----')
+            || ! str_ends_with(trim((string) $value['private_key']), '-----END PRIVATE KEY-----')
+        ) {
             $this->error = "FCM service account JSON field 'private_key' must contain a PEM-encoded private key.";
 
             return false;
         }
 
         foreach (self::URL_FIELDS as $field) {
-            if (isset($value[$field]) && !$this->isHttpsUrl($value[$field])) {
+            if (isset($value[$field]) && ! $this->isHttpsUrl($value[$field])) {
                 $this->error = "FCM service account JSON field '{$field}' must contain a valid HTTPS URL.";
 
                 return false;
@@ -136,7 +138,9 @@ class FCM extends Validator
 
     private function isHttpsUrl(string $value): bool
     {
-        return filter_var($value, FILTER_VALIDATE_URL) !== false
-            && strtolower((string) parse_url($value, PHP_URL_SCHEME)) === 'https';
+        return (
+            filter_var($value, FILTER_VALIDATE_URL) !== false
+            && strtolower((string) parse_url($value, PHP_URL_SCHEME)) === 'https'
+        );
     }
 }

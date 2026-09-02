@@ -26,7 +26,9 @@ class Local extends Device
     /**
      * Local constructor.
      */
-    public function __construct(protected readonly string $root = '') {}
+    public function __construct(
+        protected readonly string $root = '',
+    ) {}
 
     public function getType(): DeviceType
     {
@@ -113,7 +115,11 @@ class Local extends Device
 
     private function countChunks(string $tmp, string $path): int
     {
-        $escaped = (fn(string $literal): string => str_replace(['\\', '*', '?', '[', ']', '{', '}'], ['\\\\', '\\*', '\\?', '\\[', '\\]', '\\{', '\\}'], $literal));
+        $escaped = fn(string $literal): string => str_replace(
+            ['\\', '*', '?', '[', ']', '{', '}'],
+            ['\\\\', '\\*', '\\?', '\\[', '\\]', '\\{', '\\}'],
+            $literal,
+        );
         $pattern = $escaped($tmp) . DIRECTORY_SEPARATOR . $escaped(pathinfo($path, PATHINFO_FILENAME)) . '.part.*';
         $files = glob($pattern);
         if ($files === false) {
@@ -396,7 +402,9 @@ class Local extends Device
     {
         $size = $this->exists($path) ? filesize($path) : false;
         if ($size === false) {
-            throw $this->exists($path) ? new StorageException('Failed to get size of file ' . $path) : new NotFoundException('File not found: ' . $path);
+            throw $this->exists($path)
+                ? new StorageException('Failed to get size of file ' . $path)
+                : new NotFoundException('File not found: ' . $path);
         }
 
         return $size;
@@ -411,7 +419,9 @@ class Local extends Device
     {
         $mimeType = $this->exists($path) ? mime_content_type($path) : false;
         if ($mimeType === false) {
-            throw $this->exists($path) ? new StorageException('Failed to get mime type of file ' . $path) : new NotFoundException('File not found: ' . $path);
+            throw $this->exists($path)
+                ? new StorageException('Failed to get mime type of file ' . $path)
+                : new NotFoundException('File not found: ' . $path);
         }
 
         return $mimeType;
@@ -426,7 +436,9 @@ class Local extends Device
     {
         $hash = $this->exists($path) ? md5_file($path) : false;
         if ($hash === false) {
-            throw $this->exists($path) ? new StorageException('Failed to hash file ' . $path) : new NotFoundException('File not found: ' . $path);
+            throw $this->exists($path)
+                ? new StorageException('Failed to hash file ' . $path)
+                : new NotFoundException('File not found: ' . $path);
         }
 
         return $hash;
@@ -543,7 +555,7 @@ class Local extends Device
 
         return new FileList(
             files: $files,
-            cursor: $offset + \count($page) < \count($paths) ? (string) ($offset + \count($page)) : null,
+            cursor: ($offset + \count($page)) < \count($paths) ? (string) ($offset + \count($page)) : null,
         );
     }
 

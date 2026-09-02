@@ -13,10 +13,7 @@ final class SMTPTest extends Base
 {
     public function testSendEmail(): void
     {
-        $sender = new SMTP(
-            host: '127.0.0.1',
-            port: 11025,
-        );
+        $sender = new SMTP(host: '127.0.0.1', port: 11025);
 
         $to = 'tester@localhost.test';
         $subject = 'Test Subject';
@@ -45,10 +42,7 @@ final class SMTPTest extends Base
 
     public function testSendEmailWithAttachment(): void
     {
-        $sender = new SMTP(
-            host: '127.0.0.1',
-            port: 11025,
-        );
+        $sender = new SMTP(host: '127.0.0.1', port: 11025);
 
         $to = 'tester@localhost.test';
         $subject = 'Test Subject';
@@ -82,10 +76,7 @@ final class SMTPTest extends Base
 
     public function testSendEmailOnlyBCC(): void
     {
-        $sender = new SMTP(
-            host: '127.0.0.1',
-            port: 11025,
-        );
+        $sender = new SMTP(host: '127.0.0.1', port: 11025);
 
         $subject = 'Test Subject';
         $content = 'Test Content';
@@ -120,12 +111,7 @@ final class SMTPTest extends Base
     public function testAttachmentWithStringContent(): void
     {
         $content = 'Hello, this is raw file content.';
-        $attachment = new Attachment(
-            name: 'readme.txt',
-            path: '',
-            type: 'text/plain',
-            content: $content,
-        );
+        $attachment = new Attachment(name: 'readme.txt', path: '', type: 'text/plain', content: $content);
 
         $this->assertSame('readme.txt', $attachment->getName());
         $this->assertSame('', $attachment->getPath());
@@ -135,23 +121,14 @@ final class SMTPTest extends Base
 
     public function testAttachmentWithoutStringContentDefaultsToNull(): void
     {
-        $attachment = new Attachment(
-            name: 'image.png',
-            path: '/tmp/image.png',
-            type: 'image/png',
-        );
+        $attachment = new Attachment(name: 'image.png', path: '/tmp/image.png', type: 'image/png');
 
         $this->assertNull($attachment->getContent());
     }
 
     public function testSMTPConstructorWithKeepAliveAndTimelimit(): void
     {
-        $sender = new SMTP(
-            host: '127.0.0.1',
-            port: 11025,
-            keepAlive: true,
-            timelimit: 60,
-        );
+        $sender = new SMTP(host: '127.0.0.1', port: 11025, keepAlive: true, timelimit: 60);
 
         $this->assertInstanceOf(SMTP::class, $sender);
         $this->assertSame('SMTP', $sender->getName());
@@ -160,20 +137,14 @@ final class SMTPTest extends Base
     public function testSMTPConstructorDefaultsAreBackwardsCompatible(): void
     {
         // Existing call signature still works without new params
-        $sender = new SMTP(
-            host: '127.0.0.1',
-            port: 11025,
-        );
+        $sender = new SMTP(host: '127.0.0.1', port: 11025);
 
         $this->assertInstanceOf(SMTP::class, $sender);
     }
 
     public function testSendEmailWithStringAttachment(): void
     {
-        $sender = new SMTP(
-            host: '127.0.0.1',
-            port: 11025,
-        );
+        $sender = new SMTP(host: '127.0.0.1', port: 11025);
 
         $to = 'tester@localhost.test';
         $subject = 'String Attachment Test';
@@ -206,12 +177,7 @@ final class SMTPTest extends Base
 
     public function testSendEmailWithKeepAlive(): void
     {
-        $sender = new SMTP(
-            host: '127.0.0.1',
-            port: 11025,
-            keepAlive: true,
-            timelimit: 15,
-        );
+        $sender = new SMTP(host: '127.0.0.1', port: 11025, keepAlive: true, timelimit: 15);
 
         $to = 'tester@localhost.test';
         $fromEmail = 'sender@localhost.test';

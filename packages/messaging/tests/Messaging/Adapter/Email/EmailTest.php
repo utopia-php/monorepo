@@ -134,13 +134,7 @@ final class EmailTest extends Base
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        new Email(
-            to: [''],
-            subject: 'Test',
-            content: 'Test',
-            fromName: 'Test',
-            fromEmail: 'sender@localhost.test',
-        );
+        new Email(to: [''], subject: 'Test', content: 'Test', fromName: 'Test', fromEmail: 'sender@localhost.test');
     }
 
     public function testRejectsEmptyEmailInArray(): void

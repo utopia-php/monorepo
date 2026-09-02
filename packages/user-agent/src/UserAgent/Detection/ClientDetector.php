@@ -14,18 +14,14 @@ final class ClientDetector
             return new Client();
         }
 
-        $client = self::edge($userAgent)
-            ?? self::opera($userAgent)
-            ?? self::samsung($userAgent)
-            ?? self::chromeIos($userAgent)
-            ?? self::firefoxIos($userAgent)
-            ?? self::derivative($userAgent)
-            ?? self::androidWebView($userAgent)
-            ?? self::chrome($userAgent)
-            ?? self::firefox($userAgent)
-            ?? self::safari($userAgent)
-            ?? self::internetExplorer($userAgent)
-            ?? self::library($userAgent);
+        $client =
+            self::edge($userAgent) ?? self::opera($userAgent) ?? self::samsung($userAgent) ?? self::chromeIos(
+                $userAgent,
+            ) ?? self::firefoxIos($userAgent) ?? self::derivative($userAgent) ?? self::androidWebView(
+                $userAgent,
+            ) ?? self::chrome($userAgent) ?? self::firefox($userAgent) ?? self::safari(
+                $userAgent,
+            ) ?? self::internetExplorer($userAgent) ?? self::library($userAgent);
 
         return $client ?? new Client();
     }
@@ -59,8 +55,10 @@ final class ClientDetector
         }
 
         // Firefox Focus reports as Blink only when it embeds a Chrome token.
-        if (preg_match('/Focus\/([0-9.]+)/i', $userAgent, $matches) === 1
-            && self::tokenVersion($userAgent, 'Chrome') !== null) {
+        if (
+            preg_match('/Focus\/([0-9.]+)/i', $userAgent, $matches) === 1
+            && self::tokenVersion($userAgent, 'Chrome') !== null
+        ) {
             return self::derivativeClient($userAgent, 'FK', 'Firefox Focus', $matches[1]);
         }
 
@@ -108,7 +106,14 @@ final class ClientDetector
 
         $engineVersion = self::tokenVersion($userAgent, 'Chrome') ?? self::version($matches[1]);
 
-        return new Client('browser', 'PS', 'Microsoft Edge', self::displayVersion($matches[1]), 'Blink', $engineVersion);
+        return new Client(
+            'browser',
+            'PS',
+            'Microsoft Edge',
+            self::displayVersion($matches[1]),
+            'Blink',
+            $engineVersion,
+        );
     }
 
     private static function opera(string $userAgent): ?Client
@@ -149,7 +154,14 @@ final class ClientDetector
 
         $engineVersion = self::tokenVersion($userAgent, 'Chrome') ?? self::version($matches[1]);
 
-        return new Client('browser', 'SB', 'Samsung Browser', self::displayVersion($matches[1]), 'Blink', $engineVersion);
+        return new Client(
+            'browser',
+            'SB',
+            'Samsung Browser',
+            self::displayVersion($matches[1]),
+            'Blink',
+            $engineVersion,
+        );
     }
 
     private static function chromeIos(string $userAgent): ?Client
@@ -186,7 +198,7 @@ final class ClientDetector
 
     private static function androidWebView(string $userAgent): ?Client
     {
-        if (!str_contains($userAgent, '; wv)') && stripos($userAgent, 'Version/4.0 Chrome/') === false) {
+        if (! str_contains($userAgent, '; wv)') && stripos($userAgent, 'Version/4.0 Chrome/') === false) {
             return null;
         }
 
@@ -195,7 +207,14 @@ final class ClientDetector
             return null;
         }
 
-        return new Client('browser', 'CV', 'Chrome Webview', self::displayVersion($engineVersion), 'Blink', $engineVersion);
+        return new Client(
+            'browser',
+            'CV',
+            'Chrome Webview',
+            self::displayVersion($engineVersion),
+            'Blink',
+            $engineVersion,
+        );
     }
 
     private static function chrome(string $userAgent): ?Client
@@ -243,10 +262,13 @@ final class ClientDetector
         }
 
         $version = self::tokenVersion($userAgent, 'Version');
-        $mobile = stripos($userAgent, 'Mobile/') !== false
-            && (stripos($userAgent, 'iPhone') !== false
+        $mobile =
+            stripos($userAgent, 'Mobile/') !== false
+            && (
+                stripos($userAgent, 'iPhone') !== false
                 || stripos($userAgent, 'iPad') !== false
-                || stripos($userAgent, 'iPod') !== false);
+                || stripos($userAgent, 'iPod') !== false
+            );
 
         return new Client(
             'browser',

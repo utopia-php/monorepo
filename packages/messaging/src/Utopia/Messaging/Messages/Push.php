@@ -41,11 +41,7 @@ class Push implements Message
         private readonly ?bool $critical = null,
         private readonly ?Priority $priority = null,
     ) {
-        if (
-            $title === null
-            && $body === null
-            && $data === null
-        ) {
+        if ($title === null && $body === null && $data === null) {
             throw new \Exception('At least one of the following parameters must be set: title, body, data');
         }
     }

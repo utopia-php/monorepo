@@ -9,30 +9,37 @@ class RedisCluster implements Connection
     protected const int CONNECT_MAX_ATTEMPTS = 5;
     protected const int CONNECT_BACKOFF_MS = 100;
     protected const int CONNECT_MAX_BACKOFF_MS = 3_000;
+
     protected ?\RedisCluster $redis = null;
 
-    public function __construct(protected array $seeds, protected float $connectTimeout = -1, protected float $readTimeout = -1) {}
+    public function __construct(
+        protected array $seeds,
+        protected float $connectTimeout = -1,
+        protected float $readTimeout = -1,
+    ) {}
 
     public function rightPopLeftPushArray(string $queue, string $destination, int $timeout): array|false
     {
         $response = $this->rightPopLeftPush($queue, $destination, $timeout);
 
-        if (!$response) {
+        if (! $response) {
             return false;
         }
 
         return json_decode($response, true);
     }
+
     public function rightPopLeftPush(string $queue, string $destination, int $timeout): string|false
     {
         $response = $this->getRedis()->bRPopLPush($queue, $destination, $timeout);
 
-        if (!$response) {
+        if (! $response) {
             return false;
         }
 
         return $response;
     }
+
     public function rightPushArray(string $queue, array $value): bool
     {
         return (bool) $this->getRedis()->rPush($queue, json_encode($value));
@@ -218,10 +225,7 @@ class RedisCluster implements Connection
                 }
 
                 // Exponential backoff with full jitter to avoid thundering herd on recovery.
-                $backoffMs = min(
-                    self::CONNECT_MAX_BACKOFF_MS,
-                    self::CONNECT_BACKOFF_MS * (2 ** ($attempt - 1)),
-                );
+                $backoffMs = min(self::CONNECT_MAX_BACKOFF_MS, self::CONNECT_BACKOFF_MS * (2 ** ($attempt - 1)));
                 usleep(mt_rand(0, $backoffMs) * 1000);
             }
         }

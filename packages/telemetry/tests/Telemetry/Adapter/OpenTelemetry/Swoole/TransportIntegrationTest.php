@@ -7,12 +7,11 @@ namespace Tests\Telemetry\Adapter\OpenTelemetry\Swoole;
 use OpenTelemetry\Contrib\Otlp\ContentTypes;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
+use Utopia\Telemetry\Adapter\OpenTelemetry\Transport\Swoole;
+use Utopia\Telemetry\Exception;
 
 use function Swoole\Coroutine\go;
 use function Swoole\Coroutine\run;
-
-use Utopia\Telemetry\Adapter\OpenTelemetry\Transport\Swoole;
-use Utopia\Telemetry\Exception;
 
 /**
  * Integration tests for the Swoole Transport.
@@ -47,13 +46,10 @@ final class TransportIntegrationTest extends TestCase
     public function testSendWithCustomHeaders(): void
     {
         MockOtlpServer::run(function (MockOtlpServer $server): void {
-            $transport = new Swoole(
-                endpoint: $server->getEndpoint(),
-                headers: [
-                    'Authorization' => 'Bearer test-token',
-                    'X-Custom-Header' => 'custom-value',
-                ],
-            );
+            $transport = new Swoole(endpoint: $server->getEndpoint(), headers: [
+                'Authorization' => 'Bearer test-token',
+                'X-Custom-Header' => 'custom-value',
+            ]);
 
             $transport->send('payload')->await();
 
@@ -86,10 +82,7 @@ final class TransportIntegrationTest extends TestCase
     public function testMultipleSequentialSends(): void
     {
         MockOtlpServer::run(function (MockOtlpServer $server): void {
-            $transport = new Swoole(
-                endpoint: $server->getEndpoint(),
-                poolSize: 2,
-            );
+            $transport = new Swoole(endpoint: $server->getEndpoint(), poolSize: 2);
 
             for ($i = 0; $i < 10; $i++) {
                 $transport->send("payload-$i")->await();
@@ -106,10 +99,7 @@ final class TransportIntegrationTest extends TestCase
         MockOtlpServer::run(function (MockOtlpServer $server): void {
             $server->withDelay(0.01);
 
-            $transport = new Swoole(
-                endpoint: $server->getEndpoint(),
-                poolSize: 4,
-            );
+            $transport = new Swoole(endpoint: $server->getEndpoint(), poolSize: 4);
 
             $wg = new \Swoole\Coroutine\WaitGroup();
             $concurrentRequests = 20;
@@ -133,10 +123,7 @@ final class TransportIntegrationTest extends TestCase
     public function testJsonContentType(): void
     {
         MockOtlpServer::run(function (MockOtlpServer $server): void {
-            $transport = new Swoole(
-                endpoint: $server->getEndpoint(),
-                contentType: ContentTypes::JSON,
-            );
+            $transport = new Swoole(endpoint: $server->getEndpoint(), contentType: ContentTypes::JSON);
 
             $transport->send('{"metrics":[]}')->await();
 
@@ -152,10 +139,7 @@ final class TransportIntegrationTest extends TestCase
         $exception = null;
 
         run(function () use (&$exception): void {
-            $transport = new Swoole(
-                endpoint: 'http://127.0.0.1:19999/v1/metrics',
-                timeout: 0.5,
-            );
+            $transport = new Swoole(endpoint: 'http://127.0.0.1:19999/v1/metrics', timeout: 0.5);
 
             $startTime = microtime(true);
 
@@ -177,10 +161,7 @@ final class TransportIntegrationTest extends TestCase
     public function testKeepAliveConnectionReuse(): void
     {
         MockOtlpServer::run(function (MockOtlpServer $server): void {
-            $transport = new Swoole(
-                endpoint: $server->getEndpoint(),
-                poolSize: 1,
-            );
+            $transport = new Swoole(endpoint: $server->getEndpoint(), poolSize: 1);
 
             // Send 5 requests with pool size 1
             for ($i = 0; $i < 5; $i++) {

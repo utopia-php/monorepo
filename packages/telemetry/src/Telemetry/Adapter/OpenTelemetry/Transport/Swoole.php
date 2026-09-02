@@ -43,8 +43,8 @@ class Swoole implements TransportInterface
     public function __construct(
         string $endpoint,
         private string $contentType = ContentTypes::PROTOBUF,
-        private array  $headers = [],
-        private float  $timeout = 10.0,
+        private array $headers = [],
+        private float $timeout = 10.0,
         private int $poolSize = 8,
         int $socketBufferSize = 64 * 1024, // 64 KB
     ) {
@@ -63,13 +63,10 @@ class Swoole implements TransportInterface
         $this->shutdown = new Atomic(0);
         $this->pool = new Channel($this->poolSize);
 
-        $this->baseHeaders = array_merge(
-            [
-                'Content-Type' => $this->contentType,
-                'Connection' => 'keep-alive',
-            ],
-            $this->headers,
-        );
+        $this->baseHeaders = array_merge([
+            'Content-Type' => $this->contentType,
+            'Connection' => 'keep-alive',
+        ], $this->headers);
         $this->settings = [
             'timeout' => $this->timeout,
             'connect_timeout' => max(0.5, $this->timeout),
@@ -175,11 +172,11 @@ class Swoole implements TransportInterface
      */
     private function putClient(Client $client, bool $forceClose = false): void
     {
-        if ($this->shutdown->get() === 1 || $forceClose || !$client->connected) {
+        if ($this->shutdown->get() === 1 || $forceClose || ! $client->connected) {
             $client->close();
             return;
         }
-        if (!$this->pool->push($client, 1.0)) {
+        if (! $this->pool->push($client, 1.0)) {
             $client->close();
         }
     }
@@ -189,7 +186,7 @@ class Swoole implements TransportInterface
         $this->shutdown->set(1);
 
         // Drain and close all pooled connections
-        while (!$this->pool->isEmpty()) {
+        while (! $this->pool->isEmpty()) {
             $client = $this->pool->pop(0.001);
             if ($client instanceof Client) {
                 $client->close();

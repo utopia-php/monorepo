@@ -61,7 +61,7 @@ final class JetStreamMessage
 
     public function metadata(): MsgMetadata
     {
-        if (!$this->metadata instanceof \Utopia\NATS\JetStream\MsgMetadata) {
+        if (! $this->metadata instanceof \Utopia\NATS\JetStream\MsgMetadata) {
             if ($this->message->replyTo === null) {
                 throw new \RuntimeException('Message has no reply subject for metadata parsing');
             }

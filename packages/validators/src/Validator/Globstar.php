@@ -21,7 +21,9 @@ use Utopia\Validator;
  */
 class Globstar extends Validator
 {
-    public function __construct(private readonly array $patterns) {}
+    public function __construct(
+        private readonly array $patterns,
+    ) {}
 
     /**
      * Get Description
@@ -40,7 +42,7 @@ class Globstar extends Validator
      */
     public function isValid($value): bool
     {
-        if (!\is_string($value)) {
+        if (! \is_string($value)) {
             return false;
         }
 
@@ -50,25 +52,36 @@ class Globstar extends Validator
 
         $hasInclusions = false;
         foreach ($this->patterns as $p) {
-            if (!str_starts_with((string) $p, '!')) {
+            if (! str_starts_with((string) $p, '!')) {
                 $hasInclusions = true;
                 break;
             }
         }
 
         // Pure-exclusion mode: default to valid; any matching exclusion invalidates.
-        if (!$hasInclusions) {
-            return array_all($this->patterns, fn($pattern): bool => !$this->match($value, substr((string) $pattern, 1)));
+        if (! $hasInclusions) {
+            return array_all(
+                $this->patterns,
+                fn($pattern): bool => ! $this->match($value, substr((string) $pattern, 1)),
+            );
         }
 
         // Inclusion mode.
         //
         // Step 1 — literal (no *, ?, [) inclusion patterns always win:
         //   if any specific inclusion matches, the value is valid regardless of later exclusions.
-        $isWildcard = fn($p): bool => str_contains((string) $p, '*') || str_contains((string) $p, '?') || str_contains((string) $p, '[');
+        $isWildcard = fn($p): bool => (
+            str_contains((string) $p, '*')
+            || str_contains((string) $p, '?')
+            || str_contains((string) $p, '[')
+        );
 
         foreach ($this->patterns as $pattern) {
-            if (!str_starts_with((string) $pattern, '!') && !$isWildcard($pattern) && $this->match($value, $pattern)) {
+            if (
+                ! str_starts_with((string) $pattern, '!')
+                && ! $isWildcard($pattern)
+                && $this->match($value, $pattern)
+            ) {
                 return true;
             }
         }
@@ -88,6 +101,7 @@ class Globstar extends Validator
                     $state = true;
                 }
             }
+
             // literal non-! patterns are skipped (handled in step 1)
         }
 
@@ -131,7 +145,7 @@ class Globstar extends Validator
         while ($i < $len) {
             $char = $pattern[$i];
 
-            if ($char === '\\' && $i + 1 < $len) {
+            if ($char === '\\' && ($i + 1) < $len) {
                 $regex .= preg_quote($pattern[$i + 1], '~');
                 $i += 2;
             } elseif ($char === '[') {
@@ -176,7 +190,7 @@ class Globstar extends Validator
                         $inner = '^' . substr($inner, 1);
                     } elseif ($isNegated && str_starts_with($inner, '^')) {
                         // already ^-prefixed, keep as-is
-                    } elseif (!$isNegated && str_starts_with($inner, '^')) {
+                    } elseif (! $isNegated && str_starts_with($inner, '^')) {
                         // Literal ^ as first char — escape it so PCRE doesn't treat as negation
                         $inner = '\\^' . substr($inner, 1);
                     }

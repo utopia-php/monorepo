@@ -18,10 +18,11 @@ final class StoreTest extends TestCase
         $this->assertEquals('John Doe', $store->getProperty('name'));
 
         // Test setting and getting different types
-        $store->setProperty('age', 30)
-              ->setProperty('active', true)
-              ->setProperty('scores', [95, 87, 92])
-              ->setProperty('details', ['city' => 'New York', 'country' => 'USA']);
+        $store
+            ->setProperty('age', 30)
+            ->setProperty('active', true)
+            ->setProperty('scores', [95, 87, 92])
+            ->setProperty('details', ['city' => 'New York', 'country' => 'USA']);
 
         $this->assertEquals(30, $store->getProperty('age'));
         $this->assertTrue($store->getProperty('active'));

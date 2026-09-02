@@ -27,7 +27,9 @@ final readonly class Zone
 
         $this->name = strtolower($name);
         if ($soa->name !== $this->name) {
-            throw new \InvalidArgumentException("SOA record name must match zone name: expected '$this->name', got '$soa->name'");
+            throw new \InvalidArgumentException(
+                "SOA record name must match zone name: expected '$this->name', got '$soa->name'",
+            );
         }
 
         $zoneSuffix = $this->name === '.' ? '.' : ".$this->name";
@@ -35,9 +37,11 @@ final readonly class Zone
         // Validate that all records belong to the zone
         foreach ($records as $record) {
             if ($record->type === Record::TYPE_SOA) {
-                throw new \InvalidArgumentException('SOA records should be passed as the $soa parameter, not in $records');
+                throw new \InvalidArgumentException(
+                    'SOA records should be passed as the $soa parameter, not in $records',
+                );
             }
-            if ($this->name !== '.' && $record->name !== $this->name && !str_ends_with($record->name, $zoneSuffix)) {
+            if ($this->name !== '.' && $record->name !== $this->name && ! str_ends_with($record->name, $zoneSuffix)) {
                 throw new \InvalidArgumentException(
                     "Record name '$record->name' does not belong to zone '$this->name'",
                 );
@@ -55,6 +59,12 @@ final readonly class Zone
         if ($name === $this->name) {
             return true;
         }
-        return array_all($this->records, fn(\Utopia\DNS\Message\Record $record): bool => $record->name !== $name || $record->type !== Record::TYPE_NS);
+        return array_all(
+            $this->records,
+            fn(\Utopia\DNS\Message\Record $record): bool => (
+                $record->name !== $name
+                || $record->type !== Record::TYPE_NS
+            ),
+        );
     }
 }

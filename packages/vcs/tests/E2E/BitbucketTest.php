@@ -79,19 +79,15 @@ final class BitbucketTest extends Base
     /**
      * @return array<string, mixed>
      */
-
     /**
      * @return array<string, mixed>
      */
-
     /**
      * Bitbucket only names the author in a raw "Name <email>" string; a commit
      * linked to an account is named by the account instead.
      */
-
     /**
      * Bitbucket batches every ref a push touched into one delivery, and the
      * shared event shape describes a branch push, so tags are left out.
      */
-
 }

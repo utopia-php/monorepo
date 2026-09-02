@@ -26,9 +26,6 @@ final class ExternalStream
 
     public static function fromArray(array $data): self
     {
-        return new self(
-            api: $data['api'] ?? '',
-            deliver: $data['deliver'] ?? null,
-        );
+        return new self(api: $data['api'] ?? '', deliver: $data['deliver'] ?? null);
     }
 }

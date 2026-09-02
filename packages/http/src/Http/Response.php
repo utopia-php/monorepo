@@ -261,6 +261,7 @@ abstract class Response
     public const string COOKIE_SAMESITE_LAX = 'Lax';
 
     public const int CHUNK_SIZE = 2000000; //2mb
+
     protected int $statusCode = self::STATUS_CODE_OK;
 
     protected string $contentType = '';
@@ -301,12 +302,12 @@ abstract class Response
      */
     public function __construct(float $time = 0)
     {
-        $this->startTime = (!empty($time)) ? $time : microtime(true);
+        $this->startTime = ! empty($time) ? $time : microtime(true);
     }
 
     private function isCompressible(?string $contentType): bool
     {
-        if (!$contentType) {
+        if (! $contentType) {
             return false;
         }
 
@@ -357,7 +358,7 @@ abstract class Response
      */
     public function setContentType(string $type, string $charset = ''): static
     {
-        $this->contentType = $type . ((!empty($charset) ? '; charset=' . $charset : ''));
+        $this->contentType = $type . (! empty($charset) ? '; charset=' . $charset : '');
 
         return $this;
     }
@@ -390,7 +391,7 @@ abstract class Response
      */
     public function setStatusCode(int $code = 200): static
     {
-        if (!\array_key_exists($code, $this->statusCodes)) {
+        if (! \array_key_exists($code, $this->statusCodes)) {
             throw new Exception('Unknown HTTP status code');
         }
 
@@ -536,8 +537,16 @@ abstract class Response
      *
      * Add an HTTP cookie to response header
      */
-    public function addCookie(string $name, ?string $value = null, ?int $expire = null, ?string $path = null, ?string $domain = null, ?bool $secure = null, ?bool $httponly = null, ?string $sameSite = null): static
-    {
+    public function addCookie(
+        string $name,
+        ?string $value = null,
+        ?int $expire = null,
+        ?string $path = null,
+        ?string $domain = null,
+        ?bool $secure = null,
+        ?bool $httponly = null,
+        ?string $sameSite = null,
+    ): static {
         $name = strtolower($name);
 
         $this->cookies[] = [
@@ -593,8 +602,8 @@ abstract class Response
 
         // Compress body only if all conditions are met:
         if (
-            !$this->hasHeader('Content-Encoding')
-            && !empty($this->acceptEncoding)
+            ! $this->hasHeader('Content-Encoding')
+            && ! empty($this->acceptEncoding)
             && $this->isCompressible($this->contentType)
             && \strlen($body) > $this->compressionMinSize
         ) {
@@ -689,15 +698,13 @@ abstract class Response
 
         $this->addHeader('X-Debug-Speed', (string) (microtime(true) - $this->startTime));
 
-        if (!$this->headersSent) {
-            $this
-                ->appendCookies()
-                ->appendHeaders();
+        if (! $this->headersSent) {
+            $this->appendCookies()->appendHeaders();
 
             $this->headersSent = true;
         }
 
-        if (!$this->disablePayload) {
+        if (! $this->disablePayload) {
             $this->write($body);
             if ($end) {
                 $this->disablePayload();
@@ -720,7 +727,7 @@ abstract class Response
         $this->sendStatus($this->statusCode);
 
         // Send content type header
-        if (!empty($this->contentType)) {
+        if (! empty($this->contentType)) {
             $this->setHeader('Content-Type', $this->contentType);
         }
 
@@ -798,13 +805,13 @@ abstract class Response
     public function redirect(string $url, int $statusCode = 301): void
     {
         if (300 === $statusCode) {
-            trigger_error('It seems webkit based browsers have problems redirecting link with 300 status codes!', E_USER_NOTICE);
+            trigger_error(
+                'It seems webkit based browsers have problems redirecting link with 300 status codes!',
+                E_USER_NOTICE,
+            );
         }
 
-        $this
-            ->addHeader('Location', $url)
-            ->setStatusCode($statusCode)
-            ->send('');
+        $this->addHeader('Location', $url)->setStatusCode($statusCode)->send('');
     }
 
     /**
@@ -816,9 +823,7 @@ abstract class Response
      */
     public function html(string $data): void
     {
-        $this
-            ->setContentType(self::CONTENT_TYPE_HTML, self::CHARSET_UTF8)
-            ->send($data);
+        $this->setContentType(self::CONTENT_TYPE_HTML, self::CHARSET_UTF8)->send($data);
     }
 
     /**
@@ -830,9 +835,7 @@ abstract class Response
      */
     public function text(string $data): void
     {
-        $this
-            ->setContentType(self::CONTENT_TYPE_TEXT, self::CHARSET_UTF8)
-            ->send($data);
+        $this->setContentType(self::CONTENT_TYPE_TEXT, self::CHARSET_UTF8)->send($data);
     }
 
     /**
@@ -847,13 +850,13 @@ abstract class Response
      */
     public function json($data): void
     {
-        if (!\is_array($data) && !$data instanceof \stdClass) {
+        if (! \is_array($data) && ! $data instanceof \stdClass) {
             throw new \Exception('Invalid JSON input var');
         }
 
-        $this
-            ->setContentType(Response::CONTENT_TYPE_JSON, self::CHARSET_UTF8)
-            ->send(json_encode($data, JSON_UNESCAPED_UNICODE) ?: '');
+        $this->setContentType(Response::CONTENT_TYPE_JSON, self::CHARSET_UTF8)->send(
+            json_encode($data, JSON_UNESCAPED_UNICODE) ?: '',
+        );
     }
 
     /**
@@ -868,9 +871,9 @@ abstract class Response
      */
     public function jsonp(string $callback, array $data): void
     {
-        $this
-            ->setContentType(self::CONTENT_TYPE_JAVASCRIPT, self::CHARSET_UTF8)
-            ->send('parent.' . $callback . '(' . json_encode($data) . ');');
+        $this->setContentType(self::CONTENT_TYPE_JAVASCRIPT, self::CHARSET_UTF8)->send(
+            'parent.' . $callback . '(' . json_encode($data) . ');',
+        );
     }
 
     /**
@@ -883,9 +886,9 @@ abstract class Response
      */
     public function iframe(string $callback, array $data): void
     {
-        $this
-            ->setContentType(self::CONTENT_TYPE_HTML, self::CHARSET_UTF8)
-            ->send('<script type="text/javascript">window.parent.' . $callback . '(' . json_encode($data) . ');</script>');
+        $this->setContentType(self::CONTENT_TYPE_HTML, self::CHARSET_UTF8)->send(
+            '<script type="text/javascript">window.parent.' . $callback . '(' . json_encode($data) . ');</script>',
+        );
     }
 
     /**
@@ -898,8 +901,6 @@ abstract class Response
      */
     public function noContent(): void
     {
-        $this
-            ->setStatusCode(self::STATUS_CODE_NOCONTENT)
-            ->send('');
+        $this->setStatusCode(self::STATUS_CODE_NOCONTENT)->send('');
     }
 }

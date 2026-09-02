@@ -52,8 +52,12 @@ final readonly class RetryStrategy implements Strategy
         $this->randomizer = $randomizer ?? static fn(): float => mt_rand() / mt_getrandmax();
     }
 
-    public function delay(RequestInterface $request, int $attempt, ?ResponseInterface $response, ?ClientExceptionInterface $error): ?float
-    {
+    public function delay(
+        RequestInterface $request,
+        int $attempt,
+        ?ResponseInterface $response,
+        ?ClientExceptionInterface $error,
+    ): ?float {
         if ($attempt > $this->retries || ! $response instanceof ResponseInterface) {
             return null;
         }
@@ -62,7 +66,7 @@ final readonly class RetryStrategy implements Strategy
             return null;
         }
 
-        return ($this->randomizer)() * min($this->maxDelay, $this->delay * 2 ** ($attempt - 1));
+        return ($this->randomizer)() * min($this->maxDelay, $this->delay * (2 ** ($attempt - 1)));
     }
 
     private function isTransient(ResponseInterface $response): bool

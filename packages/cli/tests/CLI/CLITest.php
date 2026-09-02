@@ -153,17 +153,13 @@ final class CLITest extends TestCase
     {
         $cli = new CLI(new Generic(), ['test.php', 'build', '--email=me@example.com', '--list=item1', '--list=item2']);
 
-        $cli
-            ->init()
-            ->action(function (): void {
-                echo '(init)-';
-            });
+        $cli->init()->action(function (): void {
+            echo '(init)-';
+        });
 
-        $cli
-            ->shutdown()
-            ->action(function (): void {
-                echo '-(shutdown)';
-            });
+        $cli->shutdown()->action(function (): void {
+            echo '-(shutdown)';
+        });
 
         $cli
             ->task('build')
@@ -189,7 +185,8 @@ final class CLITest extends TestCase
 
         $cli->setResource('test', fn(): string => 'test-value');
 
-        $cli->task('build')
+        $cli
+            ->task('build')
             ->inject('test')
             ->param('email', null, new Text(15), 'valid email address')
             ->action(function (string $test, string $email): void {
@@ -215,7 +212,8 @@ final class CLITest extends TestCase
         $this->assertNotSame($container, $cli->getContainer());
         $this->assertEquals('test-value', $cli->getResource('test'));
 
-        $cli->task('build')
+        $cli
+            ->task('build')
             ->inject('test')
             ->action(function ($test): void {
                 echo $test;

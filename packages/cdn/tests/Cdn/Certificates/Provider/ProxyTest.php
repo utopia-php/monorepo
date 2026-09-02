@@ -60,26 +60,34 @@ final class ProxyTest extends TestCase
     /** @param \ArrayObject<int, mixed> $seen */
     private function recorder(string $name, \ArrayObject $seen): Provider
     {
-        return new readonly class ($name, $seen) implements Provider {
+        return new readonly class($name, $seen) implements Provider {
             /** @param \ArrayObject<int, mixed> $seen */
-            public function __construct(private string $name, private \ArrayObject $seen) {}
+            public function __construct(
+                private string $name,
+                private \ArrayObject $seen,
+            ) {}
+
             public function issueCertificate(string $certName, string $domain, ?string $domainType): ?string
             {
                 $this->seen->append($this->name . ':issue:' . $domain);
                 return null;
             }
+
             public function isInstantGeneration(string $domain, ?string $domainType): bool
             {
                 return false;
             }
+
             public function getCertificateStatus(string $domain, ?string $domainType): string
             {
                 return Status::ISSUED;
             }
+
             public function isRenewRequired(string $domain, ?string $domainType): bool
             {
                 return false;
             }
+
             public function deleteCertificate(string $domain, ?string $domainType = null): void
             {
                 $this->seen->append($this->name . ':delete:' . $domain);
@@ -96,28 +104,46 @@ final class ProxyTest extends TestCase
     }
 
     /** @param \ArrayObject<int, mixed> $calls */
-    private function provider(string $name, string $status, bool $instant, ?string $date, bool $renew, \ArrayObject $calls): Provider
-    {
-        return new readonly class ($name, $status, $instant, $date, $renew, $calls) implements Provider {
+    private function provider(
+        string $name,
+        string $status,
+        bool $instant,
+        ?string $date,
+        bool $renew,
+        \ArrayObject $calls,
+    ): Provider {
+        return new readonly class($name, $status, $instant, $date, $renew, $calls) implements Provider {
             /** @param \ArrayObject<int, mixed> $calls */
-            public function __construct(private string $name, private string $status, private bool $instant, private ?string $date, private bool $renew, private \ArrayObject $calls) {}
+            public function __construct(
+                private string $name,
+                private string $status,
+                private bool $instant,
+                private ?string $date,
+                private bool $renew,
+                private \ArrayObject $calls,
+            ) {}
+
             public function issueCertificate(string $certName, string $domain, ?string $domainType): ?string
             {
                 $this->calls->append($this->name . ':issue');
                 return $this->date;
             }
+
             public function isInstantGeneration(string $domain, ?string $domainType): bool
             {
                 return $this->instant;
             }
+
             public function getCertificateStatus(string $domain, ?string $domainType): string
             {
                 return $this->status;
             }
+
             public function isRenewRequired(string $domain, ?string $domainType): bool
             {
                 return $this->renew;
             }
+
             public function deleteCertificate(string $domain, ?string $domainType = null): void
             {
                 $this->calls->append($this->name . ':delete');

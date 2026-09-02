@@ -20,7 +20,10 @@ final class CloudflareTest extends TestCase
         $cdn->purgePaths('example.com', ['/a', '/b?x=1']);
         $cdn->purgeDomain('example.com');
 
-        $this->assertSame(['files' => ['https://example.com/a', 'https://example.com/b?x=1']], $client->calls[0]['body']);
+        $this->assertSame(
+            ['files' => ['https://example.com/a', 'https://example.com/b?x=1']],
+            $client->calls[0]['body'],
+        );
         // Cloudflare purges a hostname natively, so the domain reaches the request
         // and nothing served for another hostname is touched.
         $this->assertSame(['hosts' => ['example.com']], $client->calls[1]['body']);
@@ -57,7 +60,6 @@ final class CloudflareTest extends TestCase
         $this->assertCount(2, $client->calls);
     }
 
-
     public function testZonePurgeIsItsOwnOperation(): void
     {
         $client = new TestClient([new Response(200, body: new Stream('{"success":true}'))]);
@@ -67,11 +69,13 @@ final class CloudflareTest extends TestCase
         $this->assertSame(['purge_everything' => true], $client->calls[0]['body']);
     }
 
-
     public function testRejectsAPurgeTheBodyReportsAsFailed(): void
     {
         // The envelope's explicit verdict wins over the 2xx it travels in.
-        $client = new TestClient([new Response(200, body: new Stream('{"success":false,"errors":[{"message":"Invalid zone"}]}'))]);
+        $client = new TestClient([new Response(
+            200,
+            body: new Stream('{"success":false,"errors":[{"message":"Invalid zone"}]}'),
+        )]);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Cloudflare purge failed with status 200: Invalid zone');
@@ -92,7 +96,10 @@ final class CloudflareTest extends TestCase
     public function testRejectsAPurgeTheStatusReportsAsFailed(): void
     {
         // The reverse does not hold: no envelope softens a failing status.
-        $client = new TestClient([new Response(403, body: new Stream('{"success":false,"errors":[{"message":"Forbidden"}]}'))]);
+        $client = new TestClient([new Response(
+            403,
+            body: new Stream('{"success":false,"errors":[{"message":"Forbidden"}]}'),
+        )]);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Cloudflare purge failed with status 403: Forbidden');
@@ -109,5 +116,4 @@ final class CloudflareTest extends TestCase
 
         $this->assertSame([], $client->calls);
     }
-
 }

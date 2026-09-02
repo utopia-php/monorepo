@@ -19,11 +19,7 @@ final class MemoryTest extends TestCase
     {
         $zone = new Zone(
             name: 'example.com',
-            records: [new Record(
-                name: 'www.example.com',
-                type: Record::TYPE_A,
-                rdata: '192.0.2.10',
-            )],
+            records: [new Record(name: 'www.example.com', type: Record::TYPE_A, rdata: '192.0.2.10')],
             soa: new Record(
                 name: 'example.com',
                 type: Record::TYPE_SOA,
@@ -33,12 +29,14 @@ final class MemoryTest extends TestCase
 
         $resolver = new Memory($zone);
 
-        $response = $resolver->resolve(new Query(Message::query(
-            new Question(
-                name: 'www.example.com',
-                type: Record::TYPE_A,
+        $response = $resolver->resolve(
+            new Query(
+                Message::query(new Question(name: 'www.example.com', type: Record::TYPE_A)),
+                '127.0.0.1',
+                53,
+                Protocol::Udp,
             ),
-        ), '127.0.0.1', 53, Protocol::Udp));
+        );
 
         $this->assertSame(Message::RCODE_NOERROR, $response->header->responseCode);
         $this->assertCount(1, $response->answers);
@@ -52,11 +50,7 @@ final class MemoryTest extends TestCase
     {
         $zone = new Zone(
             name: 'example.com',
-            records: [new Record(
-                name: 'www.example.com',
-                type: Record::TYPE_A,
-                rdata: '192.0.2.10',
-            )],
+            records: [new Record(name: 'www.example.com', type: Record::TYPE_A, rdata: '192.0.2.10')],
             soa: new Record(
                 name: 'example.com',
                 type: Record::TYPE_SOA,
@@ -66,12 +60,14 @@ final class MemoryTest extends TestCase
 
         $resolver = new Memory($zone);
 
-        $response = $resolver->resolve(new Query(Message::query(
-            new Question(
-                name: 'www.example.com',
-                type: Record::TYPE_AAAA,
+        $response = $resolver->resolve(
+            new Query(
+                Message::query(new Question(name: 'www.example.com', type: Record::TYPE_AAAA)),
+                '127.0.0.1',
+                53,
+                Protocol::Udp,
             ),
-        ), '127.0.0.1', 53, Protocol::Udp));
+        );
 
         $this->assertSame(Message::RCODE_NOERROR, $response->header->responseCode);
         $this->assertEmpty($response->answers);
@@ -83,11 +79,7 @@ final class MemoryTest extends TestCase
     {
         $zone = new Zone(
             name: 'example.com',
-            records: [new Record(
-                name: 'www.example.com',
-                type: Record::TYPE_A,
-                rdata: '192.0.2.10',
-            )],
+            records: [new Record(name: 'www.example.com', type: Record::TYPE_A, rdata: '192.0.2.10')],
             soa: new Record(
                 name: 'example.com',
                 type: Record::TYPE_SOA,
@@ -97,12 +89,14 @@ final class MemoryTest extends TestCase
 
         $resolver = new Memory($zone);
 
-        $response = $resolver->resolve(new Query(Message::query(
-            new Question(
-                name: 'missing.example.com',
-                type: Record::TYPE_A,
+        $response = $resolver->resolve(
+            new Query(
+                Message::query(new Question(name: 'missing.example.com', type: Record::TYPE_A)),
+                '127.0.0.1',
+                53,
+                Protocol::Udp,
             ),
-        ), '127.0.0.1', 53, Protocol::Udp));
+        );
 
         $this->assertSame(Message::RCODE_NXDOMAIN, $response->header->responseCode);
         $this->assertEmpty($response->answers);
@@ -114,11 +108,7 @@ final class MemoryTest extends TestCase
     {
         $zone = new Zone(
             name: 'example.com',
-            records: [new Record(
-                name: 'www.example.com',
-                type: Record::TYPE_A,
-                rdata: '192.0.2.10',
-            )],
+            records: [new Record(name: 'www.example.com', type: Record::TYPE_A, rdata: '192.0.2.10')],
             soa: new Record(
                 name: 'example.com',
                 type: Record::TYPE_SOA,
@@ -128,12 +118,14 @@ final class MemoryTest extends TestCase
 
         $resolver = new Memory($zone);
 
-        $response = $resolver->resolve(new Query(Message::query(
-            new Question(
-                name: 'child.www.example.com',
-                type: Record::TYPE_SOA,
+        $response = $resolver->resolve(
+            new Query(
+                Message::query(new Question(name: 'child.www.example.com', type: Record::TYPE_SOA)),
+                '127.0.0.1',
+                53,
+                Protocol::Udp,
             ),
-        ), '127.0.0.1', 53, Protocol::Udp));
+        );
 
         $this->assertSame(Message::RCODE_NXDOMAIN, $response->header->responseCode);
         $this->assertEmpty($response->answers);

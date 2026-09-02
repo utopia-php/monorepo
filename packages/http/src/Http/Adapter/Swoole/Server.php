@@ -15,6 +15,7 @@ use Utopia\Telemetry\Adapter\None;
 class Server extends Adapter
 {
     protected SwooleServer $server;
+
     protected const string CONTEXT_KEY = '__utopia__';
 
     /**
@@ -177,12 +178,14 @@ class Server extends Adapter
         // A null reading skips the observation, so only register a gauge this
         // process can actually fill — see the worker-id note below.
         $observe = function (string $name, callable $value) use ($telemetry): void {
-            $telemetry->createObservableGauge($name)->observe(function (callable $observer) use ($value): void {
-                $reading = $value();
-                if ($reading !== null) {
-                    $observer($reading, []);
-                }
-            });
+            $telemetry
+                ->createObservableGauge($name)
+                ->observe(function (callable $observer) use ($value): void {
+                    $reading = $value();
+                    if ($reading !== null) {
+                        $observer($reading, []);
+                    }
+                });
         };
 
         // Per-worker stats: emitted from every worker so a sum across
@@ -205,14 +208,16 @@ class Server extends Adapter
 
         // Co::sleep(10ms) should take ~10ms; any extra is how long the event loop
         // was blocked. Needs a coroutine, so it's skipped in non-coroutine mode.
-        $telemetry->createObservableGauge(self::METRIC_SCHEDULER_LAG)->observe(function (callable $observer): void {
-            if (Coroutine::getCid() === -1) {
-                return;
-            }
-            $startNs = hrtime(true);
-            Coroutine::sleep(0.01);
-            $observer(max(0.0, (hrtime(true) - $startNs) / 1_000_000 - 10), []);
-        });
+        $telemetry
+            ->createObservableGauge(self::METRIC_SCHEDULER_LAG)
+            ->observe(function (callable $observer): void {
+                if (Coroutine::getCid() === -1) {
+                    return;
+                }
+                $startNs = hrtime(true);
+                Coroutine::sleep(0.01);
+                $observer(max(0.0, ((hrtime(true) - $startNs) / 1_000_000) - 10), []);
+            });
 
         // Server-wide stats are master-tracked, so only worker 0 emits them to
         // avoid every worker reporting the same numbers. The check belongs here,

@@ -19,11 +19,7 @@ final class IdTokenTest extends TestCase
     {
         [$this->privateKey, $this->publicKey] = IdToken::generateKeyPair();
 
-        $this->idToken = new IdToken(
-            $this->privateKey,
-            $this->publicKey,
-            'https://example.com/v1/oauth2/test',
-        );
+        $this->idToken = new IdToken($this->privateKey, $this->publicKey, 'https://example.com/v1/oauth2/test');
     }
 
     /**
@@ -84,12 +80,7 @@ final class IdTokenTest extends TestCase
         $signingInput = $parts[0] . '.' . $parts[1];
         $signature = base64_decode(strtr($parts[2], '-_', '+/'));
 
-        $result = openssl_verify(
-            $signingInput,
-            $signature,
-            $this->publicKey,
-            OPENSSL_ALGO_SHA256,
-        );
+        $result = openssl_verify($signingInput, $signature, $this->publicKey, OPENSSL_ALGO_SHA256);
 
         $this->assertSame(1, $result);
     }

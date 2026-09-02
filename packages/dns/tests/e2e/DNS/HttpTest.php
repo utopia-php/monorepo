@@ -58,16 +58,24 @@ final class HttpTest extends TestCase
         $this->assertNull($this->tryRequest('DELETE', self::ENDPOINT));
     }
 
-    protected function request(string $method, string $url, string $body = '', string $contentType = 'application/dns-message'): string
-    {
+    protected function request(
+        string $method,
+        string $url,
+        string $body = '',
+        string $contentType = 'application/dns-message',
+    ): string {
         $response = $this->tryRequest($method, $url, $body, $contentType);
         $this->assertNotNull($response, \sprintf('%s %s failed', $method, $url));
 
         return $response;
     }
 
-    protected function tryRequest(string $method, string $url, string $body = '', string $contentType = 'application/dns-message'): ?string
-    {
+    protected function tryRequest(
+        string $method,
+        string $url,
+        string $body = '',
+        string $contentType = 'application/dns-message',
+    ): ?string {
         $context = stream_context_create(['http' => [
             'method' => $method,
             'header' => $body === '' ? [] : ['Content-Type: ' . $contentType],

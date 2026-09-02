@@ -36,7 +36,12 @@ final class GitHubTest extends Base
         $appId = System::getEnv('TESTS_GITHUB_APP_IDENTIFIER') ?? '';
         self::$installationId = System::getEnv('TESTS_GITHUB_INSTALLATION_ID') ?? '';
 
-        if (empty($privateKey) || ($appId === '' || $appId === '0') || (self::$installationId === '' || self::$installationId === '0')) {
+        if (
+            empty($privateKey)
+            || $appId === ''
+            || $appId === '0'
+            || (self::$installationId === '' || self::$installationId === '0')
+        ) {
             $this->markTestSkipped('GitHub App credentials not configured');
         }
 

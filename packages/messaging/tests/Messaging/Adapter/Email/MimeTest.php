@@ -86,9 +86,12 @@ final class MimeTest extends TestCase
 
     public function testAnAttachmentIsWrappedAroundTheBody(): void
     {
-        $rendered = $this->render($this->email(
-            attachments: [new Attachment(name: 'notes.txt', path: '', type: 'text/plain', content: 'the notes')],
-        ));
+        $rendered = $this->render($this->email(attachments: [new Attachment(
+            name: 'notes.txt',
+            path: '',
+            type: 'text/plain',
+            content: 'the notes',
+        )]));
 
         $this->assertStringContainsString('Content-Type: multipart/mixed;', $rendered);
         $this->assertStringContainsString('Content-Disposition: attachment; filename="notes.txt"', $rendered);
@@ -136,8 +139,14 @@ final class MimeTest extends TestCase
     public function testWeighsAttachmentsBeforeTheyAreEncoded(): void
     {
         $this->assertSame(0, Mime::size($this->email()));
-        $this->assertSame(9, Mime::size($this->email(
-            attachments: [new Attachment(name: 'notes.txt', path: '', type: 'text/plain', content: 'the notes')],
-        )));
+        $this->assertSame(
+            9,
+            Mime::size($this->email(attachments: [new Attachment(
+                name: 'notes.txt',
+                path: '',
+                type: 'text/plain',
+                content: 'the notes',
+            )])),
+        );
     }
 }

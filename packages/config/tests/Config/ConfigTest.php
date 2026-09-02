@@ -43,10 +43,14 @@ final class ConfigTest extends TestCase
 
     public function testVariableSource(): void
     {
-        $config = Config::load(new Variable([
-            'phpKey' => 'aValue',
-            'ENV_KEY' => 'aValue',
-        ]), new None(), TestConfig::class);
+        $config = Config::load(
+            new Variable([
+                'phpKey' => 'aValue',
+                'ENV_KEY' => 'aValue',
+            ]),
+            new None(),
+            TestConfig::class,
+        );
         $this->assertSame('aValue', $config->phpKey);
         $this->assertSame('aValue', $config->envKey);
 
@@ -97,7 +101,7 @@ final class ConfigTest extends TestCase
     public function testAdapters(string $adapter, string $extension, string $key): void
     {
         $adapter = new $adapter();
-        if (! ($adapter instanceof Parser)) {
+        if (! $adapter instanceof Parser) {
             throw new \Exception('Test scenario includes invalid adapter.');
         }
 
@@ -111,11 +115,15 @@ final class ConfigTest extends TestCase
         $config1 = Config::load(new Variable('ENV_KEY=envValue'), new Dotenv(), TestConfig::class);
         $config2 = Config::load(new Variable('yml_key: ymlValue'), new YAML(), TestConfig::class);
 
-        $config = Config::load(new Variable([
-            'config1' => $config1,
-            'config2' => $config2,
-            'rootKey' => 'rootValue',
-        ]), new None(), TestGroupConfig::class);
+        $config = Config::load(
+            new Variable([
+                'config1' => $config1,
+                'config2' => $config2,
+                'rootKey' => 'rootValue',
+            ]),
+            new None(),
+            TestGroupConfig::class,
+        );
 
         $this->assertSame('rootValue', $config->rootKey);
         $this->assertSame('envValue', $config->config1->envKey);
@@ -137,7 +145,11 @@ final class ConfigTest extends TestCase
     public function testExceptionValidator(): void
     {
         $this->expectException(Load::class);
-        Config::load(new Variable('KEY=too_long_value_that_will_not_get_accepted'), new Dotenv(), TestConfigRequired::class);
+        Config::load(
+            new Variable('KEY=too_long_value_that_will_not_get_accepted'),
+            new Dotenv(),
+            TestConfigRequired::class,
+        );
     }
 
     public function testExceptionRequired(): void
@@ -339,5 +351,7 @@ class TestTypeMismatchConfig
 
 class TestConstructorConfig
 {
-    public function __construct(public string $required) {}
+    public function __construct(
+        public string $required,
+    ) {}
 }

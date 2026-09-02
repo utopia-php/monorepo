@@ -60,30 +60,35 @@ class Swoole extends Adapter
 
     protected function spawnWorker(int $workerId): void
     {
-        $process = new Process(function () use ($workerId): void {
-            Coroutine::set(['hook_flags' => SWOOLE_HOOK_ALL]);
+        $process = new Process(
+            function () use ($workerId): void {
+                Coroutine::set(['hook_flags' => SWOOLE_HOOK_ALL]);
 
-            Coroutine\run(function () use ($workerId): void {
-                Process::signal(SIGTERM, function (): void {
-                    $this->stopped = true;
-                    $this->consumer->close();
-                    foreach ($this->consumers as $consumer) {
-                        try {
-                            $consumer->close();
-                        } catch (\Throwable) {
+                Coroutine\run(function () use ($workerId): void {
+                    Process::signal(SIGTERM, function (): void {
+                        $this->stopped = true;
+                        $this->consumer->close();
+                        foreach ($this->consumers as $consumer) {
+                            try {
+                                $consumer->close();
+                            } catch (\Throwable) {
+                            }
                         }
+                    });
+
+                    foreach ($this->onWorkerStart as $callback) {
+                        $callback((string) $workerId);
+                    }
+
+                    foreach ($this->onWorkerStop as $callback) {
+                        $callback((string) $workerId);
                     }
                 });
-
-                foreach ($this->onWorkerStart as $callback) {
-                    $callback((string) $workerId);
-                }
-
-                foreach ($this->onWorkerStop as $callback) {
-                    $callback((string) $workerId);
-                }
-            });
-        }, false, 0, false);
+            },
+            false,
+            0,
+            false,
+        );
 
         $pid = $process->start();
         $this->workers[$pid] = $process;
@@ -132,7 +137,13 @@ class Swoole extends Adapter
 
         foreach ($queues as $spec) {
             $waitGroup->add();
-            Coroutine::create(function () use ($spec, $messageCallback, $successCallback, $errorCallback, $waitGroup): void {
+            Coroutine::create(function () use (
+                $spec,
+                $messageCallback,
+                $successCallback,
+                $errorCallback,
+                $waitGroup,
+            ): void {
                 try {
                     $this->run(
                         $spec['queue'],
@@ -168,19 +179,26 @@ class Swoole extends Adapter
         $slots = new Channel($maxCoroutines);
         $waitGroup = new WaitGroup();
 
-        while (!$this->isStopped()) {
+        while (! $this->isStopped()) {
             $slots->push(true);
 
             $message = $this->nextMessage($errorCallback);
 
-            if (!$message instanceof Message) {
+            if (! $message instanceof Message) {
                 $slots->pop();
                 continue;
             }
 
             $waitGroup->add();
 
-            Coroutine::create(function () use ($message, $messageCallback, $successCallback, $errorCallback, $slots, $waitGroup): void {
+            Coroutine::create(function () use (
+                $message,
+                $messageCallback,
+                $successCallback,
+                $errorCallback,
+                $slots,
+                $waitGroup,
+            ): void {
                 try {
                     $this->process($message, $messageCallback, $successCallback, $errorCallback);
                 } catch (\Throwable $error) {
@@ -221,19 +239,28 @@ class Swoole extends Adapter
         $slots = new Channel($maxCoroutines);
         $waitGroup = new WaitGroup();
 
-        while (!$this->isStopped()) {
+        while (! $this->isStopped()) {
             $slots->push(true);
 
             $message = $this->nextMessageFrom($errorCallback, $queue, $consumer);
 
-            if (!$message instanceof Message) {
+            if (! $message instanceof Message) {
                 $slots->pop();
                 continue;
             }
 
             $waitGroup->add();
 
-            Coroutine::create(function () use ($message, $messageCallback, $successCallback, $errorCallback, $slots, $waitGroup, $queue, $consumer): void {
+            Coroutine::create(function () use (
+                $message,
+                $messageCallback,
+                $successCallback,
+                $errorCallback,
+                $slots,
+                $waitGroup,
+                $queue,
+                $consumer,
+            ): void {
                 try {
                     $this->processFrom($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
                 } catch (\Throwable $error) {

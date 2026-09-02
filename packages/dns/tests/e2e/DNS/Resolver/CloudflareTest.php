@@ -18,12 +18,14 @@ final class CloudflareTest extends TestCase
     {
         $resolver = new Cloudflare();
 
-        $response = $resolver->resolve(new Query(Message::query(
-            new Question(
-                name: 'google.com',
-                type: Record::TYPE_A,
+        $response = $resolver->resolve(
+            new Query(
+                Message::query(new Question(name: 'google.com', type: Record::TYPE_A)),
+                '127.0.0.1',
+                53,
+                Protocol::Udp,
             ),
-        ), '127.0.0.1', 53, Protocol::Udp));
+        );
 
         $this->assertNotEmpty($response->answers);
         $this->assertInstanceOf(Record::class, $response->answers[0] ?? null);
@@ -38,12 +40,14 @@ final class CloudflareTest extends TestCase
     {
         $resolver = new Cloudflare();
 
-        $response = $resolver->resolve(new Query(Message::query(
-            new Question(
-                name: 'google.com',
-                type: Record::TYPE_AAAA,
+        $response = $resolver->resolve(
+            new Query(
+                Message::query(new Question(name: 'google.com', type: Record::TYPE_AAAA)),
+                '127.0.0.1',
+                53,
+                Protocol::Udp,
             ),
-        ), '127.0.0.1', 53, Protocol::Udp));
+        );
 
         $this->assertNotEmpty($response->answers);
         $this->assertInstanceOf(Record::class, $response->answers[0] ?? null);

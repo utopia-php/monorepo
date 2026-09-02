@@ -17,10 +17,7 @@ final class RefreshTokenTest extends TestCase
     {
         $this->secret = RefreshToken::generateSecret();
 
-        $this->refreshToken = new RefreshToken(
-            $this->secret,
-            'https://example.com/v1/oauth2/test',
-        );
+        $this->refreshToken = new RefreshToken($this->secret, 'https://example.com/v1/oauth2/test');
     }
 
     /**
@@ -52,7 +49,13 @@ final class RefreshTokenTest extends TestCase
     public function testClaims(): void
     {
         $before = time();
-        $token = $this->refreshToken->issue('user-123', 'https://example.com/token', 'client-abc', 1209600, ['read', 'offline_access']);
+        $token = $this->refreshToken->issue(
+            'user-123',
+            'https://example.com/token',
+            'client-abc',
+            1209600,
+            ['read', 'offline_access'],
+        );
         $after = time();
 
         $claims = $this->decodeSegment(explode('.', $token)[1]);

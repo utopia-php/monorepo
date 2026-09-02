@@ -15,8 +15,14 @@ abstract class GiteaBase extends Base
         return hash_hmac('sha256', $payload, $secret);
     }
 
-    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false): string
-    {
+    protected function pushPayload(
+        string $branch,
+        array $added = [],
+        array $removed = [],
+        array $modified = [],
+        bool $created = false,
+        bool $deleted = false,
+    ): string {
         $repositoryUrl = 'http://gitea:3000/' . self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME;
 
         return (string) json_encode([

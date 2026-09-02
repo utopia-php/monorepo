@@ -162,10 +162,7 @@ abstract class Base extends TestCase
     protected function getLastWebhookRequest(): array
     {
         $client = new Client();
-        $response = $client->fetch(
-            url: Services::CATCHER_URL . '/__last_request__',
-            method: 'GET',
-        );
+        $response = $client->fetch(url: Services::CATCHER_URL . '/__last_request__', method: 'GET');
 
         if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
             return [];
@@ -253,10 +250,7 @@ abstract class Base extends TestCase
     protected function assertPushedAt(array $repository): void
     {
         $this->assertArrayHasKey('pushed_at', $repository);
-        $this->assertNotFalse(
-            strtotime((string) $repository['pushed_at']),
-            'pushed_at is not a parseable timestamp',
-        );
+        $this->assertNotFalse(strtotime((string) $repository['pushed_at']), 'pushed_at is not a parseable timestamp');
     }
 
     /**
@@ -275,7 +269,7 @@ abstract class Base extends TestCase
 
     protected function skipUnlessSupported(bool $supported, string $capability): void
     {
-        if (!$supported) {
+        if (! $supported) {
             $this->markTestSkipped(static::class . ' does not support ' . $capability);
         }
     }
@@ -285,7 +279,7 @@ abstract class Base extends TestCase
         $start = microtime(true) * 1000;
         $lastException = null;
 
-        while ((microtime(true) * 1000 - $start) < $timeoutMs) {
+        while (((microtime(true) * 1000) - $start) < $timeoutMs) {
             try {
                 $probe();
                 return;
@@ -302,10 +296,14 @@ abstract class Base extends TestCase
     protected function getLatestCommitEventually(string $repositoryName): array
     {
         $commit = [];
-        $this->assertEventually(function () use (&$commit, $repositoryName): void {
-            $commit = $this->vcsAdapter->getLatestCommit(static::$owner, $repositoryName, static::$defaultBranch);
-            $this->assertNotEmpty($commit['commitHash']);
-        }, 15000, 1000);
+        $this->assertEventually(
+            function () use (&$commit, $repositoryName): void {
+                $commit = $this->vcsAdapter->getLatestCommit(static::$owner, $repositoryName, static::$defaultBranch);
+                $this->assertNotEmpty($commit['commitHash']);
+            },
+            15000,
+            1000,
+        );
         return $commit;
     }
 
@@ -362,10 +360,7 @@ abstract class Base extends TestCase
     protected function deleteLastWebhookRequest(): void
     {
         $client = new Client();
-        $client->fetch(
-            url: Services::CATCHER_URL . '/__clear__',
-            method: 'DELETE',
-        );
+        $client->fetch(url: Services::CATCHER_URL . '/__clear__', method: 'DELETE');
     }
 
     public function testCreateRepository(): void
@@ -399,10 +394,16 @@ abstract class Base extends TestCase
         try {
             $this->assertArrayHasKey('name', $result);
             $this->assertSame($repositoryName, $result['name']);
-            $this->assertTrue($this->isPrivate($result), 'createRepository() did not report the new repository as private');
+            $this->assertTrue(
+                $this->isPrivate($result),
+                'createRepository() did not report the new repository as private',
+            );
 
             $fetched = $this->vcsAdapter->getRepository(static::$owner, $repositoryName);
-            $this->assertTrue($this->isPrivate($fetched), 'getRepository() did not report the new repository as private');
+            $this->assertTrue(
+                $this->isPrivate($fetched),
+                'getRepository() did not report the new repository as private',
+            );
         } finally {
             $this->discardRepositories($repositoryName);
         }
@@ -446,7 +447,11 @@ abstract class Base extends TestCase
             $this->assertEventually(function () use ($publicRepository): void {
                 [$status, $body] = $this->fetchAnonymousRefAdvertisement($publicRepository);
                 $this->assertSame(200, $status, 'An anonymous git client cannot reach the public repository');
-                $this->assertStringContainsString('git-upload-pack', $body, 'The anonymous response is not a git ref advertisement');
+                $this->assertStringContainsString(
+                    'git-upload-pack',
+                    $body,
+                    'The anonymous response is not a git ref advertisement',
+                );
             });
 
             [$status] = $this->fetchAnonymousRefAdvertisement($privateRepository);
@@ -548,7 +553,12 @@ abstract class Base extends TestCase
 
             $tree = [];
             $this->assertEventually(function () use (&$tree, $repositoryName): void {
-                $tree = $this->vcsAdapter->getRepositoryTree(static::$owner, $repositoryName, static::$defaultBranch, false);
+                $tree = $this->vcsAdapter->getRepositoryTree(
+                    static::$owner,
+                    $repositoryName,
+                    static::$defaultBranch,
+                    false,
+                );
                 $this->assertContains('src', $tree);
             });
 
@@ -557,7 +567,12 @@ abstract class Base extends TestCase
 
             $treeRecursive = [];
             $this->assertEventually(function () use (&$treeRecursive, $repositoryName): void {
-                $treeRecursive = $this->vcsAdapter->getRepositoryTree(static::$owner, $repositoryName, static::$defaultBranch, true);
+                $treeRecursive = $this->vcsAdapter->getRepositoryTree(
+                    static::$owner,
+                    $repositoryName,
+                    static::$defaultBranch,
+                    true,
+                );
                 $this->assertContains('src/lib.php', $treeRecursive);
             });
 
@@ -614,7 +629,12 @@ abstract class Base extends TestCase
         try {
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'test.txt', 'main branch content');
 
-            $result = $this->vcsAdapter->getRepositoryContent(static::$owner, $repositoryName, 'test.txt', static::$defaultBranch);
+            $result = $this->vcsAdapter->getRepositoryContent(
+                static::$owner,
+                $repositoryName,
+                'test.txt',
+                static::$defaultBranch,
+            );
 
             $this->assertSame('main branch content', $result['content']);
         } finally {
@@ -696,12 +716,16 @@ abstract class Base extends TestCase
 
             $languages = [];
             try {
-                $this->assertEventually(function () use (&$languages, $repositoryName): void {
-                    $languages = $this->vcsAdapter->listRepositoryLanguages(static::$owner, $repositoryName);
-                    $this->assertNotEmpty($languages);
-                }, static::$computesLanguagesAsynchronously ? 60000 : 30000, static::$computesLanguagesAsynchronously ? 5000 : 2000);
+                $this->assertEventually(
+                    function () use (&$languages, $repositoryName): void {
+                        $languages = $this->vcsAdapter->listRepositoryLanguages(static::$owner, $repositoryName);
+                        $this->assertNotEmpty($languages);
+                    },
+                    static::$computesLanguagesAsynchronously ? 60000 : 30000,
+                    static::$computesLanguagesAsynchronously ? 5000 : 2000,
+                );
             } catch (\Throwable $e) {
-                if (!static::$computesLanguagesAsynchronously) {
+                if (! static::$computesLanguagesAsynchronously) {
                     throw $e;
                 }
 
@@ -741,11 +765,15 @@ abstract class Base extends TestCase
             $this->vcsAdapter->createBranch(static::$owner, $repositoryName, 'feature-2', static::$defaultBranch);
 
             $branches = [];
-            $this->assertEventually(function () use (&$branches, $repositoryName): void {
-                $branches = $this->vcsAdapter->listBranches(static::$owner, $repositoryName);
-                $this->assertContains('feature-1', $branches);
-                $this->assertContains('feature-2', $branches);
-            }, 15000, 500);
+            $this->assertEventually(
+                function () use (&$branches, $repositoryName): void {
+                    $branches = $this->vcsAdapter->listBranches(static::$owner, $repositoryName);
+                    $this->assertContains('feature-1', $branches);
+                    $this->assertContains('feature-2', $branches);
+                },
+                15000,
+                500,
+            );
 
             $this->assertNotEmpty($branches);
             $this->assertContains(static::$defaultBranch, $branches);
@@ -786,15 +814,22 @@ abstract class Base extends TestCase
             $this->vcsAdapter->createTag(static::$owner, $repositoryName, 'v2.0.0', $commitHash);
 
             $tags = [];
-            $this->assertEventually(function () use (&$tags, $repositoryName): void {
-                $tags = $this->vcsAdapter->listTags(static::$owner, $repositoryName);
-                $this->assertCount(3, $tags);
-            }, 15000, 500);
+            $this->assertEventually(
+                function () use (&$tags, $repositoryName): void {
+                    $tags = $this->vcsAdapter->listTags(static::$owner, $repositoryName);
+                    $this->assertCount(3, $tags);
+                },
+                15000,
+                500,
+            );
 
             $this->assertEqualsCanonicalizing(['v1.0.0', 'v1.1.0', 'v2.0.0'], $tags);
 
             // Glob filtering
-            $this->assertEqualsCanonicalizing(['v1.0.0', 'v1.1.0'], $this->vcsAdapter->listTags(static::$owner, $repositoryName, 'v1.*'));
+            $this->assertEqualsCanonicalizing(
+                ['v1.0.0', 'v1.1.0'],
+                $this->vcsAdapter->listTags(static::$owner, $repositoryName, 'v1.*'),
+            );
             $this->assertSame(['v2.0.0'], $this->vcsAdapter->listTags(static::$owner, $repositoryName, 'v2.0.0'));
             $this->assertEmpty($this->vcsAdapter->listTags(static::$owner, $repositoryName, 'nope-*'));
         } finally {
@@ -879,10 +914,18 @@ abstract class Base extends TestCase
 
             // Wait until commit hash is DIFFERENT from first — not just non-empty
             $commit2 = [];
-            $this->assertEventually(function () use (&$commit2, $repositoryName, $commit1Hash): void {
-                $commit2 = $this->vcsAdapter->getLatestCommit(static::$owner, $repositoryName, static::$defaultBranch);
-                $this->assertNotSame($commit1Hash, $commit2['commitHash']);
-            }, 15000, 1000);
+            $this->assertEventually(
+                function () use (&$commit2, $repositoryName, $commit1Hash): void {
+                    $commit2 = $this->vcsAdapter->getLatestCommit(
+                        static::$owner,
+                        $repositoryName,
+                        static::$defaultBranch,
+                    );
+                    $this->assertNotSame($commit1Hash, $commit2['commitHash']);
+                },
+                15000,
+                1000,
+            );
 
             $this->assertStringStartsWith($secondMessage, $commit2['commitMessage']);
             $this->assertNotSame($commit1Hash, $commit2['commitHash']);
@@ -929,7 +972,7 @@ abstract class Base extends TestCase
                 'ci/build',
             );
 
-            if (!static::$supportsCommitStatusLookup) {
+            if (! static::$supportsCommitStatusLookup) {
                 return;
             }
 
@@ -1084,10 +1127,10 @@ abstract class Base extends TestCase
             // GitHub resolves the owner from the installation and Bitbucket from
             // the account its token belongs to, the others from the repository, so
             // pass both and let each use what it reads
-            $this->assertSame(
-                $this->ownerPath(),
-                $this->vcsAdapter->getOwnerName(static::$installationId, (int) $created['id']),
-            );
+            $this->assertSame($this->ownerPath(), $this->vcsAdapter->getOwnerName(
+                static::$installationId,
+                (int) $created['id'],
+            ));
         } finally {
             $this->discardRepositories($repositoryName);
         }
@@ -1145,11 +1188,15 @@ abstract class Base extends TestCase
             $this->vcsAdapter->createRepository(static::$owner, $other, false);
 
             $names = [];
-            $this->assertEventually(function () use (&$names, $match): void {
-                $result = $this->vcsAdapter->searchRepositories(static::$owner, 1, 10, $match);
-                $names = array_column($result['items'], 'name');
-                $this->assertContains($match, $names);
-            }, 60000, 2000);
+            $this->assertEventually(
+                function () use (&$names, $match): void {
+                    $result = $this->vcsAdapter->searchRepositories(static::$owner, 1, 10, $match);
+                    $names = array_column($result['items'], 'name');
+                    $this->assertContains($match, $names);
+                },
+                60000,
+                2000,
+            );
 
             $this->assertNotContains($other, $names);
         } finally {
@@ -1167,10 +1214,14 @@ abstract class Base extends TestCase
             $this->vcsAdapter->createRepository(static::$owner, $repo2Name, false);
 
             $result = [];
-            $this->assertEventually(function () use (&$result): void {
-                $result = $this->vcsAdapter->searchRepositories(static::$owner, 1, 10);
-                $this->assertGreaterThanOrEqual(2, $result['total']);
-            }, 30000, 2000);
+            $this->assertEventually(
+                function () use (&$result): void {
+                    $result = $this->vcsAdapter->searchRepositories(static::$owner, 1, 10);
+                    $this->assertGreaterThanOrEqual(2, $result['total']);
+                },
+                30000,
+                2000,
+            );
 
             $this->assertArrayHasKey('items', $result);
             $this->assertArrayHasKey('total', $result);
@@ -1198,7 +1249,14 @@ abstract class Base extends TestCase
         try {
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
             $this->vcsAdapter->createBranch(static::$owner, $repositoryName, 'feature-branch', static::$defaultBranch);
-            $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'feature.txt', 'feature content', 'Add feature', 'feature-branch');
+            $this->vcsAdapter->createFile(
+                static::$owner,
+                $repositoryName,
+                'feature.txt',
+                'feature content',
+                'Add feature',
+                'feature-branch',
+            );
 
             $pr = $this->vcsAdapter->createPullRequest(
                 static::$owner,
@@ -1237,7 +1295,14 @@ abstract class Base extends TestCase
         try {
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
             $this->vcsAdapter->createBranch(static::$owner, $repositoryName, 'feature-branch', static::$defaultBranch);
-            $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'feature.txt', 'feature content', 'Add feature', 'feature-branch');
+            $this->vcsAdapter->createFile(
+                static::$owner,
+                $repositoryName,
+                'feature.txt',
+                'feature content',
+                'Add feature',
+                'feature-branch',
+            );
 
             $pr = $this->vcsAdapter->createPullRequest(
                 static::$owner,
@@ -1250,10 +1315,14 @@ abstract class Base extends TestCase
             $prNumber = $this->pullRequestNumberOf($pr);
 
             $result = [];
-            $this->assertEventually(function () use (&$result, $repositoryName, $prNumber): void {
-                $result = $this->vcsAdapter->getPullRequestFiles(static::$owner, $repositoryName, $prNumber);
-                $this->assertNotEmpty($result);
-            }, 15000, 1000);
+            $this->assertEventually(
+                function () use (&$result, $repositoryName, $prNumber): void {
+                    $result = $this->vcsAdapter->getPullRequestFiles(static::$owner, $repositoryName, $prNumber);
+                    $this->assertNotEmpty($result);
+                },
+                15000,
+                1000,
+            );
 
             $filenames = array_column($result, 'filename');
             $this->assertContains('feature.txt', $filenames);
@@ -1287,7 +1356,14 @@ abstract class Base extends TestCase
         try {
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
             $this->vcsAdapter->createBranch(static::$owner, $repositoryName, 'my-feature', static::$defaultBranch);
-            $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'feature.txt', 'content', 'Add feature', 'my-feature');
+            $this->vcsAdapter->createFile(
+                static::$owner,
+                $repositoryName,
+                'feature.txt',
+                'content',
+                'Add feature',
+                'my-feature',
+            );
 
             $this->vcsAdapter->createPullRequest(
                 static::$owner,
@@ -1337,7 +1413,14 @@ abstract class Base extends TestCase
         try {
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
             $this->vcsAdapter->createBranch(static::$owner, $repositoryName, 'test-branch', static::$defaultBranch);
-            $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'test.txt', 'test', 'Add test', 'test-branch');
+            $this->vcsAdapter->createFile(
+                static::$owner,
+                $repositoryName,
+                'test.txt',
+                'test',
+                'Add test',
+                'test-branch',
+            );
 
             $pr = $this->vcsAdapter->createPullRequest(
                 static::$owner,
@@ -1368,7 +1451,14 @@ abstract class Base extends TestCase
         try {
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
             $this->vcsAdapter->createBranch(static::$owner, $repositoryName, 'test-branch', static::$defaultBranch);
-            $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'test.txt', 'test', 'Add test', 'test-branch');
+            $this->vcsAdapter->createFile(
+                static::$owner,
+                $repositoryName,
+                'test.txt',
+                'test',
+                'Add test',
+                'test-branch',
+            );
 
             $pr = $this->vcsAdapter->createPullRequest(
                 static::$owner,
@@ -1399,7 +1489,14 @@ abstract class Base extends TestCase
         try {
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
             $this->vcsAdapter->createBranch(static::$owner, $repositoryName, 'test-branch', static::$defaultBranch);
-            $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'test.txt', 'test', 'Add test', 'test-branch');
+            $this->vcsAdapter->createFile(
+                static::$owner,
+                $repositoryName,
+                'test.txt',
+                'test',
+                'Add test',
+                'test-branch',
+            );
 
             $pr = $this->vcsAdapter->createPullRequest(
                 static::$owner,
@@ -1410,9 +1507,19 @@ abstract class Base extends TestCase
             );
 
             $prNumber = $this->pullRequestNumberOf($pr);
-            $commentId = $this->vcsAdapter->createComment(static::$owner, $repositoryName, $prNumber, 'Original comment');
+            $commentId = $this->vcsAdapter->createComment(
+                static::$owner,
+                $repositoryName,
+                $prNumber,
+                'Original comment',
+            );
 
-            $updatedCommentId = $this->vcsAdapter->updateComment(static::$owner, $repositoryName, $commentId, 'Updated comment');
+            $updatedCommentId = $this->vcsAdapter->updateComment(
+                static::$owner,
+                $repositoryName,
+                $commentId,
+                'Updated comment',
+            );
 
             $this->assertSame($commentId, $updatedCommentId);
 
@@ -1494,12 +1601,16 @@ abstract class Base extends TestCase
         $eventHeader = $this->vcsAdapter->getEventHeaderName();
 
         $webhookData = [];
-        $this->assertEventually(function () use (&$webhookData, $eventHeader, $eventName): void {
-            $webhookData = $this->getLastWebhookRequest();
-            $this->assertNotEmpty($webhookData, 'No webhook was delivered');
-            $this->assertNotEmpty($webhookData['data'] ?? '', 'Webhook payload was empty');
-            $this->assertSame($eventName, $this->findHeader($webhookData['headers'] ?? [], $eventHeader));
-        }, 60000, 2000);
+        $this->assertEventually(
+            function () use (&$webhookData, $eventHeader, $eventName): void {
+                $webhookData = $this->getLastWebhookRequest();
+                $this->assertNotEmpty($webhookData, 'No webhook was delivered');
+                $this->assertNotEmpty($webhookData['data'] ?? '', 'Webhook payload was empty');
+                $this->assertSame($eventName, $this->findHeader($webhookData['headers'] ?? [], $eventHeader));
+            },
+            60000,
+            2000,
+        );
 
         $payload = $webhookData['data'];
         $signatureHeader = $this->vcsAdapter->getSignatureHeaderName();
@@ -1525,16 +1636,28 @@ abstract class Base extends TestCase
         try {
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
 
-            $tarball = $this->vcsAdapter->getRepositoryPresignedUrl(static::$owner, $repositoryName, static::$defaultBranch);
+            $tarball = $this->vcsAdapter->getRepositoryPresignedUrl(
+                static::$owner,
+                $repositoryName,
+                static::$defaultBranch,
+            );
             $this->assertStringStartsWith('http', $tarball);
             $this->assertStringContainsString(static::$presignedTarballFragment, $tarball);
 
-            $zipball = $this->vcsAdapter->getRepositoryPresignedUrl(static::$owner, $repositoryName, static::$defaultBranch, 'zipball');
+            $zipball = $this->vcsAdapter->getRepositoryPresignedUrl(
+                static::$owner,
+                $repositoryName,
+                static::$defaultBranch,
+                'zipball',
+            );
             $this->assertStringContainsString(static::$presignedZipballFragment, $zipball);
             $this->assertNotSame($tarball, $zipball);
 
             // Without a ref the provider falls back to the default branch
-            $this->assertStringStartsWith('http', $this->vcsAdapter->getRepositoryPresignedUrl(static::$owner, $repositoryName));
+            $this->assertStringStartsWith('http', $this->vcsAdapter->getRepositoryPresignedUrl(
+                static::$owner,
+                $repositoryName,
+            ));
         } finally {
             $this->discardRepositories($repositoryName);
         }
@@ -1553,7 +1676,7 @@ abstract class Base extends TestCase
 
     public function testGetInstallationRepository(): void
     {
-        if (!static::$supportsInstallationRepository) {
+        if (! static::$supportsInstallationRepository) {
             $this->expectException(Exception::class);
             $this->vcsAdapter->getInstallationRepository('any-repo-name');
 
@@ -1574,14 +1697,11 @@ abstract class Base extends TestCase
 
     public function testGetOwnerNameWithInvalidRepositoryId(): void
     {
-        if (!static::$resolvesOwnerFromRepositoryId) {
+        if (! static::$resolvesOwnerFromRepositoryId) {
             // GitHub reads the owner off the installation and Bitbucket off the
             // account its token belongs to, so an id that resolves to nothing
             // does not change the answer
-            $this->assertSame(
-                $this->ownerPath(),
-                $this->vcsAdapter->getOwnerName(static::$installationId, 999999999),
-            );
+            $this->assertSame($this->ownerPath(), $this->vcsAdapter->getOwnerName(static::$installationId, 999999999));
 
             return;
         }
@@ -1611,7 +1731,13 @@ abstract class Base extends TestCase
             );
             $this->assertGreaterThan(0, $webhookId);
 
-            $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Webhook Test', 'Initial commit');
+            $this->vcsAdapter->createFile(
+                static::$owner,
+                $repositoryName,
+                'README.md',
+                '# Webhook Test',
+                'Initial commit',
+            );
 
             $event = $this->awaitWebhook(static::$pushEventName, $secret);
 
@@ -1641,7 +1767,14 @@ abstract class Base extends TestCase
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
             $this->getLatestCommitEventually($repositoryName);
             $this->vcsAdapter->createBranch(static::$owner, $repositoryName, 'feature-branch', static::$defaultBranch);
-            $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'feature.txt', 'content', 'Add feature', 'feature-branch');
+            $this->vcsAdapter->createFile(
+                static::$owner,
+                $repositoryName,
+                'feature.txt',
+                'content',
+                'Add feature',
+                'feature-branch',
+            );
 
             $webhookId = $this->vcsAdapter->createWebhook(
                 static::$owner,
@@ -1682,7 +1815,12 @@ abstract class Base extends TestCase
         try {
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
             $this->getLatestCommitEventually($repositoryName);
-            $this->vcsAdapter->createBranch(static::$owner, $repositoryName, 'feature/test-branch', static::$defaultBranch);
+            $this->vcsAdapter->createBranch(
+                static::$owner,
+                $repositoryName,
+                'feature/test-branch',
+                static::$defaultBranch,
+            );
 
             $tree = [];
             $this->assertEventually(function () use (&$tree, $repositoryName): void {
@@ -1705,7 +1843,13 @@ abstract class Base extends TestCase
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
             $commitHash = $this->getLatestCommitEventually($repositoryName)['commitHash'];
 
-            $result = $this->vcsAdapter->createTag(static::$owner, $repositoryName, 'v1.0.0', $commitHash, 'First release');
+            $result = $this->vcsAdapter->createTag(
+                static::$owner,
+                $repositoryName,
+                'v1.0.0',
+                $commitHash,
+                'First release',
+            );
 
             $this->assertArrayHasKey('name', $result);
             $this->assertSame('v1.0.0', $result['name']);
@@ -1730,10 +1874,14 @@ abstract class Base extends TestCase
             $this->vcsAdapter->createRepository(static::$owner, $repo2, false);
 
             $page1 = [];
-            $this->assertEventually(function () use (&$page1, $prefix): void {
-                $page1 = $this->vcsAdapter->searchRepositories(static::$owner, 1, 1, $prefix);
-                $this->assertGreaterThanOrEqual(2, $page1['total']);
-            }, 60000, 2000);
+            $this->assertEventually(
+                function () use (&$page1, $prefix): void {
+                    $page1 = $this->vcsAdapter->searchRepositories(static::$owner, 1, 1, $prefix);
+                    $this->assertGreaterThanOrEqual(2, $page1['total']);
+                },
+                60000,
+                2000,
+            );
 
             $this->assertCount(1, $page1['items']);
             $this->assertCount(1, $this->vcsAdapter->searchRepositories(static::$owner, 2, 1, $prefix)['items']);
@@ -1770,7 +1918,15 @@ abstract class Base extends TestCase
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test');
             $commitHash = $this->getLatestCommitEventually($repositoryName)['commitHash'];
 
-            $this->vcsAdapter->updateCommitStatus($repositoryName, $commitHash, static::$owner, 'pending', 'Build started', '', 'ci/test');
+            $this->vcsAdapter->updateCommitStatus(
+                $repositoryName,
+                $commitHash,
+                static::$owner,
+                'pending',
+                'Build started',
+                '',
+                'ci/test',
+            );
 
             $result = $this->vcsAdapter->getCommitStatuses(static::$owner, $repositoryName, $commitHash);
 
@@ -1848,6 +2004,7 @@ abstract class Base extends TestCase
             $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
         }
     }
+
     public function testCreateCheckRunWithInvalidRepository(): void
     {
         $this->skipUnlessSupported(static::$supportsCheckRuns, 'check runs');
@@ -1860,6 +2017,7 @@ abstract class Base extends TestCase
             name: 'ci/build',
         );
     }
+
     public function testGetCheckRunWithInvalidId(): void
     {
         $this->skipUnlessSupported(static::$supportsCheckRuns, 'check runs');
@@ -1874,6 +2032,7 @@ abstract class Base extends TestCase
             $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
         }
     }
+
     public function testCreateTwoCheckRunsOnSameCommit(): void
     {
         $this->skipUnlessSupported(static::$supportsCheckRuns, 'check runs');
@@ -1914,6 +2073,7 @@ abstract class Base extends TestCase
             $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
         }
     }
+
     public function testCreateCheckRunsWithSameNameOnDifferentCommits(): void
     {
         $this->skipUnlessSupported(static::$supportsCheckRuns, 'check runs');
@@ -1957,6 +2117,7 @@ abstract class Base extends TestCase
             $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
         }
     }
+
     public function testCreateCheckRunCompleted(): void
     {
         $this->skipUnlessSupported(static::$supportsCheckRuns, 'check runs');
@@ -1995,6 +2156,7 @@ abstract class Base extends TestCase
             $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
         }
     }
+
     public function testUpdateCheckRun(): void
     {
         $this->skipUnlessSupported(static::$supportsCheckRuns, 'check runs');
@@ -2037,6 +2199,7 @@ abstract class Base extends TestCase
             $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
         }
     }
+
     public function testUpdateCheckRunWithInvalidRepository(): void
     {
         $this->skipUnlessSupported(static::$supportsCheckRuns, 'check runs');
@@ -2049,6 +2212,7 @@ abstract class Base extends TestCase
             conclusion: 'success',
         );
     }
+
     public function testUpdateCheckRunWithInvalidId(): void
     {
         $this->skipUnlessSupported(static::$supportsCheckRuns, 'check runs');
@@ -2068,6 +2232,7 @@ abstract class Base extends TestCase
             $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
         }
     }
+
     public function testUpdateCheckRunWithMissingConclusion(): void
     {
         $this->skipUnlessSupported(static::$supportsCheckRuns, 'check runs');
@@ -2125,6 +2290,7 @@ abstract class Base extends TestCase
             $this->assertNotEmpty($namespace['path']);
         }
     }
+
     public function testListNamespacesWithSearch(): void
     {
         $this->skipUnlessSupported(static::$supportsNamespaceListing, 'listing namespaces');
@@ -2137,6 +2303,7 @@ abstract class Base extends TestCase
         $paths = array_column($result['items'], 'path');
         $this->assertContains($ownerPath, $paths);
     }
+
     public function testListRepositoryContentsRootSentinels(): void
     {
         $repositoryName = 'test-list-repository-contents-root-' . uniqid();
@@ -2159,6 +2326,7 @@ abstract class Base extends TestCase
             $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
         }
     }
+
     public function testGetRepositoryContentRootSentinelPrefix(): void
     {
         $repositoryName = 'test-get-repository-content-root-' . uniqid();
@@ -2169,7 +2337,11 @@ abstract class Base extends TestCase
 
             $direct = $this->vcsAdapter->getRepositoryContent(static::$owner, $repositoryName, 'README.md');
             $prefixed = $this->vcsAdapter->getRepositoryContent(static::$owner, $repositoryName, './README.md');
-            $repeatedPrefix = $this->vcsAdapter->getRepositoryContent(static::$owner, $repositoryName, './././README.md');
+            $repeatedPrefix = $this->vcsAdapter->getRepositoryContent(
+                static::$owner,
+                $repositoryName,
+                './././README.md',
+            );
 
             $this->assertEquals($direct['content'], $prefixed['content']);
             $this->assertEquals($direct['content'], $repeatedPrefix['content']);
@@ -2177,6 +2349,7 @@ abstract class Base extends TestCase
             $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
         }
     }
+
     public function testListRepositoryContentsMalformedNestedPath(): void
     {
         $repositoryName = 'test-list-repository-contents-malformed-' . uniqid();
@@ -2249,6 +2422,7 @@ abstract class Base extends TestCase
             $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
         }
     }
+
     public function testGetRepositoryAfterDeleteFails(): void
     {
         $this->skipUnlessSupported(static::$deletesRepositoriesSynchronously, 'deleting a repository straight away');
@@ -2351,12 +2525,7 @@ abstract class Base extends TestCase
 
         try {
             $this->expectException(Exception::class);
-            $this->vcsAdapter->updateCommitStatus(
-                $repositoryName,
-                'invalid-commit-hash',
-                static::$owner,
-                'success',
-            );
+            $this->vcsAdapter->updateCommitStatus($repositoryName, 'invalid-commit-hash', static::$owner, 'success');
         } finally {
             $this->discardRepositories($repositoryName);
         }

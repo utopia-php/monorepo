@@ -18,7 +18,7 @@ final class BrowserDetectionTest extends TestCase
         return [
             'Edge' => [
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/126.0.0.0',
+                    . '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/126.0.0.0',
                 'PS',
                 'Microsoft Edge',
                 'Blink',
@@ -27,7 +27,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Opera' => [
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OPR/110.0.0.0',
+                    . '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OPR/110.0.0.0',
                 'OP',
                 'Opera',
                 'Blink',
@@ -36,7 +36,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Samsung Internet' => [
                 'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36',
+                    . '(KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36',
                 'SB',
                 'Samsung Browser',
                 'Blink',
@@ -45,8 +45,8 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Chrome iOS' => [
                 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) '
-                . 'AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.54 '
-                . 'Mobile/15E148 Safari/604.1',
+                    . 'AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.54 '
+                    . 'Mobile/15E148 Safari/604.1',
                 'CI',
                 'Chrome Mobile iOS',
                 'WebKit',
@@ -55,8 +55,8 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Firefox iOS' => [
                 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) '
-                . 'AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/127.0 '
-                . 'Mobile/15E148 Safari/605.1.15',
+                    . 'AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/127.0 '
+                    . 'Mobile/15E148 Safari/605.1.15',
                 'F1',
                 'Firefox Mobile iOS',
                 'WebKit',
@@ -65,8 +65,8 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Android WebView' => [
                 'Mozilla/5.0 (Linux; Android 13; Pixel 6 Build/TQ3A; wv) '
-                . 'AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 '
-                . 'Chrome/120.0.0.0 Mobile Safari/537.36',
+                    . 'AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 '
+                    . 'Chrome/120.0.0.0 Mobile Safari/537.36',
                 'CV',
                 'Chrome Webview',
                 'Blink',
@@ -82,8 +82,7 @@ final class BrowserDetectionTest extends TestCase
                 '7.0',
             ],
             'Opera Mini' => [
-                'Opera/9.80 (Android; Opera Mini/36.2.2254/191.249; U; en) '
-                . 'Presto/2.12.423 Version/12.16',
+                'Opera/9.80 (Android; Opera Mini/36.2.2254/191.249; U; en) ' . 'Presto/2.12.423 Version/12.16',
                 'OI',
                 'Opera Mini',
                 'Presto',
@@ -92,7 +91,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Opera Mobile' => [
                 'Mozilla/5.0 (Linux; Android 10; VOG-L29) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) Chrome/104.0.0.0 Mobile Safari/537.36 OPR/64.3.3282.60839',
+                    . '(KHTML, like Gecko) Chrome/104.0.0.0 Mobile Safari/537.36 OPR/64.3.3282.60839',
                 'OM',
                 'Opera Mobile',
                 'Blink',
@@ -101,7 +100,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Brave' => [
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Brave/120',
+                    . '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Brave/120',
                 'BR',
                 'Brave',
                 'Blink',
@@ -110,7 +109,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Vivaldi' => [
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Vivaldi/6.2',
+                    . '(KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Vivaldi/6.2',
                 'VI',
                 'Vivaldi',
                 'Blink',
@@ -119,7 +118,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Yandex Browser' => [
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) Chrome/114.0.0.0 YaBrowser/23.7.1.1140 Safari/537.36',
+                    . '(KHTML, like Gecko) Chrome/114.0.0.0 YaBrowser/23.7.1.1140 Safari/537.36',
                 'YA',
                 'Yandex Browser',
                 'Blink',
@@ -128,8 +127,8 @@ final class BrowserDetectionTest extends TestCase
             ],
             'UC Browser' => [
                 'Mozilla/5.0 (Linux; U; Android 11; en-US; SM-M317F Build/RP1A.200720.012) '
-                . 'AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/100.0.4896.127 '
-                . 'UCBrowser/15.5.0.1395 Mobile Safari/537.36',
+                    . 'AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/100.0.4896.127 '
+                    . 'UCBrowser/15.5.0.1395 Mobile Safari/537.36',
                 'UC',
                 'UC Browser',
                 'Blink',
@@ -138,7 +137,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'DuckDuckGo' => [
                 'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) Version/4.0 Chrome/116.0.0.0 Mobile DuckDuckGo/5 Safari/537.36',
+                    . '(KHTML, like Gecko) Version/4.0 Chrome/116.0.0.0 Mobile DuckDuckGo/5 Safari/537.36',
                 'DD',
                 'DuckDuckGo Privacy Browser',
                 'Blink',
@@ -147,8 +146,8 @@ final class BrowserDetectionTest extends TestCase
             ],
             'QQ Browser' => [
                 'Mozilla/5.0 (Linux; U; Android 12; zh-cn; RMX3350 Build/SKQ1.211019.001) '
-                . 'AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/107.0.5304.105 '
-                . 'MQQBrowser/13.6 Mobile Safari/537.36',
+                    . 'AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/107.0.5304.105 '
+                    . 'MQQBrowser/13.6 Mobile Safari/537.36',
                 'QQ',
                 'QQ Browser',
                 'Blink',
@@ -157,7 +156,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Coc Coc' => [
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) coc_coc_browser/112.0.174 Chrome/106.0.5249.174 Safari/537.36',
+                    . '(KHTML, like Gecko) coc_coc_browser/112.0.174 Chrome/106.0.5249.174 Safari/537.36',
                 'CC',
                 'Coc Coc',
                 'Blink',
@@ -166,7 +165,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Whale' => [
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) Chrome/116.0.0.0 Whale/3.23.214.9 Safari/537.36',
+                    . '(KHTML, like Gecko) Chrome/116.0.0.0 Whale/3.23.214.9 Safari/537.36',
                 'WH',
                 'Whale Browser',
                 'Blink',
@@ -175,7 +174,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Huawei Browser' => [
                 'Mozilla/5.0 (Linux; Android 10; ELS-NX9; HMSCore 6.6.0.311) AppleWebKit/537.36 '
-                . '(KHTML, like Gecko) Chrome/99.0.4844.88 HuaweiBrowser/13.0.5.303 Mobile Safari/537.36',
+                    . '(KHTML, like Gecko) Chrome/99.0.4844.88 HuaweiBrowser/13.0.5.303 Mobile Safari/537.36',
                 'HU',
                 'Huawei Browser Mobile',
                 'Blink',
@@ -184,7 +183,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Amazon Silk' => [
                 'Mozilla/5.0 (Linux; Android 9; KFMAWI) AppleWebKit/537.36 (KHTML, like Gecko) '
-                . 'Silk/104.5.1 like Chrome/104.0.5112.105 Safari/537.36',
+                    . 'Silk/104.5.1 like Chrome/104.0.5112.105 Safari/537.36',
                 'MS',
                 'Mobile Silk',
                 'Blink',
@@ -193,7 +192,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Amazon Silk (legacy WebKit)' => [
                 'Mozilla/5.0 (Linux; U; en-US) AppleWebKit/533.16 (KHTML, like Gecko) '
-                . 'Version/5.0 Safari/533.16 Silk/3.13',
+                    . 'Version/5.0 Safari/533.16 Silk/3.13',
                 'MS',
                 'Mobile Silk',
                 'WebKit',
@@ -202,7 +201,7 @@ final class BrowserDetectionTest extends TestCase
             ],
             'Firefox Focus' => [
                 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) '
-                . 'Version/4.0 Chrome/113.0.0.0 Mobile Safari/537.36 Focus/125.0',
+                    . 'Version/4.0 Chrome/113.0.0.0 Mobile Safari/537.36 Focus/125.0',
                 'FK',
                 'Firefox Focus',
                 'Blink',

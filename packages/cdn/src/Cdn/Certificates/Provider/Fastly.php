@@ -60,7 +60,7 @@ class Fastly implements Provider
         if ($domainInfo !== null) {
             $existingServiceId = $domainInfo['service_id'] ?? null;
 
-            if (!\is_string($existingServiceId) || $existingServiceId === '') {
+            if (! \is_string($existingServiceId) || $existingServiceId === '') {
                 // A classic domain cannot be moved without activating a new
                 // service version, so leave its existing certificate untouched.
                 return null;
@@ -68,7 +68,7 @@ class Fastly implements Provider
 
             if ($existingServiceId !== $this->serviceId) {
                 $domainId = $domainInfo['id'] ?? null;
-                if (!\is_string($domainId) || $domainId === '') {
+                if (! \is_string($domainId) || $domainId === '') {
                     throw new \RuntimeException('Fastly domain response was missing its ID.');
                 }
 
@@ -77,15 +77,13 @@ class Fastly implements Provider
                 $renewDate = $this->tls->issueCertificate($certName, $domain, $domainType);
                 $status = $this->tls->getCertificateStatus($domain, $domainType);
 
-                if (!\in_array($status, [Status::ISSUED, Status::RENEWING], true)) {
+                if (! \in_array($status, [Status::ISSUED, Status::RENEWING], true)) {
                     return $renewDate;
                 }
 
-                $result = $this->request(
-                    'PATCH',
-                    '/domain-management/v1/domains/' . rawurlencode($domainId),
-                    ['service_id' => $this->serviceId],
-                );
+                $result = $this->request('PATCH', '/domain-management/v1/domains/' . rawurlencode($domainId), [
+                    'service_id' => $this->serviceId,
+                ]);
                 $this->assertSuccess('reassign Fastly domain', $result);
 
                 return $renewDate;
@@ -123,7 +121,7 @@ class Fastly implements Provider
         }
 
         $serviceId = $domainInfo['service_id'] ?? null;
-        if (!\is_string($serviceId) || $serviceId === '') {
+        if (! \is_string($serviceId) || $serviceId === '') {
             return false;
         }
 
@@ -145,7 +143,7 @@ class Fastly implements Provider
         }
 
         $serviceId = $domainInfo['service_id'] ?? null;
-        if (!\is_string($serviceId) || $serviceId === '') {
+        if (! \is_string($serviceId) || $serviceId === '') {
             $this->deleteClassicDomain($domain, $domainType);
             return;
         }
@@ -164,12 +162,12 @@ class Fastly implements Provider
         $result = $this->request('GET', '/domain-management/v1/domains?' . $query);
         $this->assertSuccess('fetch Fastly domains', $result);
 
-        if (!\is_array($result['response'])) {
+        if (! \is_array($result['response'])) {
             throw new \RuntimeException('Fastly domains response was not valid JSON.');
         }
 
         $domains = $result['response']['data'] ?? null;
-        if (!\is_array($domains)) {
+        if (! \is_array($domains)) {
             throw new \RuntimeException('Fastly domains response was missing its data list.');
         }
 
@@ -188,7 +186,7 @@ class Fastly implements Provider
         $domainId = $domainInfo['id'] ?? null;
         $domain = $domainInfo['fqdn'] ?? null;
 
-        if (!\is_string($domainId) || $domainId === '' || !\is_string($domain) || $domain === '') {
+        if (! \is_string($domainId) || $domainId === '' || ! \is_string($domain) || $domain === '') {
             throw new \RuntimeException('Fastly domain response was missing its ID or FQDN.');
         }
 
@@ -203,22 +201,24 @@ class Fastly implements Provider
         $result = $this->request('GET', '/service/' . rawurlencode($this->serviceId) . '/details');
         $this->assertSuccess('fetch Fastly service details', $result);
 
-        if (!\is_array($result['response'])) {
+        if (! \is_array($result['response'])) {
             throw new \RuntimeException('Fastly service details response was not valid JSON.');
         }
 
         $activeVersion = $result['response']['active_version'] ?? null;
-        if (!\is_array($activeVersion)) {
+        if (! \is_array($activeVersion)) {
             throw new \RuntimeException('Fastly service details response was missing its active version.');
         }
 
         $domains = $activeVersion['domains'] ?? [];
-        $containsDomain = \is_array($domains) && array_any(
-            $domains,
-            static fn(mixed $candidate): bool => \is_array($candidate) && ($candidate['name'] ?? null) === $domain,
-        );
+        $containsDomain =
+            \is_array($domains)
+            && array_any(
+                $domains,
+                static fn(mixed $candidate): bool => \is_array($candidate) && ($candidate['name'] ?? null) === $domain,
+            );
 
-        if (!$containsDomain) {
+        if (! $containsDomain) {
             // Classic domain records do not identify their service. An
             // account-wide FQDN match that is absent from this service may
             // belong to another service, whose TLS must remain untouched.
@@ -226,7 +226,7 @@ class Fastly implements Provider
         }
 
         $currentVersion = $activeVersion['number'] ?? null;
-        if (!\is_int($currentVersion)) {
+        if (! \is_int($currentVersion)) {
             throw new \RuntimeException('Fastly active service version was missing its number.');
         }
 
@@ -234,7 +234,7 @@ class Fastly implements Provider
         $result = $this->request('PUT', $servicePath . $currentVersion . '/clone');
         $this->assertSuccess('clone Fastly service version', $result);
 
-        if (!\is_array($result['response']) || !\is_int($result['response']['number'] ?? null)) {
+        if (! \is_array($result['response']) || ! \is_int($result['response']['number'] ?? null)) {
             throw new \RuntimeException('Fastly cloned service version was missing its number.');
         }
         $newVersion = $result['response']['number'];
@@ -266,7 +266,9 @@ class Fastly implements Provider
             }
         }
 
-        throw new \RuntimeException('Fastly service version was not deployed after ' . $this->deploymentPollAttempts . ' attempts.');
+        throw new \RuntimeException(
+            'Fastly service version was not deployed after ' . $this->deploymentPollAttempts . ' attempts.',
+        );
     }
 
     /**
@@ -317,12 +319,18 @@ class Fastly implements Provider
 
         $message = $result['error'];
         if (\is_array($result['response'])) {
-            $message ??= $result['response']['errors'][0]['detail']
-                ?? $result['response']['errors'][0]['title']
-                ?? $result['response']['msg']
-                ?? null;
+            $message ??=
+                $result['response']['errors'][0]['detail'] ?? $result['response']['errors'][0]['title'] ?? $result['response']['msg']
+                    ?? null;
         }
 
-        throw new \RuntimeException('Failed to ' . $operation . ' with status ' . $result['statusCode'] . ': ' . ($message ?? 'Unknown Fastly error'));
+        throw new \RuntimeException(
+            'Failed to '
+            . $operation
+            . ' with status '
+            . $result['statusCode']
+            . ': '
+            . ($message ?? 'Unknown Fastly error'),
+        );
     }
 }

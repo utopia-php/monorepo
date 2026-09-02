@@ -75,11 +75,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('ClickHouse host is not a valid hostname or IP address');
 
-        new ClickHouse(
-            host: '',
-            username: 'default',
-            password: '',
-        );
+        new ClickHouse(host: '', username: 'default', password: '');
     }
 
     /**
@@ -90,12 +86,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('ClickHouse port must be between 1 and 65535');
 
-        new ClickHouse(
-            host: 'localhost',
-            username: 'default',
-            password: '',
-            port: 0,
-        );
+        new ClickHouse(host: 'localhost', username: 'default', password: '', port: 0);
     }
 
     /**
@@ -106,12 +97,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('ClickHouse port must be between 1 and 65535');
 
-        new ClickHouse(
-            host: 'localhost',
-            username: 'default',
-            password: '',
-            port: 65536,
-        );
+        new ClickHouse(host: 'localhost', username: 'default', password: '', port: 65536);
     }
 
     /**
@@ -136,11 +122,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testGetName(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $this->assertSame('ClickHouse', $adapter->getName());
     }
@@ -153,11 +135,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Database cannot be empty');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setDatabase('');
     }
@@ -170,11 +148,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Database cannot exceed 255 characters');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setDatabase(str_repeat('a', 256));
     }
@@ -187,11 +161,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Database must start with a letter or underscore');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setDatabase('123invalid');
     }
@@ -204,11 +174,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Database cannot be a reserved SQL keyword');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setDatabase('SELECT');
     }
@@ -218,11 +184,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testSetDatabaseWithValidIdentifier(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $result = $adapter->setDatabase('my_database_123');
         $this->assertInstanceOf(ClickHouse::class, $result);
@@ -236,11 +198,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Table cannot be empty');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setTable('');
     }
@@ -253,11 +211,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Table cannot exceed 255 characters');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setTable(str_repeat('a', 256));
     }
@@ -270,11 +224,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Table must start with a letter or underscore');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setTable('123invalid');
     }
@@ -287,11 +237,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Table cannot be a reserved SQL keyword');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setTable('SELECT');
     }
@@ -301,11 +247,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testSetTableWithValidIdentifier(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $result = $adapter->setTable('my_audit_logs');
         $this->assertInstanceOf(ClickHouse::class, $result);
@@ -317,11 +259,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testSetNamespaceAllowsEmpty(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $result = $adapter->setNamespace('');
         $this->assertInstanceOf(ClickHouse::class, $result);
@@ -336,11 +274,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Namespace must start with a letter or underscore');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setNamespace('9invalid');
     }
@@ -350,11 +284,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testSetNamespaceWithValidIdentifier(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $result = $adapter->setNamespace('project_123');
         $this->assertInstanceOf(ClickHouse::class, $result);
@@ -383,11 +313,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testSetRetention(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $this->assertNull($adapter->getRetention());
 
@@ -401,11 +327,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testSetRetentionAcceptsNull(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setRetention(30);
         $adapter->setRetention(null);
@@ -420,11 +342,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Retention must be a positive number of days');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setRetention(0);
     }
@@ -437,11 +355,7 @@ final class ClickHouseTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Retention must be a positive number of days');
 
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $adapter->setRetention(-1);
     }
@@ -451,11 +365,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testSharedTablesConfiguration(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         // Test initial state
         $this->assertFalse($adapter->isSharedTables());
@@ -508,11 +418,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testClickHouseAdapterAttributes(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $attributes = $adapter->getAttributes();
         $attributeIds = array_map(fn(array $attr): mixed => $attr['$id'], $attributes);
@@ -578,11 +484,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testUserAgentColumnTypes(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $method = new \ReflectionMethod($adapter, 'getColumnDefinition');
 
@@ -618,11 +520,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testPremiumGeoAttributesAreOptionalStrings(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $attributes = $adapter->getAttributes();
         $byId = [];
@@ -644,7 +542,11 @@ final class ClickHouseTest extends TestCase
 
         foreach ($geoColumns as $column) {
             $this->assertArrayHasKey($column, $byId, "Premium geo attribute '{$column}' not found");
-            $this->assertEquals(\Utopia\Database\Database::VAR_STRING, $byId[$column]['type'], "'{$column}' should be a string");
+            $this->assertEquals(
+                \Utopia\Database\Database::VAR_STRING,
+                $byId[$column]['type'],
+                "'{$column}' should be a string",
+            );
             $this->assertFalse($byId[$column]['required'], "'{$column}' should be optional");
             $this->assertFalse($byId[$column]['array'], "'{$column}' should not be an array");
         }
@@ -657,11 +559,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testPremiumGeoColumnTypes(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $method = new \ReflectionMethod($adapter, 'getColumnDefinition');
 
@@ -798,11 +696,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testClickHouseAdapterIndexes(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $indexes = $adapter->getIndexes();
         $indexIds = array_map(fn(array $idx): mixed => $idx['$id'], $indexes);
@@ -820,7 +714,11 @@ final class ClickHouseTest extends TestCase
         ];
 
         foreach ($expectedClickHouseIndexes as $expected) {
-            $this->assertContains($expected, $indexIds, "ClickHouse index '{$expected}' not found in ClickHouse adapter");
+            $this->assertContains(
+                $expected,
+                $indexIds,
+                "ClickHouse index '{$expected}' not found in ClickHouse adapter",
+            );
         }
 
         // Verify parent indexes are also included (with parent naming convention)
@@ -864,11 +762,7 @@ final class ClickHouseTest extends TestCase
      */
     public function testParseResourceMethod(): void
     {
-        $adapter = new ClickHouse(
-            host: 'clickhouse',
-            username: 'default',
-            password: 'clickhouse',
-        );
+        $adapter = new ClickHouse(host: 'clickhouse', username: 'default', password: 'clickhouse');
 
         $method = new \ReflectionMethod($adapter, 'parseResource');
 
@@ -1186,12 +1080,7 @@ final class ClickHouseTest extends TestCase
         $host = getenv('CLICKHOUSE_HOST') ?: 'localhost';
         $port = (int) (getenv('CLICKHOUSE_PORT') ?: 18123);
 
-        $adapter = new ClickHouse(
-            host: $host,
-            username: 'default',
-            password: 'clickhouse',
-            port: $port,
-        );
+        $adapter = new ClickHouse(host: $host, username: 'default', password: 'clickhouse', port: $port);
         $adapter->setNamespace('select_tenant_test');
         $adapter->setSharedTables(true);
         $adapter->setTenant(7);
@@ -1308,13 +1197,7 @@ final class ClickHouseTest extends TestCase
 
         $namespace = 'projtest_' . uniqid();
 
-        $adapter = new ClickHouse(
-            host: $host,
-            username: $username,
-            password: $password,
-            port: $port,
-            secure: $secure,
-        );
+        $adapter = new ClickHouse(host: $host, username: $username, password: $password, port: $port, secure: $secure);
         $adapter->setDatabase($database);
         $adapter->setNamespace($namespace);
         $adapter->setSharedTables(true);
@@ -1322,11 +1205,22 @@ final class ClickHouseTest extends TestCase
 
         $table = $namespace . '_audits';
 
-        $http = function (string $sql, array $params = []) use ($host, $port, $username, $password, $secure, $database): string {
+        $http = function (string $sql, array $params = []) use (
+            $host,
+            $port,
+            $username,
+            $password,
+            $secure,
+            $database,
+        ): string {
             $scheme = $secure ? 'https' : 'http';
-            $url = "{$scheme}://{$host}:{$port}/?database=" . rawurlencode($database)
-                . '&user=' . rawurlencode($username)
-                . '&password=' . rawurlencode($password);
+            $url =
+                "{$scheme}://{$host}:{$port}/?database="
+                . rawurlencode($database)
+                . '&user='
+                . rawurlencode($username)
+                . '&password='
+                . rawurlencode($password);
             /** @var array<string, string> $params */
             foreach ($params as $key => $value) {
                 $url .= '&param_' . rawurlencode($key) . '=' . rawurlencode($value);
@@ -1346,10 +1240,10 @@ final class ClickHouseTest extends TestCase
         try {
             new Audit($adapter)->setup();
 
-            $sortingKey = $http(
-                'SELECT sorting_key FROM system.tables WHERE database = {db:String} AND name = {tbl:String}',
-                ['db' => $database, 'tbl' => $table],
-            );
+            $sortingKey = $http('SELECT sorting_key FROM system.tables WHERE database = {db:String} AND name = {tbl:String}', [
+                'db' => $database,
+                'tbl' => $table,
+            ]);
 
             $this->assertTrue(
                 str_starts_with(trim($sortingKey), 'tenant'),

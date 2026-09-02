@@ -11,28 +11,35 @@ final class UserAgentTest extends TestCase
 {
     public function testFirefoxOnWindowsMatchesReferenceContract(): void
     {
-        $agent = UserAgent::parse(
-            'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0',
-        );
+        $agent = UserAgent::parse('Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0');
 
-        $this->assertSame([
-            'code' => 'WIN',
-            'name' => 'Windows',
-            'version' => '7',
-        ], $agent->operatingSystem()->toArray());
-        $this->assertSame([
-            'type' => 'browser',
-            'code' => 'FF',
-            'name' => 'Firefox',
-            'version' => '47.0',
-            'engine' => 'Gecko',
-            'engineVersion' => '47.0',
-        ], $agent->client()->toArray());
-        $this->assertSame([
-            'type' => 'desktop',
-            'brand' => null,
-            'model' => null,
-        ], $agent->device()->toArray());
+        $this->assertSame(
+            [
+                'code' => 'WIN',
+                'name' => 'Windows',
+                'version' => '7',
+            ],
+            $agent->operatingSystem()->toArray(),
+        );
+        $this->assertSame(
+            [
+                'type' => 'browser',
+                'code' => 'FF',
+                'name' => 'Firefox',
+                'version' => '47.0',
+                'engine' => 'Gecko',
+                'engineVersion' => '47.0',
+            ],
+            $agent->client()->toArray(),
+        );
+        $this->assertSame(
+            [
+                'type' => 'desktop',
+                'brand' => null,
+                'model' => null,
+            ],
+            $agent->device()->toArray(),
+        );
         $this->assertFalse($agent->isBot());
     }
 

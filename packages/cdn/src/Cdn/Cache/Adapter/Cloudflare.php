@@ -89,7 +89,7 @@ class Cloudflare implements Adapter
     {
         $result = $this->request(Method::POST, '/zones/' . $this->zoneId . '/purge_cache', $body);
 
-        if (!$this->isSuccess($result)) {
+        if (! $this->isSuccess($result)) {
             throw new \RuntimeException($this->formatError($result));
         }
     }

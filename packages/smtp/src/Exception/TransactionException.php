@@ -15,8 +15,10 @@ use Utopia\SMTP\Reply;
  */
 class TransactionException extends SmtpException
 {
-    public function __construct(public readonly Reply $reply, string $message = '')
-    {
+    public function __construct(
+        public readonly Reply $reply,
+        string $message = '',
+    ) {
         parent::__construct($message === '' ? (string) $reply : $message, $reply->code);
     }
 

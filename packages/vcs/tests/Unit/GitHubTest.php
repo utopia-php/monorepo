@@ -11,7 +11,10 @@ use Utopia\VCS\Adapter\Git\GitHub;
 final class GitHubTest extends Base
 {
     /** @var array<string> */
-    protected static array $supportedWebhookScopes = [GitHub::WEBHOOK_SCOPE_INSTALLATION, GitHub::WEBHOOK_SCOPE_REPOSITORY];
+    protected static array $supportedWebhookScopes = [
+        GitHub::WEBHOOK_SCOPE_INSTALLATION,
+        GitHub::WEBHOOK_SCOPE_REPOSITORY,
+    ];
 
     protected static string $eventHeader = 'x-github-event';
     protected static string $signatureHeader = 'x-hub-signature-256';
@@ -20,13 +23,20 @@ final class GitHubTest extends Base
     {
         return new GitHub(new Cache(new None()));
     }
+
     protected function signWebhookPayload(string $payload, string $secret): string
     {
         return 'sha256=' . hash_hmac('sha256', $payload, $secret);
     }
 
-    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false): string
-    {
+    protected function pushPayload(
+        string $branch,
+        array $added = [],
+        array $removed = [],
+        array $modified = [],
+        bool $created = false,
+        bool $deleted = false,
+    ): string {
         return (string) json_encode([
             'created' => $created,
             'deleted' => $deleted,
@@ -45,7 +55,13 @@ final class GitHubTest extends Base
             'head_commit' => [
                 'id' => self::EVENT_COMMIT_HASH,
                 'message' => self::EVENT_COMMIT_MESSAGE,
-                'url' => 'https://github.com/' . self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME . '/commit/' . self::EVENT_COMMIT_HASH,
+                'url' =>
+                    'https://github.com/'
+                        . self::EVENT_OWNER
+                        . '/'
+                        . self::EVENT_REPOSITORY_NAME
+                        . '/commit/'
+                        . self::EVENT_COMMIT_HASH,
                 'author' => ['name' => self::EVENT_AUTHOR_NAME, 'email' => self::EVENT_AUTHOR_EMAIL],
             ],
             'commits' => [[
@@ -71,7 +87,13 @@ final class GitHubTest extends Base
             'pull_request' => [
                 'id' => 1303283688,
                 'state' => 'open',
-                'html_url' => 'https://github.com/' . self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME . '/pull/' . self::EVENT_PULL_REQUEST_NUMBER,
+                'html_url' =>
+                    'https://github.com/'
+                        . self::EVENT_OWNER
+                        . '/'
+                        . self::EVENT_REPOSITORY_NAME
+                        . '/pull/'
+                        . self::EVENT_PULL_REQUEST_NUMBER,
                 'head' => [
                     'ref' => self::EVENT_HEAD_BRANCH,
                     'sha' => self::EVENT_COMMIT_HASH,
@@ -126,12 +148,18 @@ final class GitHubTest extends Base
         openssl_pkey_export($keyPair, $pem);
         $publicKey = openssl_pkey_get_details($keyPair)['key'];
 
-        $adapter = new class (new Cache(new None())) extends GitHub {
+        $adapter = new class(new Cache(new None())) extends GitHub {
             /** @var array<string, mixed> */
             public array $captured = [];
 
-            protected function call(string $method, string $path = '', array $headers = [], array $params = [], bool $decode = true, bool $followRedirects = true): array
-            {
+            protected function call(
+                string $method,
+                string $path = '',
+                array $headers = [],
+                array $params = [],
+                bool $decode = true,
+                bool $followRedirects = true,
+            ): array {
                 $this->captured = ['method' => $method, 'path' => $path, 'headers' => $headers];
 
                 return [

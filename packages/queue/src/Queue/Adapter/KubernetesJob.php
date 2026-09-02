@@ -50,7 +50,7 @@ class KubernetesJob extends Adapter
             }
         };
 
-        if (!\extension_loaded('swoole') || Coroutine::getCid() >= 0) {
+        if (! \extension_loaded('swoole') || Coroutine::getCid() >= 0) {
             $lifecycle();
 
             return $this;
@@ -165,10 +165,10 @@ class KubernetesJob extends Adapter
     ): void {
         $consumer ??= $this->consumer;
 
-        while (!$this->isStopped()) {
+        while (! $this->isStopped()) {
             $message = $consumer->receive($queue, static::RECEIVE_TIMEOUT);
 
-            if (!$message instanceof Message) {
+            if (! $message instanceof Message) {
                 break;
             }
 
@@ -183,9 +183,24 @@ class KubernetesJob extends Adapter
             // trace, the message stranded in the processing list.
             if ($swoole && Coroutine::getCid() >= 0) {
                 $waitGroup = new WaitGroup(1);
-                Coroutine::create(function () use ($waitGroup, $message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer): void {
+                Coroutine::create(function () use (
+                    $waitGroup,
+                    $message,
+                    $messageCallback,
+                    $successCallback,
+                    $errorCallback,
+                    $queue,
+                    $consumer,
+                ): void {
                     try {
-                        $this->processFrom($message, $messageCallback, $successCallback, $errorCallback, $queue, $consumer);
+                        $this->processFrom(
+                            $message,
+                            $messageCallback,
+                            $successCallback,
+                            $errorCallback,
+                            $queue,
+                            $consumer,
+                        );
                     } finally {
                         $waitGroup->done();
                     }

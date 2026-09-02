@@ -107,7 +107,7 @@ final class WebSocketTransport implements Transport
 
     public function isConnected(): bool
     {
-        return $this->stream !== null && !feof($this->stream);
+        return $this->stream !== null && ! feof($this->stream);
     }
 
     public function close(): void
@@ -121,7 +121,8 @@ final class WebSocketTransport implements Transport
     private function handshake(string $host, int $port): void
     {
         $key = base64_encode(random_bytes(16));
-        $request = "GET {$this->path} HTTP/1.1\r\n"
+        $request =
+            "GET {$this->path} HTTP/1.1\r\n"
             . "Host: {$host}:{$port}\r\n"
             . "Upgrade: websocket\r\n"
             . "Connection: Upgrade\r\n"
@@ -132,17 +133,17 @@ final class WebSocketTransport implements Transport
         // Read the HTTP response headers up to the blank line, keeping any trailing
         // bytes (the first WS frame) — they must not be swallowed.
         $response = '';
-        while (!str_contains($response, "\r\n\r\n")) {
+        while (! str_contains($response, "\r\n\r\n")) {
             $response .= $this->rawRead(1);
         }
 
-        if (!preg_match('#^HTTP/1\.1 101#i', $response)) {
+        if (! preg_match('#^HTTP/1\.1 101#i', $response)) {
             $status = strtok($response, "\r\n");
             throw new ConnectionException("WebSocket upgrade failed: {$status}");
         }
 
         $expected = base64_encode(sha1($key . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
-        if (!preg_match('#Sec-WebSocket-Accept:\s*(.+?)\r\n#i', $response, $m) || trim($m[1]) !== $expected) {
+        if (! preg_match('#Sec-WebSocket-Accept:\s*(.+?)\r\n#i', $response, $m) || trim($m[1]) !== $expected) {
             throw new ConnectionException('WebSocket upgrade failed: bad Sec-WebSocket-Accept');
         }
     }

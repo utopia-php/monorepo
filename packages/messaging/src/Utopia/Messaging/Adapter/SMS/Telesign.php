@@ -41,10 +41,7 @@ class Telesign extends SMSAdapter
      */
     protected function process(SMSMessage $message): array
     {
-        $to = $this->formatNumbers(array_map(
-            fn(string $to): string => $to,
-            $message->getTo(),
-        ));
+        $to = $this->formatNumbers(array_map(fn(string $to): string => $to, $message->getTo()));
 
         $response = new Response($this->getType());
 
@@ -68,7 +65,7 @@ class Telesign extends SMSAdapter
             }
         } else {
             foreach ($message->getTo() as $to) {
-                if (!\is_null($result['response']['errors'][0]['description'] ?? null)) {
+                if (! \is_null($result['response']['errors'][0]['description'] ?? null)) {
                     $response->addResult($to, $result['response']['errors'][0]['description']);
                 } else {
                     $response->addResult($to, 'Unknown error');
@@ -84,10 +81,7 @@ class Telesign extends SMSAdapter
      */
     private function formatNumbers(array $numbers): string
     {
-        $formatted = array_map(
-            fn(string $number): string => $number . ':' . uniqid(),
-            $numbers,
-        );
+        $formatted = array_map(fn(string $number): string => $number . ':' . uniqid(), $numbers);
 
         return implode(',', $formatted);
     }

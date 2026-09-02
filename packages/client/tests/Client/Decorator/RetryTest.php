@@ -170,13 +170,11 @@ final class RetryTest extends TestCase
      */
     private function retry(Adapter $inner, array &$delays): Retry
     {
-        return new Retry(
-            $inner,
-            new Backoff(randomizer: static fn(): float => 1.0),
-            function (float $seconds) use (&$delays): void {
-                $delays[] = $seconds;
-            },
-        );
+        return new Retry($inner, new Backoff(randomizer: static fn(): float => 1.0), function (float $seconds) use (
+            &$delays,
+        ): void {
+            $delays[] = $seconds;
+        });
     }
 
     private function request(string $method): RequestInterface
@@ -192,7 +190,9 @@ final class QueueAdapter implements Adapter
     /**
      * @param array<int, callable(callable(string): void): ResponseInterface> $outcomes
      */
-    public function __construct(private array $outcomes) {}
+    public function __construct(
+        private array $outcomes,
+    ) {}
 
     public function withTimeout(float $seconds): static
     {

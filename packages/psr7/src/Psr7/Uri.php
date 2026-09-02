@@ -61,7 +61,7 @@ final readonly class Uri implements UriInterface, \Stringable
             $authority = $this->userInfo . '@' . $authority;
         }
 
-        if ($this->port !== null && !$this->isDefaultPort()) {
+        if ($this->port !== null && ! $this->isDefaultPort()) {
             $authority .= ':' . $this->port;
         }
 
@@ -100,17 +100,41 @@ final readonly class Uri implements UriInterface, \Stringable
 
     public function withScheme(string $scheme): UriInterface
     {
-        return new self(strtolower($scheme), $this->userInfo, $this->host, $this->port, $this->path, $this->query, $this->fragment);
+        return new self(
+            strtolower($scheme),
+            $this->userInfo,
+            $this->host,
+            $this->port,
+            $this->path,
+            $this->query,
+            $this->fragment,
+        );
     }
 
     public function withUserInfo(string $user, ?string $password = null): UriInterface
     {
-        return new self($this->scheme, $password === null ? $user : $user . ':' . $password, $this->host, $this->port, $this->path, $this->query, $this->fragment);
+        return new self(
+            $this->scheme,
+            $password === null ? $user : $user . ':' . $password,
+            $this->host,
+            $this->port,
+            $this->path,
+            $this->query,
+            $this->fragment,
+        );
     }
 
     public function withHost(string $host): UriInterface
     {
-        return new self($this->scheme, $this->userInfo, strtolower($host), $this->port, $this->path, $this->query, $this->fragment);
+        return new self(
+            $this->scheme,
+            $this->userInfo,
+            strtolower($host),
+            $this->port,
+            $this->path,
+            $this->query,
+            $this->fragment,
+        );
     }
 
     public function withPort(?int $port): UriInterface
@@ -124,17 +148,41 @@ final readonly class Uri implements UriInterface, \Stringable
 
     public function withPath(string $path): UriInterface
     {
-        return new self($this->scheme, $this->userInfo, $this->host, $this->port, self::encodePath($path), $this->query, $this->fragment);
+        return new self(
+            $this->scheme,
+            $this->userInfo,
+            $this->host,
+            $this->port,
+            self::encodePath($path),
+            $this->query,
+            $this->fragment,
+        );
     }
 
     public function withQuery(string $query): UriInterface
     {
-        return new self($this->scheme, $this->userInfo, $this->host, $this->port, $this->path, self::encodeQueryOrFragment(ltrim($query, '?')), $this->fragment);
+        return new self(
+            $this->scheme,
+            $this->userInfo,
+            $this->host,
+            $this->port,
+            $this->path,
+            self::encodeQueryOrFragment(ltrim($query, '?')),
+            $this->fragment,
+        );
     }
 
     public function withFragment(string $fragment): UriInterface
     {
-        return new self($this->scheme, $this->userInfo, $this->host, $this->port, $this->path, $this->query, self::encodeQueryOrFragment(ltrim($fragment, '#')));
+        return new self(
+            $this->scheme,
+            $this->userInfo,
+            $this->host,
+            $this->port,
+            $this->path,
+            $this->query,
+            self::encodeQueryOrFragment(ltrim($fragment, '#')),
+        );
     }
 
     public function __toString(): string
@@ -166,25 +214,28 @@ final readonly class Uri implements UriInterface, \Stringable
 
     private function isDefaultPort(): bool
     {
-        return ($this->scheme === 'http' && $this->port === 80)
-            || ($this->scheme === 'https' && $this->port === 443);
+        return $this->scheme === 'http' && $this->port === 80 || $this->scheme === 'https' && $this->port === 443;
     }
 
     private static function encodePath(string $path): string
     {
-        return preg_replace_callback(
-            '/(?:[^A-Za-z0-9_\-\.~!\$&\'\(\)\*\+,;=:@\/%]++|%(?![A-Fa-f0-9]{2}))/',
-            static fn(array $matches): string => rawurlencode($matches[0]),
-            $path,
-        ) ?? '';
+        return (
+            preg_replace_callback(
+                '/(?:[^A-Za-z0-9_\-\.~!\$&\'\(\)\*\+,;=:@\/%]++|%(?![A-Fa-f0-9]{2}))/',
+                static fn(array $matches): string => rawurlencode($matches[0]),
+                $path,
+            ) ?? ''
+        );
     }
 
     private static function encodeQueryOrFragment(string $value): string
     {
-        return preg_replace_callback(
-            '/(?:[^A-Za-z0-9_\-\.~!\$&\'\(\)\*\+,;=:@\/\?%]++|%(?![A-Fa-f0-9]{2}))/',
-            static fn(array $matches): string => rawurlencode($matches[0]),
-            $value,
-        ) ?? '';
+        return (
+            preg_replace_callback(
+                '/(?:[^A-Za-z0-9_\-\.~!\$&\'\(\)\*\+,;=:@\/\?%]++|%(?![A-Fa-f0-9]{2}))/',
+                static fn(array $matches): string => rawurlencode($matches[0]),
+                $value,
+            ) ?? ''
+        );
     }
 }

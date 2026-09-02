@@ -26,10 +26,7 @@ final class KeyValueWatchOptionsTest extends TestCase
         $this->conn = Connection::connect($url);
         $this->js = $this->conn->jetStream();
         $this->bucket = 'kvwo_' . uniqid();
-        $this->kv = $this->js->createKeyValue(new KeyValueConfig(
-            bucket: $this->bucket,
-            history: 10,
-        ));
+        $this->kv = $this->js->createKeyValue(new KeyValueConfig(bucket: $this->bucket, history: 10));
     }
 
     protected function tearDown(): void
@@ -45,7 +42,7 @@ final class KeyValueWatchOptionsTest extends TestCase
     private function pumpUntil(callable $done, float $seconds = 3.0): void
     {
         $deadline = microtime(true) + $seconds;
-        while (!$done() && microtime(true) < $deadline) {
+        while (! $done() && microtime(true) < $deadline) {
             $this->conn->processMessage(0.2);
         }
     }

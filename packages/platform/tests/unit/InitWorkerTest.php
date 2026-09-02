@@ -76,14 +76,14 @@ final class InitWorkerTest extends TestCase
             }
         };
 
-        $module = new class ($service) extends Module {
+        $module = new class($service) extends Module {
             public function __construct(Service $service)
             {
                 $this->addService('workers', $service);
             }
         };
 
-        return new class ($module) extends Platform {};
+        return new class($module) extends Platform {};
     }
 }
 
@@ -105,7 +105,7 @@ final class RecordingAdapter extends Adapter
 {
     public function __construct(string $namespace = 'utopia-queue')
     {
-        parent::__construct(static fn (string $q): Consumer => new FakeConsumer(), 1, $namespace);
+        parent::__construct(static fn(string $q): Consumer => new FakeConsumer(), 1, $namespace);
     }
 
     public function start(): self

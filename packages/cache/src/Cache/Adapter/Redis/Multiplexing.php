@@ -282,7 +282,7 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
         $locked = $this->lockSend();
         try {
             $context = $this->connection;
-            if (!$context instanceof \Utopia\Cache\Adapter\Redis\ConnectionContext) {
+            if (! $context instanceof \Utopia\Cache\Adapter\Redis\ConnectionContext) {
                 throw new ConnectionException('Redis connection is not open');
             }
             $response = new Channel(1);
@@ -312,7 +312,7 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
     {
         $locked = $this->lockSend();
         try {
-            if (!$this->connection instanceof \Utopia\Cache\Adapter\Redis\ConnectionContext) {
+            if (! $this->connection instanceof \Utopia\Cache\Adapter\Redis\ConnectionContext) {
                 $this->connect();
             }
         } finally {
@@ -382,7 +382,10 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
                 }
             }
 
-            if ($this->dbIndex !== 0 && $client->command(['SELECT', (string) $this->dbIndex], $this->readTimeout) !== 'OK') {
+            if (
+                $this->dbIndex !== 0
+                && $client->command(['SELECT', (string) $this->dbIndex], $this->readTimeout) !== 'OK'
+            ) {
                 throw new \RedisException('Redis SELECT failed');
             }
         } catch (Throwable $th) {
@@ -481,7 +484,10 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
                 try {
                     $value = Client::parse($readBuffer, $offset);
                 } catch (Throwable $th) {
-                    $this->teardownIfCurrent($context, new ConnectionException('Redis protocol parse failed: ' . $th->getMessage()));
+                    $this->teardownIfCurrent(
+                        $context,
+                        new ConnectionException('Redis protocol parse failed: ' . $th->getMessage()),
+                    );
 
                     return;
                 }
@@ -510,8 +516,13 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
                     // Should never happen given the send-lock invariant. Log
                     // and tear down so the next caller reconnects on a clean
                     // socket rather than continuing to misroute frames.
-                    error_log('Redis\\Multiplexing: unexpected RESP frame with no pending request; tearing down connection');
-                    $this->teardownIfCurrent($context, new ConnectionException('Unexpected RESP frame with no pending request'));
+                    error_log(
+                        'Redis\\Multiplexing: unexpected RESP frame with no pending request; tearing down connection',
+                    );
+                    $this->teardownIfCurrent(
+                        $context,
+                        new ConnectionException('Unexpected RESP frame with no pending request'),
+                    );
 
                     return;
                 }

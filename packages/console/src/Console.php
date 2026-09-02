@@ -103,12 +103,16 @@ class Console
      * @param  string  $stdout  Stdout contents (by reference).
      * @param  string  $stderr  Stderr contents (by reference).
      */
-    public static function execute(Command|array|string $cmd, string $stdin, string &$stdout, string &$stderr, int $timeout = -1, ?callable $onProgress = null): int
-    {
+    public static function execute(
+        Command|array|string $cmd,
+        string $stdin,
+        string &$stdout,
+        string &$stderr,
+        int $timeout = -1,
+        ?callable $onProgress = null,
+    ): int {
         if ($cmd instanceof Command) {
-            $cmd = $cmd->isPlain()
-                ? $cmd->toArray()
-                : $cmd->toString();
+            $cmd = $cmd->isPlain() ? $cmd->toArray() : $cmd->toString();
         }
 
         // If the $cmd is passed as string, it will be wrapped into a subshell by \proc_open
@@ -118,11 +122,7 @@ class Console
         }
 
         $pipes = [];
-        $process = proc_open(
-            $cmd,
-            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w'], ['pipe', 'w']],
-            $pipes,
-        );
+        $process = proc_open($cmd, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
         $start = time();
         $stdout = '';
         $stderr = '';
@@ -153,7 +153,7 @@ class Console
             $stdout .= $outputContents;
             $status .= stream_get_contents($pipes[3]);
 
-            if ($timeout > 0 && time() - $start > $timeout) {
+            if ($timeout > 0 && (time() - $start) > $timeout) {
                 proc_terminate($process, 9);
 
                 return 1;
@@ -165,9 +165,7 @@ class Console
                 fclose($pipes[2]);
                 proc_close($process);
 
-                return ($status !== '')
-                    ? (int) str_replace("\n", '', $status)
-                    : $procStatus['exitcode'];
+                return $status !== '' ? (int) str_replace("\n", '', $status) : $procStatus['exitcode'];
             }
 
             usleep(10000);
@@ -194,8 +192,12 @@ class Console
      *
      * @throws \Exception
      */
-    public static function loop(callable $callback, int $sleep = 1 /* seconds */, int $delay = 0 /* seconds */, ?callable $onError = null): void
-    {
+    public static function loop(
+        callable $callback,
+        int $sleep = 1 /* seconds */,
+        int $delay = 0 /* seconds */,
+        ?callable $onError = null,
+    ): void {
         gc_enable();
 
         $time = 0;
@@ -234,10 +236,11 @@ class Console
 
             $time += $suspend;
 
-            if (PHP_SAPI === 'cli' && $time >= 60 * 5) {
+            if (PHP_SAPI === 'cli' && $time >= (60 * 5)) {
                 // Every 5 minutes
                 $time = 0;
                 gc_collect_cycles();
+
                 //Forces collection of any existing garbage cycles
             }
         }

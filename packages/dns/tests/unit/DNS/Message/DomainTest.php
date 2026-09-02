@@ -20,10 +20,7 @@ final class DomainTest extends TestCase
 
     public function testEncodeTreatsSingleTrailingDotAsAbsolute(): void
     {
-        $this->assertSame(
-            Domain::encode('example.com'),
-            Domain::encode('example.com.'),
-        );
+        $this->assertSame(Domain::encode('example.com'), Domain::encode('example.com.'));
     }
 
     public function testEncodeAllowsRootViaEmptyString(): void

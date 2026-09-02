@@ -22,13 +22,10 @@ final class ServiceExtrasTest extends TestCase
         $this->conn = Connection::connect($url);
         $this->name = 'svcx_' . uniqid();
 
-        $this->service = new Service(
-            $this->conn,
-            $this->name,
-            '1.0.0',
-            'Extras service',
-            ['owner' => 'levi', 'env' => 'test'],
-        );
+        $this->service = new Service($this->conn, $this->name, '1.0.0', 'Extras service', [
+            'owner' => 'levi',
+            'env' => 'test',
+        ]);
     }
 
     protected function tearDown(): void
@@ -82,13 +79,7 @@ final class ServiceExtrasTest extends TestCase
     public function testInfoIncludesEndpointsWithSubjectsAndMetadata(): void
     {
         $group = $this->service->addGroup($this->name)->addGroup('v1');
-        $group->addEndpoint(
-            'status',
-            fn(Message $msg): string => 'ok',
-            null,
-            null,
-            ['visibility' => 'public'],
-        );
+        $group->addEndpoint('status', fn(Message $msg): string => 'ok', null, null, ['visibility' => 'public']);
         $this->service->start();
 
         $info = json_decode($this->conn->request("\$SRV.INFO.{$this->name}", '', 2.0)->data, true);
@@ -115,12 +106,7 @@ final class ServiceExtrasTest extends TestCase
         $group->addEndpoint('run', fn(Message $msg): string => 'done');
 
         // Per-endpoint override on the bare service.
-        $this->service->addEndpoint(
-            'direct',
-            "{$this->name}.direct",
-            fn(Message $msg): string => 'direct',
-            $queue,
-        );
+        $this->service->addEndpoint('direct', "{$this->name}.direct", fn(Message $msg): string => 'direct', $queue);
         $this->service->start();
 
         $info = json_decode($this->conn->request("\$SRV.INFO.{$this->name}", '', 2.0)->data, true);

@@ -7,11 +7,10 @@ namespace Tests\Telemetry\Adapter\OpenTelemetry\Swoole;
 use OpenTelemetry\Contrib\Otlp\ContentTypes;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
-
-use function Swoole\Coroutine\run;
-
 use Utopia\Telemetry\Adapter\OpenTelemetry\Transport\Swoole;
 use Utopia\Telemetry\Exception;
+
+use function Swoole\Coroutine\run;
 
 /**
  * Unit tests for the Swoole Transport implementation.
@@ -61,60 +60,37 @@ final class TransportTest extends TestCase
 
     public function testConstructorWithCustomContentType(): void
     {
-        $transport = new Swoole(
-            'http://localhost:4318/v1/metrics',
-            ContentTypes::JSON,
-        );
+        $transport = new Swoole('http://localhost:4318/v1/metrics', ContentTypes::JSON);
 
         $this->assertSame(ContentTypes::JSON, $transport->contentType());
     }
 
     public function testConstructorWithCustomHeaders(): void
     {
-        $transport = new Swoole(
-            'http://localhost:4318/v1/metrics',
-            ContentTypes::PROTOBUF,
-            ['Authorization' => 'Bearer token123'],
-        );
+        $transport = new Swoole('http://localhost:4318/v1/metrics', ContentTypes::PROTOBUF, [
+            'Authorization' => 'Bearer token123',
+        ]);
 
         $this->assertSame(ContentTypes::PROTOBUF, $transport->contentType());
     }
 
     public function testConstructorWithCustomTimeout(): void
     {
-        $transport = new Swoole(
-            'http://localhost:4318/v1/metrics',
-            ContentTypes::PROTOBUF,
-            [],
-            5.0,
-        );
+        $transport = new Swoole('http://localhost:4318/v1/metrics', ContentTypes::PROTOBUF, [], 5.0);
 
         $this->assertSame(ContentTypes::PROTOBUF, $transport->contentType());
     }
 
     public function testConstructorWithCustomPoolSize(): void
     {
-        $transport = new Swoole(
-            'http://localhost:4318/v1/metrics',
-            ContentTypes::PROTOBUF,
-            [],
-            10.0,
-            16,
-        );
+        $transport = new Swoole('http://localhost:4318/v1/metrics', ContentTypes::PROTOBUF, [], 10.0, 16);
 
         $this->assertSame(ContentTypes::PROTOBUF, $transport->contentType());
     }
 
     public function testConstructorWithCustomSocketBufferSize(): void
     {
-        $transport = new Swoole(
-            'http://localhost:4318/v1/metrics',
-            ContentTypes::PROTOBUF,
-            [],
-            10.0,
-            8,
-            128 * 1024,
-        );
+        $transport = new Swoole('http://localhost:4318/v1/metrics', ContentTypes::PROTOBUF, [], 10.0, 8, 128 * 1024);
 
         $this->assertSame(ContentTypes::PROTOBUF, $transport->contentType());
     }

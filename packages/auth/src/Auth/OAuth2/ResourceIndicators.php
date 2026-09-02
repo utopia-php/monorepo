@@ -22,11 +22,13 @@ class ResourceIndicators
 
         foreach ($resources as $resource) {
             switch (true) {
-                case !\is_string($resource) || $resource === '':
+                case ! \is_string($resource) || $resource === '':
                     throw new InvalidResourceException('resource must be a non-empty absolute URI.');
 
-                case !$this->isValid($resource):
-                    throw new InvalidResourceException('resource must be an absolute HTTP(S) URI with no fragment component.');
+                case ! $this->isValid($resource):
+                    throw new InvalidResourceException(
+                        'resource must be an absolute HTTP(S) URI with no fragment component.',
+                    );
 
                 case \in_array($resource, $seen, true):
                     throw new InvalidResourceException('resources must not contain duplicates.');
@@ -55,7 +57,7 @@ class ResourceIndicators
         $normalized = [];
 
         foreach ($resources as $resource) {
-            if (!\in_array($resource, $normalized, true)) {
+            if (! \in_array($resource, $normalized, true)) {
                 $normalized[] = $resource;
             }
         }
@@ -71,8 +73,10 @@ class ResourceIndicators
             return $audienceResource;
         }
 
-        if (!$audienceResource->isSubsetOf($resources)) {
-            throw new InvalidResourceException('audience must match one of the resource values when both parameters are provided.');
+        if (! $audienceResource->isSubsetOf($resources)) {
+            throw new InvalidResourceException(
+                'audience must match one of the resource values when both parameters are provided.',
+            );
         }
 
         return $resources;
@@ -121,10 +125,12 @@ class ResourceIndicators
     {
         $parts = parse_url($resource);
 
-        return \is_array($parts)
+        return (
+            \is_array($parts)
             && isset($parts['scheme'])
             && \in_array(strtolower($parts['scheme']), ['http', 'https'], true)
-            && !isset($parts['fragment'])
-            && !empty($parts['host']);
+            && ! isset($parts['fragment'])
+            && ! empty($parts['host'])
+        );
     }
 }

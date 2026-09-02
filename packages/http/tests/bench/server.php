@@ -30,23 +30,21 @@ $itersEnv = getenv('CPU_ITERS');
 $sleep = $sleepEnv === false ? 50 : (int) $sleepEnv;
 $iterations = $itersEnv === false ? 1_000 : (int) $itersEnv;
 
-Http::get('/work')
-    ->inject('response')
-    ->action(function (Response $response) use ($sleep, $iterations) {
-        // Native blocking sleep on purpose: it models real I/O (PDO, file
-        // reads, streams). In HYPERLOOP_B the hook_flags setting turns this
-        // into a coroutine yield; in HYPERLOOP_A it blocks the worker.
-        if ($sleep > 0) {
-            usleep($sleep * 1_000);
-        }
+Http::get('/work')->inject('response')->action(function (Response $response) use ($sleep, $iterations) {
+    // Native blocking sleep on purpose: it models real I/O (PDO, file
+    // reads, streams). In HYPERLOOP_B the hook_flags setting turns this
+    // into a coroutine yield; in HYPERLOOP_A it blocks the worker.
+    if ($sleep > 0) {
+        usleep($sleep * 1_000);
+    }
 
-        $payload = str_repeat('x', 1024);
-        for ($i = 0; $i < $iterations; $i++) {
-            $payload = hash('sha256', $payload);
-        }
+    $payload = str_repeat('x', 1024);
+    for ($i = 0; $i < $iterations; $i++) {
+        $payload = hash('sha256', $payload);
+    }
 
-        $response->send($payload);
-    });
+    $response->send($payload);
+});
 
 $mode = getenv('MODE') ?: 'b';
 $settings = match ($mode) {

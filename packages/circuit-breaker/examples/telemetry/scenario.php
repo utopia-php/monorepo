@@ -65,7 +65,7 @@ while ((time() - $start) < $duration) {
         $lastCollect = time();
     }
 
-    if (time() - $lastReport >= 30) {
+    if ((time() - $lastReport) >= 30) {
         printf(
             "[%3ds] %-18s state=%-9s calls=%3d dependency=%3d fallback=%3d short=%3d failures=%d successes=%d\n",
             time() - $start,
@@ -141,7 +141,7 @@ function resetBreaker(array $config): void
 
 function redis(): object
 {
-    if (!class_exists('Redis')) {
+    if (! class_exists('Redis')) {
         throw new RuntimeException('The redis extension is required for the telemetry scenario.');
     }
 
@@ -150,7 +150,7 @@ function redis(): object
     $host = getenv('BREAKER_REDIS_HOST') ?: '127.0.0.1';
     $port = (int) (getenv('BREAKER_REDIS_PORT') ?: 6379);
 
-    if (!$redis->connect($host, $port, 2.0)) {
+    if (! $redis->connect($host, $port, 2.0)) {
         throw new RuntimeException(sprintf('Redis is not reachable at %s:%d.', $host, $port));
     }
 

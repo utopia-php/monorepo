@@ -50,7 +50,15 @@ final class S3Test extends S3Base
         $this->pathBucket = $this->env('S3_PATH_BUCKET', $this->bucket);
         $host = $this->env('S3_HOST', "http://{$this->bucket}.localhost:9805");
 
-        $this->object = new S3($this->root, $this->accessKey, $this->secretKey, $host, $this->region, Acl::Private, bucket: $this->bucket);
+        $this->object = new S3(
+            $this->root,
+            $this->accessKey,
+            $this->secretKey,
+            $host,
+            $this->region,
+            Acl::Private,
+            bucket: $this->bucket,
+        );
     }
 
     protected function getAdapterType(): DeviceType
@@ -63,14 +71,20 @@ final class S3Test extends S3Base
         $pathHost = $this->pathHost;
         $virtualHost = $this->configured('S3_HOST');
         if (($pathHost === null) !== ($virtualHost === null)) {
-            self::markTestSkipped('S3_HOST and S3_PATH_HOST must both be configured when overriding the local MinIO endpoints');
+            self::markTestSkipped(
+                'S3_HOST and S3_PATH_HOST must both be configured when overriding the local MinIO endpoints',
+            );
         }
 
         if ($pathHost === null) {
             $pathHost = 'http://localhost:9805';
         }
 
-        $this->assertSame($this->bucket, $this->pathBucket, 'S3_PATH_BUCKET and S3_BUCKET must identify the same bucket for cross-visibility');
+        $this->assertSame(
+            $this->bucket,
+            $this->pathBucket,
+            'S3_PATH_BUCKET and S3_BUCKET must identify the same bucket for cross-visibility',
+        );
 
         $path = new S3(
             root: '/',
@@ -111,7 +125,7 @@ final class S3Test extends S3Base
                 }
             }
 
-            if (!$failure instanceof Throwable && $cleanup !== []) {
+            if (! $failure instanceof Throwable && $cleanup !== []) {
                 self::fail(implode('; ', $cleanup));
             }
         }

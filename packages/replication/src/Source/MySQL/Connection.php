@@ -46,7 +46,15 @@ final class Connection implements Transport
      */
     public function open(?string $position = null): void
     {
-        $this->client = new Client($this->host, $this->port, $this->username, $this->password, $this->ssl, $this->sslVerify, $this->sslCa);
+        $this->client = new Client(
+            $this->host,
+            $this->port,
+            $this->username,
+            $this->password,
+            $this->ssl,
+            $this->sslVerify,
+            $this->sslCa,
+        );
         $this->client->connect();
 
         $this->client->execute('SET @master_binlog_checksum = @@global.binlog_checksum');
@@ -59,9 +67,10 @@ final class Connection implements Transport
 
         $this->registerSlave();
 
-        $this->position = ($position !== null && $position !== '')
-            ? $position
-            : ($this->client->queryScalar('SELECT @@global.gtid_executed') ?? '');
+        $this->position =
+            $position !== null && $position !== ''
+                ? $position
+                : $this->client->queryScalar('SELECT @@global.gtid_executed') ?? '';
 
         $this->sendDumpCommand(new GtidSet($this->position));
     }
@@ -103,7 +112,8 @@ final class Connection implements Transport
 
     private function registerSlave(): void
     {
-        $payload = \chr(Constants::COM_REGISTER_SLAVE)
+        $payload =
+            \chr(Constants::COM_REGISTER_SLAVE)
             . pack('V', $this->serverId)
             . \chr(0) // hostname
             . \chr(0) // user
@@ -120,7 +130,8 @@ final class Connection implements Transport
     {
         $encoded = $executed->encode();
 
-        $payload = \chr(Constants::COM_BINLOG_DUMP_GTID)
+        $payload =
+            \chr(Constants::COM_BINLOG_DUMP_GTID)
             . pack('v', 0) // flags
             . pack('V', $this->serverId)
             . pack('V', 0) // binlog filename length

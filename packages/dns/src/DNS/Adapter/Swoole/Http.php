@@ -102,7 +102,7 @@ class Http extends Transport
 
         if ($method === 'GET') {
             $dns = $request->get['dns'] ?? null;
-            if (!\is_string($dns) || $dns === '') {
+            if (! \is_string($dns) || $dns === '') {
                 return null;
             }
 
@@ -112,7 +112,7 @@ class Http extends Transport
 
         if ($method === 'POST') {
             $contentType = $request->header['content-type'] ?? null;
-            if (!\is_string($contentType) || strtolower(trim(explode(';', $contentType)[0])) !== self::CONTENT_TYPE) {
+            if (! \is_string($contentType) || strtolower(trim(explode(';', $contentType)[0])) !== self::CONTENT_TYPE) {
                 return null;
             }
 

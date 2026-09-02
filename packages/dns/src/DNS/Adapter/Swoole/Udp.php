@@ -22,7 +22,7 @@ class Udp extends Transport
     {
         // Enforces the 512-byte response limit per RFC 1035
         $target->on('Packet', function ($server, $data, $clientInfo) use ($onPacket): void {
-            if (!\is_string($data) || !\is_array($clientInfo)) {
+            if (! \is_string($data) || ! \is_array($clientInfo)) {
                 return;
             }
 

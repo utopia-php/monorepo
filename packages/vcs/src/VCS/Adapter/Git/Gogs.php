@@ -54,17 +54,25 @@ class Gogs extends Gitea
     {
         $url = "/org/{$owner}/repos";
 
-        $response = $this->call(self::METHOD_POST, $url, ['Authorization' => "token $this->accessToken"], [
-            'name' => $repositoryName,
-            'private' => $private,
-            'auto_init' => true,
-            'readme' => 'Default',
-        ]);
+        $response = $this->call(
+            self::METHOD_POST,
+            $url,
+            ['Authorization' => "token $this->accessToken"],
+            [
+                'name' => $repositoryName,
+                'private' => $private,
+                'auto_init' => true,
+                'readme' => 'Default',
+            ],
+        );
 
         $responseHeaders = $response['headers'] ?? [];
         $statusCode = $responseHeaders['status-code'] ?? 0;
         if ($statusCode >= 400) {
-            throw new Exception("Creating repository {$repositoryName} failed with status code {$statusCode}", $statusCode);
+            throw new Exception(
+                "Creating repository {$repositoryName} failed with status code {$statusCode}",
+                $statusCode,
+            );
         }
 
         $result = $response['body'] ?? [];
@@ -86,9 +94,14 @@ class Gogs extends Gitea
     {
         $url = '/user/orgs';
 
-        $response = $this->call(self::METHOD_POST, $url, ['Authorization' => "token $this->accessToken"], [
-            'username' => $orgName,
-        ]);
+        $response = $this->call(
+            self::METHOD_POST,
+            $url,
+            ['Authorization' => "token $this->accessToken"],
+            [
+                'username' => $orgName,
+            ],
+        );
 
         $responseBody = $response['body'] ?? [];
 
@@ -115,7 +128,7 @@ class Gogs extends Gitea
         $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "token $this->accessToken"]);
 
         $responseBody = $response['body'] ?? [];
-        if (!\is_array($responseBody)) {
+        if (! \is_array($responseBody)) {
             $responseBody = [];
         }
 
@@ -147,8 +160,12 @@ class Gogs extends Gitea
      * @return array<string>
      */
     #[\Override]
-    public function getRepositoryTree(string $owner, string $repositoryName, string $branch, bool $recursive = false): array
-    {
+    public function getRepositoryTree(
+        string $owner,
+        string $repositoryName,
+        string $branch,
+        bool $recursive = false,
+    ): array {
         $url = "/repos/{$owner}/{$repositoryName}/git/trees/" . urlencode($branch);
 
         $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "token $this->accessToken"]);
@@ -296,7 +313,7 @@ class Gogs extends Gitea
     {
         // Gogs ignores sha param — verify branch exists first
         $branches = $this->listBranches($owner, $repositoryName);
-        if (!\in_array($branch, $branches, true)) {
+        if (! \in_array($branch, $branches, true)) {
             throw new Exception("Branch '{$branch}' not found");
         }
 
@@ -313,8 +330,14 @@ class Gogs extends Gitea
      * @return array<mixed>
      */
     #[\Override]
-    public function createFile(string $owner, string $repositoryName, string $filepath, string $content, string $message = 'Add file', string $branch = ''): array
-    {
+    public function createFile(
+        string $owner,
+        string $repositoryName,
+        string $filepath,
+        string $content,
+        string $message = 'Add file',
+        string $branch = '',
+    ): array {
         if ($branch !== '' && $branch !== '0') {
             // Check if branch is the default branch
             $url = "/repos/{$owner}/{$repositoryName}";
@@ -341,7 +364,10 @@ class Gogs extends Gitea
         $responseHeaders = $response['headers'] ?? [];
         $responseHeadersStatusCode = $responseHeaders['status-code'] ?? 0;
         if ($responseHeadersStatusCode >= 400) {
-            throw new Exception("Failed to create file {$filepath}: HTTP {$responseHeadersStatusCode}", $responseHeadersStatusCode);
+            throw new Exception(
+                "Failed to create file {$filepath}: HTTP {$responseHeadersStatusCode}",
+                $responseHeadersStatusCode,
+            );
         }
 
         return $response['body'] ?? [];
@@ -352,14 +378,20 @@ class Gogs extends Gitea
      *
      * @return array<mixed>
      */
-    private function createFileViaCli(string $owner, string $repositoryName, string $filepath, string $content, string $message, string $branch): array
-    {
+    private function createFileViaCli(
+        string $owner,
+        string $repositoryName,
+        string $filepath,
+        string $content,
+        string $message,
+        string $branch,
+    ): array {
         $dir = $this->gitClone($owner, $repositoryName, $branch);
 
         try {
             $fullPath = $dir . '/' . $filepath;
             $dirPath = \dirname($fullPath);
-            if (!is_dir($dirPath)) {
+            if (! is_dir($dirPath)) {
                 mkdir($dirPath, 0777, true);
             }
             file_put_contents($fullPath, $content);
@@ -382,8 +414,12 @@ class Gogs extends Gitea
      * @return array<mixed>
      */
     #[\Override]
-    public function createBranch(string $owner, string $repositoryName, string $newBranchName, string $oldBranchName): array
-    {
+    public function createBranch(
+        string $owner,
+        string $repositoryName,
+        string $newBranchName,
+        string $oldBranchName,
+    ): array {
         $dir = $this->gitClone($owner, $repositoryName, $oldBranchName);
 
         try {
@@ -401,7 +437,9 @@ class Gogs extends Gitea
      */
     private function gitClone(string $owner, string $repositoryName, string $branch = ''): string
     {
-        $cloneUrl = str_replace('://', "://{$owner}:{$this->accessToken}@", $this->giteaUrl) . "/{$owner}/{$repositoryName}.git";
+        $cloneUrl =
+            str_replace('://', "://{$owner}:{$this->accessToken}@", $this->giteaUrl)
+            . "/{$owner}/{$repositoryName}.git";
 
         $dir = escapeshellarg(sys_get_temp_dir() . '/gogs-' . uniqid());
 
@@ -416,7 +454,6 @@ class Gogs extends Gitea
 
         return trim($dir, "'\"");
     }
-
 
     /**
      * Execute a shell command and throw on failure.
@@ -458,14 +495,22 @@ class Gogs extends Gitea
      * @return array<mixed>
      */
     #[\Override]
-    public function createTag(string $owner, string $repositoryName, string $tagName, string $target, string $message = ''): array
-    {
+    public function createTag(
+        string $owner,
+        string $repositoryName,
+        string $tagName,
+        string $target,
+        string $message = '',
+    ): array {
         $dir = $this->gitClone($owner, $repositoryName);
 
         try {
             $this->exec("git -C {$dir} fetch origin " . escapeshellarg($target));
             if ($message !== '' && $message !== '0') {
-                $this->exec("git -C {$dir} tag -a " . escapeshellarg($tagName) . ' ' . escapeshellarg($target) . ' -m ' . escapeshellarg($message));
+                $this->exec(
+                    "git -C {$dir} tag -a " . escapeshellarg($tagName) . ' ' . escapeshellarg($target) . ' -m '
+                        . escapeshellarg($message),
+                );
             } else {
                 $this->exec("git -C {$dir} tag " . escapeshellarg($tagName) . ' ' . escapeshellarg($target));
             }
@@ -490,8 +535,14 @@ class Gogs extends Gitea
      * @return array<mixed>
      */
     #[\Override]
-    public function createPullRequest(string $owner, string $repositoryName, string $title, string $head, string $base, string $body = ''): array
-    {
+    public function createPullRequest(
+        string $owner,
+        string $repositoryName,
+        string $title,
+        string $head,
+        string $base,
+        string $body = '',
+    ): array {
         throw new Exception('Pull request API is not supported by Gogs');
     }
 
@@ -534,8 +585,15 @@ class Gogs extends Gitea
      * Gogs does not support commit statuses API.
      */
     #[\Override]
-    public function updateCommitStatus(string $repositoryName, string $commitHash, string $owner, string $state, string $description = '', string $target_url = '', string $context = ''): void
-    {
+    public function updateCommitStatus(
+        string $repositoryName,
+        string $commitHash,
+        string $owner,
+        string $state,
+        string $description = '',
+        string $target_url = '',
+        string $context = '',
+    ): void {
         throw new Exception('Commit status API is not supported by Gogs');
     }
 
@@ -574,12 +632,15 @@ class Gogs extends Gitea
         }
 
         if ($responseHeadersStatusCode >= 400) {
-            throw new Exception("Failed to list branches: HTTP {$responseHeadersStatusCode}", $responseHeadersStatusCode);
+            throw new Exception(
+                "Failed to list branches: HTTP {$responseHeadersStatusCode}",
+                $responseHeadersStatusCode,
+            );
         }
 
         $responseBody = $response['body'] ?? [];
 
-        if (!\is_array($responseBody)) {
+        if (! \is_array($responseBody)) {
             return [];
         }
 
@@ -621,7 +682,7 @@ class Gogs extends Gitea
 
         $responseBody = $response['body'] ?? [];
 
-        if (!\is_array($responseBody)) {
+        if (! \is_array($responseBody)) {
             return [];
         }
 

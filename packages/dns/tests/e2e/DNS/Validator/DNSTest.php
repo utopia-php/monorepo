@@ -92,7 +92,11 @@ final class DNSTest extends TestCase
         $this->assertFalse($certainlyFull->isValid('certainly-full.caa.appwrite.org'));
 
         // Custom flags&tag still allows if they match exactly
-        $certainlyFull = new DNS('128 issuewild "certainly.com;account=123456;validationmethods=dns-01"', Record::TYPE_CAA, $digitalOceanIp);
+        $certainlyFull = new DNS(
+            '128 issuewild "certainly.com;account=123456;validationmethods=dns-01"',
+            Record::TYPE_CAA,
+            $digitalOceanIp,
+        );
         $this->assertTrue($certainlyFull->isValid('certainly-full.caa.appwrite.org'));
 
         // Certainly CAA allows Certainly, but not LetsEncrypt; Same for subdomains

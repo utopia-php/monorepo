@@ -15,9 +15,17 @@ final readonly class Message implements \Stringable
 {
     /** Headers the message owns, which a caller must not set by hand. */
     private const array RESERVED = [
-        'date', 'from', 'to', 'cc', 'bcc', 'reply-to',
-        'subject', 'message-id', 'mime-version',
-        'content-type', 'content-transfer-encoding',
+        'date',
+        'from',
+        'to',
+        'cc',
+        'bcc',
+        'reply-to',
+        'subject',
+        'message-id',
+        'mime-version',
+        'content-type',
+        'content-transfer-encoding',
     ];
 
     public \DateTimeImmutable $date;
@@ -67,7 +75,8 @@ final readonly class Message implements \Stringable
         }
 
         $this->date = $date ?? new \DateTimeImmutable();
-        $this->messageId = $messageId ?? bin2hex(random_bytes(16)) . substr($from->email, (int) strrpos($from->email, '@'));
+        $this->messageId =
+            $messageId ?? bin2hex(random_bytes(16)) . substr($from->email, (int) strrpos($from->email, '@'));
         $this->root = $this->build($text, $html, $attachments);
     }
 

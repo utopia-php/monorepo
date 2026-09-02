@@ -29,8 +29,7 @@ final readonly class Factory implements RequestFactoryInterface
     {
         $uri = $uri instanceof UriInterface ? $uri : $this->uriFactory->createUri((string) $uri);
 
-        return new Request(strtoupper($method), $uri)
-            ->withUri($uri);
+        return new Request(strtoupper($method), $uri)->withUri($uri);
     }
 
     /**
@@ -42,7 +41,7 @@ final readonly class Factory implements RequestFactoryInterface
     {
         $request = $this->body($method, $uri, json_encode($data, JSON_THROW_ON_ERROR), ContentType::JSON, $headers);
 
-        if (!$request->hasHeader(Header::ACCEPT)) {
+        if (! $request->hasHeader(Header::ACCEPT)) {
             return $request->withHeader(Header::ACCEPT, ContentType::JSON);
         }
 
@@ -83,14 +82,19 @@ final readonly class Factory implements RequestFactoryInterface
     /**
      * @param array<string, string|array<int, string>> $headers
      */
-    public function body(string $method, UriInterface|string $uri, string $body, string $contentType, array $headers = []): RequestInterface
-    {
+    public function body(
+        string $method,
+        UriInterface|string $uri,
+        string $body,
+        string $contentType,
+        array $headers = [],
+    ): RequestInterface {
         $request = $this->applyHeaders(
             $this->createRequest($method, $uri),
             $headers,
         )->withBody($this->streamFactory->createStream($body));
 
-        if (!$request->hasHeader(Header::CONTENT_TYPE)) {
+        if (! $request->hasHeader(Header::CONTENT_TYPE)) {
             return $request->withHeader(Header::CONTENT_TYPE, $contentType);
         }
 
@@ -101,12 +105,13 @@ final readonly class Factory implements RequestFactoryInterface
      * @param array<string, mixed> $parameters
      * @param array<string, string|array<int, string>> $headers
      */
-    public function query(string $method, UriInterface|string $uri, array $parameters, array $headers = []): RequestInterface
-    {
-        $request = $this->applyHeaders(
-            $this->createRequest($method, $uri),
-            $headers,
-        );
+    public function query(
+        string $method,
+        UriInterface|string $uri,
+        array $parameters,
+        array $headers = [],
+    ): RequestInterface {
+        $request = $this->applyHeaders($this->createRequest($method, $uri), $headers);
 
         if ($parameters === []) {
             return $request;
@@ -126,18 +131,18 @@ final readonly class Factory implements RequestFactoryInterface
      * @param array<array-key, scalar|Part> $parts
      * @param array<string, string|array<int, string>> $headers
      */
-    public function multipart(string $method, UriInterface|string $uri, array $parts, array $headers = []): RequestInterface
-    {
+    public function multipart(
+        string $method,
+        UriInterface|string $uri,
+        array $parts,
+        array $headers = [],
+    ): RequestInterface {
         $boundary = $this->boundary();
-        $request = $this->applyHeaders(
-            $this->createRequest($method, $uri),
-            $headers,
-        )->withBody(new Body($boundary, $this->parts($parts)));
-
-        return $request->withHeader(
-            Header::CONTENT_TYPE,
-            ContentType::MULTIPART_FORM_DATA . '; boundary=' . $boundary,
+        $request = $this->applyHeaders($this->createRequest($method, $uri), $headers)->withBody(
+            new Body($boundary, $this->parts($parts)),
         );
+
+        return $request->withHeader(Header::CONTENT_TYPE, ContentType::MULTIPART_FORM_DATA . '; boundary=' . $boundary);
     }
 
     /**

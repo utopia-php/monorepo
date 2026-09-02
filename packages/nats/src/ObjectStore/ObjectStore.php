@@ -89,7 +89,11 @@ final class ObjectStore
             );
         } catch (\Throwable $e) {
             $this->purgeChunks($nuid);
-            throw new ObjectStoreException("conflicting concurrent write for object: {$name}", $e->getCode(), previous: $e);
+            throw new ObjectStoreException(
+                "conflicting concurrent write for object: {$name}",
+                $e->getCode(),
+                previous: $e,
+            );
         }
 
         // Reclaim chunks left behind by a prior version of this object.
@@ -106,7 +110,7 @@ final class ObjectStore
     public function get(string $name): string
     {
         $meta = $this->readMeta($name);
-        if (!$meta instanceof ObjectMeta || $meta->deleted) {
+        if (! $meta instanceof ObjectMeta || $meta->deleted) {
             throw new \RuntimeException("Object not found: {$name}");
         }
 
@@ -125,12 +129,15 @@ final class ObjectStore
             $stream = "OBJ_{$this->bucket}";
             $subject = "\$O.{$this->bucket}.C.{$meta->nuid}";
 
-            $consumer = $this->js->createConsumer($stream, new ConsumerConfig(
-                deliverPolicy: DeliverPolicy::All,
-                ackPolicy: AckPolicy::Explicit,
-                filterSubject: $subject,
-                inactiveThreshold: 30.0,
-            ));
+            $consumer = $this->js->createConsumer(
+                $stream,
+                new ConsumerConfig(
+                    deliverPolicy: DeliverPolicy::All,
+                    ackPolicy: AckPolicy::Explicit,
+                    filterSubject: $subject,
+                    inactiveThreshold: 30.0,
+                ),
+            );
 
             try {
                 foreach ($consumer->fetch($meta->chunks, 10.0) as $msg) {
@@ -156,7 +163,7 @@ final class ObjectStore
     public function getMeta(string $name): ObjectMeta
     {
         $meta = $this->readMeta($name);
-        if (!$meta instanceof ObjectMeta || $meta->deleted) {
+        if (! $meta instanceof ObjectMeta || $meta->deleted) {
             throw new \RuntimeException("Object not found: {$name}");
         }
 
@@ -166,7 +173,7 @@ final class ObjectStore
     public function delete(string $name): void
     {
         [$meta, $expectedSeq] = $this->readMetaWithSeq($name);
-        if (!$meta instanceof ObjectMeta || $meta->deleted) {
+        if (! $meta instanceof ObjectMeta || $meta->deleted) {
             return;
         }
 
@@ -215,12 +222,15 @@ final class ObjectStore
         $subject = "\$O.{$this->bucket}.M.>";
 
         try {
-            $consumer = $this->js->createConsumer($stream, new ConsumerConfig(
-                deliverPolicy: DeliverPolicy::LastPerSubject,
-                ackPolicy: AckPolicy::Explicit,
-                filterSubject: $subject,
-                inactiveThreshold: 30.0,
-            ));
+            $consumer = $this->js->createConsumer(
+                $stream,
+                new ConsumerConfig(
+                    deliverPolicy: DeliverPolicy::LastPerSubject,
+                    ackPolicy: AckPolicy::Explicit,
+                    filterSubject: $subject,
+                    inactiveThreshold: 30.0,
+                ),
+            );
         } catch (\Throwable) {
             return [];
         }
@@ -230,11 +240,11 @@ final class ObjectStore
             foreach ($consumer->fetch(1024, 1.0) as $msg) {
                 $msg->ack();
                 $decoded = json_decode((string) $msg->getData(), true, 512, JSON_THROW_ON_ERROR);
-                if (!\is_array($decoded)) {
+                if (! \is_array($decoded)) {
                     continue;
                 }
                 $meta = ObjectMeta::fromArray($decoded);
-                if (!$meta->deleted) {
+                if (! $meta->deleted) {
                     $objects[] = $meta;
                 }
             }
@@ -293,7 +303,7 @@ final class ObjectStore
             }
 
             $decoded = json_decode($msg->data, true, 512, JSON_THROW_ON_ERROR);
-            if (!\is_array($decoded)) {
+            if (! \is_array($decoded)) {
                 return;
             }
 
@@ -327,7 +337,7 @@ final class ObjectStore
     public function updateMeta(string $name, ?string $description = null, ?array $metadata = null): ObjectMeta
     {
         [$previous, $expectedSeq] = $this->readMetaWithSeq($name);
-        if (!$previous instanceof ObjectMeta || $previous->deleted) {
+        if (! $previous instanceof ObjectMeta || $previous->deleted) {
             throw new \RuntimeException("Object not found: {$name}");
         }
 
@@ -362,7 +372,7 @@ final class ObjectStore
         JetStream::checkError($info);
 
         $config = $info['config'] ?? [];
-        if (!\is_array($config)) {
+        if (! \is_array($config)) {
             throw new ObjectStoreException("cannot read stream config for bucket: {$this->bucket}");
         }
         // Empty JSON objects in the info response (e.g. consumer_limits) decode to
@@ -426,7 +436,11 @@ final class ObjectStore
                 expectedLastSubjectSeq: $expectedSeq,
             );
         } catch (\Throwable $e) {
-            throw new ObjectStoreException("conflicting concurrent write for object: {$meta->name}", $e->getCode(), previous: $e);
+            throw new ObjectStoreException(
+                "conflicting concurrent write for object: {$meta->name}",
+                $e->getCode(),
+                previous: $e,
+            );
         }
     }
 
@@ -445,21 +459,25 @@ final class ObjectStore
     private function readMetaWithSeq(string $name): array
     {
         try {
-            $response = $this->conn->request(
-                "\$JS.API.STREAM.MSG.GET.OBJ_{$this->bucket}",
-                json_encode(['last_by_subj' => $this->metaSubject($name)], JSON_THROW_ON_ERROR),
-            );
+            $response = $this->conn->request("\$JS.API.STREAM.MSG.GET.OBJ_{$this->bucket}", json_encode([
+                'last_by_subj' => $this->metaSubject($name),
+            ], JSON_THROW_ON_ERROR));
         } catch (\Throwable) {
             return [null, 0];
         }
 
         $data = json_decode($response->data, true, 512, JSON_THROW_ON_ERROR);
-        if (isset($data['error']) || !isset($data['message']['data'])) {
+        if (isset($data['error']) || ! isset($data['message']['data'])) {
             return [null, 0];
         }
 
-        $decoded = json_decode((string) base64_decode((string) $data['message']['data'], true), true, 512, JSON_THROW_ON_ERROR);
-        if (!\is_array($decoded)) {
+        $decoded = json_decode(
+            (string) base64_decode((string) $data['message']['data'], true),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        if (! \is_array($decoded)) {
             return [null, 0];
         }
 

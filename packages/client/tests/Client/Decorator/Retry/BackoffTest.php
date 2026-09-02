@@ -49,7 +49,11 @@ final class BackoffTest extends TestCase
     {
         $request = $this->request(Method::GET);
 
-        $this->assertEqualsWithDelta(0.1, $this->strategy()->delay($request, 1, new Response(503), null), PHP_FLOAT_EPSILON);
+        $this->assertEqualsWithDelta(
+            0.1,
+            $this->strategy()->delay($request, 1, new Response(503), null),
+            PHP_FLOAT_EPSILON,
+        );
     }
 
     public function testItStopsAtMaxAttempts(): void

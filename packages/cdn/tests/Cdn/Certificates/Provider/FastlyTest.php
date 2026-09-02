@@ -28,7 +28,10 @@ final class FastlyTest extends TestCase
         $this->assertSame('https://api.fastly.com/domain-management/v1/domains', $client->calls[1]['url']);
         $this->assertSame(['fqdn' => 'example.com', 'service_id' => 'service_1'], $client->calls[1]['body']);
         $this->assertSame('POST', $client->calls[3]['method']);
-        $this->assertSame('example.com', $client->calls[3]['body']['data']['relationships']['tls_domains']['data'][0]['id']);
+        $this->assertSame(
+            'example.com',
+            $client->calls[3]['body']['data']['relationships']['tls_domains']['data'][0]['id'],
+        );
     }
 
     public function testIssueReassignsVersionlessDomainFromAnotherService(): void
@@ -58,7 +61,11 @@ final class FastlyTest extends TestCase
             $this->json('{"data":[{"id":"sub_1","attributes":{"state":"pending"}}]}'),
         ]);
 
-        $this->assertNull(new Fastly('token', 'new_service', client: $client)->issueCertificate('cert', 'example.com', null));
+        $this->assertNull(new Fastly('token', 'new_service', client: $client)->issueCertificate(
+            'cert',
+            'example.com',
+            null,
+        ));
 
         $this->assertCount(3, $client->calls);
         $this->assertSame('GET', $client->calls[2]['method']);
@@ -111,8 +118,7 @@ final class FastlyTest extends TestCase
             $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":"old_service"}]}'),
         ]);
 
-        $renewRequired = new Fastly('token', 'new_service', client: $client)
-            ->isRenewRequired('example.com', null);
+        $renewRequired = new Fastly('token', 'new_service', client: $client)->isRenewRequired('example.com', null);
 
         $this->assertTrue($renewRequired);
         $this->assertCount(1, $client->calls);
@@ -124,8 +130,7 @@ final class FastlyTest extends TestCase
             $this->json('{"data":[{"id":"domain_1","fqdn":"example.com"}]}'),
         ]);
 
-        $renewRequired = new Fastly('token', 'service_1', client: $client)
-            ->isRenewRequired('example.com', null);
+        $renewRequired = new Fastly('token', 'service_1', client: $client)->isRenewRequired('example.com', null);
 
         $this->assertFalse($renewRequired);
         $this->assertCount(1, $client->calls);
@@ -138,8 +143,7 @@ final class FastlyTest extends TestCase
             $this->json('{"data":[{"id":"sub_1","attributes":{"state":"issued"}}]}'),
         ]);
 
-        $renewRequired = new Fastly('token', 'service_1', client: $client)
-            ->isRenewRequired('example.com', null);
+        $renewRequired = new Fastly('token', 'service_1', client: $client)->isRenewRequired('example.com', null);
 
         $this->assertFalse($renewRequired);
         $this->assertCount(2, $client->calls);
@@ -217,7 +221,10 @@ final class FastlyTest extends TestCase
 
         $this->assertSame('PUT', $client->calls[2]['method']);
         $this->assertSame('https://api.fastly.com/service/service_1/version/3/clone', $client->calls[2]['url']);
-        $this->assertSame('https://api.fastly.com/service/service_1/version/4/domain/example.com', $client->calls[3]['url']);
+        $this->assertSame(
+            'https://api.fastly.com/service/service_1/version/4/domain/example.com',
+            $client->calls[3]['url'],
+        );
         $this->assertSame('https://api.fastly.com/service/service_1/version/4/activate', $client->calls[4]['url']);
         $this->assertSame('https://api.fastly.com/tls/subscriptions/sub_1?force=true', $client->calls[8]['url']);
     }
@@ -240,7 +247,10 @@ final class FastlyTest extends TestCase
 
         $this->assertCount(4, $client->calls);
         $this->assertSame('DELETE', $client->calls[3]['method']);
-        $this->assertSame('https://api.fastly.com/service/service_1/version/4/domain/example.com', $client->calls[3]['url']);
+        $this->assertSame(
+            'https://api.fastly.com/service/service_1/version/4/domain/example.com',
+            $client->calls[3]['url'],
+        );
     }
 
     public function testClassicDomainOwnedByAnotherServiceLeavesTlsUntouched(): void

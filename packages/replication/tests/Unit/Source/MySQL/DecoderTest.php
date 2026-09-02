@@ -70,9 +70,18 @@ final class DecoderTest extends TestCase
     {
         $decoder = $this->decoder();
 
-        $this->assertNotInstanceOf(\Utopia\Replication\Change::class, $decoder->decode($this->binlogEvent(Constants::ROTATE_EVENT, str_repeat("\x00", 30))));
-        $this->assertNotInstanceOf(\Utopia\Replication\Change::class, $decoder->decode($this->binlogEvent(Constants::QUERY_EVENT, str_repeat("\x00", 30))));
-        $this->assertNotInstanceOf(\Utopia\Replication\Change::class, $decoder->decode($this->binlogEvent(Constants::FORMAT_DESCRIPTION_EVENT, str_repeat("\x00", 80))));
+        $this->assertNotInstanceOf(
+            \Utopia\Replication\Change::class,
+            $decoder->decode($this->binlogEvent(Constants::ROTATE_EVENT, str_repeat("\x00", 30))),
+        );
+        $this->assertNotInstanceOf(
+            \Utopia\Replication\Change::class,
+            $decoder->decode($this->binlogEvent(Constants::QUERY_EVENT, str_repeat("\x00", 30))),
+        );
+        $this->assertNotInstanceOf(
+            \Utopia\Replication\Change::class,
+            $decoder->decode($this->binlogEvent(Constants::FORMAT_DESCRIPTION_EVENT, str_repeat("\x00", 80))),
+        );
     }
 
     public function testRowsWithoutAPriorTableMapAreSkipped(): void
@@ -148,14 +157,24 @@ final class DecoderTest extends TestCase
         $decoder = $this->decoder();
 
         // TABLE_MAP for a different schema -> its rows are decoded but not emitted.
-        $decoder->decode($this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(self::TABLE_ID, 'other', self::TABLE, $this->columns())));
+        $decoder->decode($this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(
+            self::TABLE_ID,
+            'other',
+            self::TABLE,
+            $this->columns(),
+        )));
         $this->assertNotInstanceOf(\Utopia\Replication\Change::class, $decoder->decode($this->writeEvent(1, 'a')));
     }
 
     public function testNullSchemaEmitsEveryDatabase(): void
     {
         $decoder = new Decoder(new EventParser(), new GtidSet(), null, true);
-        $decoder->decode($this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(self::TABLE_ID, 'anything', self::TABLE, $this->columns())));
+        $decoder->decode($this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(
+            self::TABLE_ID,
+            'anything',
+            self::TABLE,
+            $this->columns(),
+        )));
 
         $change = $decoder->decode($this->writeEvent(1, 'a'));
         $this->assertInstanceOf(Change::class, $change);
@@ -166,7 +185,11 @@ final class DecoderTest extends TestCase
     {
         // With checksum off the decoder must not strip a CRC, so events carry none.
         $decoder = new Decoder(new EventParser(), new GtidSet(), self::SCHEMA, false);
-        $decoder->decode($this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $this->columns()), checksum: false));
+        $decoder->decode($this->binlogEvent(
+            Constants::TABLE_MAP_EVENT,
+            $this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $this->columns()),
+            checksum: false,
+        ));
 
         $body = $this->binlogRowsV2(self::TABLE_ID, 2, $this->binlogRow(2, pack('P', 1), $this->varchar('a')));
         $change = $decoder->decode($this->binlogEvent(Constants::WRITE_ROWS_EVENT_V2, $body, checksum: false));
@@ -181,7 +204,11 @@ final class DecoderTest extends TestCase
         $decoder->decode($this->tableMapEvent());
 
         // v1 ROWS events carry no 2-byte extra-data header.
-        $body = $this->le(self::TABLE_ID, 6) . "\x00\x00" . \chr(2) . \chr(0b11)
+        $body =
+            $this->le(self::TABLE_ID, 6)
+            . "\x00\x00"
+            . \chr(2)
+            . \chr(0b11)
             . $this->binlogRow(2, pack('P', 3), $this->varchar('v1'));
         $change = $decoder->decode($this->binlogEvent(Constants::WRITE_ROWS_EVENT_V1, $body));
 
@@ -197,7 +224,10 @@ final class DecoderTest extends TestCase
         // A DDL transaction is GTID + QUERY with no XID — autocommitted, so the
         // QUERY itself is the commit boundary (even if it ends the segment).
         $decoder->decode($this->binlogEvent(Constants::GTID_EVENT, $this->binlogGtidEvent(self::SID_HEX, 5)));
-        $decoder->decode($this->binlogEvent(Constants::QUERY_EVENT, $this->binlogQueryEvent('CREATE TABLE t (id INT)')));
+        $decoder->decode($this->binlogEvent(
+            Constants::QUERY_EVENT,
+            $this->binlogQueryEvent('CREATE TABLE t (id INT)'),
+        ));
 
         $this->assertSame(self::SID . ':5', $decoder->position());
     }
@@ -251,7 +281,12 @@ final class DecoderTest extends TestCase
 
     private function tableMapEvent(): string
     {
-        return $this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $this->columns()));
+        return $this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(
+            self::TABLE_ID,
+            self::SCHEMA,
+            self::TABLE,
+            $this->columns(),
+        ));
     }
 
     private function writeEvent(int $id, string $uid): string

@@ -64,11 +64,7 @@ final class OrderedConsumerTest extends TestCase
     private function createStream(string $subject): string
     {
         $name = 'OC_' . uniqid();
-        $this->js->createStream(new StreamConfig(
-            name: $name,
-            subjects: [$subject],
-            storage: StorageType::Memory,
-        ));
+        $this->js->createStream(new StreamConfig(name: $name, subjects: [$subject], storage: StorageType::Memory));
         $this->streams[] = $name;
         return $name;
     }
@@ -119,7 +115,7 @@ final class OrderedConsumerTest extends TestCase
         // Drain the rest. The first next() here observes the gap, triggers
         // reset($lastStreamSeq + 1) and recreates the consumer from the message
         // after the last good one (stream seq $half + 1), then returns it.
-        for ($i = 0; $i < $count - $half; $i++) {
+        for ($i = 0; $i < ($count - $half); $i++) {
             $msg = $ordered->next(3.0);
             $this->assertInstanceOf(JetStreamMessage::class, $msg);
             $streamSeqs[] = $msg->metadata()->streamSequence;
@@ -132,10 +128,18 @@ final class OrderedConsumerTest extends TestCase
 
         // Every message delivered to the caller exactly once, in stream order,
         // with no loss and no duplicate across the reset boundary.
-        $this->assertSame(range(1, $count), $streamSeqs, 'all messages must be delivered once, in order, across the reset');
+        $this->assertSame(
+            range(1, $count),
+            $streamSeqs,
+            'all messages must be delivered once, in order, across the reset',
+        );
 
         // No further messages remain.
-        $this->assertNotInstanceOf(\Utopia\NATS\JetStream\JetStreamMessage::class, $ordered->next(0.5), 'no extra or duplicate messages after recovery');
+        $this->assertNotInstanceOf(
+            \Utopia\NATS\JetStream\JetStreamMessage::class,
+            $ordered->next(0.5),
+            'no extra or duplicate messages after recovery',
+        );
 
         $ordered->stop();
     }

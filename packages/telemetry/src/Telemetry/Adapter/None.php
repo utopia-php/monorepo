@@ -14,8 +14,12 @@ class None implements Adapter
     /**
      * @param array<string, mixed> $advisory
      */
-    public function createCounter(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): Counter
-    {
+    public function createCounter(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): Counter {
         return new class extends Counter {
             /**
              * @param iterable<non-empty-string, array<mixed>|bool|float|int|string|null> $attributes
@@ -27,8 +31,12 @@ class None implements Adapter
     /**
      * @param array<string, mixed> $advisory
      */
-    public function createHistogram(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): Histogram
-    {
+    public function createHistogram(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): Histogram {
         return new class extends Histogram {
             /**
              * @param iterable<non-empty-string, array<mixed>|bool|float|int|string|null> $attributes
@@ -40,8 +48,12 @@ class None implements Adapter
     /**
      * @param array<string, mixed> $advisory
      */
-    public function createGauge(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): Gauge
-    {
+    public function createGauge(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): Gauge {
         return new class extends Gauge {
             /**
              * @param iterable<non-empty-string, array<mixed>|bool|float|int|string|null> $attributes
@@ -53,8 +65,12 @@ class None implements Adapter
     /**
      * @param array<string, mixed> $advisory
      */
-    public function createUpDownCounter(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): UpDownCounter
-    {
+    public function createUpDownCounter(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): UpDownCounter {
         return new class extends UpDownCounter {
             /**
              * @param iterable<non-empty-string, array<mixed>|bool|float|int|string|null> $attributes
@@ -66,8 +82,12 @@ class None implements Adapter
     /**
      * @param array<string, mixed> $advisory
      */
-    public function createObservableGauge(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): ObservableGauge
-    {
+    public function createObservableGauge(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): ObservableGauge {
         return new class extends ObservableGauge {
             public function observe(callable $callback): void {}
         };

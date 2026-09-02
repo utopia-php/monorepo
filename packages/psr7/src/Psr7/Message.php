@@ -54,7 +54,7 @@ abstract class Message implements MessageInterface
     {
         $normalized = strtolower($name);
 
-        if (!isset($this->headerNames[$normalized])) {
+        if (! isset($this->headerNames[$normalized])) {
             return [];
         }
 
@@ -91,7 +91,7 @@ abstract class Message implements MessageInterface
         $normalized = strtolower($name);
         $values = $this->normalizeHeaderValue($value);
 
-        if (!isset($clone->headerNames[$normalized])) {
+        if (! isset($clone->headerNames[$normalized])) {
             $clone->headerNames[$normalized] = $name;
             $clone->headers[$name] = $values;
 
@@ -109,7 +109,7 @@ abstract class Message implements MessageInterface
         $clone = clone $this;
         $normalized = strtolower($name);
 
-        if (!isset($clone->headerNames[$normalized])) {
+        if (! isset($clone->headerNames[$normalized])) {
             return $clone;
         }
 

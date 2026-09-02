@@ -45,37 +45,37 @@ class APNS extends PushAdapter
     {
         $payload = [];
 
-        if (!\is_null($message->getTitle())) {
+        if (! \is_null($message->getTitle())) {
             $payload['aps']['alert']['title'] = $message->getTitle();
         }
-        if (!\is_null($message->getBody())) {
+        if (! \is_null($message->getBody())) {
             $payload['aps']['alert']['body'] = $message->getBody();
         }
-        if (!\is_null($message->getData())) {
+        if (! \is_null($message->getData())) {
             $payload['aps']['data'] = $message->getData();
         }
-        if (!\is_null($message->getAction())) {
+        if (! \is_null($message->getAction())) {
             $payload['aps']['category'] = $message->getAction();
         }
-        if (!\is_null($message->getCritical())) {
+        if (! \is_null($message->getCritical())) {
             $payload['aps']['sound']['critical'] = 1;
             $payload['aps']['sound']['name'] = 'default';
             $payload['aps']['sound']['volume'] = 1.0;
         }
-        if (!\is_null($message->getSound())) {
-            if (!\is_null($message->getCritical())) {
+        if (! \is_null($message->getSound())) {
+            if (! \is_null($message->getCritical())) {
                 $payload['aps']['sound']['name'] = $message->getSound();
             } else {
                 $payload['aps']['sound'] = $message->getSound();
             }
         }
-        if (!\is_null($message->getBadge())) {
+        if (! \is_null($message->getBadge())) {
             $payload['aps']['badge'] = $message->getBadge();
         }
-        if (!\is_null($message->getContentAvailable())) {
+        if (! \is_null($message->getContentAvailable())) {
             $payload['aps']['content-available'] = (int) $message->getContentAvailable();
         }
-        if (!\is_null($message->getPriority())) {
+        if (! \is_null($message->getPriority())) {
             $payload['headers']['apns-priority'] = match ($message->getPriority()) {
                 Priority::HIGH => '10',
                 Priority::NORMAL => '5',
@@ -83,17 +83,12 @@ class APNS extends PushAdapter
         }
 
         $claims = [
-            'iss' => $this->teamId,   // Issuer
-            'iat' => time(),         // Issued at time
-            'exp' => time() + 3600,  // Expiration time
+            'iss' => $this->teamId, // Issuer
+            'iat' => time(), // Issued at time
+            'exp' => time() + 3600, // Expiration time
         ];
 
-        $jwt = JWT::encode(
-            $claims,
-            $this->authKey,
-            'ES256',
-            $this->authKeyId,
-        );
+        $jwt = JWT::encode($claims, $this->authKey, 'ES256', $this->authKeyId);
 
         $endpoint = 'https://api.push.apple.com';
 
@@ -130,9 +125,11 @@ class APNS extends PushAdapter
                     $response->addResult($device);
                     break;
                 default:
-                    $error = ($result['response']['reason'] ?? null) === 'ExpiredToken' || ($result['response']['reason'] ?? null) === 'BadDeviceToken'
-                        ? $this->getExpiredErrorMessage()
-                        : ($result['response']['reason'] ?? ($result['error'] ?: 'Unknown error'));
+                    $error =
+                        ($result['response']['reason'] ?? null) === 'ExpiredToken'
+                        || ($result['response']['reason'] ?? null) === 'BadDeviceToken'
+                            ? $this->getExpiredErrorMessage()
+                            : $result['response']['reason'] ?? ($result['error'] ?: 'Unknown error');
 
                     $response->addResult($device, $error);
                     break;

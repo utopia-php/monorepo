@@ -24,9 +24,6 @@ final class SubjectTransform
 
     public static function fromArray(array $data): self
     {
-        return new self(
-            source: $data['src'] ?? '',
-            destination: $data['dest'] ?? '',
-        );
+        return new self(source: $data['src'] ?? '', destination: $data['dest'] ?? '');
     }
 }

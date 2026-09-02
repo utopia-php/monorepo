@@ -21,9 +21,12 @@ class WhiteList extends Validator
      * @param  bool  $strict disable type check and be case insensetive
      * @param  string  $type of $list items
      */
-    public function __construct(protected array $list, protected bool $strict = false, protected string $type = self::TYPE_STRING)
-    {
-        if (!$this->strict) {
+    public function __construct(
+        protected array $list,
+        protected bool $strict = false,
+        protected string $type = self::TYPE_STRING,
+    ) {
+        if (! $this->strict) {
             foreach ($this->list as $key => &$value) {
                 $this->list[$key] = strtolower((string) $value);
             }
@@ -79,7 +82,7 @@ class WhiteList extends Validator
             return false;
         }
 
-        $value = ($this->strict) ? $value : strtolower((string) $value);
+        $value = $this->strict ? $value : strtolower((string) $value);
         return \in_array($value, $this->list, $this->strict);
     }
 }

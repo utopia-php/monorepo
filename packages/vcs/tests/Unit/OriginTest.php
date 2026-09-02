@@ -80,9 +80,11 @@ final class OriginTest extends TestCase
 
         // A signature by a different key must not verify
         $otherSecretKey = sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair());
-        $this->assertFalse(
-            $this->adapter->validateWebhookEvent($payload, $this->signWebhookPayload($payload, $otherSecretKey), $publicKey),
-        );
+        $this->assertFalse($this->adapter->validateWebhookEvent(
+            $payload,
+            $this->signWebhookPayload($payload, $otherSecretKey),
+            $publicKey,
+        ));
 
         // Tampered content must not verify either
         $this->assertFalse($this->adapter->validateWebhookEvent($payload . 'tampered', $signature, $publicKey));
@@ -140,12 +142,14 @@ final class OriginTest extends TestCase
                         'created' => $created,
                         'deleted' => $deleted,
                         'forced' => false,
-                        'headCommit' => $deleted ? null : [
-                            'sha' => self::COMMIT_HASH,
-                            'author' => ['name' => self::AUTHOR_NAME, 'email' => self::AUTHOR_EMAIL],
-                            'committer' => ['name' => self::AUTHOR_NAME, 'email' => self::AUTHOR_EMAIL],
-                            'message' => self::COMMIT_MESSAGE,
-                        ],
+                        'headCommit' => $deleted
+                            ? null
+                            : [
+                                'sha' => self::COMMIT_HASH,
+                                'author' => ['name' => self::AUTHOR_NAME, 'email' => self::AUTHOR_EMAIL],
+                                'committer' => ['name' => self::AUTHOR_NAME, 'email' => self::AUTHOR_EMAIL],
+                                'message' => self::COMMIT_MESSAGE,
+                            ],
                     ]],
                     'refUpdatesCount' => 1,
                     'pushedAt' => '2026-08-18T10:00:00Z',
@@ -292,14 +296,29 @@ final class OriginTest extends TestCase
 
         $cases = [
             'not a JWT' => ['not-a-jwt', 'app_0123456789'],
-            'wrong algorithm' => [$this->signReceipt(['alg' => 'HS256'] + $header, $claims, $secretKey), 'app_0123456789'],
-            'wrong token type' => [$this->signReceipt(['typ' => 'other+jwt'] + $header, $claims, $secretKey), 'app_0123456789'],
+            'wrong algorithm' => [
+                $this->signReceipt(['alg' => 'HS256'] + $header, $claims, $secretKey),
+                'app_0123456789',
+            ],
+            'wrong token type' => [
+                $this->signReceipt(['typ' => 'other+jwt'] + $header, $claims, $secretKey),
+                'app_0123456789',
+            ],
             'unknown key id' => [$this->signReceipt(['kid' => 'k2'] + $header, $claims, $secretKey), 'app_0123456789'],
             'wrong audience' => [$this->signReceipt($header, $claims, $secretKey), 'app_other'],
-            'wrong issuer' => [$this->signReceipt($header, ['iss' => 'https://evil.test'] + $claims, $secretKey), 'app_0123456789'],
+            'wrong issuer' => [
+                $this->signReceipt($header, ['iss' => 'https://evil.test'] + $claims, $secretKey),
+                'app_0123456789',
+            ],
             'expired' => [$this->signReceipt($header, ['exp' => time() - 300] + $claims, $secretKey), 'app_0123456789'],
-            'missing installation id' => [$this->signReceipt($header, ['sub' => ''] + $claims, $secretKey), 'app_0123456789'],
-            'signed by a different key' => [$this->signReceipt($header, $claims, sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair())), 'app_0123456789'],
+            'missing installation id' => [
+                $this->signReceipt($header, ['sub' => ''] + $claims, $secretKey),
+                'app_0123456789',
+            ],
+            'signed by a different key' => [
+                $this->signReceipt($header, $claims, sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair())),
+                'app_0123456789',
+            ],
         ];
 
         foreach ($cases as $name => [$receipt, $appId]) {
@@ -351,11 +370,17 @@ final class OriginTest extends TestCase
 
     public function testGetEventPushBranchLifecycle(): void
     {
-        $created = $this->adapter->getEvents('repository.pushed', (string) json_encode($this->pushPayload('new-branch', created: true)));
+        $created = $this->adapter->getEvents(
+            'repository.pushed',
+            (string) json_encode($this->pushPayload('new-branch', created: true)),
+        );
         $this->assertTrue($created[0]['branchCreated']);
         $this->assertFalse($created[0]['branchDeleted']);
 
-        $deleted = $this->adapter->getEvents('repository.pushed', (string) json_encode($this->pushPayload('old-branch', deleted: true)));
+        $deleted = $this->adapter->getEvents(
+            'repository.pushed',
+            (string) json_encode($this->pushPayload('old-branch', deleted: true)),
+        );
         $this->assertFalse($deleted[0]['branchCreated']);
         $this->assertTrue($deleted[0]['branchDeleted']);
     }

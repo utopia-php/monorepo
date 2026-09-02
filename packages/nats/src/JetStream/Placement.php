@@ -29,9 +29,6 @@ final class Placement
 
     public static function fromArray(array $data): self
     {
-        return new self(
-            cluster: $data['cluster'] ?? null,
-            tags: $data['tags'] ?? null,
-        );
+        return new self(cluster: $data['cluster'] ?? null, tags: $data['tags'] ?? null);
     }
 }

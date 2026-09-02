@@ -167,8 +167,10 @@ final class OperatingSystemDetector
             return new OperatingSystem('IPA', 'iPadOS', self::appleVersion($userAgent));
         }
 
-        if (preg_match('/(?:iPhone|iPod)/i', $userAgent) === 1
-            || preg_match('/(?:CPU (?:iPhone )?OS|iPhone OS)[ \/]([0-9_]+)/i', $userAgent) === 1) {
+        if (
+            preg_match('/(?:iPhone|iPod)/i', $userAgent) === 1
+            || preg_match('/(?:CPU (?:iPhone )?OS|iPhone OS)[ \/]([0-9_]+)/i', $userAgent) === 1
+        ) {
             return new OperatingSystem('IOS', 'iOS', self::appleVersion($userAgent));
         }
 

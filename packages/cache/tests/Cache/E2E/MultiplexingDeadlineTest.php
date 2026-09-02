@@ -6,15 +6,14 @@ namespace Utopia\Tests\E2E;
 
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
-
-use function Swoole\Coroutine\run;
-
 use Swoole\Coroutine\WaitGroup;
 use Utopia\Cache\Adapter\Redis\IdleConnectionException;
 use Utopia\Cache\Adapter\Redis\Multiplexing as RedisMultiplexing;
 use Utopia\Cache\Adapter\Redis\TimeoutException;
 use Utopia\Cache\Cache;
 use Utopia\Tests\Services;
+
+use function Swoole\Coroutine\run;
 
 /**
  * What a caller's expired read deadline is allowed to do to the connection

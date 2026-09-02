@@ -41,7 +41,20 @@ final class SchedulerTest extends TestCase
         }
 
         $expected = [];
-        foreach (['15:55', '16:00', '16:05', '16:10', '16:15', '16:20', '16:25', '16:30', '16:35', '16:40', '16:45', '16:50'] as $slot) {
+        foreach ([
+            '15:55',
+            '16:00',
+            '16:05',
+            '16:10',
+            '16:15',
+            '16:20',
+            '16:25',
+            '16:30',
+            '16:35',
+            '16:40',
+            '16:45',
+            '16:50',
+        ] as $slot) {
             $expected[] = "{$slot}:00";
         }
 
@@ -137,10 +150,10 @@ final class SchedulerTest extends TestCase
                 ['b-minutely', '03:01:00'],
                 ['a-half-minute', '03:01:30'],
             ],
-            array_map(
-                fn(Occurrence $occurrence): array => [$occurrence->id, $occurrence->due->format('H:i:s')],
-                $scheduler->tick(),
-            ),
+            array_map(fn(Occurrence $occurrence): array => [
+                $occurrence->id,
+                $occurrence->due->format('H:i:s'),
+            ], $scheduler->tick()),
         );
     }
 
@@ -204,10 +217,7 @@ final class SchedulerTest extends TestCase
 
         // Each occurrence is handled on the tick after its minute closes,
         // and ticks land on wall-clock minute boundaries.
-        $this->assertSame(
-            [['00:01:00', '00:02:00'], ['00:02:00', '00:03:00']],
-            $seen,
-        );
+        $this->assertSame([['00:01:00', '00:02:00'], ['00:02:00', '00:03:00']], $seen);
     }
 
     public function testStandbyTakesOverWhenTheClaimExpires(): void
@@ -217,7 +227,13 @@ final class SchedulerTest extends TestCase
         // Another instance holds the claim for the next 120 seconds.
         $store->swap(null, new Claim('incumbent', (float) $clock->now()->format('U') + 120.0, null));
 
-        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], store: $store, tickSeconds: 60, token: 'standby');
+        $scheduler = $this->scheduler(
+            $clock,
+            ['minutely' => new Cron('* * * * *')],
+            store: $store,
+            tickSeconds: 60,
+            token: 'standby',
+        );
 
         $delivered = [];
         $scheduler->run(function (array $occurrences) use (&$delivered, $scheduler): void {
@@ -276,7 +292,13 @@ final class SchedulerTest extends TestCase
         $store = new MemoryStore();
         $telemetry = new TestTelemetry();
 
-        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], store: $store, token: 'leader', telemetry: $telemetry);
+        $leader = $this->scheduler(
+            $clock,
+            ['fn' => new Cron('* * * * *')],
+            store: $store,
+            token: 'leader',
+            telemetry: $telemetry,
+        );
         $leader->tick();
         $leader->commit();
 
@@ -305,11 +327,23 @@ final class SchedulerTest extends TestCase
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
         $store = new MemoryStore();
 
-        $leader = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], store: $store, token: 'leader', leaseSeconds: 60);
+        $leader = $this->scheduler(
+            $clock,
+            ['fn' => new Cron('* * * * *')],
+            store: $store,
+            token: 'leader',
+            leaseSeconds: 60,
+        );
         $leader->tick();
         $leader->commit(); // claim expires 03:01:30
 
-        $standby = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], store: $store, token: 'standby', leaseSeconds: 60);
+        $standby = $this->scheduler(
+            $clock,
+            ['fn' => new Cron('* * * * *')],
+            store: $store,
+            token: 'standby',
+            leaseSeconds: 60,
+        );
 
         // Two failed attempts, 40 seconds apart, neither committing.
         foreach ([40.0, 40.0] as $backoff) {
@@ -328,10 +362,14 @@ final class SchedulerTest extends TestCase
     public function testHandlerReceivesEachDueMomentWhenItFallsDue(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
-        $scheduler = $this->scheduler($clock, [
-            'b' => new Cron('* * * * *'),
-            'a' => new Interval(30),
-        ], tickSeconds: 60);
+        $scheduler = $this->scheduler(
+            $clock,
+            [
+                'b' => new Cron('* * * * *'),
+                'a' => new Interval(30),
+            ],
+            tickSeconds: 60,
+        );
 
         $batches = [];
         $scheduler->run(function (array $occurrences) use (&$batches, $scheduler): void {
@@ -348,12 +386,14 @@ final class SchedulerTest extends TestCase
         // once that moment arrives, everything sharing the moment together.
         // Batching, fan-out and failure isolation within a hand-over remain
         // the handler's to choose, and an empty window never calls it.
-        $this->assertSame([
-            ['a@03:00:30'],
-            ['a@03:01:00', 'b@03:01:00'],
-            ['a@03:01:30'],
-        ], $batches);
-
+        $this->assertSame(
+            [
+                ['a@03:00:30'],
+                ['a@03:01:00', 'b@03:01:00'],
+                ['a@03:01:30'],
+            ],
+            $batches,
+        );
     }
 
     /**
@@ -363,7 +403,13 @@ final class SchedulerTest extends TestCase
     public function testAnOccurrenceSelectedAheadIsHeldUntilItIsDue(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
-        $scheduler = $this->scheduler($clock, ['fn' => new Cron('* * * * *')], tickSeconds: 60, leadSeconds: 60, leaseSeconds: 300);
+        $scheduler = $this->scheduler(
+            $clock,
+            ['fn' => new Cron('* * * * *')],
+            tickSeconds: 60,
+            leadSeconds: 60,
+            leaseSeconds: 300,
+        );
 
         $seen = [];
         $scheduler->run(function (array $occurrences) use (&$seen, $clock, $scheduler): void {
@@ -471,9 +517,11 @@ final class SchedulerTest extends TestCase
         $cancelledAt = new \DateTimeImmutable('2026-08-18 03:00:10.000000');
         $scheduler = new Scheduler(
             source: new SnapshotSource(
-                snapshot: fn(): array => $clock->now() >= $cancelledAt
-                    ? [new Row('kept', '1')]
-                    : [new Row('doomed', '1'), new Row('kept', '1')],
+                snapshot: fn(): array => (
+                    $clock->now() >= $cancelledAt
+                        ? [new Row('kept', '1')]
+                        : [new Row('doomed', '1'), new Row('kept', '1')]
+                ),
                 make: fn(Row $row): Entry => new Entry(new Shifted(new Cron('* * * * *'), 30), $row->id),
             ),
             tickSeconds: 60,
@@ -602,20 +650,22 @@ final class SchedulerTest extends TestCase
         // same key, whatever payload it carries.
         $due = new \DateTimeImmutable('2026-08-18 03:01:00');
         $this->assertSame(
-            (new Occurrence('fn', $due, 'payload-a'))->key(),
-            (new Occurrence('fn', $due, 'payload-b'))->key(),
+            new Occurrence('fn', $due, 'payload-a')->key(),
+            new Occurrence('fn', $due, 'payload-b')->key(),
         );
-        $this->assertNotSame(
-            (new Occurrence('fn', $due))->key(),
-            (new Occurrence('fn', $due->modify('+1 minute')))->key(),
-        );
+        $this->assertNotSame(new Occurrence('fn', $due)->key(), new Occurrence('fn', $due->modify('+1 minute'))->key());
     }
 
     public function testGoldenSignalsAreRecorded(): void
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
         $telemetry = new TestTelemetry();
-        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], tickSeconds: 60, telemetry: $telemetry);
+        $scheduler = $this->scheduler(
+            $clock,
+            ['minutely' => new Cron('* * * * *')],
+            tickSeconds: 60,
+            telemetry: $telemetry,
+        );
 
         $scheduler->run(function (array $occurrences) use ($scheduler): void {
             $scheduler->stop();
@@ -648,7 +698,12 @@ final class SchedulerTest extends TestCase
     {
         $clock = new TestClock(new \DateTimeImmutable('2026-01-01 00:00:30.000000'));
         $telemetry = new TestTelemetry();
-        $scheduler = $this->scheduler($clock, ['minutely' => new Cron('* * * * *')], tickSeconds: 60, telemetry: $telemetry);
+        $scheduler = $this->scheduler(
+            $clock,
+            ['minutely' => new Cron('* * * * *')],
+            tickSeconds: 60,
+            telemetry: $telemetry,
+        );
 
         try {
             $scheduler->run(function (array $occurrences): never {
@@ -734,6 +789,9 @@ final class SchedulerTest extends TestCase
 
     private function emptySource(): Source
     {
-        return new SnapshotSource(snapshot: fn(): array => [], make: fn(Row $row): Entry => new Entry(new Interval(60)));
+        return new SnapshotSource(
+            snapshot: fn(): array => [],
+            make: fn(Row $row): Entry => new Entry(new Interval(60)),
+        );
     }
 }

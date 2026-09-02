@@ -170,7 +170,9 @@ class System
 
                 $cpuInfo = file_get_contents('/proc/cpuinfo');
                 if ($cpuInfo === false) {
-                    throw new Exception('Unable to determine CPU count: /proc/cpuinfo is not readable and no cgroup limits are configured.');
+                    throw new Exception(
+                        'Unable to determine CPU count: /proc/cpuinfo is not readable and no cgroup limits are configured.',
+                    );
                 }
                 preg_match_all('/^processor/m', $cpuInfo, $matches);
                 $hostCores = \count($matches[0]);
@@ -284,7 +286,7 @@ class System
             if (str_contains($range, '-')) {
                 [$start, $end] = explode('-', $range, 2);
                 if (is_numeric($start) && is_numeric($end) && (int) $start <= (int) $end) {
-                    $count += ((int) $end - (int) $start) + 1;
+                    $count += (int) $end - (int) $start + 1;
                 }
             } elseif (is_numeric($range)) {
                 $count += 1;
@@ -307,7 +309,7 @@ class System
 
         $cpustats = file_get_contents('/proc/stat');
 
-        if (!$cpustats) {
+        if (! $cpustats) {
             throw new Exception('Unable to read /proc/stat');
         }
 
@@ -388,8 +390,20 @@ class System
                 $prevIdle = $startCpu['idle'] + $startCpu['iowait'];
                 $idle = $endCpu['idle'] + $endCpu['iowait'];
 
-                $prevNonIdle = $startCpu['user'] + $startCpu['nice'] + $startCpu['system'] + $startCpu['irq'] + $startCpu['softirq'] + $startCpu['steal'];
-                $nonIdle = $endCpu['user'] + $endCpu['nice'] + $endCpu['system'] + $endCpu['irq'] + $endCpu['softirq'] + $endCpu['steal'];
+                $prevNonIdle =
+                    $startCpu['user']
+                    + $startCpu['nice']
+                    + $startCpu['system']
+                    + $startCpu['irq']
+                    + $startCpu['softirq']
+                    + $startCpu['steal'];
+                $nonIdle =
+                    $endCpu['user']
+                    + $endCpu['nice']
+                    + $endCpu['system']
+                    + $endCpu['irq']
+                    + $endCpu['softirq']
+                    + $endCpu['steal'];
 
                 $prevTotal = $prevIdle + $prevNonIdle;
                 $total = $idle + $nonIdle;
@@ -408,7 +422,7 @@ class System
     private static function getProcMemoryInfo(string $field): int
     {
         $memInfo = file_get_contents('/proc/meminfo');
-        if (!$memInfo) {
+        if (! $memInfo) {
             throw new Exception('Unable to read /proc/meminfo');
         }
 
@@ -417,7 +431,6 @@ class System
             return \intval(\intval($matches[1]) / 1024);
         }
         throw new Exception("Unable to find {$field} in /proc/meminfo.");
-
     }
 
     /**
@@ -430,7 +443,7 @@ class System
     {
         return match (self::getOS()) {
             'Linux' => self::getProcMemoryInfo('MemTotal'),
-            'Darwin' => \intval((\intval(shell_exec('sysctl -n hw.memsize'))) / 1024 / 1024),
+            'Darwin' => \intval((\intval(shell_exec('sysctl -n hw.memsize')) / 1024) / 1024),
             default => throw new Exception(self::getOS() . ' not supported.'),
         };
     }
@@ -445,7 +458,7 @@ class System
     {
         return match (self::getOS()) {
             'Linux' => self::getProcMemoryInfo('MemFree'),
-            'Darwin' => \intval(\intval(shell_exec('sysctl -n vm.page_free_count')) / 1024 / 1024),
+            'Darwin' => \intval((\intval(shell_exec('sysctl -n vm.page_free_count')) / 1024) / 1024),
             default => throw new Exception(self::getOS() . ' not supported.'),
         };
     }
@@ -482,7 +495,7 @@ class System
             throw new Exception('Unable to get disk space');
         }
 
-        return \intval($totalSpace / 1024 / 1024);
+        return \intval(($totalSpace / 1024) / 1024);
     }
 
     /**
@@ -499,7 +512,7 @@ class System
             throw new Exception('Unable to get free disk space');
         }
 
-        return \intval($totalSpace / 1024 / 1024);
+        return \intval(($totalSpace / 1024) / 1024);
     }
 
     /**
@@ -512,7 +525,7 @@ class System
         // Read /proc/diskstats
         $diskStats = @file_get_contents('/proc/diskstats');
 
-        if (!$diskStats) {
+        if (! $diskStats) {
             throw new Exception('Unable to read /proc/diskstats');
         }
 
@@ -552,7 +565,7 @@ class System
 
         $diskStat = array_filter($diskStat, function (array $disk): bool {
             foreach (self::INVALID_DISKS as $filter) {
-                if (!isset($disk[2]) || !\is_string($disk[2])) {
+                if (! isset($disk[2]) || ! \is_string($disk[2])) {
                     return false;
                 }
                 if (str_contains($disk[2], $filter)) {
@@ -565,7 +578,7 @@ class System
 
         $diskStat2 = array_filter($diskStat2, function (array $disk): bool {
             foreach (self::INVALID_DISKS as $filter) {
-                if (!isset($disk[2]) || !\is_string($disk[2])) {
+                if (! isset($disk[2]) || ! \is_string($disk[2])) {
                     return false;
                 }
 
@@ -587,9 +600,9 @@ class System
             $write2 = $diskStat2[$key][9];
             $write1 = $disk[9];
 
-            $stats[$key]['read'] = (((\intval($read2) - \intval($read1)) * 512) / 1048576);
+            $stats[$key]['read'] = ((\intval($read2) - \intval($read1)) * 512) / 1048576;
 
-            $stats[$key]['write'] = (((\intval($write2) - \intval($write1)) * 512) / 1048576);
+            $stats[$key]['write'] = ((\intval($write2) - \intval($write1)) * 512) / 1048576;
         }
 
         $stats['total']['read'] = array_sum(array_column($stats, 'read'));
@@ -614,7 +627,7 @@ class System
         // Create a list of interfaces
         $interfaces = @scandir('/sys/class/net', SCANDIR_SORT_NONE);
 
-        if (!$interfaces) {
+        if (! $interfaces) {
             throw new Exception('Unable to read /sys/class/net');
         }
 

@@ -44,7 +44,7 @@ final class PushSubscription
      */
     public static function handleControl(Connection $conn, Message $msg): bool
     {
-        if (!$msg->headers instanceof \Utopia\NATS\Headers) {
+        if (! $msg->headers instanceof \Utopia\NATS\Headers) {
             return false;
         }
         if ($msg->headers->getStatus() !== '100') {

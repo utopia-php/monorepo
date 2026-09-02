@@ -37,7 +37,7 @@ class Client
     {
         $this->socket = new Socket(AF_INET, SOCK_STREAM, self::PROTOCOL_TCP);
 
-        if (!$this->socket->connect($this->host, $this->port, $this->timeout)) {
+        if (! $this->socket->connect($this->host, $this->port, $this->timeout)) {
             throw new Exception("Failed to connect to {$this->host}:{$this->port}: {$this->socket->errMsg}");
         }
 
@@ -61,7 +61,7 @@ class Client
 
         do {
             $header = $this->socket->recvAll(4, $this->timeout);
-            if (!\is_string($header) || \strlen($header) < 4) {
+            if (! \is_string($header) || \strlen($header) < 4) {
                 throw new Exception("Connection closed while reading packet header: {$this->socket->errMsg}");
             }
 
@@ -70,7 +70,7 @@ class Client
 
             if ($length > 0) {
                 $chunk = $this->socket->recvAll($length, $this->timeout);
-                if (!\is_string($chunk) || \strlen($chunk) < $length) {
+                if (! \is_string($chunk) || \strlen($chunk) < $length) {
                     throw new Exception("Connection closed while reading packet body: {$this->socket->errMsg}");
                 }
                 $payload .= $chunk;
@@ -105,7 +105,11 @@ class Client
 
         do {
             $size = min($length - $offset, 0xFFFFFF);
-            $header = \chr($size & 0xFF) . \chr(($size >> 8) & 0xFF) . \chr(($size >> 16) & 0xFF) . \chr($this->sequence & 0xFF);
+            $header =
+                \chr($size & 0xFF)
+                . \chr(($size >> 8) & 0xFF)
+                . \chr(($size >> 16) & 0xFF)
+                . \chr($this->sequence & 0xFF);
             if ($this->socket->sendAll($header . substr($payload, $offset, $size)) === false) {
                 throw new Exception("Failed to write packet: {$this->socket->errMsg}");
             }
@@ -159,7 +163,7 @@ class Client
                 $this->throwError($packet);
             }
 
-            $value ??= (new BinaryReader($packet))->readLengthEncodedString();
+            $value ??= new BinaryReader($packet)->readLengthEncodedString();
         }
 
         return $value;
@@ -203,7 +207,7 @@ class Client
             $authData .= $handshake->read(max(13, $authDataLen - 8));
         }
 
-        $plugin = (($capabilities & Constants::CLIENT_PLUGIN_AUTH) !== 0)
+        $plugin = ($capabilities & Constants::CLIENT_PLUGIN_AUTH) !== 0
             ? $handshake->readNullTerminatedString()
             : 'mysql_native_password';
 
@@ -228,7 +232,8 @@ class Client
             throw new Exception('TLS requested but the server does not support it');
         }
 
-        $payload = pack('V', $this->clientCapabilities() | Constants::CLIENT_SSL)
+        $payload =
+            pack('V', $this->clientCapabilities() | Constants::CLIENT_SSL)
             . pack('V', self::MAX_PACKET_SIZE)
             . \chr(self::CHARSET_UTF8MB4)
             . str_repeat("\0", 23);
@@ -238,26 +243,28 @@ class Client
             'open_ssl' => true,
             'ssl_host_name' => $this->host,
             'ssl_verify_peer' => $this->sslVerify,
-            'ssl_allow_self_signed' => !$this->sslVerify,
+            'ssl_allow_self_signed' => ! $this->sslVerify,
         ];
         if ($this->sslCa !== '') {
             $options['ssl_cafile'] = $this->sslCa;
         }
 
         $this->socket->setProtocol($options);
-        if (!$this->socket->sslHandshake()) {
+        if (! $this->socket->sslHandshake()) {
             throw new Exception("TLS handshake failed: {$this->socket->errMsg}");
         }
     }
 
     private function clientCapabilities(): int
     {
-        return Constants::CLIENT_LONG_PASSWORD
+        return (
+            Constants::CLIENT_LONG_PASSWORD
             | Constants::CLIENT_LONG_FLAG
             | Constants::CLIENT_PROTOCOL_41
             | Constants::CLIENT_SECURE_CONNECTION
             | Constants::CLIENT_PLUGIN_AUTH
-            | Constants::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
+            | Constants::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
+        );
     }
 
     private function sendHandshakeResponse(string $nonce, string $plugin): void
@@ -269,13 +276,17 @@ class Client
 
         $authResponse = $this->scramble($plugin, $nonce);
 
-        $payload = pack('V', $capabilities)
+        $payload =
+            pack('V', $capabilities)
             . pack('V', self::MAX_PACKET_SIZE)
             . \chr(self::CHARSET_UTF8MB4)
             . str_repeat("\0", 23)
-            . $this->username . "\0"
-            . $this->lengthEncodedInt(\strlen($authResponse)) . $authResponse
-            . $plugin . "\0";
+            . $this->username
+            . "\0"
+            . $this->lengthEncodedInt(\strlen($authResponse))
+            . $authResponse
+            . $plugin
+            . "\0";
 
         $this->writePacket($payload);
     }
@@ -291,7 +302,7 @@ class Client
                     return;
                 case Constants::PACKET_ERR:
                     $this->throwError($packet);
-                    // no break — throwError always throws
+                // no break — throwError always throws
                 case Constants::PACKET_EOF:
                     // Auth switch request: re-scramble for the requested plugin.
                     $reader = new BinaryReader(substr($packet, 1));
@@ -337,7 +348,7 @@ class Client
             $masked .= $plain[$i] ^ $nonce[$i % $nonceLen];
         }
 
-        if (!openssl_public_encrypt($masked, $encrypted, $publicKey, OPENSSL_PKCS1_OAEP_PADDING)) {
+        if (! openssl_public_encrypt($masked, $encrypted, $publicKey, OPENSSL_PKCS1_OAEP_PADDING)) {
             throw new Exception('Failed to RSA-encrypt credentials: ' . openssl_error_string());
         }
 

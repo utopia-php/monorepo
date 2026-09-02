@@ -115,7 +115,7 @@ function mirror_workflow(string $package): string
 }
 
 /**
- * Ensure the root toolchain (pint, phpstan, rector, phpunit) is installed and
+ * Ensure the root toolchain (Mago, phpstan, rector, phpunit) is installed and
  * on PATH, so package scripts resolve `phpunit` to the monorepo's version.
  */
 function toolchain(): void
@@ -336,7 +336,7 @@ switch ($command) {
         $path = "{$directory}/composer.json";
         $manifest = json_decode(file_get_contents($path), true);
         $original = $manifest;
-        foreach (['laravel/pint', 'phpstan/phpstan', 'rector/rector', 'squizlabs/php_codesniffer', 'phpunit/phpunit'] as $dependency) {
+        foreach (['carthage-software/mago', 'laravel/pint', 'phpstan/phpstan', 'rector/rector', 'squizlabs/php_codesniffer', 'phpunit/phpunit'] as $dependency) {
             unset($manifest['require-dev'][$dependency]);
         }
         foreach (['format', 'format:check', 'format:fix', 'lint', 'check', 'analyse', 'analyze', 'refactor', 'refactor:check'] as $script) {
@@ -356,7 +356,11 @@ switch ($command) {
         }
         if (is_file("{$directory}/pint.json")) {
             unlink("{$directory}/pint.json");
-            out('removed pint.json (root config is canonical)');
+            out('removed legacy pint.json (Mago root config is canonical)');
+        }
+        if (is_file("{$directory}/mago.toml")) {
+            unlink("{$directory}/mago.toml");
+            out('removed mago.toml (root config is canonical)');
         }
         if ($manifest !== $original) {
             file_put_contents($path, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
@@ -595,7 +599,7 @@ switch ($command) {
             }
 
             $fix = isset($options['fix']);
-            $checks = ['pint' => '../../vendor/bin/pint --config ../../pint.json' . ($fix ? '' : ' --test')];
+            $checks = ['mago' => '../../vendor/bin/mago --config ../../mago.toml format .' . ($fix ? '' : ' --check')];
             // A package phpstan.neon overrides the root level-5 baseline; without one, fall back to it.
             $checks['phpstan'] = '../../vendor/bin/phpstan analyse --memory-limit=1G'
                 . (glob("{$directory}/phpstan.neon*") !== [] ? '' : ' -c ../../phpstan.neon');
@@ -788,7 +792,7 @@ switch ($command) {
           release <name> <version> [--dry-run]
                                               preview notes, tag <name>/<version> and push it (CI does the rest)
           validate                            check package composer.json conventions
-          check [name...] [--fix]             run pint, phpstan and rector against packages
+          check [name...] [--fix]             run Mago, phpstan and rector against packages
           test [name...] [--linked]           install dependencies and run package test suites
                                               (--linked resolves monorepo siblings from the local checkout)
           benchmark [name...]                 run the `bench` script of packages that declare one

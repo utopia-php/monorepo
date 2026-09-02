@@ -71,7 +71,7 @@ final readonly class Message
         // TC=1 signals an incomplete response, so NODATA/NXDOMAIN invariants
         // that require SOA in authority don't apply — the client will retry
         // over TCP for the full answer.
-        if ($header->isResponse && $header->authoritative && !$header->truncated && $soaAuthorityCount < 1) {
+        if ($header->isResponse && $header->authoritative && ! $header->truncated && $soaAuthorityCount < 1) {
             if ($header->responseCode === self::RCODE_NXDOMAIN) {
                 throw new \InvalidArgumentException('NXDOMAIN requires SOA in authority');
             }
@@ -81,11 +81,8 @@ final readonly class Message
         }
     }
 
-    public static function query(
-        Question $question,
-        ?int $id = null,
-        bool $recursionDesired = true,
-    ): self {
+    public static function query(Question $question, ?int $id = null, bool $recursionDesired = true): self
+    {
         if ($id === null) {
             $id = random_int(0, 0xFFFF);
         }
@@ -147,7 +144,6 @@ final readonly class Message
             authorityCount: \count($authority),
             additionalCount: \count($additional),
         );
-
 
         return new self($header, $questions, $answers, $authority, $additional);
     }
@@ -221,7 +217,7 @@ final readonly class Message
         $answerCount = 0;
         foreach ($this->answers as $answer) {
             $encoded = $answer->encode();
-            if ($maxSize !== null && \strlen($packet) + \strlen($encoded) > $maxSize) {
+            if ($maxSize !== null && (\strlen($packet) + \strlen($encoded)) > $maxSize) {
                 break;
             }
             $packet .= $encoded;
@@ -233,7 +229,7 @@ final readonly class Message
         // Order matches RFC 1035 Section 6.2 (drop additional before authority).
         $authorityCount = 0;
         $additionalCount = 0;
-        if (!$answersTruncated) {
+        if (! $answersTruncated) {
             $withAuthority = $this->appendRecords($packet, $this->authority);
             if ($maxSize === null || \strlen($withAuthority) <= $maxSize) {
                 $packet = $withAuthority;
@@ -247,8 +243,8 @@ final readonly class Message
             }
         }
 
-        $sectionsUnchanged
-            = $answerCount === \count($this->answers)
+        $sectionsUnchanged =
+            $answerCount === \count($this->answers)
             && $authorityCount === \count($this->authority)
             && $additionalCount === \count($this->additional);
 
@@ -262,11 +258,10 @@ final readonly class Message
         // TC=1 response that merely encoded zero answers isn't NODATA — the
         // client will retry over TCP and the AA claim remains accurate.
         $authorityDropped = $authorityCount < \count($this->authority);
-        $isNodataOrNxdomain = ($this->header->responseCode === self::RCODE_NOERROR && $this->answers === [])
+        $isNodataOrNxdomain =
+            $this->header->responseCode === self::RCODE_NOERROR && $this->answers === []
             || $this->header->responseCode === self::RCODE_NXDOMAIN;
-        $authoritative = ($authorityDropped && $isNodataOrNxdomain)
-            ? false
-            : $this->header->authoritative;
+        $authoritative = $authorityDropped && $isNodataOrNxdomain ? false : $this->header->authoritative;
 
         // Per RFC 2181 Section 9, TC signals truncated required data (answers).
         // Preserve an inbound TC=1 (e.g. from a forwarded packet) — dropping

@@ -14,23 +14,14 @@ final class RedisClientTest extends TestCase
 {
     public function testEncodeBuildsRespArrayOfBulkStrings(): void
     {
-        $this->assertSame(
-            "*1\r\n\$4\r\nPING\r\n",
-            Client::encode(['PING']),
-        );
+        $this->assertSame("*1\r\n\$4\r\nPING\r\n", Client::encode(['PING']));
 
-        $this->assertSame(
-            "*3\r\n\$3\r\nSET\r\n\$3\r\nfoo\r\n\$3\r\nbar\r\n",
-            Client::encode(['SET', 'foo', 'bar']),
-        );
+        $this->assertSame("*3\r\n\$3\r\nSET\r\n\$3\r\nfoo\r\n\$3\r\nbar\r\n", Client::encode(['SET', 'foo', 'bar']));
     }
 
     public function testEncodeCoercesIntegersToStrings(): void
     {
-        $this->assertSame(
-            "*2\r\n\$6\r\nSELECT\r\n\$1\r\n3\r\n",
-            Client::encode(['SELECT', 3]),
-        );
+        $this->assertSame("*2\r\n\$6\r\nSELECT\r\n\$1\r\n3\r\n", Client::encode(['SELECT', 3]));
     }
 
     public function testEncodePreservesBinaryPayloadByByteLength(): void
@@ -75,10 +66,7 @@ final class RedisClientTest extends TestCase
     {
         $offset = 0;
         $payload = "line1\r\nline2";
-        $this->assertSame(
-            $payload,
-            Client::parse('$' . \strlen($payload) . "\r\n" . $payload . "\r\n", $offset),
-        );
+        $this->assertSame($payload, Client::parse('$' . \strlen($payload) . "\r\n" . $payload . "\r\n", $offset));
     }
 
     public function testParseEmptyBulkString(): void
@@ -188,10 +176,12 @@ final class RedisClientTest extends TestCase
         $this->assertSame(1, Client::parse(":1\r\n", $offset));
 
         // And that encode produces what a real Redis would expect.
-        $this->assertSame(
-            "*4\r\n\$4\r\nHSET\r\n\$1\r\nk\r\n\$1\r\nf\r\n\$1\r\nv\r\n",
-            Client::encode(['HSET', 'k', 'f', 'v']),
-        );
+        $this->assertSame("*4\r\n\$4\r\nHSET\r\n\$1\r\nk\r\n\$1\r\nf\r\n\$1\r\nv\r\n", Client::encode([
+            'HSET',
+            'k',
+            'f',
+            'v',
+        ]));
     }
 
     public function testUnwrapPassesThroughScalars(): void

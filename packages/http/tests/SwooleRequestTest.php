@@ -25,7 +25,10 @@ final class SwooleRequestTest extends TestCase
         yield 'empty object inside a list' => ['{"data":{"arr":[{},{"x":1}]}}', '{"data":{"arr":[{},{"x":1}]}}'];
         yield 'populated object' => ['{"data":{"a":1}}', '{"data":{"a":1}}'];
         yield 'empty object as the only param' => ['{"data":{},"other":{}}', '{"data":{},"other":{}}'];
-        yield 'braces inside a string literal' => ['{"data":{"note":"braces {} in text"}}', '{"data":{"note":"braces {} in text"}}'];
+        yield 'braces inside a string literal' => [
+            '{"data":{"note":"braces {} in text"}}',
+            '{"data":{"note":"braces {} in text"}}',
+        ];
         yield 'whitespace inside the empty object' => ['{"data":{"a":{ }}}', '{"data":{"a":{}}}'];
         yield 'newline inside the empty object' => ["{\"data\":{\"a\":{\n}}}", '{"data":{"a":{}}}'];
         yield 'empty list stays a list' => ['{"data":{"a":[]}}', '{"data":{"a":[]}}'];
@@ -73,7 +76,7 @@ final class SwooleRequestTest extends TestCase
     {
         $swoole = $this->swooleRequest('data=value', 'application/x-www-form-urlencoded');
 
-        $this->assertSame(['data' => 'value'], (new Request($swoole))->getParams());
+        $this->assertSame(['data' => 'value'], new Request($swoole)->getParams());
     }
 
     private function swooleRequest(string $body, string $contentType = 'application/json'): SwooleRequest
@@ -82,8 +85,12 @@ final class SwooleRequestTest extends TestCase
         $request->parse(
             "POST /v1/documents HTTP/1.1\r\n"
             . "Host: localhost\r\n"
-            . 'Content-Type: ' . $contentType . "\r\n"
-            . 'Content-Length: ' . \strlen($body) . "\r\n"
+            . 'Content-Type: '
+            . $contentType
+            . "\r\n"
+            . 'Content-Length: '
+            . \strlen($body)
+            . "\r\n"
             . "\r\n"
             . $body,
         );

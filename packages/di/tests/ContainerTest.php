@@ -38,10 +38,14 @@ final class ContainerTest extends TestCase
     {
         $callCount = 0;
         $container = new Container();
-        $container->set('counter', function () use (&$callCount): \stdClass {
-            $callCount++;
-            return new \stdClass();
-        }, []);
+        $container->set(
+            'counter',
+            function () use (&$callCount): \stdClass {
+                $callCount++;
+                return new \stdClass();
+            },
+            [],
+        );
 
         $first = $container->get('counter');
         $second = $container->get('counter');
@@ -164,10 +168,14 @@ final class ContainerTest extends TestCase
     {
         $callCount = 0;
         $container = new Container();
-        $container->set('nullable', function () use (&$callCount): null {
-            $callCount++;
-            return null;
-        }, []);
+        $container->set(
+            'nullable',
+            function () use (&$callCount): null {
+                $callCount++;
+                return null;
+            },
+            [],
+        );
 
         $container->get('nullable');
         $container->get('nullable');
@@ -231,10 +239,14 @@ final class ContainerTest extends TestCase
     {
         $callCount = 0;
         $parent = new Container();
-        $parent->set('singleton', function () use (&$callCount): \stdClass {
-            $callCount++;
-            return new \stdClass();
-        }, []);
+        $parent->set(
+            'singleton',
+            function () use (&$callCount): \stdClass {
+                $callCount++;
+                return new \stdClass();
+            },
+            [],
+        );
 
         $child = new Container($parent);
 

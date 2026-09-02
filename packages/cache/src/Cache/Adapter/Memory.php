@@ -20,7 +20,7 @@ class Memory implements Adapter
             /** @var array{time: int, data: string} */
             $saved = $this->store[$key];
 
-            return ($saved['time'] + $ttl > time()) ? $saved['data'] : false; // return data if cache is valid
+            return ($saved['time'] + $ttl) > time() ? $saved['data'] : false; // return data if cache is valid
         }
 
         return false;

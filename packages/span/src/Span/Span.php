@@ -24,8 +24,9 @@ class Span
 
     private ?Throwable $error = null;
 
-    public function __construct(private readonly string $action = 'unknown')
-    {
+    public function __construct(
+        private readonly string $action = 'unknown',
+    ) {
         $this->attributes['span.trace_id'] = bin2hex(random_bytes(16));
         $this->attributes['span.id'] = bin2hex(random_bytes(8));
         $this->attributes['span.started_at'] = microtime(true);
@@ -76,9 +77,12 @@ class Span
             if (
                 \count($parts) === 4
                 && $parts[0] === '00'
-                && \strlen($parts[1]) === 32 && ctype_xdigit($parts[1])
-                && \strlen($parts[2]) === 16 && ctype_xdigit($parts[2])
-                && \strlen($parts[3]) === 2 && ctype_xdigit($parts[3])
+                && \strlen($parts[1]) === 32
+                && ctype_xdigit($parts[1])
+                && \strlen($parts[2]) === 16
+                && ctype_xdigit($parts[2])
+                && \strlen($parts[3]) === 2
+                && ctype_xdigit($parts[3])
             ) {
                 $span->attributes['span.trace_id'] = $parts[1];
                 $span->attributes['span.parent_id'] = $parts[2];
@@ -194,11 +198,7 @@ class Span
      */
     public function getTraceparent(): string
     {
-        return \sprintf(
-            '00-%s-%s-01',
-            $this->attributes['span.trace_id'],
-            $this->attributes['span.id'],
-        );
+        return \sprintf('00-%s-%s-01', $this->attributes['span.trace_id'], $this->attributes['span.id']);
     }
 
     /**

@@ -1,0 +1,19 @@
+#:schema vendor/carthage-software/mago/schema.json
+
+version = "1.47"
+php-version = "8.4"
+
+[source]
+paths = ["packages"]
+excludes = ["**/vendor/**"]
+
+[formatter]
+preset = "default"
+tab-width = 4
+end-of-line = "lf"
+single-quote = true
+trailing-comma = true
+indent-heredoc = false
+sort-uses = "alpha-ascending"
+space-after-logical-not-unary-prefix-operator = true
+array-table-style-alignment = false

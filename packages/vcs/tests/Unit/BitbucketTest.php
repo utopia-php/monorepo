@@ -33,13 +33,20 @@ final class BitbucketTest extends Base
     {
         return new Bitbucket(new Cache(new None()));
     }
+
     protected function signWebhookPayload(string $payload, string $secret): string
     {
         return 'sha256=' . hash_hmac('sha256', $payload, $secret);
     }
 
-    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false): string
-    {
+    protected function pushPayload(
+        string $branch,
+        array $added = [],
+        array $removed = [],
+        array $modified = [],
+        bool $created = false,
+        bool $deleted = false,
+    ): string {
         $ref = [
             'type' => 'branch',
             'name' => $branch,
@@ -133,9 +140,17 @@ final class BitbucketTest extends Base
             'repository' => $this->eventRepository(),
             'push' => [
                 'changes' => [
-                    ['new' => ['type' => 'branch', 'name' => 'main', 'target' => ['hash' => 'aaa111']], 'created' => false, 'closed' => false],
+                    [
+                        'new' => ['type' => 'branch', 'name' => 'main', 'target' => ['hash' => 'aaa111']],
+                        'created' => false,
+                        'closed' => false,
+                    ],
                     ['new' => ['type' => 'tag', 'name' => 'v1.0.0', 'target' => ['hash' => 'bbb222']]],
-                    ['new' => ['type' => 'branch', 'name' => 'feature', 'target' => ['hash' => 'ccc333']], 'created' => true, 'closed' => false],
+                    [
+                        'new' => ['type' => 'branch', 'name' => 'feature', 'target' => ['hash' => 'ccc333']],
+                        'created' => true,
+                        'closed' => false,
+                    ],
                 ],
             ],
         ]);
@@ -151,7 +166,9 @@ final class BitbucketTest extends Base
         // A push carrying nothing but tags has no branch to report
         $tagsOnly = (string) json_encode([
             'repository' => $this->eventRepository(),
-            'push' => ['changes' => [['new' => ['type' => 'tag', 'name' => 'v1.0.0', 'target' => ['hash' => 'aaa111']]]]],
+            'push' => [
+                'changes' => [['new' => ['type' => 'tag', 'name' => 'v1.0.0', 'target' => ['hash' => 'aaa111']]]],
+            ],
         ]);
 
         $this->assertSame([], $this->vcsAdapter->getEvents(self::$pushEventName, $tagsOnly));

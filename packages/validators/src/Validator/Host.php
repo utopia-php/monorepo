@@ -15,7 +15,9 @@ use Utopia\Validator;
  */
 class Host extends Validator
 {
-    public function __construct(protected array $whitelist) {}
+    public function __construct(
+        protected array $whitelist,
+    ) {}
 
     /**
      * Get Description
@@ -38,7 +40,7 @@ class Host extends Validator
     {
         $urlValidator = new URL();
 
-        if (!$urlValidator->isValid($value)) {
+        if (! $urlValidator->isValid($value)) {
             return false;
         }
 

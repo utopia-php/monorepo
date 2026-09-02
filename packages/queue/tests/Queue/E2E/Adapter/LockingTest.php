@@ -23,10 +23,7 @@ final class LockingTest extends TestCase
     public function testOperationIsSynchronized(string $method, array $args, mixed $expected): void
     {
         $recorder = new Recorder();
-        $locking = new Locking(
-            new RecordingConnection($recorder),
-            new RecordingLock($recorder),
-        );
+        $locking = new Locking(new RecordingConnection($recorder), new RecordingLock($recorder));
 
         $result = $locking->$method(...$args);
 
@@ -42,10 +39,7 @@ final class LockingTest extends TestCase
     public function testLockIsAcquiredWithWaitForeverTimeout(): void
     {
         $recorder = new Recorder();
-        $locking = new Locking(
-            new RecordingConnection($recorder),
-            new RecordingLock($recorder),
-        );
+        $locking = new Locking(new RecordingConnection($recorder), new RecordingLock($recorder));
 
         $locking->ping();
 
@@ -59,10 +53,7 @@ final class LockingTest extends TestCase
     public function testLockIsReleasedWhenInnerCommandThrows(): void
     {
         $recorder = new Recorder();
-        $locking = new Locking(
-            new ThrowingConnection(),
-            new RecordingLock($recorder),
-        );
+        $locking = new Locking(new ThrowingConnection(), new RecordingLock($recorder));
 
         try {
             $locking->ping();
@@ -157,7 +148,9 @@ class Recorder
 
 class RecordingLock implements Lock
 {
-    public function __construct(private readonly Recorder $recorder) {}
+    public function __construct(
+        private readonly Recorder $recorder,
+    ) {}
 
     public function acquire(float $timeout = 0.0): bool
     {
@@ -186,7 +179,9 @@ class RecordingLock implements Lock
 
 class RecordingConnection implements Connection
 {
-    public function __construct(private readonly Recorder $recorder) {}
+    public function __construct(
+        private readonly Recorder $recorder,
+    ) {}
 
     private function record(string $method, array $args): void
     {
@@ -457,6 +452,7 @@ class ThrowingConnection implements Connection
     }
 
     public function close(): void {}
+
     public function leftPushMany(string $queue, array $payloads): bool
     {
         return true;
@@ -466,5 +462,4 @@ class ThrowingConnection implements Connection
     {
         return true;
     }
-
 }

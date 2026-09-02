@@ -24,10 +24,7 @@ final class EnvelopeTest extends TestCase
         ));
 
         $this->assertSame('jane@example.test', $envelope->sender);
-        $this->assertSame(
-            ['john@example.test', 'ada@example.test', 'eve@example.test'],
-            $envelope->recipients,
-        );
+        $this->assertSame(['john@example.test', 'ada@example.test', 'eve@example.test'], $envelope->recipients);
     }
 
     public function testAnAddressListedTwiceIsSentOnce(): void
@@ -45,7 +42,7 @@ final class EnvelopeTest extends TestCase
 
     public function testAnEmptySenderIsAllowedForBounces(): void
     {
-        $this->assertSame('', (new Envelope('', ['john@example.test']))->sender);
+        $this->assertSame('', new Envelope('', ['john@example.test'])->sender);
     }
 
     public function testRejectsAnEnvelopeWithNoRecipients(): void
@@ -64,7 +61,7 @@ final class EnvelopeTest extends TestCase
 
     public function testDetectsAnInternationalPath(): void
     {
-        $this->assertTrue((new Envelope('jäne@example.test', ['john@example.test']))->isInternational());
-        $this->assertFalse((new Envelope('jane@example.test', ['john@example.test']))->isInternational());
+        $this->assertTrue(new Envelope('jäne@example.test', ['john@example.test'])->isInternational());
+        $this->assertFalse(new Envelope('jane@example.test', ['john@example.test'])->isInternational());
     }
 }

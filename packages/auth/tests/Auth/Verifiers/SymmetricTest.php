@@ -29,7 +29,9 @@ final class SymmetricTest extends TestCase
     public function testVerifiesIssuedToken(): void
     {
         $token = $this->issuer->issue('user-123', 'https://example.com/token', 'client-abc', 3600, ['offline_access']);
-        $claims = (new Symmetric($this->secret, issuer: $this->iss, audience: 'https://example.com/token'))->verify($token);
+        $claims = new Symmetric($this->secret, issuer: $this->iss, audience: 'https://example.com/token')->verify(
+            $token,
+        );
 
         $this->assertSame('user-123', $claims['sub']);
         $this->assertSame('client-abc', $claims['client_id']);
@@ -42,7 +44,7 @@ final class SymmetricTest extends TestCase
 
         $this->expectException(VerificationException::class);
         $this->expectExceptionMessage('Signature verification failed');
-        (new Symmetric(RefreshToken::generateSecret()))->verify($token);
+        new Symmetric(RefreshToken::generateSecret())->verify($token);
     }
 
     public function testExpiredTokenRejected(): void
@@ -60,14 +62,14 @@ final class SymmetricTest extends TestCase
 
         $this->expectException(VerificationException::class);
         $this->expectExceptionMessage('Unexpected token audience');
-        (new Symmetric($this->secret, audience: 'other'))->verify($token);
+        new Symmetric($this->secret, audience: 'other')->verify($token);
     }
 
     public function testLeewayAllowsRecentlyExpired(): void
     {
         // Expired 10 seconds ago, but a 60s leeway tolerates the skew.
         $token = $this->issuer->issue('u', 'aud', 'c', -10);
-        $claims = (new Symmetric($this->secret, leeway: 60))->verify($token);
+        $claims = new Symmetric($this->secret, leeway: 60)->verify($token);
 
         $this->assertSame('u', $claims['sub']);
     }

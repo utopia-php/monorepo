@@ -12,11 +12,17 @@ final class ArrayListTest extends TestCase
     {
         $arrayList = new ArrayList(new Integer());
         $this->assertFalse($arrayList->isValid(['text']));
-        $this->assertSame('Value must a valid array and Value must be a valid signed 32-bit integer between -2,147,483,648 and 2,147,483,647', $arrayList->getDescription());
+        $this->assertSame(
+            'Value must a valid array and Value must be a valid signed 32-bit integer between -2,147,483,648 and 2,147,483,647',
+            $arrayList->getDescription(),
+        );
 
         $arrayList = new ArrayList(new Integer(), 3);
         $this->assertFalse($arrayList->isValid(['a', 'b', 'c', 'd']));
-        $this->assertSame('Value must a valid array no longer than 3 items and Value must be a valid signed 32-bit integer between -2,147,483,648 and 2,147,483,647', $arrayList->getDescription());
+        $this->assertSame(
+            'Value must a valid array no longer than 3 items and Value must be a valid signed 32-bit integer between -2,147,483,648 and 2,147,483,647',
+            $arrayList->getDescription(),
+        );
     }
 
     public function testCanValidateTextValues(): void

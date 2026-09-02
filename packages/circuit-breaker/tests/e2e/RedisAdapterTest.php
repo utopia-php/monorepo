@@ -15,7 +15,7 @@ final class RedisAdapterTest extends TestCase
 
     protected function setUp(): void
     {
-        if (!\extension_loaded('redis') || !class_exists('Redis')) {
+        if (! \extension_loaded('redis') || ! class_exists('Redis')) {
             self::markTestSkipped('The redis extension is required for Redis E2E tests.');
         }
 
@@ -26,7 +26,7 @@ final class RedisAdapterTest extends TestCase
         $this->redis = new $redisClass();
 
         try {
-            if (!$this->redis->connect($host, $port, 2.0)) {
+            if (! $this->redis->connect($host, $port, 2.0)) {
                 $error = method_exists($this->redis, 'getLastError') ? $this->redis->getLastError() : null;
                 $message = \is_string($error) && $error !== '' ? ': ' . $error : '.';
                 self::markTestSkipped(\sprintf('Redis E2E server is not reachable at %s:%d%s', $host, $port, $message));
@@ -38,7 +38,7 @@ final class RedisAdapterTest extends TestCase
 
     protected function tearDown(): void
     {
-        if ($this->redis === null || !$this->redis->isConnected()) {
+        if ($this->redis === null || ! $this->redis->isConnected()) {
             return;
         }
 
@@ -70,15 +70,24 @@ final class RedisAdapterTest extends TestCase
     public function testCircuitBreakerSharesStateThroughRedis(): void
     {
         $cache = new RedisAdapter($this->redis, $this->prefix);
-        $first = new CircuitBreaker(timeout: 0, successThreshold: 2, cache: $cache, key: 'users-api', minimumThroughput: 1);
-        $second = new CircuitBreaker(timeout: 0, successThreshold: 2, cache: $cache, key: 'users-api', minimumThroughput: 1);
-
-        $first->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
+        $first = new CircuitBreaker(
+            timeout: 0,
+            successThreshold: 2,
+            cache: $cache,
+            key: 'users-api',
+            minimumThroughput: 1,
         );
+        $second = new CircuitBreaker(
+            timeout: 0,
+            successThreshold: 2,
+            cache: $cache,
+            key: 'users-api',
+            minimumThroughput: 1,
+        );
+
+        $first->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
 
         $this->assertTrue($second->isHalfOpen());
         $this->assertSame(0, $second->getFailureCount());

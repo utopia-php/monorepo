@@ -77,8 +77,12 @@ class Dotenv extends Parser
 
             // In double quotes, only \" and \\ are escapes; every other
             // backslash is literal (e.g. a Windows path like C:\tmp).
-            if ($char === '\\' && $quote === '"' && $i + 1 < $length
-                && ($raw[$i + 1] === '"' || $raw[$i + 1] === '\\')) {
+            if (
+                $char === '\\'
+                && $quote === '"'
+                && ($i + 1) < $length
+                && ($raw[$i + 1] === '"' || $raw[$i + 1] === '\\')
+            ) {
                 $value .= $raw[$i + 1];
                 $i++;
                 continue;
@@ -106,7 +110,7 @@ class Dotenv extends Parser
      */
     public function parse(mixed $contents, ?\ReflectionClass $reflection = null): array
     {
-        if (!\is_string($contents)) {
+        if (! \is_string($contents)) {
             throw new Parse('Contents must be a string.');
         }
 

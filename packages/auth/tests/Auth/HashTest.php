@@ -72,9 +72,7 @@ final class HashTest extends TestCase
 
     public function testMethodChaining(): void
     {
-        $result = $this->hash
-            ->setOption('key1', 'value1')
-            ->setOptions(['key2' => 'value2']);
+        $result = $this->hash->setOption('key1', 'value1')->setOptions(['key2' => 'value2']);
 
         $this->assertInstanceOf(Hash::class, $result);
         $this->assertEquals('value1', $this->hash->getOption('key1'));

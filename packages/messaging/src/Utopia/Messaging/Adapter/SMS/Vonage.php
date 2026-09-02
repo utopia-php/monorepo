@@ -40,10 +40,7 @@ class Vonage extends SMSAdapter
      */
     protected function process(SMS $message): array
     {
-        $to = array_map(
-            fn(string $to): string => ltrim($to, '+'),
-            $message->getTo(),
-        );
+        $to = array_map(fn(string $to): string => ltrim($to, '+'), $message->getTo());
 
         $response = new Response($this->getType());
         $result = $this->request(
@@ -64,7 +61,7 @@ class Vonage extends SMSAdapter
         if (($result['response']['messages'][0]['status'] ?? null) === 0) {
             $response->setDeliveredTo(1);
             $response->addResult($result['response']['messages'][0]['to']);
-        } elseif (!\is_null($result['response']['messages'][0]['error-text'] ?? null)) {
+        } elseif (! \is_null($result['response']['messages'][0]['error-text'] ?? null)) {
             $response->addResult($message->getTo()[0], $result['response']['messages'][0]['error-text']);
         } else {
             $response->addResult($message->getTo()[0], 'Unknown error');

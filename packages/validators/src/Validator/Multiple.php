@@ -28,12 +28,15 @@ class Multiple extends Validator
      * $multiple = new Multiple([$validator1, $validator2]);
      * $multiple = new Multiple([$validator1, $validator2, $validator3], self::TYPE_STRING);
      */
-    public function __construct(array $rules, protected ?string $type = self::TYPE_MIXED)
-    {
+    public function __construct(
+        array $rules,
+        protected ?string $type = self::TYPE_MIXED,
+    ) {
         foreach ($rules as $rule) {
             $this->addRule($rule);
         }
     }
+
     /**
      * Add rule
      *

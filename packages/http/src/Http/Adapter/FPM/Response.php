@@ -28,11 +28,10 @@ class Response extends UtopiaResponse
      */
     public function end(?string $content = null): void
     {
-        if (!\is_null($content)) {
+        if (! \is_null($content)) {
             echo $content;
         }
     }
-
 
     /**
      * Send Status Code

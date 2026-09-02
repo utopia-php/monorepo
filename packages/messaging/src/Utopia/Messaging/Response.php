@@ -13,7 +13,9 @@ class Response
      */
     private array $results = [];
 
-    public function __construct(private string $type) {}
+    public function __construct(
+        private string $type,
+    ) {}
 
     public function setDeliveredTo(int $deliveredTo): void
     {

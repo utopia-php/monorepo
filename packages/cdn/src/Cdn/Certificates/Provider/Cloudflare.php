@@ -73,7 +73,7 @@ class Cloudflare implements Provider
         }
 
         $id = $hostname['id'] ?? null;
-        if (!\is_string($id) || $id === '') {
+        if (! \is_string($id) || $id === '') {
             throw new \RuntimeException('Cloudflare custom hostname response was missing an ID.');
         }
 
@@ -87,12 +87,12 @@ class Cloudflare implements Provider
         $result = $this->request(Method::GET, $this->hostnamesPath() . '?' . http_build_query(['hostname' => $domain]));
         $this->assertSuccess('fetch Cloudflare custom hostnames', $result);
 
-        if (!\is_array($result['response'])) {
+        if (! \is_array($result['response'])) {
             throw new \RuntimeException('Cloudflare custom hostname response was not valid JSON.');
         }
 
         $hostnames = $result['response']['result'] ?? null;
-        if (!\is_array($hostnames)) {
+        if (! \is_array($hostnames)) {
             throw new \RuntimeException('Cloudflare custom hostname response was missing its result list.');
         }
 
@@ -113,7 +113,7 @@ class Cloudflare implements Provider
     /** @param array{statusCode:int,response:array<string, mixed>|string|null,error:string|null} $result */
     private function isDuplicate(array $result): bool
     {
-        return \is_array($result['response']) && (($result['response']['errors'][0]['code'] ?? null) === 1406);
+        return \is_array($result['response']) && ($result['response']['errors'][0]['code'] ?? null) === 1406;
     }
 
     /**
@@ -125,15 +125,25 @@ class Cloudflare implements Provider
         $httpSuccess = $expectedStatuses === null
             ? $result['statusCode'] >= 200 && $result['statusCode'] < 300
             : \in_array($result['statusCode'], $expectedStatuses, true);
-        $envelopeSuccess = !\is_array($result['response']) || !\array_key_exists('success', $result['response']) || $result['response']['success'] === true;
+        $envelopeSuccess =
+            ! \is_array($result['response'])
+            || ! \array_key_exists('success', $result['response'])
+            || $result['response']['success'] === true;
 
-        if (!$httpSuccess || !$envelopeSuccess) {
+        if (! $httpSuccess || ! $envelopeSuccess) {
             $message = $result['error'];
             if (\is_array($result['response'])) {
                 $message ??= $result['response']['errors'][0]['message'] ?? null;
             }
 
-            throw new \RuntimeException('Failed to ' . $operation . ' with status ' . $result['statusCode'] . ': ' . ($message ?? 'Unknown Cloudflare error'));
+            throw new \RuntimeException(
+                'Failed to '
+                . $operation
+                . ' with status '
+                . $result['statusCode']
+                . ': '
+                . ($message ?? 'Unknown Cloudflare error'),
+            );
         }
     }
 

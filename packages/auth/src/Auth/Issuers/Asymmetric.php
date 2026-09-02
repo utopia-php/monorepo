@@ -71,7 +71,7 @@ abstract class Asymmetric extends Issuer
     private static function exportPrivateKey(\OpenSSLAsymmetricKey $resource): string
     {
         $privateKey = '';
-        if (!openssl_pkey_export($resource, $privateKey)) {
+        if (! openssl_pkey_export($resource, $privateKey)) {
             throw new \Exception('Unable to export the private key');
         }
 
@@ -86,7 +86,7 @@ abstract class Asymmetric extends Issuer
     private static function exportPublicKey(\OpenSSLAsymmetricKey $resource): string
     {
         $details = openssl_pkey_get_details($resource);
-        if ($details === false || !isset($details['key'])) {
+        if ($details === false || ! isset($details['key'])) {
             throw new \Exception('Unable to export the public key');
         }
 
@@ -121,7 +121,7 @@ abstract class Asymmetric extends Issuer
         }
 
         $details = openssl_pkey_get_details($publicKey);
-        if ($details === false || !isset($details['rsa'])) {
+        if ($details === false || ! isset($details['rsa'])) {
             throw new \Exception('Public key is not an RSA key');
         }
 
@@ -164,7 +164,7 @@ abstract class Asymmetric extends Issuer
         }
 
         $signature = '';
-        if (!openssl_sign($signingInput, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
+        if (! openssl_sign($signingInput, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
             throw new \Exception('Unable to sign the token');
         }
 
@@ -193,7 +193,7 @@ abstract class Asymmetric extends Issuer
         }
 
         $details = openssl_pkey_get_details($publicKey);
-        if ($details === false || !isset($details['rsa']['n'])) {
+        if ($details === false || ! isset($details['rsa']['n'])) {
             throw new \Exception('Public key is not an RSA key');
         }
 

@@ -11,8 +11,8 @@ use Utopia\Messaging\Response;
 class FCM extends PushAdapter
 {
     protected const NAME = 'FCM';
-    protected const DEFAULT_EXPIRY_SECONDS = 3600;    // 1 hour
-    protected const DEFAULT_SKEW_SECONDS = 60;        // 1 minute
+    protected const DEFAULT_EXPIRY_SECONDS = 3600; // 1 hour
+    protected const DEFAULT_SKEW_SECONDS = 60; // 1 minute
     protected const GOOGLE_TOKEN_URL = 'https://www.googleapis.com/oauth2/v4/token';
 
     /**
@@ -60,11 +60,7 @@ class FCM extends PushAdapter
             'aud' => self::GOOGLE_TOKEN_URL,
         ];
 
-        $jwt = JWT::encode(
-            $payload,
-            $signingKey,
-            $signingAlgorithm,
-        );
+        $jwt = JWT::encode($payload, $signingKey, $signingAlgorithm);
 
         $token = $this->request(
             method: 'POST',
@@ -78,63 +74,70 @@ class FCM extends PushAdapter
             ],
         );
 
-        if ($token['statusCode'] !== 200 || !\is_array($token['response']) || !isset($token['response']['access_token'])) {
-            throw new \Exception('Failed to obtain FCM access token: ' . ($token['error'] !== '' ? $token['error'] : 'HTTP ' . $token['statusCode']));
+        if (
+            $token['statusCode'] !== 200
+            || ! \is_array($token['response'])
+            || ! isset($token['response']['access_token'])
+        ) {
+            throw new \Exception(
+                'Failed to obtain FCM access token: '
+                . ($token['error'] !== '' ? $token['error'] : 'HTTP ' . $token['statusCode']),
+            );
         }
 
         $accessToken = $token['response']['access_token'];
 
         $shared = [];
 
-        if (!\is_null($message->getTitle())) {
+        if (! \is_null($message->getTitle())) {
             $shared['message']['notification']['title'] = $message->getTitle();
         }
-        if (!\is_null($message->getBody())) {
+        if (! \is_null($message->getBody())) {
             $shared['message']['notification']['body'] = $message->getBody();
         }
-        if (!\is_null($message->getData())) {
+        if (! \is_null($message->getData())) {
             $shared['message']['data'] = $message->getData();
         }
-        if (!\is_null($message->getAction())) {
+        if (! \is_null($message->getAction())) {
             $shared['message']['android']['notification']['click_action'] = $message->getAction();
             $shared['message']['apns']['payload']['aps']['category'] = $message->getAction();
         }
-        if (!\is_null($message->getImage())) {
+        if (! \is_null($message->getImage())) {
             $shared['message']['android']['notification']['image'] = $message->getImage();
             $shared['message']['apns']['payload']['aps']['mutable-content'] = 1;
             $shared['message']['apns']['fcm_options']['image'] = $message->getImage();
         }
-        if (!\is_null($message->getCritical())) {
+        if (! \is_null($message->getCritical())) {
             $shared['message']['apns']['payload']['aps']['sound']['critical'] = 1;
         }
-        if (!\is_null($message->getSound())) {
+        if (! \is_null($message->getSound())) {
             $shared['message']['android']['notification']['sound'] = $message->getSound();
 
-            if (!\is_null($message->getCritical())) {
+            if (! \is_null($message->getCritical())) {
                 $shared['message']['apns']['payload']['aps']['sound']['name'] = $message->getSound();
             } else {
                 $shared['message']['apns']['payload']['aps']['sound'] = $message->getSound();
             }
         }
-        if (!\is_null($message->getIcon())) {
+        if (! \is_null($message->getIcon())) {
             $shared['message']['android']['notification']['icon'] = $message->getIcon();
         }
-        if (!\is_null($message->getColor())) {
+        if (! \is_null($message->getColor())) {
             $shared['message']['android']['notification']['color'] = $message->getColor();
         }
-        if (!\is_null($message->getTag())) {
+        if (! \is_null($message->getTag())) {
             $shared['message']['android']['notification']['tag'] = $message->getTag();
         }
-        if (!\is_null($message->getBadge())) {
+        if (! \is_null($message->getBadge())) {
             $shared['message']['apns']['payload']['aps']['badge'] = $message->getBadge();
         }
-        if (!\is_null($message->getContentAvailable())) {
+        if (! \is_null($message->getContentAvailable())) {
             $shared['message']['apns']['payload']['aps']['content-available'] = (int) $message->getContentAvailable();
         }
-        if (!\is_null($message->getPriority())) {
+        if (! \is_null($message->getPriority())) {
             $shared['message']['android']['priority'] = match ($message->getPriority()) {
                 Priority::HIGH => 'high',
-                Priority::NORMAL => 'normal'
+                Priority::NORMAL => 'normal',
             };
             $shared['message']['apns']['headers']['apns-priority'] = match ($message->getPriority()) {
                 Priority::HIGH => '10',

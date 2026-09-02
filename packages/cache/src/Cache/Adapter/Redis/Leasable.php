@@ -46,28 +46,28 @@ abstract class Leasable implements \Utopia\Cache\Feature\Leasable
      * ARGV[3]=expected generation, ARGV[4]=grace window ms (0 = tombstone off).
      */
     protected const LUA_SAVE_WITH_LEASE = <<<'LUA'
-        local current = redis.call('HGET', KEYS[1], '__utopia_gen__')
-        if current == false then current = '0' end
-        if current ~= ARGV[3] then return 0 end
-        local window = tonumber(ARGV[4]) or 0
-        if window > 0 then
-            local tomb = redis.call('HGET', KEYS[1], '__utopia_tomb__')
-            if tomb ~= false then
-                local deadline = tonumber(tomb)
-                if deadline ~= nil then
-                    local t = redis.call('TIME')
-                    local now = tonumber(t[1]) * 1000000 + tonumber(t[2])
-                    -- 2nd clause ignores a deadline left by a since-rewound clock
-                    if now < deadline and (deadline - now) <= window * 1000 then
-                        return 0
-                    end
+    local current = redis.call('HGET', KEYS[1], '__utopia_gen__')
+    if current == false then current = '0' end
+    if current ~= ARGV[3] then return 0 end
+    local window = tonumber(ARGV[4]) or 0
+    if window > 0 then
+        local tomb = redis.call('HGET', KEYS[1], '__utopia_tomb__')
+        if tomb ~= false then
+            local deadline = tonumber(tomb)
+            if deadline ~= nil then
+                local t = redis.call('TIME')
+                local now = tonumber(t[1]) * 1000000 + tonumber(t[2])
+                -- 2nd clause ignores a deadline left by a since-rewound clock
+                if now < deadline and (deadline - now) <= window * 1000 then
+                    return 0
                 end
-                redis.call('HDEL', KEYS[1], '__utopia_tomb__')
             end
+            redis.call('HDEL', KEYS[1], '__utopia_tomb__')
         end
-        redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
-        return 1
-        LUA;
+    end
+    redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+    return 1
+    LUA;
 
     /**
      * Drop $key's value fields, advance its generation (so an in-flight reader
@@ -76,21 +76,21 @@ abstract class Leasable implements \Utopia\Cache\Feature\Leasable
      * semantics. Single-key. KEYS[1]=key; ARGV[1]=grace window ms.
      */
     protected const LUA_PURGE_BUMP = <<<'LUA'
-        local gen = '__utopia_gen__'
-        local tomb = '__utopia_tomb__'
-        local removed = redis.call('HLEN', KEYS[1]) - redis.call('HEXISTS', KEYS[1], gen) - redis.call('HEXISTS', KEYS[1], tomb)
-        local current = redis.call('HGET', KEYS[1], gen)
-        local next = (tonumber(current) or 0) + 1
-        redis.call('DEL', KEYS[1])
-        redis.call('HSET', KEYS[1], gen, next)
-        local window = tonumber(ARGV[1]) or 0
-        if window > 0 then
-            local t = redis.call('TIME')
-            local now = tonumber(t[1]) * 1000000 + tonumber(t[2])
-            redis.call('HSET', KEYS[1], tomb, now + window * 1000)
-        end
-        return removed
-        LUA;
+    local gen = '__utopia_gen__'
+    local tomb = '__utopia_tomb__'
+    local removed = redis.call('HLEN', KEYS[1]) - redis.call('HEXISTS', KEYS[1], gen) - redis.call('HEXISTS', KEYS[1], tomb)
+    local current = redis.call('HGET', KEYS[1], gen)
+    local next = (tonumber(current) or 0) + 1
+    redis.call('DEL', KEYS[1])
+    redis.call('HSET', KEYS[1], gen, next)
+    local window = tonumber(ARGV[1]) or 0
+    if window > 0 then
+        local t = redis.call('TIME')
+        local now = tonumber(t[1]) * 1000000 + tonumber(t[2])
+        redis.call('HSET', KEYS[1], tomb, now + window * 1000)
+    end
+    return removed
+    LUA;
 
     /**
      * Delete one $hash field, advance the generation, and stamp the tombstone when
@@ -98,18 +98,18 @@ abstract class Leasable implements \Utopia\Cache\Feature\Leasable
      * Single-key. KEYS[1]=key; ARGV[1]=field, ARGV[2]=grace window ms.
      */
     protected const LUA_PURGE_FIELD = <<<'LUA'
-        local removed = redis.call('HDEL', KEYS[1], ARGV[1])
-        local current = redis.call('HGET', KEYS[1], '__utopia_gen__')
-        local next = (tonumber(current) or 0) + 1
-        redis.call('HSET', KEYS[1], '__utopia_gen__', next)
-        local window = tonumber(ARGV[2]) or 0
-        if window > 0 then
-            local t = redis.call('TIME')
-            local now = tonumber(t[1]) * 1000000 + tonumber(t[2])
-            redis.call('HSET', KEYS[1], '__utopia_tomb__', now + window * 1000)
-        end
-        return removed
-        LUA;
+    local removed = redis.call('HDEL', KEYS[1], ARGV[1])
+    local current = redis.call('HGET', KEYS[1], '__utopia_gen__')
+    local next = (tonumber(current) or 0) + 1
+    redis.call('HSET', KEYS[1], '__utopia_gen__', next)
+    local window = tonumber(ARGV[2]) or 0
+    if window > 0 then
+        local t = redis.call('TIME')
+        local now = tonumber(t[1]) * 1000000 + tonumber(t[2])
+        redis.call('HSET', KEYS[1], '__utopia_tomb__', now + window * 1000)
+    end
+    return removed
+    LUA;
 
     /**
      * Milliseconds after a purge during which saveWithLease() is refused. Size to
@@ -156,7 +156,10 @@ abstract class Leasable implements \Utopia\Cache\Feature\Leasable
         try {
             $value = Envelope::encode($data, time());
             $stored = $this->leaseRun(self::LUA_SAVE_WITH_LEASE, $key, [
-                $hash, $value, $generation, (string) $this->leaseGraceWindow,
+                $hash,
+                $value,
+                $generation,
+                (string) $this->leaseGraceWindow,
             ]);
 
             return $stored ? $data : false;

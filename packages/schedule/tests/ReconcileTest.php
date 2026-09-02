@@ -38,24 +38,17 @@ final class ReconcileTest extends TestCase
         $made = new class {
             public int $count = 0;
         };
-        $scheduler = new Scheduler(
-            source: new SnapshotSource(
-                snapshot: $set->list(...),
-                make: function (Row $row) use ($made): Entry {
-                    ++$made->count;
-                    $spec = $row->data;
-                    if (!\is_string($spec)) {
-                        throw new \InvalidArgumentException('spec must be a string');
-                    }
+        $scheduler = new Scheduler(source: new SnapshotSource(snapshot: $set->list(...), make: function (Row $row) use (
+            $made,
+        ): Entry {
+            ++$made->count;
+            $spec = $row->data;
+            if (! \is_string($spec)) {
+                throw new \InvalidArgumentException('spec must be a string');
+            }
 
-                    return $spec === 'interval'
-                        ? new Entry(new Interval(60), $row->id)
-                        : new Entry(new Cron($spec), $row->id);
-                },
-            ),
-            store: new MemoryStore(),
-            clock: $clock,
-        );
+            return $spec === 'interval' ? new Entry(new Interval(60), $row->id) : new Entry(new Cron($spec), $row->id);
+        }), store: new MemoryStore(), clock: $clock);
 
         $scheduler->reconcile();
         $this->assertSame(2, $made->count);
@@ -76,10 +69,11 @@ final class ReconcileTest extends TestCase
 
         $this->assertSame(
             [['a', '03:02:00', 'a']],
-            array_map(
-                fn(Occurrence $occurrence): array => [$occurrence->id, $occurrence->due->format('H:i:s'), $occurrence->payload],
-                $scheduler->tick(),
-            ),
+            array_map(fn(Occurrence $occurrence): array => [
+                $occurrence->id,
+                $occurrence->due->format('H:i:s'),
+                $occurrence->payload,
+            ], $scheduler->tick()),
             'removed rows stop firing; payload rides along',
         );
     }
@@ -133,17 +127,14 @@ final class ReconcileTest extends TestCase
 
         $set = new RowSet([new Row('job', 'v1', '2026-08-18 03:00:30')]);
         $scheduler = new Scheduler(
-            source: new SnapshotSource(
-                snapshot: $set->list(...),
-                make: function (Row $row): Entry {
-                    $at = $row->data;
-                    if (!\is_string($at)) {
-                        throw new \InvalidArgumentException('time must be a string');
-                    }
+            source: new SnapshotSource(snapshot: $set->list(...), make: function (Row $row): Entry {
+                $at = $row->data;
+                if (! \is_string($at)) {
+                    throw new \InvalidArgumentException('time must be a string');
+                }
 
-                    return new Entry(new At(new \DateTimeImmutable($at)));
-                },
-            ),
+                return new Entry(new At(new \DateTimeImmutable($at)));
+            }),
             store: new MemoryStore(),
             clock: $clock,
         );
@@ -258,16 +249,17 @@ final class ReconcileTest extends TestCase
             public array $messages = [];
         };
         $scheduler = new Scheduler(
-            source: new SnapshotSource(
-                snapshot: fn(): array => [new Row('a', 'v1'), new Row('bad', 'v1'), new Row('c', 'v1')],
-                make: function (Row $row): Entry {
-                    if ($row->id === 'bad') {
-                        throw new \InvalidArgumentException('poison row');
-                    }
+            source: new SnapshotSource(snapshot: fn(): array => [
+                new Row('a', 'v1'),
+                new Row('bad', 'v1'),
+                new Row('c', 'v1'),
+            ], make: function (Row $row): Entry {
+                if ($row->id === 'bad') {
+                    throw new \InvalidArgumentException('poison row');
+                }
 
-                    return new Entry(new Interval(60), $row->id);
-                },
-            ),
+                return new Entry(new Interval(60), $row->id);
+            }),
             store: new MemoryStore(),
             clock: $clock,
             telemetry: $telemetry,
@@ -338,16 +330,13 @@ final class ReconcileTest extends TestCase
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:30.000000'));
         $set = new RowSet([new Row('a', 'v1'), new Row('b', 'v1'), new Row('gone', 'v1')]);
         $scheduler = new Scheduler(
-            source: new SnapshotSource(
-                snapshot: $set->list(...),
-                make: function (Row $row): Entry {
-                    if ($row->id === 'gone') {
-                        throw new \InvalidArgumentException('resource not found');
-                    }
+            source: new SnapshotSource(snapshot: $set->list(...), make: function (Row $row): Entry {
+                if ($row->id === 'gone') {
+                    throw new \InvalidArgumentException('resource not found');
+                }
 
-                    return new Entry(new Interval(60));
-                },
-            ),
+                return new Entry(new Interval(60));
+            }),
             store: new MemoryStore(),
             clock: $clock,
             onError: function (\Throwable $error): void {},
@@ -427,24 +416,21 @@ final class ReconcileTest extends TestCase
         );
 
         $predecessor = $build('predecessor');
-        $predecessor->reconcile();   // read at 03:05:00
-        $predecessor->tick();        // window selected here, out to 03:07:00
+        $predecessor->reconcile(); // read at 03:05:00
+        $predecessor->tick(); // window selected here, out to 03:07:00
 
-        $clock->advance(20.0);       // 03:05:20
+        $clock->advance(20.0); // 03:05:20
         $set->rows = [new Row('a', 'v2', activeFrom: new \DateTimeImmutable('2026-08-18 03:05:20'))];
-        $predecessor->reconcile();   // read at 03:05:20 — after the window was chosen
-        $predecessor->commit();      // coverage to 03:07:00, from the 03:05:00 read
+        $predecessor->reconcile(); // read at 03:05:20 — after the window was chosen
+        $predecessor->commit(); // coverage to 03:07:00, from the 03:05:00 read
 
-        $clock->advance(400.0);      // 03:12:00 — the claim has expired
+        $clock->advance(400.0); // 03:12:00 — the claim has expired
         $successor = $build('successor');
         $successor->reconcile();
 
         $this->assertContains(
             '03:06:00',
-            array_map(
-                fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'),
-                $successor->tick(),
-            ),
+            array_map(fn(Occurrence $occurrence): string => $occurrence->due->format('H:i:s'), $successor->tick()),
             'the replacement is owed the runs inside a window that was chosen before it existed',
         );
     }
@@ -471,12 +457,12 @@ final class ReconcileTest extends TestCase
         );
 
         $predecessor = $build('predecessor');
-        $predecessor->reconcile();   // source read at 03:05:00
-        $clock->advance(120.0);      // 03:07:00
-        $predecessor->tick();        // dispatches 03:05:00 and 03:06:00
-        $predecessor->commit();      // coverage to 03:07:00, read to 03:05:00
+        $predecessor->reconcile(); // source read at 03:05:00
+        $clock->advance(120.0); // 03:07:00
+        $predecessor->tick(); // dispatches 03:05:00 and 03:06:00
+        $predecessor->commit(); // coverage to 03:07:00, read to 03:05:00
 
-        $clock->advance(130.0);      // 03:09:10 — the claim has expired
+        $clock->advance(130.0); // 03:09:10 — the claim has expired
         $successor = $build('successor');
         $successor->reconcile();
 
@@ -515,15 +501,15 @@ final class ReconcileTest extends TestCase
         );
 
         $predecessor = $build('predecessor');
-        $predecessor->reconcile();   // reads an empty source at 03:05:00
-        $clock->advance(120.0);      // 03:07:00
+        $predecessor->reconcile(); // reads an empty source at 03:05:00
+        $clock->advance(120.0); // 03:07:00
         $predecessor->tick();
-        $predecessor->commit();      // coverage to 03:07:00, source read to 03:05:00
+        $predecessor->commit(); // coverage to 03:07:00, source read to 03:05:00
 
         // Created inside that gap, and due inside it too.
         $set->rows = [new Row('late', 'v1', activeFrom: new \DateTimeImmutable('2026-08-18 03:05:30'))];
 
-        $clock->advance(130.0);      // 03:09:10 — the predecessor is gone, its claim expired
+        $clock->advance(130.0); // 03:09:10 — the predecessor is gone, its claim expired
         $successor = $build('successor');
         $successor->reconcile();
 
@@ -647,17 +633,14 @@ final class ReconcileTest extends TestCase
         $clock = new TestClock(new \DateTimeImmutable('2026-08-18 03:00:00.000000'));
         $set = new RowSet([new Row('job', 'v1', '2026-08-18 03:00:30')]);
         $scheduler = new Scheduler(
-            source: new SnapshotSource(
-                snapshot: $set->list(...),
-                make: function (Row $row): Entry {
-                    $at = $row->data;
-                    if (!\is_string($at)) {
-                        throw new \InvalidArgumentException('time must be a string');
-                    }
+            source: new SnapshotSource(snapshot: $set->list(...), make: function (Row $row): Entry {
+                $at = $row->data;
+                if (! \is_string($at)) {
+                    throw new \InvalidArgumentException('time must be a string');
+                }
 
-                    return new Entry(new At(new \DateTimeImmutable($at)));
-                },
-            ),
+                return new Entry(new At(new \DateTimeImmutable($at)));
+            }),
             store: new MemoryStore(),
             clock: $clock,
         );

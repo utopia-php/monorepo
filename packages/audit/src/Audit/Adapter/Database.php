@@ -19,7 +19,9 @@ use Utopia\Query\Method;
  */
 class Database extends SQL
 {
-    public function __construct(private readonly \Utopia\Database\Database $db) {}
+    public function __construct(
+        private readonly \Utopia\Database\Database $db,
+    ) {}
 
     /**
      * Get adapter name.
@@ -60,11 +62,7 @@ class Database extends SQL
         $indexes = $this->getIndexDocuments();
 
         try {
-            $this->db->createCollection(
-                $this->getCollectionName(),
-                $attributes,
-                $indexes,
-            );
+            $this->db->createCollection($this->getCollectionName(), $attributes, $indexes);
         } catch (DuplicateException) {
             // Collection already exists
         }
@@ -79,7 +77,12 @@ class Database extends SQL
     public function create(array $log): Log
     {
         $log['time'] ??= DateTime::now();
-        $document = $this->db->getAuthorization()->skip(fn(): \Utopia\Database\Document => $this->db->createDocument($this->getCollectionName(), new Document($log)));
+        $document = $this->db
+            ->getAuthorization()
+            ->skip(fn(): \Utopia\Database\Document => $this->db->createDocument(
+                $this->getCollectionName(),
+                new Document($log),
+            ));
 
         return new Log($document->getArrayCopy());
     }
@@ -92,18 +95,20 @@ class Database extends SQL
      */
     public function createBatch(array $logs): bool
     {
-        $this->db->getAuthorization()->skip(function () use ($logs): void {
-            $documents = array_map(function (array $log): \Utopia\Database\Document {
-                $time = $log['time'] ?? new \DateTime();
-                if (\is_string($time)) {
-                    $time = new \DateTime($time);
-                }
-                \assert($time instanceof \DateTime);
-                $log['time'] = DateTime::format($time);
-                return new Document($log);
-            }, $logs);
-            $this->db->createDocuments($this->getCollectionName(), $documents);
-        });
+        $this->db
+            ->getAuthorization()
+            ->skip(function () use ($logs): void {
+                $documents = array_map(function (array $log): \Utopia\Database\Document {
+                    $time = $log['time'] ?? new \DateTime();
+                    if (\is_string($time)) {
+                        $time = new \DateTime($time);
+                    }
+                    \assert($time instanceof \DateTime);
+                    $log['time'] = DateTime::format($time);
+                    return new Document($log);
+                }, $logs);
+                $this->db->createDocuments($this->getCollectionName(), $documents);
+            });
 
         return true;
     }
@@ -116,7 +121,9 @@ class Database extends SQL
      */
     public function getById(string $id): ?Log
     {
-        $document = $this->db->getAuthorization()->skip(fn(): \Utopia\Database\Document => $this->db->getDocument($this->getCollectionName(), $id));
+        $document = $this->db
+            ->getAuthorization()
+            ->skip(fn(): \Utopia\Database\Document => $this->db->getDocument($this->getCollectionName(), $id));
 
         if ($document->isEmpty()) {
             return null;
@@ -168,22 +175,24 @@ class Database extends SQL
         bool $ascending = false,
     ): array {
         $timeQueries = $this->buildTimeQueries($after, $before);
-        $documents = $this->db->getAuthorization()->skip(function () use ($userId, $timeQueries, $limit, $offset, $ascending): array {
-            $queries = [
-                Query::equal('userId', [$userId]),
-                ...$timeQueries,
-                $ascending ? Query::orderAsc() : Query::orderDesc(),
-                Query::limit($limit),
-                Query::offset($offset),
-            ];
+        $documents = $this->db
+            ->getAuthorization()
+            ->skip(function () use ($userId, $timeQueries, $limit, $offset, $ascending): array {
+                $queries = [
+                    Query::equal('userId', [$userId]),
+                    ...$timeQueries,
+                    $ascending ? Query::orderAsc() : Query::orderDesc(),
+                    Query::limit($limit),
+                    Query::offset($offset),
+                ];
 
-            return $this->db->find(
-                collection: $this->getCollectionName(),
-                queries: $queries,
-            );
-        });
+                return $this->db->find(collection: $this->getCollectionName(), queries: $queries);
+            });
 
-        return array_map(fn(\Utopia\Database\Document $doc): \Utopia\Audit\Log => new Log($doc->getArrayCopy()), $documents);
+        return array_map(
+            fn(\Utopia\Database\Document $doc): \Utopia\Audit\Log => new Log($doc->getArrayCopy()),
+            $documents,
+        );
     }
 
     /**
@@ -198,14 +207,16 @@ class Database extends SQL
         ?int $max = null,
     ): int {
         $timeQueries = $this->buildTimeQueries($after, $before);
-        return $this->db->getAuthorization()->skip(fn(): int => $this->db->count(
-            collection: $this->getCollectionName(),
-            queries: [
-                Query::equal('userId', [$userId]),
-                ...$timeQueries,
-            ],
-            max: $max,
-        ));
+        return $this->db
+            ->getAuthorization()
+            ->skip(fn(): int => $this->db->count(
+                collection: $this->getCollectionName(),
+                queries: [
+                    Query::equal('userId', [$userId]),
+                    ...$timeQueries,
+                ],
+                max: $max,
+            ));
     }
 
     /**
@@ -223,22 +234,24 @@ class Database extends SQL
         bool $ascending = false,
     ): array {
         $timeQueries = $this->buildTimeQueries($after, $before);
-        $documents = $this->db->getAuthorization()->skip(function () use ($resource, $timeQueries, $limit, $offset, $ascending): array {
-            $queries = [
-                Query::equal('resource', [$resource]),
-                ...$timeQueries,
-                $ascending ? Query::orderAsc() : Query::orderDesc(),
-                Query::limit($limit),
-                Query::offset($offset),
-            ];
+        $documents = $this->db
+            ->getAuthorization()
+            ->skip(function () use ($resource, $timeQueries, $limit, $offset, $ascending): array {
+                $queries = [
+                    Query::equal('resource', [$resource]),
+                    ...$timeQueries,
+                    $ascending ? Query::orderAsc() : Query::orderDesc(),
+                    Query::limit($limit),
+                    Query::offset($offset),
+                ];
 
-            return $this->db->find(
-                collection: $this->getCollectionName(),
-                queries: $queries,
-            );
-        });
+                return $this->db->find(collection: $this->getCollectionName(), queries: $queries);
+            });
 
-        return array_map(fn(\Utopia\Database\Document $doc): \Utopia\Audit\Log => new Log($doc->getArrayCopy()), $documents);
+        return array_map(
+            fn(\Utopia\Database\Document $doc): \Utopia\Audit\Log => new Log($doc->getArrayCopy()),
+            $documents,
+        );
     }
 
     /**
@@ -253,14 +266,16 @@ class Database extends SQL
         ?int $max = null,
     ): int {
         $timeQueries = $this->buildTimeQueries($after, $before);
-        return $this->db->getAuthorization()->skip(fn(): int => $this->db->count(
-            collection: $this->getCollectionName(),
-            queries: [
-                Query::equal('resource', [$resource]),
-                ...$timeQueries,
-            ],
-            max: $max,
-        ));
+        return $this->db
+            ->getAuthorization()
+            ->skip(fn(): int => $this->db->count(
+                collection: $this->getCollectionName(),
+                queries: [
+                    Query::equal('resource', [$resource]),
+                    ...$timeQueries,
+                ],
+                max: $max,
+            ));
     }
 
     /**
@@ -280,23 +295,25 @@ class Database extends SQL
         bool $ascending = false,
     ): array {
         $timeQueries = $this->buildTimeQueries($after, $before);
-        $documents = $this->db->getAuthorization()->skip(function () use ($userId, $events, $timeQueries, $limit, $offset, $ascending): array {
-            $queries = [
-                Query::equal('userId', [$userId]),
-                Query::equal('event', $events),
-                ...$timeQueries,
-                $ascending ? Query::orderAsc() : Query::orderDesc(),
-                Query::limit($limit),
-                Query::offset($offset),
-            ];
+        $documents = $this->db
+            ->getAuthorization()
+            ->skip(function () use ($userId, $events, $timeQueries, $limit, $offset, $ascending): array {
+                $queries = [
+                    Query::equal('userId', [$userId]),
+                    Query::equal('event', $events),
+                    ...$timeQueries,
+                    $ascending ? Query::orderAsc() : Query::orderDesc(),
+                    Query::limit($limit),
+                    Query::offset($offset),
+                ];
 
-            return $this->db->find(
-                collection: $this->getCollectionName(),
-                queries: $queries,
-            );
-        });
+                return $this->db->find(collection: $this->getCollectionName(), queries: $queries);
+            });
 
-        return array_map(fn(\Utopia\Database\Document $doc): \Utopia\Audit\Log => new Log($doc->getArrayCopy()), $documents);
+        return array_map(
+            fn(\Utopia\Database\Document $doc): \Utopia\Audit\Log => new Log($doc->getArrayCopy()),
+            $documents,
+        );
     }
 
     /**
@@ -313,15 +330,17 @@ class Database extends SQL
         ?int $max = null,
     ): int {
         $timeQueries = $this->buildTimeQueries($after, $before);
-        return $this->db->getAuthorization()->skip(fn(): int => $this->db->count(
-            collection: $this->getCollectionName(),
-            queries: [
-                Query::equal('userId', [$userId]),
-                Query::equal('event', $events),
-                ...$timeQueries,
-            ],
-            max: $max,
-        ));
+        return $this->db
+            ->getAuthorization()
+            ->skip(fn(): int => $this->db->count(
+                collection: $this->getCollectionName(),
+                queries: [
+                    Query::equal('userId', [$userId]),
+                    Query::equal('event', $events),
+                    ...$timeQueries,
+                ],
+                max: $max,
+            ));
     }
 
     /**
@@ -341,23 +360,25 @@ class Database extends SQL
         bool $ascending = false,
     ): array {
         $timeQueries = $this->buildTimeQueries($after, $before);
-        $documents = $this->db->getAuthorization()->skip(function () use ($resource, $events, $timeQueries, $limit, $offset, $ascending): array {
-            $queries = [
-                Query::equal('resource', [$resource]),
-                Query::equal('event', $events),
-                ...$timeQueries,
-                $ascending ? Query::orderAsc() : Query::orderDesc(),
-                Query::limit($limit),
-                Query::offset($offset),
-            ];
+        $documents = $this->db
+            ->getAuthorization()
+            ->skip(function () use ($resource, $events, $timeQueries, $limit, $offset, $ascending): array {
+                $queries = [
+                    Query::equal('resource', [$resource]),
+                    Query::equal('event', $events),
+                    ...$timeQueries,
+                    $ascending ? Query::orderAsc() : Query::orderDesc(),
+                    Query::limit($limit),
+                    Query::offset($offset),
+                ];
 
-            return $this->db->find(
-                collection: $this->getCollectionName(),
-                queries: $queries,
-            );
-        });
+                return $this->db->find(collection: $this->getCollectionName(), queries: $queries);
+            });
 
-        return array_map(fn(\Utopia\Database\Document $doc): \Utopia\Audit\Log => new Log($doc->getArrayCopy()), $documents);
+        return array_map(
+            fn(\Utopia\Database\Document $doc): \Utopia\Audit\Log => new Log($doc->getArrayCopy()),
+            $documents,
+        );
     }
 
     /**
@@ -374,42 +395,46 @@ class Database extends SQL
         ?int $max = null,
     ): int {
         $timeQueries = $this->buildTimeQueries($after, $before);
-        return $this->db->getAuthorization()->skip(fn(): int => $this->db->count(
-            collection: $this->getCollectionName(),
-            queries: [
-                Query::equal('resource', [$resource]),
-                Query::equal('event', $events),
-                ...$timeQueries,
-            ],
-            max: $max,
-        ));
+        return $this->db
+            ->getAuthorization()
+            ->skip(fn(): int => $this->db->count(
+                collection: $this->getCollectionName(),
+                queries: [
+                    Query::equal('resource', [$resource]),
+                    Query::equal('event', $events),
+                    ...$timeQueries,
+                ],
+                max: $max,
+            ));
     }
 
     /**
      * Delete logs older than the specified datetime.
      *
      * @param \DateTime $datetime
-    /**
+     * /**
      * @throws AuthorizationException|\Exception
      */
     public function cleanup(\DateTime $datetime): bool
     {
         $datetimeString = DateTime::format($datetime);
-        $this->db->getAuthorization()->skip(function () use ($datetimeString): void {
-            /**
-             * $selects = ['$sequence', '$id', '$collection', '$permissions', '$updatedAt', 'time'];
-             * todo: Use individuals selected queries later on
-             */
-            $queries = [
-                Query::lessThan('time', $datetimeString),
-                Query::orderDesc('time'),
-                Query::orderAsc(),
-            ];
+        $this->db
+            ->getAuthorization()
+            ->skip(function () use ($datetimeString): void {
+                /**
+                 * $selects = ['$sequence', '$id', '$collection', '$permissions', '$updatedAt', 'time'];
+                 * todo: Use individuals selected queries later on
+                 */
+                $queries = [
+                    Query::lessThan('time', $datetimeString),
+                    Query::orderDesc('time'),
+                    Query::orderAsc(),
+                ];
 
-            do {
-                $removed = $this->db->deleteDocuments($this->getCollectionName(), $queries);
-            } while ($removed > 0);
-        });
+                do {
+                    $removed = $this->db->deleteDocuments($this->getCollectionName(), $queries);
+                } while ($removed > 0);
+            });
 
         return true;
     }
@@ -430,7 +455,7 @@ class Database extends SQL
     {
         $attribute = $this->getAttribute($id);
 
-        if (!$attribute) {
+        if (! $attribute) {
             throw new Exception("Attribute {$id} not found");
         }
 
@@ -462,7 +487,7 @@ class Database extends SQL
         $dbQueries = [];
 
         foreach ($queries as $query) {
-            if (!($query instanceof \Utopia\Audit\Query)) {
+            if (! $query instanceof \Utopia\Audit\Query) {
                 throw new \Exception('Invalid query type. Expected Utopia\\Audit\\Query');
             }
 
@@ -471,12 +496,14 @@ class Database extends SQL
             $dbQueries[] = Query::parseQuery($query->toArray());
         }
 
-        $documents = $this->db->getAuthorization()->skip(fn(): array => $this->db->find(
-            collection: $this->getCollectionName(),
-            queries: $dbQueries,
-        ));
+        $documents = $this->db
+            ->getAuthorization()
+            ->skip(fn(): array => $this->db->find(collection: $this->getCollectionName(), queries: $dbQueries));
 
-        return array_map(fn(\Utopia\Database\Document $doc): \Utopia\Audit\Log => new Log($doc->getArrayCopy()), $documents);
+        return array_map(
+            fn(\Utopia\Database\Document $doc): \Utopia\Audit\Log => new Log($doc->getArrayCopy()),
+            $documents,
+        );
     }
 
     /**
@@ -494,7 +521,7 @@ class Database extends SQL
         $dbQueries = [];
 
         foreach ($queries as $query) {
-            if (!($query instanceof \Utopia\Audit\Query)) {
+            if (! $query instanceof \Utopia\Audit\Query) {
                 throw new \Exception('Invalid query type. Expected Utopia\\Audit\\Query');
             }
 
@@ -519,10 +546,12 @@ class Database extends SQL
             $dbQueries[] = Query::parseQuery($queryArray);
         }
 
-        return $this->db->getAuthorization()->skip(fn(): int => $this->db->count(
-            collection: $this->getCollectionName(),
-            queries: $dbQueries,
-            max: $max,
-        ));
+        return $this->db
+            ->getAuthorization()
+            ->skip(fn(): int => $this->db->count(
+                collection: $this->getCollectionName(),
+                queries: $dbQueries,
+                max: $max,
+            ));
     }
 }

@@ -53,13 +53,17 @@ class Test implements Adapter
     /**
      * @param array<string, mixed> $advisory
      */
-    public function createCounter(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): Counter
-    {
+    public function createCounter(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): Counter {
         $register = function (Counter $counter) use ($name): void {
             $this->counters[$name] = $counter;
         };
 
-        return new class ($register) extends Counter {
+        return new class($register) extends Counter {
             /**
              * @var array<int, float|int>
              */
@@ -68,7 +72,9 @@ class Test implements Adapter
             /**
              * @param \Closure(Counter): void $register
              */
-            public function __construct(private \Closure $register) {}
+            public function __construct(
+                private \Closure $register,
+            ) {}
 
             /**
              * @param iterable<non-empty-string, array<mixed>|bool|float|int|string|null> $attributes
@@ -84,13 +90,17 @@ class Test implements Adapter
     /**
      * @param array<string, mixed> $advisory
      */
-    public function createHistogram(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): Histogram
-    {
+    public function createHistogram(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): Histogram {
         $register = function (Histogram $histogram) use ($name): void {
             $this->histograms[$name] = $histogram;
         };
 
-        return new class ($register) extends Histogram {
+        return new class($register) extends Histogram {
             /**
              * @var array<int, float|int>
              */
@@ -99,7 +109,9 @@ class Test implements Adapter
             /**
              * @param \Closure(Histogram): void $register
              */
-            public function __construct(private \Closure $register) {}
+            public function __construct(
+                private \Closure $register,
+            ) {}
 
             /**
              * @param iterable<non-empty-string, array<mixed>|bool|float|int|string|null> $attributes
@@ -115,13 +127,17 @@ class Test implements Adapter
     /**
      * @param array<string, mixed> $advisory
      */
-    public function createGauge(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): Gauge
-    {
+    public function createGauge(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): Gauge {
         $register = function (Gauge $gauge) use ($name): void {
             $this->gauges[$name] = $gauge;
         };
 
-        return new class ($register) extends Gauge {
+        return new class($register) extends Gauge {
             /**
              * @var array<int, float|int>
              */
@@ -130,7 +146,9 @@ class Test implements Adapter
             /**
              * @param \Closure(Gauge): void $register
              */
-            public function __construct(private \Closure $register) {}
+            public function __construct(
+                private \Closure $register,
+            ) {}
 
             /**
              * @param iterable<non-empty-string, array<mixed>|bool|float|int|string|null> $attributes
@@ -146,13 +164,17 @@ class Test implements Adapter
     /**
      * @param array<string, mixed> $advisory
      */
-    public function createUpDownCounter(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): UpDownCounter
-    {
+    public function createUpDownCounter(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): UpDownCounter {
         $register = function (UpDownCounter $upDownCounter) use ($name): void {
             $this->upDownCounters[$name] = $upDownCounter;
         };
 
-        return new class ($register) extends UpDownCounter {
+        return new class($register) extends UpDownCounter {
             /**
              * @var array<int, float|int>
              */
@@ -161,7 +183,9 @@ class Test implements Adapter
             /**
              * @param \Closure(UpDownCounter): void $register
              */
-            public function __construct(private \Closure $register) {}
+            public function __construct(
+                private \Closure $register,
+            ) {}
 
             /**
              * @param iterable<non-empty-string, array<mixed>|bool|float|int|string|null> $attributes
@@ -177,29 +201,36 @@ class Test implements Adapter
     /**
      * @param array<string, mixed> $advisory
      */
-    public function createObservableGauge(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): ObservableGauge
-    {
+    public function createObservableGauge(
+        string $name,
+        ?string $unit = null,
+        ?string $description = null,
+        array $advisory = [],
+    ): ObservableGauge {
         $register = function (ObservableGauge $gauge) use ($name): void {
             $this->observableGauges[$name] = $gauge;
         };
 
-        return $this->observableGauges[$name]
-            ?? $this->unobservedGauges[$name]
-            ??= new class ($register) extends ObservableGauge {
+        return (
+            $this->observableGauges[$name] ?? ($this->unobservedGauges[$name] ??= new class($register) extends
+                ObservableGauge {
                 /** @var list<\Closure> */
                 public array $callbacks = [];
 
                 /**
                  * @param \Closure(ObservableGauge): void $register
                  */
-                public function __construct(private \Closure $register) {}
+                public function __construct(
+                    private \Closure $register,
+                ) {}
 
                 public function observe(callable $callback): void
                 {
                     ($this->register)($this);
                     $this->callbacks[] = \Closure::fromCallable($callback);
                 }
-            };
+            })
+        );
     }
 
     public function collect(): bool

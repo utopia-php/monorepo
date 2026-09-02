@@ -27,7 +27,9 @@ final class UserAgent
 
     private bool $botResolved = false;
 
-    private function __construct(private readonly string $value) {}
+    private function __construct(
+        private readonly string $value,
+    ) {}
 
     public static function parse(string $value): self
     {
@@ -56,7 +58,7 @@ final class UserAgent
 
     public function bot(): ?Bot
     {
-        if (!$this->botResolved) {
+        if (! $this->botResolved) {
             $this->bot = BotDetector::detect($this->value);
             $this->botResolved = true;
         }

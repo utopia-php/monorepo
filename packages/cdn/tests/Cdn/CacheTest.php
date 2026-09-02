@@ -20,12 +20,15 @@ final class CacheTest extends TestCase
         $cache->purgeKeys(['key']);
         $cache->purgeZone();
 
-        $this->assertSame([
-            ['paths' => ['example.com', ['/file.png']]],
-            ['domain' => 'example.com'],
-            ['keys' => ['key']],
-            ['zone' => true],
-        ], $calls->getArrayCopy());
+        $this->assertSame(
+            [
+                ['paths' => ['example.com', ['/file.png']]],
+                ['domain' => 'example.com'],
+                ['keys' => ['key']],
+                ['zone' => true],
+            ],
+            $calls->getArrayCopy(),
+        );
     }
 
     public function testRejectsInvalidInput(): void
@@ -39,21 +42,27 @@ final class CacheTest extends TestCase
     /** @param \ArrayObject<int, mixed> $calls */
     private function adapter(\ArrayObject $calls): Adapter
     {
-        return new readonly class ($calls) implements Adapter {
+        return new readonly class($calls) implements Adapter {
             /** @param \ArrayObject<int, mixed> $calls */
-            public function __construct(private \ArrayObject $calls) {}
+            public function __construct(
+                private \ArrayObject $calls,
+            ) {}
+
             public function purgePaths(string $domain, array $paths): void
             {
                 $this->calls->append(['paths' => [$domain, $paths]]);
             }
+
             public function purgeDomain(string $domain): void
             {
                 $this->calls->append(['domain' => $domain]);
             }
+
             public function purgeKeys(array $keys): void
             {
                 $this->calls->append(['keys' => $keys]);
             }
+
             public function purgeZone(): void
             {
                 $this->calls->append(['zone' => true]);

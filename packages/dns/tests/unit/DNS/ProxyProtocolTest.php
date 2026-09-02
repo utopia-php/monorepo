@@ -50,7 +50,10 @@ final class ProxyProtocolTest extends TestCase
         $this->assertNotInstanceOf(\Utopia\DNS\ProxyProtocol::class, ProxyProtocol::parse('PROXY TCP4 192.168.0.1'));
         $this->assertNotInstanceOf(\Utopia\DNS\ProxyProtocol::class, ProxyProtocol::parse("\r\n\r\n"));
         $this->assertNotInstanceOf(\Utopia\DNS\ProxyProtocol::class, ProxyProtocol::parse(ProxyProtocol::SIGNATURE_V2));
-        $this->assertNotInstanceOf(\Utopia\DNS\ProxyProtocol::class, ProxyProtocol::parse(ProxyProtocol::SIGNATURE_V2 . "\x21\x11"));
+        $this->assertNotInstanceOf(
+            \Utopia\DNS\ProxyProtocol::class,
+            ProxyProtocol::parse(ProxyProtocol::SIGNATURE_V2 . "\x21\x11"),
+        );
     }
 
     public function testV2IncompleteAddressesReturnsNull(): void

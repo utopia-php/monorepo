@@ -80,9 +80,7 @@ class Client
             return;
         }
 
-        $message = $written === false
-            ? ($this->client->errMsg ?: 'send failed')
-            : 'partial send';
+        $message = $written === false ? ($this->client->errMsg ?: 'send failed') : 'partial send';
 
         throw new ConnectionException('Redis send failed: ' . $message);
     }
@@ -188,7 +186,7 @@ class Client
                 if ($len === -1) {
                     return null;
                 }
-                if (\strlen($buffer) < $offset + $len + 2) {
+                if (\strlen($buffer) < ($offset + $len + 2)) {
                     return self::INCOMPLETE;
                 }
                 $value = substr($buffer, $offset, $len);

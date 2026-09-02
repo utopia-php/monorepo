@@ -45,7 +45,9 @@ class GitHub extends Git
      */
     protected $headers = ['content-type' => 'application/json'];
 
-    public function __construct(protected Cache $cache) {}
+    public function __construct(
+        protected Cache $cache,
+    ) {}
 
     /**
      * Get Adapter Name
@@ -58,8 +60,13 @@ class GitHub extends Git
     /**
      * GitHub Initialisation with access token generation.
      */
-    public function initializeVariables(string $installationId, string $privateKey, ?string $appId = null, ?string $accessToken = null, ?string $refreshToken = null): void
-    {
+    public function initializeVariables(
+        string $installationId,
+        string $privateKey,
+        ?string $appId = null,
+        ?string $accessToken = null,
+        ?string $refreshToken = null,
+    ): void {
         $this->installationId = $installationId;
 
         // Cache for 1 minute less than the JWT expiry so we refresh before the token actually expires.
@@ -89,19 +96,28 @@ class GitHub extends Git
     {
         $url = "/orgs/{$owner}/repos";
 
-        $response = $this->call(self::METHOD_POST, $url, ['Authorization' => "Bearer $this->accessToken"], [
-            'name' => $repositoryName,
-            'private' => $private,
-        ]);
+        $response = $this->call(
+            self::METHOD_POST,
+            $url,
+            ['Authorization' => "Bearer $this->accessToken"],
+            [
+                'name' => $repositoryName,
+                'private' => $private,
+            ],
+        );
 
         $responseHeaders = $response['headers'] ?? [];
         $statusCode = $responseHeaders['status-code'] ?? 0;
         if ($statusCode >= 400) {
-            throw new Exception("Creating repository {$repositoryName} failed with status code {$statusCode}", $statusCode);
+            throw new Exception(
+                "Creating repository {$repositoryName} failed with status code {$statusCode}",
+                $statusCode,
+            );
         }
 
         return $response['body'] ?? [];
     }
+
     /**
      * Create a pull request
      *
@@ -113,16 +129,27 @@ class GitHub extends Git
      * @param  string  $body  PR description (optional)
      * @return array<mixed> Created PR details
      */
-    public function createPullRequest(string $owner, string $repositoryName, string $title, string $head, string $base, string $body = ''): array
-    {
+    public function createPullRequest(
+        string $owner,
+        string $repositoryName,
+        string $title,
+        string $head,
+        string $base,
+        string $body = '',
+    ): array {
         throw new Exception('Not implemented');
     }
 
     /**
      * Create a webhook on a repository
      */
-    public function createWebhook(string $owner, string $repositoryName, string $url, string $secret, array $events = ['push', 'pull_request']): int
-    {
+    public function createWebhook(
+        string $owner,
+        string $repositoryName,
+        string $url,
+        string $secret,
+        array $events = ['push', 'pull_request'],
+    ): int {
         $response = $this->call(
             self::METHOD_POST,
             "/repos/{$owner}/{$repositoryName}/hooks",
@@ -142,7 +169,10 @@ class GitHub extends Git
         $responseHeaders = $response['headers'] ?? [];
         $responseHeadersStatusCode = $responseHeaders['status-code'] ?? 0;
         if ($responseHeadersStatusCode >= 400) {
-            throw new Exception("Failed to create webhook: HTTP {$responseHeadersStatusCode}", $responseHeadersStatusCode);
+            throw new Exception(
+                "Failed to create webhook: HTTP {$responseHeadersStatusCode}",
+                $responseHeadersStatusCode,
+            );
         }
 
         $id = $response['body']['id'] ?? null;
@@ -164,8 +194,14 @@ class GitHub extends Git
      * @param  string  $branch  Branch to create file on (optional)
      * @return array<mixed> Response from API
      */
-    public function createFile(string $owner, string $repositoryName, string $filepath, string $content, string $message = 'Add file', string $branch = ''): array
-    {
+    public function createFile(
+        string $owner,
+        string $repositoryName,
+        string $filepath,
+        string $content,
+        string $message = 'Add file',
+        string $branch = '',
+    ): array {
         $url = "/repos/{$owner}/{$repositoryName}/contents/{$filepath}";
 
         $payload = [
@@ -178,17 +214,15 @@ class GitHub extends Git
             $payload['branch'] = $branch;
         }
 
-        $response = $this->call(
-            self::METHOD_PUT,
-            $url,
-            ['Authorization' => "Bearer $this->accessToken"],
-            $payload,
-        );
+        $response = $this->call(self::METHOD_PUT, $url, ['Authorization' => "Bearer $this->accessToken"], $payload);
 
         $responseHeaders = $response['headers'] ?? [];
         $responseHeadersStatusCode = $responseHeaders['status-code'] ?? 0;
         if ($responseHeadersStatusCode >= 400) {
-            throw new Exception("Failed to create file {$filepath}: HTTP {$responseHeadersStatusCode}", $responseHeadersStatusCode);
+            throw new Exception(
+                "Failed to create file {$filepath}: HTTP {$responseHeadersStatusCode}",
+                $responseHeadersStatusCode,
+            );
         }
 
         return $response['body'] ?? [];
@@ -203,15 +237,24 @@ class GitHub extends Git
      * @param string $oldBranchName Name of the branch to branch from
      * @return array<mixed> Response from API
      */
-    public function createBranch(string $owner, string $repositoryName, string $newBranchName, string $oldBranchName): array
-    {
+    public function createBranch(
+        string $owner,
+        string $repositoryName,
+        string $newBranchName,
+        string $oldBranchName,
+    ): array {
         $latestCommit = $this->getLatestCommit($owner, $repositoryName, $oldBranchName);
         $sha = $latestCommit['commitHash'];
 
-        $response = $this->call(self::METHOD_POST, "/repos/$owner/$repositoryName/git/refs", ['Authorization' => "Bearer $this->accessToken"], [
-            'ref' => "refs/heads/$newBranchName",
-            'sha' => $sha,
-        ]);
+        $response = $this->call(
+            self::METHOD_POST,
+            "/repos/$owner/$repositoryName/git/refs",
+            ['Authorization' => "Bearer $this->accessToken"],
+            [
+                'ref' => "refs/heads/$newBranchName",
+                'sha' => $sha,
+            ],
+        );
 
         return $response['body'] ?? [];
     }
@@ -247,12 +290,17 @@ class GitHub extends Git
         if ($this->hasAccessToAllRepositories()) {
             $url = '/search/repositories';
 
-            $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "Bearer $this->accessToken"], [
-                'q' => "{$search} user:{$owner} fork:true",
-                'page' => $page,
-                'per_page' => $per_page,
-                'sort' => 'updated',
-            ]);
+            $response = $this->call(
+                self::METHOD_GET,
+                $url,
+                ['Authorization' => "Bearer $this->accessToken"],
+                [
+                    'q' => "{$search} user:{$owner} fork:true",
+                    'page' => $page,
+                    'per_page' => $per_page,
+                    'sort' => 'updated',
+                ],
+            );
             $responseHeaders = $response['headers'] ?? [];
             $statusCode = $responseHeaders['status-code'] ?? 0;
 
@@ -280,10 +328,15 @@ class GitHub extends Git
 
         // When no search query is provided, delegate pagination to the GitHub API.
         if ($search === '' || $search === '0') {
-            $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "Bearer $this->accessToken"], [
-                'page' => $page,
-                'per_page' => $per_page,
-            ]);
+            $response = $this->call(
+                self::METHOD_GET,
+                $url,
+                ['Authorization' => "Bearer $this->accessToken"],
+                [
+                    'page' => $page,
+                    'per_page' => $per_page,
+                ],
+            );
 
             $responseHeaders = $response['headers'] ?? [];
             $statusCode = $responseHeaders['status-code'] ?? 0;
@@ -302,10 +355,15 @@ class GitHub extends Git
         // When search query is provided, fetch all repositories accessible by the installation and filter them locally.
         $currentPage = 1;
         while (true) {
-            $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "Bearer $this->accessToken"], [
-                'page' => $currentPage,
-                'per_page' => 100, // Maximum allowed by GitHub API
-            ]);
+            $response = $this->call(
+                self::METHOD_GET,
+                $url,
+                ['Authorization' => "Bearer $this->accessToken"],
+                [
+                    'page' => $currentPage,
+                    'per_page' => 100, // Maximum allowed by GitHub API
+                ],
+            );
 
             $responseHeaders = $response['headers'] ?? [];
             $statusCode = $responseHeaders['status-code'] ?? 0;
@@ -316,7 +374,10 @@ class GitHub extends Git
             $responseBody = $response['body'] ?? [];
 
             // Filter repositories to only include those that match the search query.
-            $filteredRepositories = array_filter($responseBody['repositories'] ?? [], fn(array $repo): bool => stripos($repo['name'] ?? '', $search) !== false);
+            $filteredRepositories = array_filter(
+                $responseBody['repositories'] ?? [],
+                fn(array $repo): bool => stripos($repo['name'] ?? '', $search) !== false,
+            );
 
             // Merge with result so far.
             $repositories = array_merge($repositories, $filteredRepositories);
@@ -347,18 +408,23 @@ class GitHub extends Git
         $url = '/installation/repositories';
 
         while ($totalRepositories < $maxRepositories) {
-            $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "Bearer $this->accessToken"], [
-                'page' => $currentPage,
-                'per_page' => $perPage,
-            ]);
+            $response = $this->call(
+                self::METHOD_GET,
+                $url,
+                ['Authorization' => "Bearer $this->accessToken"],
+                [
+                    'page' => $currentPage,
+                    'per_page' => $perPage,
+                ],
+            );
 
             $responseBody = $response['body'] ?? [];
 
-            if (!\array_key_exists('repositories', $responseBody)) {
+            if (! \array_key_exists('repositories', $responseBody)) {
                 throw new Exception('Repositories list missing in the response.');
             }
 
-            foreach (($responseBody['repositories'] ?? []) as $repo) {
+            foreach ($responseBody['repositories'] ?? [] as $repo) {
                 if (strtolower($repo['name'] ?? '') === strtolower($repositoryName)) {
                     return $repo;
                 }
@@ -409,7 +475,7 @@ class GitHub extends Git
 
         $responseBody = $response['body'] ?? [];
 
-        if (!\array_key_exists('name', $responseBody)) {
+        if (! \array_key_exists('name', $responseBody)) {
             throw new RepositoryNotFound('Repository not found');
         }
 
@@ -425,8 +491,12 @@ class GitHub extends Git
      * @param bool $recursive Whether to fetch the tree recursively
      * @return array<string> List of files in the repository
      */
-    public function getRepositoryTree(string $owner, string $repositoryName, string $branch, bool $recursive = false): array
-    {
+    public function getRepositoryTree(
+        string $owner,
+        string $repositoryName,
+        string $branch,
+        bool $recursive = false,
+    ): array {
         // if recursive is true, add optional query param to url
         $url = "/repos/$owner/$repositoryName/git/trees/$branch" . ($recursive ? '?recursive=1' : '');
         $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "Bearer $this->accessToken"]);
@@ -457,7 +527,7 @@ class GitHub extends Git
 
         $responseBody = $response['body'] ?? [];
 
-        if (!empty($responseBody)) {
+        if (! empty($responseBody)) {
             return array_keys($responseBody);
         }
 
@@ -515,8 +585,12 @@ class GitHub extends Git
      * @param  string  $ref The name of the commit/branch/tag
      * @return array<mixed> List of contents at the specified path
      */
-    public function listRepositoryContents(string $owner, string $repositoryName, string $path = '', string $ref = ''): array
-    {
+    public function listRepositoryContents(
+        string $owner,
+        string $repositoryName,
+        string $path = '',
+        string $ref = '',
+    ): array {
         $path = $this->normalizeRepositoryPath($path);
         $url = "/repos/$owner/$repositoryName/contents";
         if ($path !== '' && $path !== '0') {
@@ -538,9 +612,9 @@ class GitHub extends Git
 
         $items = [];
 
-        if (!empty($responseBody[0] ?? [])) {
+        if (! empty($responseBody[0] ?? [])) {
             $items = $responseBody;
-        } elseif (!empty($responseBody)) {
+        } elseif (! empty($responseBody)) {
             $items = [$responseBody];
         }
 
@@ -566,7 +640,10 @@ class GitHub extends Git
         $responseHeaders = $response['headers'] ?? [];
         $responseHeadersStatusCode = $responseHeaders['status-code'] ?? 0;
         if ($responseHeadersStatusCode >= 400) {
-            throw new Exception("Deleting repository $repositoryName failed with status code $responseHeadersStatusCode", $responseHeadersStatusCode);
+            throw new Exception(
+                "Deleting repository $repositoryName failed with status code $responseHeadersStatusCode",
+                $responseHeadersStatusCode,
+            );
         }
         return true;
     }
@@ -577,15 +654,24 @@ class GitHub extends Git
      *
      * @throws Exception
      */
-    public function createComment(string $owner, string $repositoryName, int $pullRequestNumber, string $comment): string
-    {
+    public function createComment(
+        string $owner,
+        string $repositoryName,
+        int $pullRequestNumber,
+        string $comment,
+    ): string {
         $url = '/repos/' . $owner . '/' . $repositoryName . '/issues/' . $pullRequestNumber . '/comments';
 
-        $response = $this->call(self::METHOD_POST, $url, ['Authorization' => "Bearer $this->accessToken"], ['body' => $comment]);
+        $response = $this->call(
+            self::METHOD_POST,
+            $url,
+            ['Authorization' => "Bearer $this->accessToken"],
+            ['body' => $comment],
+        );
 
         $responseBody = $response['body'] ?? [];
 
-        if (!\array_key_exists('id', $responseBody)) {
+        if (! \array_key_exists('id', $responseBody)) {
             throw new Exception('Comment creation response is missing comment ID.');
         }
 
@@ -628,11 +714,16 @@ class GitHub extends Git
     {
         $url = '/repos/' . $owner . '/' . $repositoryName . '/issues/comments/' . $commentId;
 
-        $response = $this->call(self::METHOD_PATCH, $url, ['Authorization' => "Bearer $this->accessToken"], ['body' => $comment]);
+        $response = $this->call(
+            self::METHOD_PATCH,
+            $url,
+            ['Authorization' => "Bearer $this->accessToken"],
+            ['body' => $comment],
+        );
 
         $responseBody = $response['body'] ?? [];
 
-        if (!\array_key_exists('id', $responseBody)) {
+        if (! \array_key_exists('id', $responseBody)) {
             throw new Exception('Comment update response is missing comment ID.');
         }
 
@@ -664,12 +755,17 @@ class GitHub extends Git
         $jwt = new JWT($privateKeyObj, 'RS256');
         $token = $jwt->encode($payload);
         $this->jwtToken = $token;
-        $response = $this->call(self::METHOD_POST, '/app/installations/' . $this->installationId . '/access_tokens', ['Authorization' => 'Bearer ' . $token]);
+        $response = $this->call(self::METHOD_POST, '/app/installations/' . $this->installationId . '/access_tokens', [
+            'Authorization' => 'Bearer ' . $token,
+        ]);
         $responseBody = $response['body'] ?? [];
         $statusCode = $response['headers']['status-code'] ?? 0;
-        if (!\array_key_exists('token', $responseBody)) {
+        if (! \array_key_exists('token', $responseBody)) {
             $safeBody = json_encode(array_intersect_key($responseBody, array_flip(['message', 'documentation_url'])));
-            throw new Exception('Failed to retrieve access token from GitHub API. Status: ' . $statusCode . '. Response: ' . $safeBody, $statusCode);
+            throw new Exception(
+                'Failed to retrieve access token from GitHub API. Status: ' . $statusCode . '. Response: ' . $safeBody,
+                $statusCode,
+            );
         }
         $this->accessToken = $responseBody['token'] ?? '';
     }
@@ -702,7 +798,7 @@ class GitHub extends Git
         $responseBody = $response['body'] ?? [];
         $responseBodyAccount = $responseBody['account'] ?? [];
 
-        if (!\array_key_exists('login', $responseBodyAccount)) {
+        if (! \array_key_exists('login', $responseBodyAccount)) {
             throw new Exception('Owner name retrieval response is missing account login.');
         }
 
@@ -743,10 +839,15 @@ class GitHub extends Git
         while (true) {
             $url = "/repos/{$owner}/{$repositoryName}/pulls/{$pullRequestNumber}/files";
 
-            $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "Bearer $this->accessToken"], [
-                'per_page' => $perPage,
-                'page' => $currentPage,
-            ]);
+            $response = $this->call(
+                self::METHOD_GET,
+                $url,
+                ['Authorization' => "Bearer $this->accessToken"],
+                [
+                    'per_page' => $perPage,
+                    'page' => $currentPage,
+                ],
+            );
 
             $files = $response['body'] ?? [];
             $allFiles = array_merge($allFiles, $files);
@@ -790,37 +891,53 @@ class GitHub extends Git
      * @param  string  $search Prefix filter; empty returns all branches
      * @return array<string> List of branch names
      */
-    public function listBranches(string $owner, string $repositoryName, int $perPage = 100, int $page = 1, string $search = ''): array
-    {
+    public function listBranches(
+        string $owner,
+        string $repositoryName,
+        int $perPage = 100,
+        int $page = 1,
+        string $search = '',
+    ): array {
         $perPage = min(max($perPage, 1), 100);
 
         if ($search !== '') {
-            $url = "/repos/$owner/$repositoryName/git/matching-refs/heads/" . str_replace('%2F', '/', rawurlencode($search));
+            $url =
+                "/repos/$owner/$repositoryName/git/matching-refs/heads/"
+                . str_replace('%2F', '/', rawurlencode($search));
             $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "Bearer $this->accessToken"]);
 
             $statusCode = $response['headers']['status-code'] ?? 0;
             $responseBody = $response['body'] ?? [];
 
-            if ($statusCode < 200 || $statusCode >= 300 || !\is_array($responseBody)) {
+            if ($statusCode < 200 || $statusCode >= 300 || ! \is_array($responseBody)) {
                 return [];
             }
 
-            $branches = array_map(fn(array $ref): string|array => str_replace('refs/heads/', '', $ref['ref'] ?? ''), $responseBody);
+            $branches = array_map(fn(array $ref): string|array => str_replace(
+                'refs/heads/',
+                '',
+                $ref['ref'] ?? '',
+            ), $responseBody);
             $offset = ($page - 1) * $perPage;
 
             return array_values(\array_slice($branches, $offset, $perPage));
         }
 
         $url = "/repos/$owner/$repositoryName/branches";
-        $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "Bearer $this->accessToken"], [
-            'page' => $page,
-            'per_page' => $perPage,
-        ]);
+        $response = $this->call(
+            self::METHOD_GET,
+            $url,
+            ['Authorization' => "Bearer $this->accessToken"],
+            [
+                'page' => $page,
+                'per_page' => $perPage,
+            ],
+        );
 
         $statusCode = $response['headers']['status-code'] ?? 0;
         $responseBody = $response['body'] ?? [];
 
-        if ($statusCode < 200 || $statusCode >= 300 || !\is_array($responseBody)) {
+        if ($statusCode < 200 || $statusCode >= 300 || ! \is_array($responseBody)) {
             return [];
         }
 
@@ -839,17 +956,24 @@ class GitHub extends Git
     public function listTags(string $owner, string $repositoryName, string $search = ''): array
     {
         $url = "/repos/$owner/$repositoryName/git/matching-refs/tags/";
-        $headers = $this->accessToken === '' || $this->accessToken === '0' ? [] : ['Authorization' => "Bearer $this->accessToken"];
+        $headers =
+            $this->accessToken === '' || $this->accessToken === '0'
+                ? []
+                : ['Authorization' => "Bearer $this->accessToken"];
         $response = $this->call(self::METHOD_GET, $url, $headers);
 
         $statusCode = $response['headers']['status-code'] ?? 0;
         $responseBody = $response['body'] ?? [];
 
-        if ($statusCode < 200 || $statusCode >= 300 || !\is_array($responseBody)) {
+        if ($statusCode < 200 || $statusCode >= 300 || ! \is_array($responseBody)) {
             return [];
         }
 
-        $tags = array_map(fn(array $ref): string|array => str_replace('refs/tags/', '', $ref['ref'] ?? ''), $responseBody);
+        $tags = array_map(fn(array $ref): string|array => str_replace(
+            'refs/tags/',
+            '',
+            $ref['ref'] ?? '',
+        ), $responseBody);
 
         return $this->matchGlob($tags, $search);
     }
@@ -912,7 +1036,10 @@ class GitHub extends Git
             throw new RepositoryNotFound("Branch not found: {$branch}");
         }
         if ($responseHeadersStatusCode >= 400) {
-            throw new Exception("Failed to get latest commit: HTTP {$responseHeadersStatusCode}", $responseHeadersStatusCode);
+            throw new Exception(
+                "Failed to get latest commit: HTTP {$responseHeadersStatusCode}",
+                $responseHeadersStatusCode,
+            );
         }
 
         $responseBody = $response['body'] ?? [];
@@ -943,9 +1070,13 @@ class GitHub extends Git
      * @param  string  $format Archive format: 'tarball' or 'zipball'
      * @return string Presigned download URL
      */
-    public function getRepositoryPresignedUrl(string $owner, string $repositoryName, string $ref = '', string $format = 'tarball'): string
-    {
-        if (!\in_array($format, ['tarball', 'zipball'], true)) {
+    public function getRepositoryPresignedUrl(
+        string $owner,
+        string $repositoryName,
+        string $ref = '',
+        string $format = 'tarball',
+    ): string {
+        if (! \in_array($format, ['tarball', 'zipball'], true)) {
             throw new Exception("Invalid archive format: {$format}. Use 'tarball' or 'zipball'.");
         }
 
@@ -955,7 +1086,14 @@ class GitHub extends Git
             $url .= '/' . str_replace('%2F', '/', rawurlencode($ref));
         }
 
-        $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "Bearer $this->accessToken"], [], false, false);
+        $response = $this->call(
+            self::METHOD_GET,
+            $url,
+            ['Authorization' => "Bearer $this->accessToken"],
+            [],
+            false,
+            false,
+        );
 
         $responseHeaders = $response['headers'] ?? [];
         $responseHeadersStatusCode = $responseHeaders['status-code'] ?? 0;
@@ -963,12 +1101,18 @@ class GitHub extends Git
             throw new RepositoryNotFound('Repository or ref not found.');
         }
         if ($responseHeadersStatusCode === 401 || $responseHeadersStatusCode === 403) {
-            throw new Exception('Access denied to repository archive; check the access token and its permissions.', $responseHeadersStatusCode);
+            throw new Exception(
+                'Access denied to repository archive; check the access token and its permissions.',
+                $responseHeadersStatusCode,
+            );
         }
 
         $presignedUrl = $responseHeaders['location'] ?? '';
         if (empty($presignedUrl)) {
-            throw new Exception("Failed to get presigned URL: HTTP {$responseHeadersStatusCode}", $responseHeadersStatusCode);
+            throw new Exception(
+                "Failed to get presigned URL: HTTP {$responseHeadersStatusCode}",
+                $responseHeadersStatusCode,
+            );
         }
 
         return $presignedUrl;
@@ -978,8 +1122,15 @@ class GitHub extends Git
      * Updates status check of each commit
      * state can be one of: error, failure, pending, success
      */
-    public function updateCommitStatus(string $repositoryName, string $commitHash, string $owner, string $state, string $description = '', string $target_url = '', string $context = ''): void
-    {
+    public function updateCommitStatus(
+        string $repositoryName,
+        string $commitHash,
+        string $owner,
+        string $state,
+        string $description = '',
+        string $target_url = '',
+        string $context = '',
+    ): void {
         $url = "/repos/$owner/$repositoryName/statuses/$commitHash";
 
         $body = [
@@ -1045,18 +1196,24 @@ class GitHub extends Git
                 'head_sha' => $headSha,
                 'status' => $status,
             ],
-            array_filter([
-                'conclusion' => $conclusion,
-                'completed_at' => $completedAt,
-                'details_url' => $detailsUrl,
-                'external_id' => $externalId,
-                'started_at' => $startedAt,
-            ], fn(string $value): bool => $value !== '' && $value !== '0'),
+            array_filter(
+                [
+                    'conclusion' => $conclusion,
+                    'completed_at' => $completedAt,
+                    'details_url' => $detailsUrl,
+                    'external_id' => $externalId,
+                    'started_at' => $startedAt,
+                ],
+                fn(string $value): bool => $value !== '' && $value !== '0',
+            ),
         );
 
         // Output requires both title and summary.
         if ($title !== '' && $title !== '0' && ($summary !== '' && $summary !== '0')) {
-            $output = array_filter(['title' => $title, 'summary' => $summary, 'text' => $text], fn(string $value): bool => $value !== '' && $value !== '0');
+            $output = array_filter(
+                ['title' => $title, 'summary' => $summary, 'text' => $text],
+                fn(string $value): bool => $value !== '' && $value !== '0',
+            );
             if ($annotations !== []) {
                 $output['annotations'] = $annotations;
             }
@@ -1074,7 +1231,10 @@ class GitHub extends Git
 
         $responseHeadersStatusCode = $response['headers']['status-code'] ?? 0;
         if ($responseHeadersStatusCode >= 400) {
-            throw new Exception("Failed to create check run: HTTP $responseHeadersStatusCode", $responseHeadersStatusCode);
+            throw new Exception(
+                "Failed to create check run: HTTP $responseHeadersStatusCode",
+                $responseHeadersStatusCode,
+            );
         }
 
         $checkRun = $response['body'] ?? [];
@@ -1096,7 +1256,10 @@ class GitHub extends Git
 
         $responseHeadersStatusCode = $response['headers']['status-code'] ?? 0;
         if ($responseHeadersStatusCode >= 400) {
-            throw new Exception("Failed to get check run $checkRunId: HTTP $responseHeadersStatusCode", $responseHeadersStatusCode);
+            throw new Exception(
+                "Failed to get check run $checkRunId: HTTP $responseHeadersStatusCode",
+                $responseHeadersStatusCode,
+            );
         }
 
         $checkRun = $response['body'] ?? [];
@@ -1146,19 +1309,25 @@ class GitHub extends Git
             }
         }
 
-        $body = array_filter([
-            'name' => $name,
-            'status' => $status,
-            'details_url' => $detailsUrl,
-            'external_id' => $externalId,
-            'started_at' => $startedAt,
-            'conclusion' => $conclusion,
-            'completed_at' => $completedAt,
-        ], fn(string $value): bool => $value !== '' && $value !== '0');
+        $body = array_filter(
+            [
+                'name' => $name,
+                'status' => $status,
+                'details_url' => $detailsUrl,
+                'external_id' => $externalId,
+                'started_at' => $startedAt,
+                'conclusion' => $conclusion,
+                'completed_at' => $completedAt,
+            ],
+            fn(string $value): bool => $value !== '' && $value !== '0',
+        );
 
         // Output requires both title and summary.
         if ($title !== '' && $title !== '0' && ($summary !== '' && $summary !== '0')) {
-            $output = array_filter(['title' => $title, 'summary' => $summary, 'text' => $text], fn(string $value): bool => $value !== '' && $value !== '0');
+            $output = array_filter(
+                ['title' => $title, 'summary' => $summary, 'text' => $text],
+                fn(string $value): bool => $value !== '' && $value !== '0',
+            );
             if ($annotations !== []) {
                 $output['annotations'] = $annotations;
             }
@@ -1176,7 +1345,10 @@ class GitHub extends Git
 
         $responseHeadersStatusCode = $response['headers']['status-code'] ?? 0;
         if ($responseHeadersStatusCode >= 400) {
-            throw new Exception("Failed to update check run $checkRunId: HTTP $responseHeadersStatusCode", $responseHeadersStatusCode);
+            throw new Exception(
+                "Failed to update check run $checkRunId: HTTP $responseHeadersStatusCode",
+                $responseHeadersStatusCode,
+            );
         }
 
         $checkRun = $response['body'] ?? [];
@@ -1188,8 +1360,14 @@ class GitHub extends Git
     /**
      * Generates a clone command using app access token
      */
-    public function generateCloneCommand(string $owner, string $repositoryName, string $version, string $versionType, string $directory, string $rootDirectory): string
-    {
+    public function generateCloneCommand(
+        string $owner,
+        string $repositoryName,
+        string $version,
+        string $versionType,
+        string $directory,
+        string $rootDirectory,
+    ): string {
         if ($rootDirectory === '' || $rootDirectory === '0') {
             $rootDirectory = '*';
         }
@@ -1197,7 +1375,8 @@ class GitHub extends Git
         // URL encode the components for the clone URL
         $owner = urlencode($owner);
         $repositoryName = urlencode($repositoryName);
-        $accessToken = $this->accessToken === '' || $this->accessToken === '0' ? '' : ':' . urlencode($this->accessToken);
+        $accessToken =
+            $this->accessToken === '' || $this->accessToken === '0' ? '' : ':' . urlencode($this->accessToken);
 
         $cloneUrl = "https://{$owner}{$accessToken}@github.com/{$owner}/{$repositoryName}";
 
@@ -1283,7 +1462,7 @@ class GitHub extends Git
     {
         $payload = json_decode($payload, true);
 
-        if ($payload === null || !\is_array($payload)) {
+        if ($payload === null || ! \is_array($payload)) {
             throw new Exception('Invalid payload.');
         }
 
@@ -1305,7 +1484,7 @@ class GitHub extends Git
                 $repositoryName = $payloadRepository['name'] ?? '';
                 $branch = str_replace('refs/heads/', '', $payload['ref'] ?? '');
                 $repositoryUrl = $payloadRepository['html_url'] ?? '';
-                $branchUrl = !empty($repositoryUrl) && !empty($branch) ? $repositoryUrl . '/tree/' . $branch : '';
+                $branchUrl = ! empty($repositoryUrl) && ! empty($branch) ? $repositoryUrl . '/tree/' . $branch : '';
                 $commitHash = $payload['after'] ?? '';
                 $owner = $payloadRepositoryOwner['name'] ?? '';
                 $authorUrl = $payloadSender['html_url'] ?? '';
@@ -1316,16 +1495,16 @@ class GitHub extends Git
                 $headCommitUrl = $payloadHeadCommit['url'] ?? '';
 
                 $affectedFiles = [];
-                foreach (($payload['commits'] ?? []) as $commit) {
-                    foreach (($commit['added'] ?? []) as $added) {
+                foreach ($payload['commits'] ?? [] as $commit) {
+                    foreach ($commit['added'] ?? [] as $added) {
                         $affectedFiles[$added] = true;
                     }
 
-                    foreach (($commit['removed'] ?? []) as $removed) {
+                    foreach ($commit['removed'] ?? [] as $removed) {
                         $affectedFiles[$removed] = true;
                     }
 
-                    foreach (($commit['modified'] ?? []) as $modified) {
+                    foreach ($commit['modified'] ?? [] as $modified) {
                         $affectedFiles[$modified] = true;
                     }
                 }
@@ -1367,7 +1546,7 @@ class GitHub extends Git
                 $branch = $payloadPullRequestHead['ref'] ?? '';
                 $repositoryName = $payloadRepository['name'] ?? '';
                 $repositoryUrl = $payloadRepository['html_url'] ?? '';
-                $branchUrl = !empty($repositoryUrl) && !empty($branch) ? $repositoryUrl . '/tree/' . $branch : '';
+                $branchUrl = ! empty($repositoryUrl) && ! empty($branch) ? $repositoryUrl . '/tree/' . $branch : '';
                 $pullRequestNumber = $payload['number'] ?? '';
                 $action = $payload['action'] ?? '';
                 $owner = $payloadRepositoryOwner['login'] ?? '';
@@ -1413,7 +1592,6 @@ class GitHub extends Git
         return [];
     }
 
-
     /**
      * Validate webhook event
      *
@@ -1429,8 +1607,13 @@ class GitHub extends Git
         return hash_equals($expected, $signature);
     }
 
-    public function createTag(string $owner, string $repositoryName, string $tagName, string $target, string $message = ''): array
-    {
+    public function createTag(
+        string $owner,
+        string $repositoryName,
+        string $tagName,
+        string $target,
+        string $message = '',
+    ): array {
         throw new Exception('createTag() is not implemented for GitHub');
     }
 

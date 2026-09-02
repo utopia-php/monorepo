@@ -19,13 +19,20 @@ final class GitLabTest extends Base
     {
         return new GitLab(new Cache(new None()));
     }
+
     protected function signWebhookPayload(string $payload, string $secret): string
     {
         return $secret;
     }
 
-    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false): string
-    {
+    protected function pushPayload(
+        string $branch,
+        array $added = [],
+        array $removed = [],
+        array $modified = [],
+        bool $created = false,
+        bool $deleted = false,
+    ): string {
         $blank = str_repeat('0', 40);
         $repositoryUrl = 'http://example.com/' . self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME;
 
@@ -43,15 +50,17 @@ final class GitLabTest extends Base
                 'namespace' => self::EVENT_OWNER,
                 'web_url' => $repositoryUrl,
             ],
-            'commits' => $deleted ? [] : [[
-                'id' => self::EVENT_COMMIT_HASH,
-                'message' => self::EVENT_COMMIT_MESSAGE,
-                'url' => $repositoryUrl . '/-/commit/' . self::EVENT_COMMIT_HASH,
-                'author' => ['name' => self::EVENT_AUTHOR_NAME, 'email' => self::EVENT_AUTHOR_EMAIL],
-                'added' => $added,
-                'removed' => $removed,
-                'modified' => $modified,
-            ]],
+            'commits' => $deleted
+                ? []
+                : [[
+                    'id' => self::EVENT_COMMIT_HASH,
+                    'message' => self::EVENT_COMMIT_MESSAGE,
+                    'url' => $repositoryUrl . '/-/commit/' . self::EVENT_COMMIT_HASH,
+                    'author' => ['name' => self::EVENT_AUTHOR_NAME, 'email' => self::EVENT_AUTHOR_EMAIL],
+                    'added' => $added,
+                    'removed' => $removed,
+                    'modified' => $modified,
+                ]],
         ]);
     }
 
@@ -128,11 +137,22 @@ final class GitLabTest extends Base
 
     public function testGetEventPullRequestActionMapping(): void
     {
-        foreach (['open' => 'opened', 'reopen' => 'reopened', 'update' => 'synchronize', 'close' => 'closed', 'merge' => 'closed'] as $native => $mapped) {
+        foreach ([
+            'open' => 'opened',
+            'reopen' => 'reopened',
+            'update' => 'synchronize',
+            'close' => 'closed',
+            'merge' => 'closed',
+        ] as $native => $mapped) {
             $payload = json_encode([
                 'object_kind' => 'merge_request',
                 'project' => ['id' => 1, 'name' => 'r', 'namespace' => 'o', 'web_url' => 'http://example.com/o/r'],
-                'object_attributes' => ['iid' => 1, 'action' => $native, 'source_branch' => 'f', 'target_branch' => 'main'],
+                'object_attributes' => [
+                    'iid' => 1,
+                    'action' => $native,
+                    'source_branch' => 'f',
+                    'target_branch' => 'main',
+                ],
             ]);
 
             if ($payload === false) {

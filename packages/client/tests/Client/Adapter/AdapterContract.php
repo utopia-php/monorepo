@@ -98,7 +98,8 @@ abstract class AdapterContract extends TestCase
             $requestFactory = new Request\Factory();
             $streamFactory = new Stream\Factory();
             $client = $this->createAdapter();
-            $request = $requestFactory->createRequest(Method::POST, 'http://127.0.0.1:' . $port . '/echo')
+            $request = $requestFactory
+                ->createRequest(Method::POST, 'http://127.0.0.1:' . $port . '/echo')
                 ->withHeader(Header::CONTENT_TYPE, ContentType::PLAIN_TEXT)
                 ->withHeader('X-Custom', 'sent')
                 ->withBody($streamFactory->createStream('hello'));
@@ -117,8 +118,14 @@ abstract class AdapterContract extends TestCase
             $requestFactory = new Request\Factory();
             $client = $this->createAdapter();
 
-            $notFound = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/not-found'));
-            $serverError = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/server-error'));
+            $notFound = $this->send($client, $requestFactory->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/not-found',
+            ));
+            $serverError = $this->send($client, $requestFactory->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/server-error',
+            ));
 
             $this->assertSame(404, $notFound->getStatusCode());
             $this->assertSame('missing', (string) $notFound->getBody());
@@ -133,7 +140,10 @@ abstract class AdapterContract extends TestCase
             $requestFactory = new Request\Factory();
             $client = $this->createAdapter();
 
-            $response = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect'));
+            $response = $this->send($client, $requestFactory->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/redirect',
+            ));
 
             $this->assertSame(302, $response->getStatusCode());
             $this->assertSame('/final', $response->getHeaderLine(Header::LOCATION));
@@ -166,7 +176,10 @@ abstract class AdapterContract extends TestCase
             $requestFactory = new Request\Factory();
             $client = $this->createAdapter()->withFollowRedirects();
 
-            $response = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect'));
+            $response = $this->send($client, $requestFactory->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/redirect',
+            ));
 
             $this->assertSame(200, $response->getStatusCode());
             $this->assertSame('final', (string) $response->getBody());
@@ -244,7 +257,10 @@ abstract class AdapterContract extends TestCase
     {
         Http::serve(function (int $port): void {
             $client = $this->createAdapter()->withFollowRedirects();
-            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect-absolute');
+            $request = new Request\Factory()->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/redirect-absolute',
+            );
 
             $response = $this->send($client, $request);
 
@@ -313,7 +329,10 @@ abstract class AdapterContract extends TestCase
     public function testItStreamsTheFinalHopAfterARedirect(): void
     {
         Http::serve(function (int $port): void {
-            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/redirect-large');
+            $request = new Request\Factory()->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/redirect-large',
+            );
             $client = $this->createAdapter()->withFollowRedirects();
 
             $expected = self::PAYLOAD_SIZE;
@@ -323,7 +342,13 @@ abstract class AdapterContract extends TestCase
             $peak = 0;
             $chunks = 0;
 
-            $response = $this->sendStream($client, $request, function (string $chunk) use ($hash, &$read, $baseline, &$peak, &$chunks): void {
+            $response = $this->sendStream($client, $request, function (string $chunk) use (
+                $hash,
+                &$read,
+                $baseline,
+                &$peak,
+                &$chunks,
+            ): void {
                 $chunks++;
                 hash_update($hash, $chunk);
                 $read += \strlen($chunk);
@@ -332,7 +357,11 @@ abstract class AdapterContract extends TestCase
 
             $this->assertSame(200, $response->getStatusCode());
             $this->assertSame($expected, $read);
-            $this->assertGreaterThan(1, $chunks, 'The final hop must be delivered in chunks, not as one assembled body.');
+            $this->assertGreaterThan(
+                1,
+                $chunks,
+                'The final hop must be delivered in chunks, not as one assembled body.',
+            );
             $this->assertSame(hash('sha256', str_repeat('a', $expected)), hash_final($hash));
             $this->assertLessThan(2 * 1_048_576, $peak, 'Following a redirect must still stream the final body.');
             $this->assertSame('', (string) $response->getBody());
@@ -342,7 +371,10 @@ abstract class AdapterContract extends TestCase
     public function testItStreamsPreservedMethodFinalHopAfterARedirect(): void
     {
         Http::serve(function (int $port): void {
-            $request = new Request\Factory()->createRequest(Method::POST, 'http://127.0.0.1:' . $port . '/redirect-stream-preserve');
+            $request = new Request\Factory()->createRequest(
+                Method::POST,
+                'http://127.0.0.1:' . $port . '/redirect-stream-preserve',
+            );
             $client = $this->createAdapter()->withFollowRedirects();
             $received = '';
             $chunks = 0;
@@ -365,8 +397,14 @@ abstract class AdapterContract extends TestCase
             $requestFactory = new Request\Factory();
             $client = $this->createAdapter();
 
-            $headers = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/headers'));
-            $binary = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/binary'));
+            $headers = $this->send($client, $requestFactory->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/headers',
+            ));
+            $binary = $this->send($client, $requestFactory->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/binary',
+            ));
 
             $this->assertSame(204, $headers->getStatusCode());
             $this->assertSame(['one', 'two'], $headers->getHeader('x-trace'));
@@ -413,9 +451,18 @@ abstract class AdapterContract extends TestCase
             $requestFactory = new Request\Factory();
             $client = $this->createAdapter();
 
-            $query = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/request-target?x=1&y=two#fragment'));
-            $emptyPath = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '?ping=1#fragment'));
-            $encoded = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/space%20name?value=a%2Bb#fragment'));
+            $query = $this->send($client, $requestFactory->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/request-target?x=1&y=two#fragment',
+            ));
+            $emptyPath = $this->send($client, $requestFactory->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '?ping=1#fragment',
+            ));
+            $encoded = $this->send($client, $requestFactory->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/space%20name?value=a%2Bb#fragment',
+            ));
 
             $this->assertSame('/request-target?x=1&y=two', (string) $query->getBody());
             $this->assertSame('/?ping=1', (string) $emptyPath->getBody());
@@ -429,9 +476,18 @@ abstract class AdapterContract extends TestCase
             $requestFactory = new Request\Factory();
             $client = $this->createAdapter();
 
-            $delete = $this->send($client, $requestFactory->createRequest(Method::DELETE, 'http://127.0.0.1:' . $port . '/method'));
-            $patch = $this->send($client, $requestFactory->createRequest(Method::PATCH, 'http://127.0.0.1:' . $port . '/method'));
-            $head = $this->send($client, $requestFactory->createRequest(Method::HEAD, 'http://127.0.0.1:' . $port . '/method'));
+            $delete = $this->send($client, $requestFactory->createRequest(
+                Method::DELETE,
+                'http://127.0.0.1:' . $port . '/method',
+            ));
+            $patch = $this->send($client, $requestFactory->createRequest(
+                Method::PATCH,
+                'http://127.0.0.1:' . $port . '/method',
+            ));
+            $head = $this->send($client, $requestFactory->createRequest(
+                Method::HEAD,
+                'http://127.0.0.1:' . $port . '/method',
+            ));
 
             $this->assertSame(Method::DELETE, $delete->getHeaderLine('X-Request-Method'));
             $this->assertSame(Method::DELETE, (string) $delete->getBody());
@@ -562,7 +618,10 @@ abstract class AdapterContract extends TestCase
     public function testItRoundTripsLargeResponseBodies(): void
     {
         Http::serve(function (int $port): void {
-            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/large-response');
+            $request = new Request\Factory()->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/large-response',
+            );
             $client = $this->createAdapter();
 
             $response = $this->send($client, $request);
@@ -622,7 +681,10 @@ abstract class AdapterContract extends TestCase
                 $response = $this->send($client, $request);
 
                 $this->assertSame(200, $response->getStatusCode());
-                $this->assertSame('Ada:' . \strlen($contents) . ':' . hash('sha256', $contents), (string) $response->getBody());
+                $this->assertSame(
+                    'Ada:' . \strlen($contents) . ':' . hash('sha256', $contents),
+                    (string) $response->getBody(),
+                );
             } finally {
                 unlink($path);
             }
@@ -662,7 +724,10 @@ abstract class AdapterContract extends TestCase
             $requestFactory = new Request\Factory();
             $client = $this->createAdapter();
 
-            $response = $this->send($client, $requestFactory->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/slow'));
+            $response = $this->send($client, $requestFactory->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/slow',
+            ));
 
             $this->assertSame(200, $response->getStatusCode());
             $this->assertSame('slow', (string) $response->getBody());
@@ -709,7 +774,10 @@ abstract class AdapterContract extends TestCase
     {
         Http::raw("HTTP/1.1 200 OK\r\nX-Partial: value", function (int $port): void {
             $client = $this->createAdapter($this->timeoutOptions(1, 1));
-            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/partial-headers');
+            $request = new Request\Factory()->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/partial-headers',
+            );
 
             $this->expectException(ConnectionException::class);
 
@@ -721,7 +789,10 @@ abstract class AdapterContract extends TestCase
     {
         Http::raw("HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nshort", function (int $port): void {
             $client = $this->createAdapter($this->timeoutOptions(1, 1));
-            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/truncated-body');
+            $request = new Request\Factory()->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/truncated-body',
+            );
 
             $this->expectException(ProtocolException::class);
 
@@ -773,7 +844,9 @@ abstract class AdapterContract extends TestCase
             // so every request shares one runAdapter call.
             $this->runAdapter(function () use ($client, $requestFactory, $uri, &$statuses): void {
                 for ($i = 0; $i < 4; $i++) {
-                    $statuses[] = $client->sendRequest($requestFactory->createRequest(Method::GET, $uri))->getStatusCode();
+                    $statuses[] = $client
+                        ->sendRequest($requestFactory->createRequest(Method::GET, $uri))
+                        ->getStatusCode();
                 }
             });
         });
@@ -896,7 +969,10 @@ abstract class AdapterContract extends TestCase
     public function testItDecodesLargeCompressedResponses(): void
     {
         Http::serve(function (int $port): void {
-            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/gzip?repeat=40000');
+            $request = new Request\Factory()->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/gzip?repeat=40000',
+            );
             $client = $this->createAdapter();
 
             $response = $this->send($client, $request);
@@ -912,7 +988,10 @@ abstract class AdapterContract extends TestCase
     public function testItDecodesCompressedBinaryResponsesByteForByte(): void
     {
         Http::serve(function (int $port): void {
-            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/gzip?type=binary&repeat=16');
+            $request = new Request\Factory()->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/gzip?type=binary&repeat=16',
+            );
             $client = $this->createAdapter();
 
             $expected = '';
@@ -934,7 +1013,10 @@ abstract class AdapterContract extends TestCase
     {
         Http::serve(function (int $port): void {
             // Advertised-to but answered in plaintext: body and Content-Length pass through.
-            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/gzip?compress=0');
+            $request = new Request\Factory()->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/gzip?compress=0',
+            );
             $client = $this->createAdapter();
 
             $response = $this->send($client, $request);
@@ -950,7 +1032,10 @@ abstract class AdapterContract extends TestCase
     public function testItDeliversDecodedBodiesWhenStreaming(): void
     {
         Http::serve(function (int $port): void {
-            $request = new Request\Factory()->createRequest(Method::GET, 'http://127.0.0.1:' . $port . '/gzip?repeat=20000');
+            $request = new Request\Factory()->createRequest(
+                Method::GET,
+                'http://127.0.0.1:' . $port . '/gzip?repeat=20000',
+            );
             $client = $this->createAdapter();
 
             $received = '';
@@ -978,7 +1063,9 @@ abstract class AdapterContract extends TestCase
             // A reused connection only persists within one coroutine run.
             $this->runAdapter(function () use ($client, $requestFactory, $uri, &$bodies): void {
                 for ($i = 0; $i < 3; $i++) {
-                    $bodies[] = (string) $client->sendRequest($requestFactory->createRequest(Method::GET, $uri))->getBody();
+                    $bodies[] = (string) $client
+                        ->sendRequest($requestFactory->createRequest(Method::GET, $uri))
+                        ->getBody();
                 }
             });
         });
@@ -1033,7 +1120,12 @@ abstract class AdapterContract extends TestCase
             $baseline = memory_get_usage();
             $peak = 0;
 
-            $response = $this->sendStream($client, $request, function (string $chunk) use ($hash, &$read, $baseline, &$peak): void {
+            $response = $this->sendStream($client, $request, function (string $chunk) use (
+                $hash,
+                &$read,
+                $baseline,
+                &$peak,
+            ): void {
                 hash_update($hash, $chunk);
                 $read += \strlen($chunk);
                 $peak = max($peak, memory_get_usage() - $baseline);
@@ -1073,7 +1165,7 @@ abstract class AdapterContract extends TestCase
 
         $handle = fopen($path, 'wb');
 
-        if (!\is_resource($handle)) {
+        if (! \is_resource($handle)) {
             self::fail('Unable to open the temporary upload file.');
         }
 
@@ -1105,7 +1197,7 @@ abstract class AdapterContract extends TestCase
             throw $thrown;
         }
 
-        if (!$response instanceof ResponseInterface) {
+        if (! $response instanceof ResponseInterface) {
             self::fail('Adapter did not return a response.');
         }
 
@@ -1132,7 +1224,7 @@ abstract class AdapterContract extends TestCase
             throw $thrown;
         }
 
-        if (!$response instanceof ResponseInterface) {
+        if (! $response instanceof ResponseInterface) {
             self::fail('Adapter did not return a response.');
         }
 

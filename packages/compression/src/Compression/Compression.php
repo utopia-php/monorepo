@@ -129,7 +129,10 @@ abstract class Compression
             ];
         }, $encodings);
 
-        $encodings = array_filter($encodings, fn(array $encoding): bool => isset($supported[$encoding['encoding']]) && $supported[$encoding['encoding']]);
+        $encodings = array_filter(
+            $encodings,
+            fn(array $encoding): bool => isset($supported[$encoding['encoding']]) && $supported[$encoding['encoding']],
+        );
 
         if ($encodings === []) {
             return null;

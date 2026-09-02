@@ -141,10 +141,13 @@ final class SwooleContextTest extends TestCase
         sort($successes);
 
         $this->assertSame(['first-message' => true, 'second-message' => true], $during);
-        $this->assertSame([
-            'first-message' => ['context' => false, 'alive' => false],
-            'second-message' => ['context' => false, 'alive' => false],
-        ], $after);
+        $this->assertSame(
+            [
+                'first-message' => ['context' => false, 'alive' => false],
+                'second-message' => ['context' => false, 'alive' => false],
+            ],
+            $after,
+        );
         $this->assertSame(['first-message', 'second-message'], $successes);
         $this->assertSame(['first:first-message'], $first->committed);
         $this->assertSame(['second:second-message'], $second->committed);

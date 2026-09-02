@@ -20,8 +20,9 @@ class GEOSMS extends SMSAdapter
      */
     protected array $localAdapters = [];
 
-    public function __construct(protected SMSAdapter $defaultAdapter)
-    {
+    public function __construct(
+        protected SMSAdapter $defaultAdapter,
+    ) {
         $this->telemetry = new NoTelemetry();
         parent::__construct($this->telemetry);
         $this->defaultAdapter->setTelemetry($this->telemetry);
@@ -99,16 +100,18 @@ class GEOSMS extends SMSAdapter
                 foreach ([MetadataParameter::CRQID, MetadataParameter::UUID] as $parameter) {
                     $key = $parameter->value;
 
-                    if (!\array_key_exists($key, $metadata)) {
+                    if (! \array_key_exists($key, $metadata)) {
                         continue;
                     }
 
-                    if (!\is_string($metadata[$key])) {
+                    if (! \is_string($metadata[$key])) {
                         throw new \InvalidArgumentException("Msg91 {$key} metadata must be a string.");
                     }
 
-                    if (\strlen($metadata[$key]) > 80 || !preg_match('/^[A-Za-z0-9_.-]+$/', $metadata[$key])) {
-                        throw new \InvalidArgumentException("Msg91 {$key} metadata must be 80 characters or less and contain only alphanumeric characters, underscores, dots, or hyphens.");
+                    if (\strlen($metadata[$key]) > 80 || ! preg_match('/^[A-Za-z0-9_.-]+$/', $metadata[$key])) {
+                        throw new \InvalidArgumentException(
+                            "Msg91 {$key} metadata must be 80 characters or less and contain only alphanumeric characters, underscores, dots, or hyphens.",
+                        );
                     }
 
                     $suffix = '-' . ($index + 1);
@@ -149,7 +152,7 @@ class GEOSMS extends SMSAdapter
         foreach ($recipients as $recipient) {
             $adapter = $this->getAdapterByPhoneNumber($recipient);
 
-            if (!$nextAdapter instanceof \Utopia\Messaging\Adapter\SMS || $adapter === $nextAdapter) {
+            if (! $nextAdapter instanceof \Utopia\Messaging\Adapter\SMS || $adapter === $nextAdapter) {
                 $nextAdapter = $adapter;
                 $nextRecipients[] = $recipient;
             }

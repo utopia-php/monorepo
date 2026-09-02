@@ -48,7 +48,7 @@ class CdnOption extends Option
 
         // State stays publicly writable through setState(), so the type the
         // constructor guaranteed is checked again on the way out.
-        if (!$adapter instanceof Adapter) {
+        if (! $adapter instanceof Adapter) {
             throw new Configuration('Option state "' . self::ADAPTER . '" must be a ' . Adapter::class . '.');
         }
 
@@ -59,7 +59,7 @@ class CdnOption extends Option
     {
         $provider = $this->getState(self::PROVIDER);
 
-        if (!\is_string($provider)) {
+        if (! \is_string($provider)) {
             throw new Configuration('Option state "' . self::PROVIDER . '" must be a string.');
         }
 

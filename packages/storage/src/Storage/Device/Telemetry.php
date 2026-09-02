@@ -22,12 +22,29 @@ class Telemetry extends Device
 {
     private readonly Histogram $telemetry;
 
-    public function __construct(Adapter $telemetry, private readonly Device $device)
-    {
+    public function __construct(
+        Adapter $telemetry,
+        private readonly Device $device,
+    ) {
         $this->telemetry = $telemetry->createHistogram(
             name: 'storage.operation',
             unit: 's',
-            advisory: ['ExplicitBucketBoundaries' => [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]],
+            advisory: ['ExplicitBucketBoundaries' => [
+                0.005,
+                0.01,
+                0.025,
+                0.05,
+                0.075,
+                0.1,
+                0.25,
+                0.5,
+                0.75,
+                1,
+                2.5,
+                5,
+                7.5,
+                10,
+            ]],
         );
     }
 
@@ -53,13 +70,10 @@ class Telemetry extends Device
         try {
             return $operation();
         } finally {
-            $this->telemetry->record(
-                microtime(true) - $start,
-                [
-                    'storage' => $this->device->getType()->value,
-                    'operation' => "device:$method",
-                ],
-            );
+            $this->telemetry->record(microtime(true) - $start, [
+                'storage' => $this->device->getType()->value,
+                'operation' => "device:$method",
+            ]);
         }
     }
 
@@ -126,8 +140,12 @@ class Telemetry extends Device
     }
 
     #[\Override]
-    public function copy(string $source, string $target, ?Device $to = null, int $chunkSize = self::COPY_CHUNK_SIZE): bool
-    {
+    public function copy(
+        string $source,
+        string $target,
+        ?Device $to = null,
+        int $chunkSize = self::COPY_CHUNK_SIZE,
+    ): bool {
         return $this->measure(__FUNCTION__, fn(): bool => $this->device->copy($source, $target, $to, $chunkSize));
     }
 

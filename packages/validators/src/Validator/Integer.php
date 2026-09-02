@@ -25,15 +25,20 @@ class Integer extends Validator
      * @param  bool  $unsigned  Whether the integer is unsigned
      * @throws \InvalidArgumentException
      */
-    public function __construct(protected bool $loose = false, int $bits = 32, bool $unsigned = false)
-    {
-        if (!\in_array($bits, [8, 16, 32, 64])) {
+    public function __construct(
+        protected bool $loose = false,
+        int $bits = 32,
+        bool $unsigned = false,
+    ) {
+        if (! \in_array($bits, [8, 16, 32, 64])) {
             throw new \InvalidArgumentException('Bits must be 8, 16, 32, or 64');
         }
 
         // 64-bit unsigned integers exceed PHP_INT_MAX and convert to floats with precision loss
         if ($bits === 64 && $unsigned) {
-            throw new \InvalidArgumentException('64-bit unsigned integers are not supported due to PHP integer limitations');
+            throw new \InvalidArgumentException(
+                '64-bit unsigned integers are not supported due to PHP integer limitations',
+            );
         }
         $this->bits = $bits;
         $this->unsigned = $unsigned;
@@ -51,10 +56,10 @@ class Integer extends Validator
         // Calculate min and max values based on bit size and signed/unsigned
         if ($this->unsigned) {
             $min = 0;
-            $max = (2 ** $this->bits) - 1;
+            $max = 2 ** $this->bits - 1;
         } else {
-            $min = -(2 ** ($this->bits - 1));
-            $max = (2 ** ($this->bits - 1)) - 1;
+            $min = -2 ** ($this->bits - 1);
+            $max = 2 ** ($this->bits - 1) - 1;
         }
 
         return \sprintf(
@@ -125,22 +130,22 @@ class Integer extends Validator
     public function isValid(mixed $value): bool
     {
         if ($this->loose) {
-            if (!is_numeric($value)) {
+            if (! is_numeric($value)) {
                 return false;
             }
             $value += 0;
         }
-        if (!\is_int($value)) {
+        if (! \is_int($value)) {
             return false;
         }
 
         // Calculate min and max values based on bit size and signed/unsigned
         if ($this->unsigned) {
             $min = 0;
-            $max = (2 ** $this->bits) - 1;
+            $max = 2 ** $this->bits - 1;
         } else {
-            $min = -(2 ** ($this->bits - 1));
-            $max = (2 ** ($this->bits - 1)) - 1;
+            $min = -2 ** ($this->bits - 1);
+            $max = 2 ** ($this->bits - 1) - 1;
         }
         // Check if value is within range
         return $value >= $min && $value <= $max;

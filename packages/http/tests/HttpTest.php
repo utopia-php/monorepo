@@ -127,11 +127,18 @@ final class HttpTest extends TestCase
             ->param('x', 'x-def', new Text(200), 'x param', true)
             ->param('y', 'y-def', new Text(200), 'y param', true)
             ->inject('rand')
-            ->param('z', 'z-def', function ($rand) {
-                echo $rand . '-';
+            ->param(
+                'z',
+                'z-def',
+                function ($rand) {
+                    echo $rand . '-';
 
-                return new Text(200);
-            }, 'z param', true, ['rand'])
+                    return new Text(200);
+                },
+                'z param',
+                true,
+                ['rand'],
+            )
             ->action(function ($x, $y, $z, $rand) {
                 echo $x . '-', $y;
             });
@@ -247,7 +254,10 @@ final class HttpTest extends TestCase
         $result = ob_get_contents();
         ob_end_clean();
 
-        $this->assertSame('init-' . $resource . '-(init-homepage)-param-x*param-y-(shutdown-homepage)-shutdown', $result);
+        $this->assertSame(
+            'init-' . $resource . '-(init-homepage)-param-x*param-y-(shutdown-homepage)-shutdown',
+            $result,
+        );
     }
 
     public function testCanExecuteRouteWithMultipleMethods(): void
@@ -442,7 +452,10 @@ final class HttpTest extends TestCase
             $result = ob_get_contents();
             ob_end_clean();
 
-            $this->assertSame('error-Invalid `x` param: Value must be a valid string and no longer than 1 chars', $result);
+            $this->assertSame(
+                'error-Invalid `x` param: Value must be a valid string and no longer than 1 chars',
+                $result,
+            );
 
             // POST request: alias resolves from $_POST body
             $_GET = [];
@@ -469,11 +482,16 @@ final class HttpTest extends TestCase
             $_SERVER['REQUEST_METHOD'] = 'GET';
             $_SERVER['REQUEST_URI'] = '/users/abc-123';
 
-            $route = Http::get('/users/:userId')
-                ->param('user_id', '', new Text(200), 'user id', false, aliases: ['userId'])
-                ->action(function ($user_id) {
-                    echo $user_id;
-                });
+            $route = Http::get('/users/:userId')->param(
+                'user_id',
+                '',
+                new Text(200),
+                'user id',
+                false,
+                aliases: ['userId'],
+            )->action(function ($user_id) {
+                echo $user_id;
+            });
 
             $matched = $this->http->match(new Request());
             $this->assertSame($route, $matched?->route);
@@ -489,11 +507,16 @@ final class HttpTest extends TestCase
             $_GET = ['user_id' => 'from-query'];
             $_SERVER['REQUEST_URI'] = '/users-2/from-path';
 
-            $route = Http::get('/users-2/:userId')
-                ->param('user_id', '', new Text(200), 'user id', false, aliases: ['userId'])
-                ->action(function ($user_id) {
-                    echo $user_id;
-                });
+            $route = Http::get('/users-2/:userId')->param(
+                'user_id',
+                '',
+                new Text(200),
+                'user id',
+                false,
+                aliases: ['userId'],
+            )->action(function ($user_id) {
+                echo $user_id;
+            });
 
             $matched = $this->http->match(new Request());
             $this->assertSame($route, $matched?->route);
@@ -716,11 +739,9 @@ final class HttpTest extends TestCase
         $_SERVER['REQUEST_METHOD'] = 'HEAD';
         $_SERVER['REQUEST_URI'] = '/path';
 
-        Http::get('/path')
-            ->inject('response')
-            ->action(function ($response) {
-                $response->send('HELLO');
-            });
+        Http::get('/path')->inject('response')->action(function ($response) {
+            $response->send('HELLO');
+        });
 
         ob_start();
         $this->http->run(new Request(), new Response());
@@ -771,11 +792,9 @@ final class HttpTest extends TestCase
 
         $captured = null;
 
-        Http::get('/users/:id/posts/:postId')
-            ->inject('params')
-            ->action(function (array $params) use (&$captured) {
-                $captured = $params;
-            });
+        Http::get('/users/:id/posts/:postId')->inject('params')->action(function (array $params) use (&$captured) {
+            $captured = $params;
+        });
 
         $this->http->execute(new Request(), new Response());
 
@@ -789,11 +808,9 @@ final class HttpTest extends TestCase
 
         $captured = null;
 
-        Http::get('/static')
-            ->inject('params')
-            ->action(function (array $params) use (&$captured) {
-                $captured = $params;
-            });
+        Http::get('/static')->inject('params')->action(function (array $params) use (&$captured) {
+            $captured = $params;
+        });
 
         $this->http->execute(new Request(), new Response());
 
@@ -813,7 +830,6 @@ final class HttpTest extends TestCase
             ->action(function (?Route $route) {
                 $this->resources->set('myRoute', fn() => $route);
             });
-
 
         Http::wildcard()
             ->inject('myRoute')
@@ -946,10 +962,12 @@ final class HttpTest extends TestCase
             ->param('locale', 'en-default', new Text(10), 'locale param', false)
             ->inject('locale')
             ->action(function (string $localeParam, Locale $localeResource) {
-                echo json_encode([
-                    'localeParam' => $localeParam,
-                    'localeResource' => $localeResource->name,
-                ]);
+                echo
+                    json_encode([
+                        'localeParam' => $localeParam,
+                        'localeResource' => $localeResource->name,
+                    ])
+                ;
             });
 
         ob_start();
@@ -981,10 +999,9 @@ final class HttpTest extends TestCase
                 $this->assertSame($resources, $server->resources());
             });
 
-        Http::onStart()
-            ->action(function () use (&$calls): void {
-                $calls[] = 'second';
-            });
+        Http::onStart()->action(function () use (&$calls): void {
+            $calls[] = 'second';
+        });
 
         $http->start();
 
@@ -998,10 +1015,9 @@ final class HttpTest extends TestCase
 
         $received = null;
 
-        Http::onStart()
-            ->action(function (): void {
-                throw new \DomainException('config file is unreadable', 17);
-            });
+        Http::onStart()->action(function (): void {
+            throw new \DomainException('config file is unreadable', 17);
+        });
 
         Http::error()
             ->inject('error')
@@ -1023,10 +1039,9 @@ final class HttpTest extends TestCase
 
         $dispatched = false;
 
-        Http::onStart()
-            ->action(function (): void {
-                throw new \DomainException('config file is unreadable', 17);
-            });
+        Http::onStart()->action(function (): void {
+            throw new \DomainException('config file is unreadable', 17);
+        });
 
         // Every real consumer injects request-scoped resources into its error
         // hooks, and none of those exist before the first connection.
@@ -1107,8 +1122,10 @@ final class HttpTest extends TestCase
      */
     private function startOnlyServer(Container $resources): Adapter
     {
-        return new class ($resources) extends Adapter {
-            public function __construct(private Container $resources) {}
+        return new class($resources) extends Adapter {
+            public function __construct(
+                private Container $resources,
+            ) {}
 
             public function onStart(callable $callback): void
             {

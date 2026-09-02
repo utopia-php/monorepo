@@ -25,7 +25,10 @@ final class ExceptionTest extends TestCase
     public function testRequestExceptionsRemainPsrRequestExceptions(): void
     {
         $this->assertContains(RequestExceptionInterface::class, class_implements(RequestException::class));
-        $this->assertContains(RequestExceptionInterface::class, class_implements(AdapterInitializationException::class));
+        $this->assertContains(
+            RequestExceptionInterface::class,
+            class_implements(AdapterInitializationException::class),
+        );
         $this->assertContains(RequestExceptionInterface::class, class_implements(AdapterPreconditionException::class));
         $this->assertContains(RequestExceptionInterface::class, class_implements(InvalidResponseException::class));
         $this->assertContains(RequestExceptionInterface::class, class_implements(InvalidUriException::class));

@@ -54,7 +54,7 @@ final readonly class File
         }
 
         $lastOwner = null;
-        $lastTTL   = $defaultTTL;
+        $lastTTL = $defaultTTL;
         $lastClass = Record::CLASS_IN;
 
         foreach ($normalizedLines as ['line' => $line, 'num' => $num]) {
@@ -98,7 +98,7 @@ final readonly class File
 
             // Update state from parsed RR
             $lastOwner = $rr['name'];
-            $lastTTL   = $rr['ttl'];
+            $lastTTL = $rr['ttl'];
             $lastClass = $rr['class'];
 
             $record = new Record(
@@ -123,12 +123,15 @@ final readonly class File
             $records[] = $record;
         }
 
-        if (!$soa instanceof \Utopia\DNS\Message\Record) {
+        if (! $soa instanceof \Utopia\DNS\Message\Record) {
             throw new ImportException($content, 'No SOA record found in zone file');
         }
 
         if ($zoneName === null) {
-            throw new ImportException($content, 'Unable to determine zone name: provide an $ORIGIN directive or defaultOrigin.');
+            throw new ImportException(
+                $content,
+                'Unable to determine zone name: provide an $ORIGIN directive or defaultOrigin.',
+            );
         }
 
         return new Zone($zoneName, $records, $soa);
@@ -170,7 +173,7 @@ final readonly class File
         ];
 
         foreach ($preferred as $type) {
-            if (!isset($recordsByType[$type])) {
+            if (! isset($recordsByType[$type])) {
                 continue;
             }
             if ($includeComments) {
@@ -234,10 +237,10 @@ final readonly class File
             }
 
             // Parentheses continuation
-            $opens  = substr_count($line, '(');
+            $opens = substr_count($line, '(');
             $closes = substr_count($line, ')');
 
-            if (!$inParen && $opens > $closes) {
+            if (! $inParen && $opens > $closes) {
                 $inParen = true;
                 $acc = $line;
                 $startNum = $lineNum;
@@ -246,7 +249,7 @@ final readonly class File
 
             if ($inParen) {
                 $acc .= ' ' . $line;
-                $opens  += substr_count($acc, '(');
+                $opens += substr_count($acc, '(');
                 $closes += substr_count($acc, ')');
                 if ($opens <= $closes) {
                     $inParen = false;
@@ -340,10 +343,10 @@ final readonly class File
         }
 
         // Optional TTL / CLASS (any order)
-        $ttl   = $lastTTL;
+        $ttl = $lastTTL;
         $class = $lastClass;
 
-        while ($i < \count($tokens) - 1) {
+        while ($i < (\count($tokens) - 1)) {
             $t = $tokens[$i];
 
             if (ctype_digit($t)) {
@@ -382,14 +385,14 @@ final readonly class File
         $r = self::parseRdata($type, $rdataTokens, $origin, $lineNum);
 
         return [
-            'name'     => $name,
-            'ttl'      => $ttl,
-            'class'    => $class,
-            'type'     => $type,
-            'rdata'    => $r['rdata'],
+            'name' => $name,
+            'ttl' => $ttl,
+            'class' => $class,
+            'type' => $type,
+            'rdata' => $r['rdata'],
             'priority' => $r['priority'],
-            'weight'   => $r['weight'],
-            'port'     => $r['port'],
+            'weight' => $r['weight'],
+            'port' => $r['port'],
         ];
     }
 
@@ -416,7 +419,7 @@ final readonly class File
                 return ['rdata' => $name, 'priority' => null, 'weight' => null, 'port' => null];
 
             case Record::TYPE_MX:
-                if (\count($tokens) < 2 || !ctype_digit($tokens[0])) {
+                if (\count($tokens) < 2 || ! ctype_digit($tokens[0])) {
                     throw new InvalidArgumentException("MX requires numeric priority and exchange (line $lineNum).");
                 }
                 $priority = (int) $tokens[0];
@@ -427,13 +430,18 @@ final readonly class File
                 return ['rdata' => $exchange, 'priority' => $priority, 'weight' => null, 'port' => null];
 
             case Record::TYPE_SRV:
-                if (\count($tokens) < 4 || !ctype_digit($tokens[0]) || !ctype_digit($tokens[1]) || !ctype_digit($tokens[2])) {
+                if (
+                    \count($tokens) < 4
+                    || ! ctype_digit($tokens[0])
+                    || ! ctype_digit($tokens[1])
+                    || ! ctype_digit($tokens[2])
+                ) {
                     throw new InvalidArgumentException("SRV requires priority, weight, port, target (line $lineNum).");
                 }
                 $priority = (int) $tokens[0];
-                $weight   = (int) $tokens[1];
-                $port     = (int) $tokens[2];
-                $target   = self::absolutizeDomainName($tokens[3], $origin);
+                $weight = (int) $tokens[1];
+                $port = (int) $tokens[2];
+                $target = self::absolutizeDomainName($tokens[3], $origin);
                 if ($target === null) {
                     throw new InvalidArgumentException("SRV target requires an origin (line $lineNum).");
                 }
@@ -441,7 +449,9 @@ final readonly class File
 
             case Record::TYPE_SOA:
                 if (\count($tokens) < 7) {
-                    throw new InvalidArgumentException("SOA requires MNAME, RNAME, SERIAL, REFRESH, RETRY, EXPIRE, MINIMUM (line $lineNum).");
+                    throw new InvalidArgumentException(
+                        "SOA requires MNAME, RNAME, SERIAL, REFRESH, RETRY, EXPIRE, MINIMUM (line $lineNum).",
+                    );
                 }
                 $mname = self::absolutizeDomainName($tokens[0], $origin);
                 $rname = self::absolutizeDomainName($tokens[1], $origin);
@@ -467,7 +477,7 @@ final readonly class File
                 return ['rdata' => implode('', $segments), 'priority' => null, 'weight' => null, 'port' => null];
 
             case Record::TYPE_CAA:
-                if (\count($tokens) < 3 || !ctype_digit($tokens[0])) {
+                if (\count($tokens) < 3 || ! ctype_digit($tokens[0])) {
                     throw new InvalidArgumentException("CAA requires flag, tag, and quoted value (line $lineNum).");
                 }
                 $flag = (int) $tokens[0];
@@ -475,7 +485,7 @@ final readonly class File
                     throw new InvalidArgumentException("CAA flag must be between 0 and 255 (line $lineNum).");
                 }
                 $valueToken = $tokens[2];
-                if ($valueToken === '' || $valueToken[0] !== '"' || !str_ends_with($valueToken, '"')) {
+                if ($valueToken === '' || $valueToken[0] !== '"' || ! str_ends_with($valueToken, '"')) {
                     throw new InvalidArgumentException("CAA value must be quoted (line $lineNum).");
                 }
                 return ['rdata' => implode(' ', $tokens), 'priority' => null, 'weight' => null, 'port' => null];
@@ -588,7 +598,7 @@ final readonly class File
 
     private static function relativizeDomainName(string $name, string $origin): string
     {
-        $name   = self::ensureTrailingDot($name);
+        $name = self::ensureTrailingDot($name);
         $origin = self::ensureTrailingDot($origin);
 
         if ($name === $origin) {
@@ -729,7 +739,7 @@ final readonly class File
             if (ctype_digit($next)) {
                 $digits = $next;
                 $count = 1;
-                while ($count < 3 && $i + 1 < $length && ctype_digit($value[$i + 1])) {
+                while ($count < 3 && ($i + 1) < $length && ctype_digit($value[$i + 1])) {
                     $digits .= $value[++$i];
                     $count++;
                 }

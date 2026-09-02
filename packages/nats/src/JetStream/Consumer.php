@@ -19,8 +19,12 @@ final class Consumer
     /**
      * Fetch a batch of messages from the consumer.
      */
-    public function fetch(int $batch = 1, ?float $timeout = null, bool $noWait = false, ?int $maxBytes = null): MessageBatch
-    {
+    public function fetch(
+        int $batch = 1,
+        ?float $timeout = null,
+        bool $noWait = false,
+        ?int $maxBytes = null,
+    ): MessageBatch {
         $timeout ??= 5.0;
         $requestSubject = "{$this->apiPrefix}.CONSUMER.MSG.NEXT.{$this->stream}.{$this->getName()}";
 
@@ -52,7 +56,7 @@ final class Consumer
             }
 
             $msg = $sub->nextMessage($remaining);
-            if (!$msg instanceof \Utopia\NATS\Message) {
+            if (! $msg instanceof \Utopia\NATS\Message) {
                 break;
             }
 

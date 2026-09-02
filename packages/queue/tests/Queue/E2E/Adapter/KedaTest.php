@@ -31,8 +31,12 @@ final class KedaTest extends TestCase
 
     private function redis(string ...$args): string
     {
-        $command = 'kubectl exec -n ' . self::NAMESPACE . ' deploy/redis -- redis-cli '
-            . implode(' ', array_map(escapeshellarg(...), $args)) . ' 2>/dev/null';
+        $command =
+            'kubectl exec -n '
+            . self::NAMESPACE
+            . ' deploy/redis -- redis-cli '
+            . implode(' ', array_map(escapeshellarg(...), $args))
+            . ' 2>/dev/null';
 
         return trim((string) shell_exec($command));
     }

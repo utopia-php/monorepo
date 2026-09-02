@@ -27,7 +27,11 @@ final class AdapterTest extends TestCase
         // Balancer included: a composite adapter that lagged the interface would
         // silently stop forwarding whichever operation it had not caught up with.
         foreach ([Fastly::class, Cloudflare::class, Balancer::class] as $adapter) {
-            $this->assertContains(Adapter::class, class_implements($adapter), $adapter . ' must implement the adapter interface');
+            $this->assertContains(
+                Adapter::class,
+                class_implements($adapter),
+                $adapter . ' must implement the adapter interface',
+            );
 
             foreach (self::OPERATIONS as $operation) {
                 $this->assertTrue(method_exists($adapter, $operation), $adapter . ' is missing ' . $operation . '()');

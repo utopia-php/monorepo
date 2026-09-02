@@ -26,7 +26,9 @@ class FileExt extends Validator
     /**
      * @param  array<string>  $allowed
      */
-    public function __construct(protected array $allowed) {}
+    public function __construct(
+        protected array $allowed,
+    ) {}
 
     /**
      * Get Description

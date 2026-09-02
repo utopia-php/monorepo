@@ -32,7 +32,7 @@ abstract class Parser
      */
     protected function requireMap(mixed $config, string $message): array
     {
-        if (!\is_array($config) || (\count($config) > 0 && array_is_list($config))) {
+        if (! \is_array($config) || \count($config) > 0 && array_is_list($config)) {
             throw new Parse($message);
         }
 

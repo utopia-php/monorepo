@@ -43,7 +43,7 @@ class PAR
      */
     public static function fromRequestUri(string $prefix, string $requestUri): self
     {
-        if ($prefix === '' || !str_starts_with($requestUri, $prefix)) {
+        if ($prefix === '' || ! str_starts_with($requestUri, $prefix)) {
             throw new InvalidRequestUriException('Invalid request_uri.');
         }
 

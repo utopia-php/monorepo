@@ -47,9 +47,7 @@ final class Redirect
         }
 
         if ($target->getHost() !== '') {
-            return $target
-                ->withScheme($base->getScheme())
-                ->withPath(self::removeDotSegments($target->getPath()));
+            return $target->withScheme($base->getScheme())->withPath(self::removeDotSegments($target->getPath()));
         }
 
         $path = $target->getPath();
@@ -57,9 +55,7 @@ final class Redirect
         if ($path === '') {
             $query = self::locationHasQuery($location) ? $target->getQuery() : $base->getQuery();
 
-            return $base
-                ->withQuery($query)
-                ->withFragment($target->getFragment());
+            return $base->withQuery($query)->withFragment($target->getFragment());
         }
 
         if (str_starts_with($path, '/')) {
@@ -126,7 +122,7 @@ final class Redirect
      */
     public static function shouldStripSensitiveHeaders(UriInterface $from, UriInterface $to): bool
     {
-        return !self::isSameOrigin($from, $to);
+        return ! self::isSameOrigin($from, $to);
     }
 
     public static function withoutSensitiveHeaders(RequestInterface $request): RequestInterface

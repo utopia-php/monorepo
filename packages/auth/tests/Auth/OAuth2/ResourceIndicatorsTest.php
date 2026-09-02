@@ -15,7 +15,10 @@ final class ResourceIndicatorsTest extends TestCase
     {
         $this->assertSame([], ResourceIndicators::from(null)->toArray());
         $this->assertSame([], ResourceIndicators::from('')->toArray());
-        $this->assertSame(['https://api.example.com/'], ResourceIndicators::from('https://api.example.com/')->toArray());
+        $this->assertSame(
+            ['https://api.example.com/'],
+            ResourceIndicators::from('https://api.example.com/')->toArray(),
+        );
         $this->assertSame(
             ['https://api.example.com/'],
             ResourceIndicators::from(null, 'https://api.example.com/')->toArray(),
@@ -31,10 +34,13 @@ final class ResourceIndicatorsTest extends TestCase
         );
         $this->assertSame(
             ['https://api.example.com/', 'http://localhost:8080/v1'],
-            ResourceIndicators::from([
+            ResourceIndicators::from(
+                [
+                    'https://api.example.com/',
+                    'http://localhost:8080/v1',
+                ],
                 'https://api.example.com/',
-                'http://localhost:8080/v1',
-            ], 'https://api.example.com/')->toArray(),
+            )->toArray(),
         );
     }
 
@@ -42,8 +48,11 @@ final class ResourceIndicatorsTest extends TestCase
      * @param string|array<int, mixed> $resources
      */
     #[DataProvider('invalidResourceProvider')]
-    public function testRejectsInvalidResources(string|array $resources, string $message, ?string $audience = null): void
-    {
+    public function testRejectsInvalidResources(
+        string|array $resources,
+        string $message,
+        ?string $audience = null,
+    ): void {
         $this->assertSame('invalid_target', InvalidResourceException::ERROR_CODE);
 
         $this->expectException(InvalidResourceException::class);
@@ -54,19 +63,18 @@ final class ResourceIndicatorsTest extends TestCase
 
     public function testComparesResourceSets(): void
     {
-        $this->assertTrue(
-            ResourceIndicators::from(['https://api.example.com/'])
-                ->isSubsetOf(ResourceIndicators::from(['https://api.example.com/', 'https://files.example.com/'])),
-        );
-        $this->assertFalse(
-            ResourceIndicators::from(['https://api.example.com/'])
-                ->isSubsetOf(ResourceIndicators::from(['https://files.example.com/'])),
-        );
+        $this->assertTrue(ResourceIndicators::from(['https://api.example.com/'])->isSubsetOf(ResourceIndicators::from([
+            'https://api.example.com/',
+            'https://files.example.com/',
+        ])));
+        $this->assertFalse(ResourceIndicators::from(['https://api.example.com/'])->isSubsetOf(ResourceIndicators::from([
+            'https://files.example.com/',
+        ])));
 
-        $this->assertTrue(
-            ResourceIndicators::from(['https://api.example.com/', 'https://files.example.com/'])
-                ->equals(ResourceIndicators::from(['https://files.example.com/', 'https://api.example.com/'])),
-        );
+        $this->assertTrue(ResourceIndicators::from([
+            'https://api.example.com/',
+            'https://files.example.com/',
+        ])->equals(ResourceIndicators::from(['https://files.example.com/', 'https://api.example.com/'])));
     }
 
     public function testBuildsAudience(): void

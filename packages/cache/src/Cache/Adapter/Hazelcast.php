@@ -12,7 +12,9 @@ class Hazelcast implements Adapter, Retryable
 
     private int $retryDelay = 1000; // milliseconds
 
-    public function __construct(protected Client $memcached) {}
+    public function __construct(
+        protected Client $memcached,
+    ) {}
 
     /**
      * @param  int  $maxRetries (0-10)
@@ -49,7 +51,7 @@ class Hazelcast implements Adapter, Retryable
             return false;
         }
 
-        if (($cache['time'] + $ttl > time())) { // Cache is valid
+        if (($cache['time'] + $ttl) > time()) { // Cache is valid
             return $cache['data'];
         }
 
@@ -72,7 +74,7 @@ class Hazelcast implements Adapter, Retryable
             'data' => $data,
         ];
 
-        return ($this->execute(fn(): bool => $this->memcached->set($key, json_encode($cache)))) ? $data : false;
+        return $this->execute(fn(): bool => $this->memcached->set($key, json_encode($cache))) ? $data : false;
     }
 
     /**
@@ -194,7 +196,10 @@ class Hazelcast implements Adapter, Retryable
                 $attempts++;
 
                 if ($attempts >= $maxAttempts) {
-                    throw new \MemcachedException('Hazelcast connection failed after ' . $attempts . ' attempts. Error: ' . $this->memcached->getResultMessage());
+                    throw new \MemcachedException(
+                        'Hazelcast connection failed after ' . $attempts . ' attempts. Error: '
+                            . $this->memcached->getResultMessage(),
+                    );
                 }
 
                 usleep($this->retryDelay * 1000);

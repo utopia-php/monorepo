@@ -13,7 +13,10 @@ use Utopia\Validator;
  */
 class Phone extends Validator
 {
-    public function __construct(protected bool $allowEmpty = false, protected bool $normalize = false) {}
+    public function __construct(
+        protected bool $allowEmpty = false,
+        protected bool $normalize = false,
+    ) {}
 
     /**
      * Recover E.164 phone numbers from URL/path transport damage.
@@ -30,7 +33,7 @@ class Phone extends Validator
             return '+' . substr($value, 1);
         }
 
-        if ($value !== '' && !str_starts_with($value, '+') && preg_match('/^[1-9]\d{6,14}$/', $value) === 1) {
+        if ($value !== '' && ! str_starts_with($value, '+') && preg_match('/^[1-9]\d{6,14}$/', $value) === 1) {
             return '+' . $value;
         }
 
@@ -74,7 +77,7 @@ class Phone extends Validator
      */
     public function isValid(mixed $value): bool
     {
-        if (!\is_string($value)) {
+        if (! \is_string($value)) {
             return false;
         }
 

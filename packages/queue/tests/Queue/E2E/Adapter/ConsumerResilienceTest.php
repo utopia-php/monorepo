@@ -35,10 +35,12 @@ final class ConsumerResilienceTest extends TestCase
         $queue = new Queue(self::QUEUE, self::NAMESPACE);
 
         // Fails the first two receives, then delegates to the working broker.
-        $flaky = new class ($broker) implements Consumer {
+        $flaky = new class($broker) implements Consumer {
             public int $failures = 0;
 
-            public function __construct(private readonly Redis $inner) {}
+            public function __construct(
+                private readonly Redis $inner,
+            ) {}
 
             public function receive(Queue $queue, int $timeout): ?Message
             {
@@ -72,10 +74,17 @@ final class ConsumerResilienceTest extends TestCase
         $reported = [];
         $reportedMessages = [];
 
-        \Swoole\Coroutine\run(function () use ($broker, $flaky, $queue, &$processed, &$reported, &$reportedMessages): void {
+        \Swoole\Coroutine\run(function () use (
+            $broker,
+            $flaky,
+            $queue,
+            &$processed,
+            &$reported,
+            &$reportedMessages,
+        ): void {
             $broker->enqueue($queue, ['n' => 1]);
 
-            $adapter = new class ($flaky, 1, self::NAMESPACE) extends Swoole {
+            $adapter = new class($flaky, 1, self::NAMESPACE) extends Swoole {
                 // Keep the test quick; the production pause is RECEIVE_BACKOFF seconds.
                 protected const int RECEIVE_BACKOFF = 0;
             };
@@ -102,7 +111,6 @@ final class ConsumerResilienceTest extends TestCase
         $this->assertSame([null, null], $reportedMessages, 'reported without a message, since none was obtained');
     }
 
-
     public function testAFailedErrorReportStillLeavesATrace(): void
     {
         $connection = new InMemoryConnection();
@@ -110,7 +118,7 @@ final class ConsumerResilienceTest extends TestCase
         $queue = new Queue(self::QUEUE, self::NAMESPACE);
         $broker->enqueue($queue, ['n' => 1]);
 
-        $adapter = new class ($broker, 1, self::NAMESPACE) extends Swoole {
+        $adapter = new class($broker, 1, self::NAMESPACE) extends Swoole {
             /** @var resource */
             public $sink;
 
@@ -142,8 +150,20 @@ final class ConsumerResilienceTest extends TestCase
         rewind($adapter->sink);
         $trace = stream_get_contents($adapter->sink);
 
-        $this->assertStringContainsString('the database is gone', (string) $trace, 'the original failure must reach a sink that needs nothing working');
-        $this->assertStringContainsString('reporting needs the database too', (string) $trace, 'the reporting failure is named too, so the gap is obvious');
-        $this->assertSame(1, $broker->getQueueSize($queue, failedJobs: true), 'the message is still rejected exactly once');
+        $this->assertStringContainsString(
+            'the database is gone',
+            (string) $trace,
+            'the original failure must reach a sink that needs nothing working',
+        );
+        $this->assertStringContainsString(
+            'reporting needs the database too',
+            (string) $trace,
+            'the reporting failure is named too, so the gap is obvious',
+        );
+        $this->assertSame(
+            1,
+            $broker->getQueueSize($queue, failedJobs: true),
+            'the message is still rejected exactly once',
+        );
     }
 }

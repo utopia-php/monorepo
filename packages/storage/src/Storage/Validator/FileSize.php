@@ -16,7 +16,9 @@ class FileSize extends Validator
      *
      * @param  int  $max
      */
-    public function __construct(protected $max) {}
+    public function __construct(
+        protected $max,
+    ) {}
 
     /**
      * Get Description

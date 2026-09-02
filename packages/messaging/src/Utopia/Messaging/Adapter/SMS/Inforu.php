@@ -42,10 +42,7 @@ class Inforu extends SMSAdapter
     {
         $response = new Response($this->getType());
 
-        $recipients = array_map(
-            fn(string $number): array => ['Phone' => ltrim($number, '+')],
-            $message->getTo(),
-        );
+        $recipients = array_map(fn(string $number): array => ['Phone' => ltrim($number, '+')], $message->getTo());
 
         $result = $this->request(
             method: 'POST',

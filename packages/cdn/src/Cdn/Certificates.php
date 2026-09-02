@@ -8,7 +8,9 @@ use Utopia\Cdn\Certificates\Provider;
 
 class Certificates
 {
-    public function __construct(private readonly Provider $provider) {}
+    public function __construct(
+        private readonly Provider $provider,
+    ) {}
 
     public function issueCertificate(string $certName, string $domain, ?string $domainType): ?string
     {

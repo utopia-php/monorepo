@@ -21,8 +21,10 @@ final readonly class Interval implements Trigger
     /**
      * @throws \InvalidArgumentException when $seconds is below 1
      */
-    public function __construct(private int $seconds, ?\DateTimeImmutable $anchor = null)
-    {
+    public function __construct(
+        private int $seconds,
+        ?\DateTimeImmutable $anchor = null,
+    ) {
         if ($seconds < 1) {
             throw new \InvalidArgumentException('Interval must be at least 1 second');
         }
@@ -40,7 +42,7 @@ final readonly class Interval implements Trigger
         $until = (float) $end->format('U.u');
 
         $occurrences = [];
-        $timestamp = $this->anchor + $this->seconds * ceil(($from - $this->anchor) / $this->seconds);
+        $timestamp = $this->anchor + ($this->seconds * ceil(($from - $this->anchor) / $this->seconds));
 
         while ($timestamp < $until) {
             $due = \DateTimeImmutable::createFromFormat('U.u', \sprintf('%.6F', $timestamp));

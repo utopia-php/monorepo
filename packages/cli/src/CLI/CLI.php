@@ -83,7 +83,7 @@ class CLI
             throw new Exception('CLI tasks can only work from the command line');
         }
 
-        $this->args = $this->parse(($args !== [] || ! isset($_SERVER['argv'])) ? $args : $_SERVER['argv']);
+        $this->args = $this->parse($args !== [] || ! isset($_SERVER['argv']) ? $args : $_SERVER['argv']);
 
         @cli_set_process_title($this->command);
 
@@ -408,7 +408,7 @@ class CLI
             $validator = $validator->getValidator();
         }
 
-        if (! ($validator instanceof Boolean)) {
+        if (! $validator instanceof Boolean) {
             return $value;
         }
 
@@ -434,6 +434,6 @@ class CLI
     {
         $key = str_replace('-', '_', $key);
 
-        return  lcfirst(str_replace('_', '', ucwords($key, '_')));
+        return lcfirst(str_replace('_', '', ucwords($key, '_')));
     }
 }

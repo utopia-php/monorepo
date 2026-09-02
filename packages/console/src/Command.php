@@ -106,8 +106,11 @@ class Command implements Stringable
         return $this;
     }
 
-    public function option(string $key, string|int|float|Stringable $value, Validator|callable|null $validator = null): self
-    {
+    public function option(
+        string $key,
+        string|int|float|Stringable $value,
+        Validator|callable|null $validator = null,
+    ): self {
         $this->ensurePlain();
 
         if (! preg_match('/^-[A-Za-z0-9]$|^--[A-Za-z0-9][A-Za-z0-9_-]*$/', $key)) {
@@ -151,9 +154,16 @@ class Command implements Stringable
     {
         return match ($this->type) {
             self::TYPE_PLAIN => implode(' ', array_map(escapeshellarg(...), $this->arguments)),
-            self::TYPE_COMPOSITE => implode(' ' . $this->operator . ' ', array_map(static fn(self $command): string => $command->toString(), $this->commands)),
+            self::TYPE_COMPOSITE => implode(' ' . $this->operator . ' ', array_map(
+                static fn(self $command): string => $command->toString(),
+                $this->commands,
+            )),
             self::TYPE_GROUP => '( ' . $this->command?->toString() . ' )',
-            self::TYPE_REDIRECT => $this->command?->toString() . ' ' . $this->redirect . ' ' . escapeshellarg($this->redirectTarget ?? ''),
+            self::TYPE_REDIRECT => $this->command?->toString()
+                . ' '
+                . $this->redirect
+                . ' '
+                . escapeshellarg($this->redirectTarget ?? ''),
             default => throw new InvalidArgumentException('Unsupported command type: ' . $this->type),
         };
     }
@@ -220,7 +230,9 @@ class Command implements Stringable
     {
         if ($validator instanceof Validator) {
             if (! $validator->isValid($argument)) {
-                throw new InvalidArgumentException('Invalid command argument: ' . $argument . ' (' . $validator->getDescription() . ')');
+                throw new InvalidArgumentException(
+                    'Invalid command argument: ' . $argument . ' (' . $validator->getDescription() . ')',
+                );
             }
 
             return;

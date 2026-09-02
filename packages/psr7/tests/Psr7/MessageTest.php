@@ -16,12 +16,14 @@ final class MessageTest extends TestCase
 {
     public function testHeadersAreImmutableCaseInsensitiveAndPreserveOriginalCase(): void
     {
-        $response = new Response\Factory()->createResponse()
+        $response = new Response\Factory()
+            ->createResponse()
             ->withHeader('X-Test', 'one');
 
-        $changed = $response
-            ->withAddedHeader('x-test', 'two')
-            ->withHeader('CONTENT-TYPE', ['text/plain', 'application/json']);
+        $changed = $response->withAddedHeader('x-test', 'two')->withHeader('CONTENT-TYPE', [
+            'text/plain',
+            'application/json',
+        ]);
 
         $this->assertFalse($response->hasHeader('content-type'));
         $this->assertSame(['one'], $response->getHeader('x-test'));
@@ -41,7 +43,9 @@ final class MessageTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new Response\Factory()->createResponse()->withHeader("Bad\nHeader", 'value');
+        new Response\Factory()
+            ->createResponse()
+            ->withHeader("Bad\nHeader", 'value');
     }
 
     public function testRequestFactorySetsHostAndWithUriHonorsPreserveHostRules(): void
@@ -59,15 +63,17 @@ final class MessageTest extends TestCase
         $this->assertSame('api.example.com', $changed->getHeaderLine('Host'));
         $this->assertSame('example.com:8443', $request->getHeaderLine('Host'));
 
-        $preserved = $request
-            ->withHeader('Host', 'custom.example.com')
-            ->withUri($uriFactory->createUri('https://api.example.com/orders'), true);
+        $preserved = $request->withHeader('Host', 'custom.example.com')->withUri(
+            $uriFactory->createUri('https://api.example.com/orders'),
+            true,
+        );
 
         $this->assertSame('custom.example.com', $preserved->getHeaderLine('Host'));
 
-        $missingHost = $request
-            ->withoutHeader('Host')
-            ->withUri($uriFactory->createUri('https://api.example.com/orders'), true);
+        $missingHost = $request->withoutHeader('Host')->withUri(
+            $uriFactory->createUri('https://api.example.com/orders'),
+            true,
+        );
 
         $this->assertSame('api.example.com', $missingHost->getHeaderLine('Host'));
     }

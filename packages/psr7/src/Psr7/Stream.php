@@ -17,7 +17,7 @@ final class Stream implements StreamInterface, \Stringable
     {
         $resource = fopen('php://temp', 'r+');
 
-        if (!\is_resource($resource)) {
+        if (! \is_resource($resource)) {
             throw new RuntimeException('Unable to create stream.');
         }
 
@@ -34,7 +34,7 @@ final class Stream implements StreamInterface, \Stringable
      */
     public static function fromResource(mixed $resource): self
     {
-        if (!\is_resource($resource)) {
+        if (! \is_resource($resource)) {
             throw new InvalidArgumentException('Expected a valid stream resource.');
         }
 
@@ -180,7 +180,7 @@ final class Stream implements StreamInterface, \Stringable
      */
     private function resource(): mixed
     {
-        if (!\is_resource($this->resource)) {
+        if (! \is_resource($this->resource)) {
             throw new RuntimeException('Stream is detached.');
         }
 

@@ -119,14 +119,24 @@ class Nats implements Publisher, Consumer
                 throw new \InvalidArgumentException('backoff must be a non-empty list of positive delays (seconds)');
             }
             if ($this->backoff[0] !== $this->ackWait) {
-                throw new \InvalidArgumentException(\sprintf('JetStream requires the first backoff entry to equal ackWait: got backoff[0]=%s, ackWait=%s', $this->backoff[0], $this->ackWait));
+                throw new \InvalidArgumentException(\sprintf(
+                    'JetStream requires the first backoff entry to equal ackWait: got backoff[0]=%s, ackWait=%s',
+                    $this->backoff[0],
+                    $this->ackWait,
+                ));
             }
             if ($this->maxDeliver <= \count($this->backoff)) {
-                throw new \InvalidArgumentException(\sprintf('JetStream requires maxDeliver (%d) to exceed the number of backoff entries (%d)', $this->maxDeliver, \count($this->backoff)));
+                throw new \InvalidArgumentException(\sprintf(
+                    'JetStream requires maxDeliver (%d) to exceed the number of backoff entries (%d)',
+                    $this->maxDeliver,
+                    \count($this->backoff),
+                ));
             }
         }
         if ($this->deadMaxAge !== null && $this->deadMaxAge <= 0) {
-            throw new \InvalidArgumentException('deadMaxAge must be a positive number of seconds, or null to keep dead messages forever');
+            throw new \InvalidArgumentException(
+                'deadMaxAge must be a positive number of seconds, or null to keep dead messages forever',
+            );
         }
     }
 
@@ -153,9 +163,7 @@ class Nats implements Publisher, Consumer
             return $this->controlConnection;
         }
 
-        return $this->controlConnection = $this->source instanceof \Closure
-            ? ($this->source)()
-            : $this->connection();
+        return $this->controlConnection = $this->source instanceof \Closure ? ($this->source)() : $this->connection();
     }
 
     private function controlJs(): JetStream
@@ -219,10 +227,13 @@ class Nats implements Publisher, Consumer
         $this->drainDeadLetters($queue, $key);
 
         // Priority first (no_wait poll), then the normal queue for up to $timeout.
-        $jsMessage = $this->fetchOne($this->consumers[$key]['priority'], 0.25, true)
-            ?? $this->fetchOne($this->consumers[$key]['normal'], (float) $timeout, false);
+        $jsMessage = $this->fetchOne($this->consumers[$key]['priority'], 0.25, true) ?? $this->fetchOne(
+            $this->consumers[$key]['normal'],
+            (float) $timeout,
+            false,
+        );
 
-        if (!$jsMessage instanceof JetStreamMessage) {
+        if (! $jsMessage instanceof JetStreamMessage) {
             return null;
         }
 
@@ -249,7 +260,7 @@ class Nats implements Publisher, Consumer
     {
         $pid = $message->getPid();
         $jsMessage = $this->inFlight[$pid] ?? null;
-        if (!$jsMessage instanceof JetStreamMessage) {
+        if (! $jsMessage instanceof JetStreamMessage) {
             return;
         }
         unset($this->inFlight[$pid]);
@@ -278,17 +289,20 @@ class Nats implements Publisher, Consumer
     {
         $this->ensure($queue);
 
-        $consumer = $this->js()->createConsumer($this->deadStream($queue), new ConsumerConfig(
-            durableName: self::CONSUMER_RETRY,
-            ackPolicy: AckPolicy::Explicit,
-            ackWait: $this->ackWait,
-            filterSubject: $this->deadSubject($queue),
-        ));
+        $consumer = $this->js()->createConsumer(
+            $this->deadStream($queue),
+            new ConsumerConfig(
+                durableName: self::CONSUMER_RETRY,
+                ackPolicy: AckPolicy::Explicit,
+                ackWait: $this->ackWait,
+                filterSubject: $this->deadSubject($queue),
+            ),
+        );
 
         $remaining = $limit ?? 500;
         while ($remaining > 0) {
             $jsMessage = $this->fetchOne($consumer, 1.0, false);
-            if (!$jsMessage instanceof JetStreamMessage) {
+            if (! $jsMessage instanceof JetStreamMessage) {
                 break;
             }
             // Re-drive onto the work queue, then remove it from the dead stream.
@@ -303,8 +317,13 @@ class Nats implements Publisher, Consumer
      * reclaims a message whose worker died before committing. Kept for drop-in
      * compatibility with the Redis broker's call sites; always returns 0.
      */
-    public function reap(Queue $queue, int $olderThan = 90000, ?int $limit = null, ?int $maxAttempts = null, ?int $newerThan = null): int
-    {
+    public function reap(
+        Queue $queue,
+        int $olderThan = 90000,
+        ?int $limit = null,
+        ?int $maxAttempts = null,
+        ?int $newerThan = null,
+    ): int {
         return 0;
     }
 
@@ -324,8 +343,10 @@ class Nats implements Publisher, Consumer
                 return $this->controlJs()->getStreamInfo($this->deadStream($queue))->state->messages;
             }
 
-            return $this->controlConsumer($stream, self::CONSUMER_NORMAL)->info(true)->numPending
-                + $this->controlConsumer($stream, self::CONSUMER_PRIORITY)->info(true)->numPending;
+            return (
+                $this->controlConsumer($stream, self::CONSUMER_NORMAL)->info(true)->numPending
+                + $this->controlConsumer($stream, self::CONSUMER_PRIORITY)->info(true)->numPending
+            );
         } catch (JetStreamException $e) {
             if ($e->apiError?->code === 404) {
                 return 0; // stream/consumer not provisioned yet — nothing enqueued
@@ -389,22 +410,28 @@ class Nats implements Publisher, Consumer
         ));
 
         $this->consumers[$key] = [
-            'normal' => $this->js()->createConsumer($this->workStream($queue), new ConsumerConfig(
-                durableName: self::CONSUMER_NORMAL,
-                ackPolicy: AckPolicy::Explicit,
-                ackWait: $this->ackWait,
-                maxDeliver: $this->maxDeliver,
-                filterSubject: $this->workSubject($queue),
-                backoff: $this->backoff,
-            )),
-            'priority' => $this->js()->createConsumer($this->workStream($queue), new ConsumerConfig(
-                durableName: self::CONSUMER_PRIORITY,
-                ackPolicy: AckPolicy::Explicit,
-                ackWait: $this->ackWait,
-                maxDeliver: $this->maxDeliver,
-                filterSubject: $this->prioritySubject($queue),
-                backoff: $this->backoff,
-            )),
+            'normal' => $this->js()->createConsumer(
+                $this->workStream($queue),
+                new ConsumerConfig(
+                    durableName: self::CONSUMER_NORMAL,
+                    ackPolicy: AckPolicy::Explicit,
+                    ackWait: $this->ackWait,
+                    maxDeliver: $this->maxDeliver,
+                    filterSubject: $this->workSubject($queue),
+                    backoff: $this->backoff,
+                ),
+            ),
+            'priority' => $this->js()->createConsumer(
+                $this->workStream($queue),
+                new ConsumerConfig(
+                    durableName: self::CONSUMER_PRIORITY,
+                    ackPolicy: AckPolicy::Explicit,
+                    ackWait: $this->ackWait,
+                    maxDeliver: $this->maxDeliver,
+                    filterSubject: $this->prioritySubject($queue),
+                    backoff: $this->backoff,
+                ),
+            ),
         ];
 
         // Best-effort terminal dead-lettering for the crash-loop case: a worker that
@@ -436,7 +463,13 @@ class Nats implements Publisher, Consumer
         // rather than letting JetStream reject the create with an opaque error.
         $longest = $this->deadStream($queue);
         if (\strlen($longest) > self::MAX_STREAM_NAME) {
-            throw new \RuntimeException("NATS stream name \"{$longest}\" exceeds JetStream's " . self::MAX_STREAM_NAME . '-byte limit; shorten queue "' . $queue->name . '".');
+            throw new \RuntimeException(
+                "NATS stream name \"{$longest}\" exceeds JetStream's "
+                . self::MAX_STREAM_NAME
+                . '-byte limit; shorten queue "'
+                . $queue->name
+                . '".',
+            );
         }
 
         $stream = $this->workStream($queue);
@@ -449,7 +482,9 @@ class Nats implements Publisher, Consumer
             $owner = null; // stream not provisioned yet
         }
         if ($owner !== null && $owner !== $identity) {
-            throw new \RuntimeException("NATS stream \"{$stream}\" already belongs to queue \"{$owner}\", not \"{$identity}\"; rename one queue.");
+            throw new \RuntimeException(
+                "NATS stream \"{$stream}\" already belongs to queue \"{$owner}\", not \"{$identity}\"; rename one queue.",
+            );
         }
     }
 
@@ -457,14 +492,14 @@ class Nats implements Publisher, Consumer
     private function drainDeadLetters(Queue $queue, string $key): void
     {
         $advisory = $this->advisories[$key] ?? null;
-        if (!$advisory instanceof \Utopia\NATS\Subscription) {
+        if (! $advisory instanceof \Utopia\NATS\Subscription) {
             return;
         }
 
         while (($event = $advisory->nextMessage(0.0)) instanceof \Utopia\NATS\Message) {
             $decoded = json_decode($event->data, true);
-            $seq = \is_array($decoded) ? ($decoded['stream_seq'] ?? null) : null;
-            if (!\is_int($seq)) {
+            $seq = \is_array($decoded) ? $decoded['stream_seq'] ?? null : null;
+            if (! \is_int($seq)) {
                 continue;
             }
 

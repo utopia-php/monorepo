@@ -70,12 +70,18 @@ final class LocalTest extends TestCase
 
     public function testRoot(): void
     {
-        $this->assertSame($this->object->getRoot(), $this->object->getAbsolutePath(__DIR__ . '/../../resources/disk-a'));
+        $this->assertSame(
+            $this->object->getRoot(),
+            $this->object->getAbsolutePath(__DIR__ . '/../../resources/disk-a'),
+        );
     }
 
     public function testPath(): void
     {
-        $this->assertSame($this->object->getPath('image.png'), $this->object->getAbsolutePath(__DIR__ . '/../../resources/disk-a') . '/image.png');
+        $this->assertSame(
+            $this->object->getPath('image.png'),
+            $this->object->getAbsolutePath(__DIR__ . '/../../resources/disk-a') . '/image.png',
+        );
     }
 
     public function testWrite(): void
@@ -89,7 +95,10 @@ final class LocalTest extends TestCase
 
     public function testRead(): void
     {
-        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-read.txt'), new Stream('Hello World')));
+        $this->assertEquals(true, $this->object->write(
+            $this->object->getPath('text-for-read.txt'),
+            new Stream('Hello World'),
+        ));
         $this->assertSame('Hello World', (string) $this->object->read($this->object->getPath('text-for-read.txt')));
 
         $this->object->delete($this->object->getPath('text-for-read.txt'));
@@ -115,7 +124,10 @@ final class LocalTest extends TestCase
 
     public function testFileExists(): void
     {
-        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-test-exists.txt'), new Stream('Hello World')));
+        $this->assertEquals(true, $this->object->write(
+            $this->object->getPath('text-for-test-exists.txt'),
+            new Stream('Hello World'),
+        ));
         $this->assertEquals(true, $this->object->exists($this->object->getPath('text-for-test-exists.txt')));
         $this->assertEquals(false, $this->object->exists($this->object->getPath('text-for-test-doesnt-exist.txt')));
 
@@ -124,9 +136,15 @@ final class LocalTest extends TestCase
 
     public function testMove(): void
     {
-        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-move.txt'), new Stream('Hello World')));
+        $this->assertEquals(true, $this->object->write(
+            $this->object->getPath('text-for-move.txt'),
+            new Stream('Hello World'),
+        ));
         $this->assertSame('Hello World', (string) $this->object->read($this->object->getPath('text-for-move.txt')));
-        $this->assertEquals(true, $this->object->move($this->object->getPath('text-for-move.txt'), $this->object->getPath('text-for-move-new.txt')));
+        $this->assertEquals(true, $this->object->move(
+            $this->object->getPath('text-for-move.txt'),
+            $this->object->getPath('text-for-move-new.txt'),
+        ));
         $this->assertSame('Hello World', (string) $this->object->read($this->object->getPath('text-for-move-new.txt')));
         $this->assertFileDoesNotExist($this->object->getPath('text-for-move.txt'));
         $this->assertIsNotReadable($this->object->getPath('text-for-move.txt'));
@@ -182,7 +200,10 @@ final class LocalTest extends TestCase
 
     public function testDelete(): void
     {
-        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-delete.txt'), new Stream('Hello World')));
+        $this->assertEquals(true, $this->object->write(
+            $this->object->getPath('text-for-delete.txt'),
+            new Stream('Hello World'),
+        ));
         $this->assertSame('Hello World', (string) $this->object->read($this->object->getPath('text-for-delete.txt')));
         $this->assertEquals(true, $this->object->delete($this->object->getPath('text-for-delete.txt')));
         $this->assertFileDoesNotExist($this->object->getPath('text-for-delete.txt'));
@@ -209,18 +230,42 @@ final class LocalTest extends TestCase
 
     public function testFileMimeType(): void
     {
-        $this->assertSame('image/jpeg', $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-a/kitten-1.jpg'));
-        $this->assertSame('image/jpeg', $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-a/kitten-2.jpg'));
-        $this->assertSame('image/png', $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-b/kitten-1.png'));
-        $this->assertSame('image/png', $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-b/kitten-2.png'));
+        $this->assertSame(
+            'image/jpeg',
+            $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-a/kitten-1.jpg'),
+        );
+        $this->assertSame(
+            'image/jpeg',
+            $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-a/kitten-2.jpg'),
+        );
+        $this->assertSame(
+            'image/png',
+            $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-b/kitten-1.png'),
+        );
+        $this->assertSame(
+            'image/png',
+            $this->object->getFileMimeType(__DIR__ . '/../../resources/disk-b/kitten-2.png'),
+        );
     }
 
     public function testFileHash(): void
     {
-        $this->assertSame('7551f343143d2e24ab4aaf4624996b6a', $this->object->getFileHash(__DIR__ . '/../../resources/disk-a/kitten-1.jpg'));
-        $this->assertSame('81702fdeef2e55b1a22617bce4951cb5', $this->object->getFileHash(__DIR__ . '/../../resources/disk-a/kitten-2.jpg'));
-        $this->assertSame('03010f4f02980521a8fd6213b52ec313', $this->object->getFileHash(__DIR__ . '/../../resources/disk-b/kitten-1.png'));
-        $this->assertSame('8a9ed992b77e4b62b10e3a5c8ed72062', $this->object->getFileHash(__DIR__ . '/../../resources/disk-b/kitten-2.png'));
+        $this->assertSame(
+            '7551f343143d2e24ab4aaf4624996b6a',
+            $this->object->getFileHash(__DIR__ . '/../../resources/disk-a/kitten-1.jpg'),
+        );
+        $this->assertSame(
+            '81702fdeef2e55b1a22617bce4951cb5',
+            $this->object->getFileHash(__DIR__ . '/../../resources/disk-a/kitten-2.jpg'),
+        );
+        $this->assertSame(
+            '03010f4f02980521a8fd6213b52ec313',
+            $this->object->getFileHash(__DIR__ . '/../../resources/disk-b/kitten-1.png'),
+        );
+        $this->assertSame(
+            '8a9ed992b77e4b62b10e3a5c8ed72062',
+            $this->object->getFileHash(__DIR__ . '/../../resources/disk-b/kitten-2.png'),
+        );
     }
 
     public function testDirectoryCreate(): void
@@ -251,12 +296,18 @@ final class LocalTest extends TestCase
         $source = $this->object->getPath(uniqid() . '.txt');
         $this->object->write($source, new Stream(str_repeat('a', 30)), 'text/plain');
 
-        $device = new class (sys_get_temp_dir()) extends Local {
+        $device = new class(sys_get_temp_dir()) extends Local {
             public int $aborts = 0;
 
             #[\Override]
-            public function upload(StreamInterface $data, string $path, string $contentType, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
-            {
+            public function upload(
+                StreamInterface $data,
+                string $path,
+                string $contentType,
+                int $chunk = 1,
+                int $chunks = 1,
+                array &$metadata = [],
+            ): int {
                 if ($chunk === 2) {
                     throw new UploadException('Injected chunk failure');
                 }
@@ -492,7 +543,11 @@ final class LocalTest extends TestCase
     {
         // Test Single Object
         $path = $this->object->getPath('text-for-delete-path.txt');
-        $path = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path);
+        $path = str_ireplace(
+            $this->object->getRoot(),
+            $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket',
+            $path,
+        );
         $this->assertEquals(true, $this->object->write($path, new Stream('Hello World'), 'text/plain'));
         $this->assertEquals(true, $this->object->exists($path));
         $this->assertEquals(true, $this->object->deletePath('bucket'));
@@ -500,17 +555,29 @@ final class LocalTest extends TestCase
 
         // Test Multiple Objects
         $path = $this->object->getPath('text-for-delete-path1.txt');
-        $path = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path);
+        $path = str_ireplace(
+            $this->object->getRoot(),
+            $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket',
+            $path,
+        );
         $this->assertEquals(true, $this->object->write($path, new Stream('Hello World'), 'text/plain'));
         $this->assertEquals(true, $this->object->exists($path));
 
         $path2 = $this->object->getPath('text-for-delete-path2.txt');
-        $path2 = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path2);
+        $path2 = str_ireplace(
+            $this->object->getRoot(),
+            $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket',
+            $path2,
+        );
         $this->assertEquals(true, $this->object->write($path2, new Stream('Hello World'), 'text/plain'));
         $this->assertEquals(true, $this->object->exists($path2));
 
         $path3 = $this->object->getPath('.hidden.txt');
-        $path3 = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path3);
+        $path3 = str_ireplace(
+            $this->object->getRoot(),
+            $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket',
+            $path3,
+        );
         $this->assertEquals(true, $this->object->write($path3, new Stream('Hello World'), 'text/plain'));
         $this->assertEquals(true, $this->object->exists($path3));
 
@@ -628,14 +695,8 @@ final class LocalTest extends TestCase
         $this->assertFileDoesNotExist($dest, 'Final file must not be created when a chunk is missing');
         $this->assertFileDoesNotExist($tmpAssemble, 'Temp assembly file must not be created');
         // Surviving parts must remain so the upload can be retried.
-        $this->assertFileExists(
-            $tmpDir . DIRECTORY_SEPARATOR . 'test.part.2',
-            'Part 2 must be preserved for retry',
-        );
-        $this->assertFileExists(
-            $tmpDir . DIRECTORY_SEPARATOR . 'test.part.3',
-            'Part 3 must be preserved for retry',
-        );
+        $this->assertFileExists($tmpDir . DIRECTORY_SEPARATOR . 'test.part.2', 'Part 2 must be preserved for retry');
+        $this->assertFileExists($tmpDir . DIRECTORY_SEPARATOR . 'test.part.3', 'Part 3 must be preserved for retry');
 
         // Re-upload the missing chunk — assembly should now succeed.
         $storage->upload(new Stream('AAAA'), $dest, 'application/octet-stream', 1, 3);

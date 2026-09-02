@@ -44,19 +44,19 @@ final class HalfOpenProbeLimitTest extends TestCase
         $breaker = $this->halfOpen(permitted: 1);
         $nested = null;
 
-        $result = $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: function () use ($breaker, &$nested): string {
-                $this->assertSame(CircuitState::HALF_OPEN, $breaker->getState());
+        $result = $breaker->call(open: static fn(): string => 'fallback', close: function () use (
+            $breaker,
+            &$nested,
+        ): string {
+            $this->assertSame(CircuitState::HALF_OPEN, $breaker->getState());
 
-                $nested = $breaker->call(
-                    open: static fn(): string => 'fallback',
-                    close: static fn(): string => 'reached dependency',
-                );
+            $nested = $breaker->call(
+                open: static fn(): string => 'fallback',
+                close: static fn(): string => 'reached dependency',
+            );
 
-                return 'probe ran';
-            },
-        );
+            return 'probe ran';
+        });
 
         $this->assertSame('probe ran', $result);
         $this->assertSame('fallback', $nested, 'A second caller must not reach a recovering dependency.');
@@ -84,24 +84,25 @@ final class HalfOpenProbeLimitTest extends TestCase
         $second = null;
         $third = null;
 
-        $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: function () use ($breaker, &$second, &$third): string {
-                $second = $breaker->call(
+        $breaker->call(open: static fn(): string => 'fallback', close: function () use (
+            $breaker,
+            &$second,
+            &$third,
+        ): string {
+            $second = $breaker->call(open: static fn(): string => 'fallback', close: function () use (
+                $breaker,
+                &$third,
+            ): string {
+                $third = $breaker->call(
                     open: static fn(): string => 'fallback',
-                    close: function () use ($breaker, &$third): string {
-                        $third = $breaker->call(
-                            open: static fn(): string => 'fallback',
-                            close: static fn(): string => 'reached dependency',
-                        );
-
-                        return 'reached dependency';
-                    },
+                    close: static fn(): string => 'reached dependency',
                 );
 
                 return 'reached dependency';
-            },
-        );
+            });
+
+            return 'reached dependency';
+        });
 
         $this->assertSame('reached dependency', $second, 'Two concurrent probes are permitted here.');
         $this->assertSame('fallback', $third, 'The third concurrent probe is not.');
@@ -116,17 +117,14 @@ final class HalfOpenProbeLimitTest extends TestCase
         $breaker = new CircuitBreaker(halfOpenPermittedCalls: 1);
         $nested = null;
 
-        $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: function () use ($breaker, &$nested): string {
-                $nested = $breaker->call(
-                    open: static fn(): string => 'fallback',
-                    close: static fn(): string => 'reached dependency',
-                );
+        $breaker->call(open: static fn(): string => 'fallback', close: function () use ($breaker, &$nested): string {
+            $nested = $breaker->call(
+                open: static fn(): string => 'fallback',
+                close: static fn(): string => 'reached dependency',
+            );
 
-                return 'reached dependency';
-            },
-        );
+            return 'reached dependency';
+        });
 
         $this->assertSame('reached dependency', $nested);
     }
@@ -135,17 +133,11 @@ final class HalfOpenProbeLimitTest extends TestCase
     {
         $breaker = $this->halfOpen(permitted: 1);
 
-        $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: function () use ($breaker): string {
-                $breaker->call(
-                    open: static fn(): string => 'fallback',
-                    close: static fn(): string => 'reached dependency',
-                );
+        $breaker->call(open: static fn(): string => 'fallback', close: function () use ($breaker): string {
+            $breaker->call(open: static fn(): string => 'fallback', close: static fn(): string => 'reached dependency');
 
-                return 'probe ran';
-            },
-        );
+            return 'probe ran';
+        });
 
         // The refused caller took the fallback without executing anything, so it
         // is neither evidence of recovery nor of continued failure. Only the probe

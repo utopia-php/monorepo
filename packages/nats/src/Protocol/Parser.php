@@ -95,13 +95,16 @@ final class Parser
         // Consume trailing \r\n
         $this->readExactly(2);
 
-        return [ServerOp::Msg, [
-            'subject' => $subject,
-            'sid' => $sid,
-            'replyTo' => $replyTo,
-            'payload' => $payload,
-            'headers' => null,
-        ]];
+        return [
+            ServerOp::Msg,
+            [
+                'subject' => $subject,
+                'sid' => $sid,
+                'replyTo' => $replyTo,
+                'payload' => $payload,
+                'headers' => null,
+            ],
+        ];
     }
 
     /**
@@ -137,13 +140,16 @@ final class Parser
         // Consume trailing \r\n
         $this->readExactly(2);
 
-        return [ServerOp::HMsg, [
-            'subject' => $subject,
-            'sid' => $sid,
-            'replyTo' => $replyTo,
-            'payload' => $payload,
-            'headers' => $headerBlock,
-        ]];
+        return [
+            ServerOp::HMsg,
+            [
+                'subject' => $subject,
+                'sid' => $sid,
+                'replyTo' => $replyTo,
+                'payload' => $payload,
+                'headers' => $headerBlock,
+            ],
+        ];
     }
 
     private function readLine(?float $timeout = null): string

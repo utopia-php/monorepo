@@ -70,11 +70,17 @@ trait ConnectionTestScope
     {
         $this->execute(function (): void {
             $i = 0;
-            $object = new Pool($this->getAdapter(), 'testDestroy', 2, function () use (&$i): string {
-                ++$i;
+            $object = new Pool(
+                $this->getAdapter(),
+                'testDestroy',
+                2,
+                function () use (&$i): string {
+                    ++$i;
 
-                return $i <= 2 ? 'x' : 'y';
-            }, timeout: 0.0);
+                    return $i <= 2 ? 'x' : 'y';
+                },
+                timeout: 0.0,
+            );
 
             $this->assertSame(2, $object->count());
 
@@ -109,7 +115,13 @@ trait ConnectionTestScope
             TrackedResource::$freed = 0;
 
             (function (): void {
-                $pool = new Pool($this->getAdapter(), 'lifetime', 3, fn(): TrackedResource => new TrackedResource(), timeout: 1.0);
+                $pool = new Pool(
+                    $this->getAdapter(),
+                    'lifetime',
+                    3,
+                    fn(): TrackedResource => new TrackedResource(),
+                    timeout: 1.0,
+                );
 
                 // Check every slot out at once so three distinct resources exist,
                 // then hand them all back: the pool is left holding them idle in

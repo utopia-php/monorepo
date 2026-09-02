@@ -70,8 +70,10 @@ class Server
     protected ?Counter $queriesTotal = null;
     protected ?Counter $responsesTotal = null;
 
-    public function __construct(protected Adapter $adapter, protected Resolver $resolver)
-    {
+    public function __construct(
+        protected Adapter $adapter,
+        protected Resolver $resolver,
+    ) {
         $this->setTelemetry(new NoTelemetry());
     }
 
@@ -80,12 +82,17 @@ class Server
      */
     public function setTelemetry(Telemetry $telemetry): void
     {
-        $this->duration = $telemetry->createHistogram(
-            'dns.query.duration',
-            's',
-            null,
-            ['ExplicitBucketBoundaries' => [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1]],
-        );
+        $this->duration = $telemetry->createHistogram('dns.query.duration', 's', null, ['ExplicitBucketBoundaries' => [
+            0.001,
+            0.005,
+            0.01,
+            0.025,
+            0.05,
+            0.1,
+            0.25,
+            0.5,
+            1,
+        ]]);
 
         // Initialize additional telemetry metrics
         $this->queriesTotal = $telemetry->createCounter('dns.queries.total');
@@ -154,11 +161,7 @@ class Server
             } catch (PartialDecodingException $e) {
                 $this->handleError($e);
 
-                $response = Message::response(
-                    $e->getHeader(),
-                    Message::RCODE_FORMERR,
-                    authoritative: false,
-                );
+                $response = Message::response($e->getHeader(), Message::RCODE_FORMERR, authoritative: false);
                 return $response->encode($maxResponseSize);
             } catch (Throwable $e) {
                 $this->handleError($e);
@@ -169,21 +172,13 @@ class Server
             // RFC 1035: Only OPCODE 0 (QUERY) is supported
             // Return NOTIMP for other opcodes (IQUERY=1 is obsolete, STATUS=2, others reserved)
             if ($message->header->opcode !== 0) {
-                $response = Message::response(
-                    $message->header,
-                    Message::RCODE_NOTIMP,
-                    authoritative: false,
-                );
+                $response = Message::response($message->header, Message::RCODE_NOTIMP, authoritative: false);
                 return $response->encode($maxResponseSize);
             }
 
             $question = $message->questions[0] ?? null;
             if ($question === null) {
-                $response = Message::response(
-                    $message->header,
-                    Message::RCODE_FORMERR,
-                    authoritative: false,
-                );
+                $response = Message::response($message->header, Message::RCODE_FORMERR, authoritative: false);
                 return $response->encode($maxResponseSize);
             }
 

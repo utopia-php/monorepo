@@ -31,11 +31,7 @@ final readonly class Resolver
     {
         $question = $query->questions[0] ?? null;
         if ($question === null) {
-            return Message::response(
-                header: $query->header,
-                responseCode: Message::RCODE_FORMERR,
-                authoritative: true,
-            );
+            return Message::response(header: $query->header, responseCode: Message::RCODE_FORMERR, authoritative: true);
         }
 
         // Step 1: Select best matching records for the query
@@ -178,7 +174,10 @@ final readonly class Resolver
             }
 
             // Check for CNAME
-            $cnameRecords = array_filter($records, fn(\Utopia\DNS\Message\Record $r): bool => $r->type === Record::TYPE_CNAME);
+            $cnameRecords = array_filter(
+                $records,
+                fn(\Utopia\DNS\Message\Record $r): bool => $r->type === Record::TYPE_CNAME,
+            );
 
             if ($cnameRecords !== []) {
                 // E2: CNAME exists
@@ -214,7 +213,6 @@ final readonly class Resolver
             authoritative: false,
             recursionAvailable: false,
         );
-
     }
 
     /**
@@ -262,7 +260,7 @@ final readonly class Resolver
      */
     private static function isWildcardMatch(string $queryName, string $recordName): bool
     {
-        if (!str_starts_with($recordName, '*.')) {
+        if (! str_starts_with($recordName, '*.')) {
             return false;
         }
 
@@ -292,10 +290,7 @@ final readonly class Resolver
 
         if ($exactTypeRecords !== []) {
             // Synthesize records with the query name (randomized for load balancing)
-            $synthesizedRecords = array_map(
-                fn($r) => $r->withName($question->name),
-                $exactTypeRecords,
-            );
+            $synthesizedRecords = array_map(fn($r) => $r->withName($question->name), $exactTypeRecords);
 
             return Message::response(
                 header: $query->header,
@@ -308,14 +303,14 @@ final readonly class Resolver
         }
 
         // Check for CNAME
-        $cnameRecords = array_filter($records, fn(\Utopia\DNS\Message\Record $r): bool => $r->type === Record::TYPE_CNAME);
+        $cnameRecords = array_filter(
+            $records,
+            fn(\Utopia\DNS\Message\Record $r): bool => $r->type === Record::TYPE_CNAME,
+        );
 
         if ($cnameRecords !== []) {
             // W2: CNAME in wildcard
-            $synthesizedRecords = array_map(
-                fn($r) => $r->withName($question->name),
-                $cnameRecords,
-            );
+            $synthesizedRecords = array_map(fn($r) => $r->withName($question->name), $cnameRecords);
 
             return Message::response(
                 header: $query->header,

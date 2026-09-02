@@ -20,7 +20,7 @@ final class Factory implements StreamFactoryInterface
     {
         $resource = @fopen($filename, $mode);
 
-        if (!\is_resource($resource)) {
+        if (! \is_resource($resource)) {
             throw new RuntimeException('Unable to open stream file.');
         }
 

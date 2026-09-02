@@ -78,15 +78,19 @@ final class ResponseTest extends TestCase
             ->withBody(new Stream\Factory()->createStream('email=ada%40example.com&name=Ada%20Lovelace'));
 
         $this->assertInstanceOf(Response::class, $response);
-        $this->assertSame([
-            'email' => 'ada@example.com',
-            'name' => 'Ada Lovelace',
-        ], $response->form());
+        $this->assertSame(
+            [
+                'email' => 'ada@example.com',
+                'name' => 'Ada Lovelace',
+            ],
+            $response->form(),
+        );
     }
 
     public function testItDecodesMultipartResponses(): void
     {
-        $body = "--abc123\r\n"
+        $body =
+            "--abc123\r\n"
             . "Content-Disposition: form-data; name=\"name\"\r\n"
             . "\r\n"
             . "Ada\r\n"
@@ -113,7 +117,8 @@ final class ResponseTest extends TestCase
 
     public function testItDecodesMultipartResponsesWithQuotedBoundariesAndBodyCrLf(): void
     {
-        $body = "--abc123\r\n"
+        $body =
+            "--abc123\r\n"
             . "Content-Disposition: form-data; name=\"log\"\r\n"
             . "\r\n"
             . "line 1\r\nline 2\r\n"
@@ -128,7 +133,8 @@ final class ResponseTest extends TestCase
 
     public function testItDecodesMultipartResponsesWithPreambleAndEpilogue(): void
     {
-        $body = "ignored preamble\r\n"
+        $body =
+            "ignored preamble\r\n"
             . "--abc123\r\n"
             . "Content-Disposition: form-data; name=\"name\"\r\n"
             . "\r\n"
@@ -145,7 +151,8 @@ final class ResponseTest extends TestCase
 
     public function testItDoesNotSplitMultipartBodiesOnBoundaryTextInsideContent(): void
     {
-        $body = "--abc123\r\n"
+        $body =
+            "--abc123\r\n"
             . "Content-Disposition: form-data; name=\"log\"\r\n"
             . "\r\n"
             . "line one has --abc123 inside it\r\n"
@@ -160,7 +167,8 @@ final class ResponseTest extends TestCase
 
     public function testItDecodesMultipartResponsesWithRepeatedFieldNames(): void
     {
-        $body = "--abc123\r\n"
+        $body =
+            "--abc123\r\n"
             . "Content-Disposition: form-data; name=\"tag\"\r\n"
             . "\r\n"
             . "math\r\n"
@@ -181,7 +189,8 @@ final class ResponseTest extends TestCase
 
     public function testItDecodesMultipartResponsesWithUnquotedDispositionParametersAndDuplicateHeaders(): void
     {
-        $body = "--abc123\r\n"
+        $body =
+            "--abc123\r\n"
             . "Content-Disposition: form-data; name=file; filename=ada.txt\r\n"
             . "X-Trace: one\r\n"
             . "X-Trace: two\r\n"

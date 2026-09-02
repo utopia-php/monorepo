@@ -23,10 +23,7 @@ final class HardeningTest extends TestCase
     {
         // A large drainTimeout: the pure-timeout drain would take this long, so a
         // fast completion proves the PING/PONG barrier is doing the work.
-        $conn = Connection::connect(new ConnectionOptions(
-            servers: $this->getServerUrl(),
-            drainTimeout: 20.0,
-        ));
+        $conn = Connection::connect(new ConnectionOptions(servers: $this->getServerUrl(), drainTimeout: 20.0));
 
         $subject = 'test.drain.' . uniqid();
         $received = 0;
@@ -64,13 +61,12 @@ final class HardeningTest extends TestCase
     public function testTokenProviderInvokedAtConnect(): void
     {
         $calls = 0;
-        $conn = Connection::connect(new ConnectionOptions(
-            servers: $this->getServerUrl(),
-            tokenProvider: function () use (&$calls): string {
-                $calls++;
-                return 'dynamic-token';
-            },
-        ));
+        $conn = Connection::connect(new ConnectionOptions(servers: $this->getServerUrl(), tokenProvider: function () use (
+            &$calls,
+        ): string {
+            $calls++;
+            return 'dynamic-token';
+        }));
 
         $this->assertTrue($conn->isConnected());
         $this->assertSame(1, $calls, 'token provider resolved during the connect handshake');

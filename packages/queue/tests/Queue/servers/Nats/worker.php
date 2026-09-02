@@ -13,14 +13,12 @@ use Utopia\Validator\Text;
 // (the socket is single-owner and must not be shared across a fork). job(..., 1)
 // keeps one message in flight per connection, avoiding concurrent use of the shared
 // read pump.
-$consumer = new Nats(
-    fn(): Connection => Connection::connect('nats://127.0.0.1:14225'),
-    maxDeliver: 3,
-);
+$consumer = new Nats(fn(): Connection => Connection::connect('nats://127.0.0.1:14225'), maxDeliver: 3);
 $adapter = new Swoole($consumer, 12);
 $server = new Server($adapter);
 
-$server->job('nats', 1)
+$server
+    ->job('nats', 1)
     ->inject('message')
     ->param(
         key: 'aliasValue',
@@ -39,12 +37,16 @@ $server
         echo $th->getMessage() . PHP_EOL;
     });
 
-$server->workerStart()->action(function (): void {
-    echo 'Worker Started' . PHP_EOL;
-});
+$server
+    ->workerStart()
+    ->action(function (): void {
+        echo 'Worker Started' . PHP_EOL;
+    });
 
-$server->workerStop()->action(function (): void {
-    echo 'Worker Stopped' . PHP_EOL;
-});
+$server
+    ->workerStop()
+    ->action(function (): void {
+        echo 'Worker Stopped' . PHP_EOL;
+    });
 
 $server->start();

@@ -189,13 +189,9 @@ final class ServerTelemetryTest extends TestCase
                 }
             });
 
-        $server
-            ->job('emails')
-            ->action(function () use ($server, &$contextValues): void {
-                $contextValues[] = $server->context()->has('contextValue')
-                    ? $server->context()->get('contextValue')
-                    : null;
-            });
+        $server->job('emails')->action(function () use ($server, &$contextValues): void {
+            $contextValues[] = $server->context()->has('contextValue') ? $server->context()->get('contextValue') : null;
+        });
 
         $server->start();
 
@@ -323,7 +319,9 @@ final class ServerTelemetryMultiMessageConsumer implements Consumer
     /**
      * @param Message[] $messages
      */
-    public function __construct(private array $messages) {}
+    public function __construct(
+        private array $messages,
+    ) {}
 
     public function receive(Queue $queue, int $timeout): ?Message
     {
@@ -345,7 +343,10 @@ final class ServerTelemetryPublisherConsumer extends ServerTelemetryConsumer imp
      * @param int[] $queueSizes
      * @param int[] $failedQueueSizes
      */
-    public function __construct(private array $queueSizes, private array $failedQueueSizes = []) {}
+    public function __construct(
+        private array $queueSizes,
+        private array $failedQueueSizes = [],
+    ) {}
 
     public function enqueue(Queue $queue, array $payload, bool $priority = false): bool
     {

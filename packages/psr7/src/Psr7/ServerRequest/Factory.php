@@ -24,7 +24,6 @@ final readonly class Factory implements ServerRequestFactoryInterface
     {
         $uri = $uri instanceof UriInterface ? $uri : $this->uriFactory->createUri((string) $uri);
 
-        return new ServerRequest(strtoupper($method), $uri, $serverParams)
-            ->withUri($uri);
+        return new ServerRequest(strtoupper($method), $uri, $serverParams)->withUri($uri);
     }
 }

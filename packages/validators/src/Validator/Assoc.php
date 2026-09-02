@@ -14,7 +14,9 @@ class Assoc extends Validator
     /**
      * Pass integer length to allow larger json objects
      */
-    public function __construct(protected int $length = 65535) {}
+    public function __construct(
+        protected int $length = 65535,
+    ) {}
 
     /**
      * Get Description
@@ -55,7 +57,7 @@ class Assoc extends Validator
      */
     public function isValid($value): bool
     {
-        if (!\is_array($value)) {
+        if (! \is_array($value)) {
             return false;
         }
 

@@ -30,13 +30,10 @@ final readonly class Part
 
     public static function text(string $type, string $content): self
     {
-        return new self(
-            [
-                'Content-Type' => "{$type}; charset=utf-8",
-                'Content-Transfer-Encoding' => 'quoted-printable',
-            ],
-            content: Encoding::quotedPrintable($content),
-        );
+        return new self([
+            'Content-Type' => "{$type}; charset=utf-8",
+            'Content-Transfer-Encoding' => 'quoted-printable',
+        ], content: Encoding::quotedPrintable($content));
     }
 
     public static function attachment(Attachment $attachment): self
@@ -44,8 +41,8 @@ final readonly class Part
         $headers = [
             'Content-Type' => $attachment->type,
             'Content-Transfer-Encoding' => 'base64',
-            'Content-Disposition' => ($attachment->cid === null ? 'attachment' : 'inline')
-                . '; ' . self::filename($attachment->name),
+            'Content-Disposition' =>
+                ($attachment->cid === null ? 'attachment' : 'inline') . '; ' . self::filename($attachment->name),
         ];
 
         if ($attachment->cid !== null) {

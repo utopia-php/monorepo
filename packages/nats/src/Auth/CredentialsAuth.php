@@ -13,7 +13,7 @@ final class CredentialsAuth implements Authenticator
 
     public function __construct(string $credentialsFile)
     {
-        if (!file_exists($credentialsFile)) {
+        if (! file_exists($credentialsFile)) {
             throw new AuthenticationException("Credentials file not found: {$credentialsFile}");
         }
 

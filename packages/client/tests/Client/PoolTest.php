@@ -75,7 +75,9 @@ final class PoolTest extends TestCase
 
 final readonly class FakeClient implements \Psr\Http\Client\ClientInterface, StreamingClientInterface
 {
-    public function __construct(private int $status) {}
+    public function __construct(
+        private int $status,
+    ) {}
 
     public function sendRequest(RequestInterface $request): ResponseInterface
     {

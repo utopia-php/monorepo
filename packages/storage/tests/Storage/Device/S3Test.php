@@ -56,12 +56,21 @@ class TestableS3 extends S3
     public array $amzHeadersByOperation = [];
 
     #[\Override]
-    protected function call(string $method, string $uri, StreamInterface|string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true, ?callable $sink = null): S3Response
-    {
+    protected function call(
+        string $method,
+        string $uri,
+        StreamInterface|string $data = '',
+        array $parameters = [],
+        array $headers = [],
+        array $amzHeaders = [],
+        bool $decode = true,
+        ?callable $sink = null,
+    ): S3Response {
         $operation = match (true) {
             $method === 'HEAD' => 's3:info',
             $method === 'POST' && \array_key_exists('uploads', $parameters) => 's3:createMultipartUpload',
-            $method === 'PUT' && isset($parameters['partNumber'], $amzHeaders['x-amz-copy-source']) => 's3:uploadPartCopy',
+            $method === 'PUT' && isset($parameters['partNumber'], $amzHeaders['x-amz-copy-source'])
+                => 's3:uploadPartCopy',
             $method === 'PUT' && isset($amzHeaders['x-amz-copy-source']) => 's3:copyObject',
             $method === 'PUT' && isset($parameters['partNumber']) => 's3:uploadPart',
             $method === 'POST' && isset($parameters['uploadId']) => 's3:completeMultipartUpload',
@@ -126,7 +135,9 @@ final class ScriptedClient implements Adapter
     /**
      * @param  array<ResponseInterface|ClientExceptionInterface>  $responses
      */
-    public function __construct(private array $responses) {}
+    public function __construct(
+        private array $responses,
+    ) {}
 
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
@@ -136,7 +147,9 @@ final class ScriptedClient implements Adapter
             throw $response;
         }
         if (! $response instanceof ResponseInterface) {
-            throw new \RuntimeException('No scripted response left for ' . $request->getMethod() . ' ' . $request->getUri());
+            throw new \RuntimeException(
+                'No scripted response left for ' . $request->getMethod() . ' ' . $request->getUri(),
+            );
         }
 
         return $response;
@@ -293,7 +306,10 @@ final class S3Test extends TestCase
         ];
 
         $this->assertTrue($this->s3->finalize('/root/file.txt', 2, $metadata));
-        $this->assertSame('application/xml', $this->s3->headersByOperation['s3:completeMultipartUpload']['content-type']);
+        $this->assertSame(
+            'application/xml',
+            $this->s3->headersByOperation['s3:completeMultipartUpload']['content-type'],
+        );
     }
 
     private function device(ScriptedClient $client): S3
@@ -331,7 +347,10 @@ final class S3Test extends TestCase
         $this->assertSame('private', $request->getHeaderLine('x-amz-acl'));
         $this->assertSame(hash('sha256', 'Hello World'), $request->getHeaderLine('x-amz-content-sha256'));
         $this->assertSame(base64_encode(md5('Hello World', true)), $request->getHeaderLine('content-md5'));
-        $this->assertStringStartsWith('AWS4-HMAC-SHA256 Credential=test-key/', $request->getHeaderLine('authorization'));
+        $this->assertStringStartsWith(
+            'AWS4-HMAC-SHA256 Credential=test-key/',
+            $request->getHeaderLine('authorization'),
+        );
         $this->assertSame('utopia-php/storage', $request->getHeaderLine('user-agent'));
     }
 
@@ -400,7 +419,10 @@ final class S3Test extends TestCase
 
     public function testTransportFailureIsWrapped(): void
     {
-        $psrError = new NetworkException(new Request('PUT', Uri::parse('https://s3.example.com/root')), 'Connection reset');
+        $psrError = new NetworkException(
+            new Request('PUT', Uri::parse('https://s3.example.com/root')),
+            'Connection reset',
+        );
         $client = new ScriptedClient([$psrError]);
 
         try {
@@ -459,13 +481,16 @@ final class S3Test extends TestCase
         $s3->infoContentLength = (string) (6 * 1024 * 1024 * 1024); // 6 GB — above the CopyObject limit
 
         $this->assertTrue($s3->copy('/root/a.bin', '/root/b.bin'));
-        $this->assertSame([
-            's3:info',
-            's3:createMultipartUpload',
-            's3:uploadPartCopy',
-            's3:uploadPartCopy',
-            's3:completeMultipartUpload',
-        ], $s3->calls);
+        $this->assertSame(
+            [
+                's3:info',
+                's3:createMultipartUpload',
+                's3:uploadPartCopy',
+                's3:uploadPartCopy',
+                's3:completeMultipartUpload',
+            ],
+            $s3->calls,
+        );
 
         $ranges = array_column($s3->amzHeadersByOperation['s3:uploadPartCopy'], 'x-amz-copy-source-range');
         $this->assertSame(['bytes=0-5368709119', 'bytes=5368709120-6442450943'], $ranges);
@@ -550,11 +575,15 @@ final class S3Test extends TestCase
 
     public function testXmlListingIsDecodedIntoTypedFiles(): void
     {
-        $body = '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><KeyCount>2</KeyCount><IsTruncated>true</IsTruncated><MaxKeys>1000</MaxKeys><NextContinuationToken>next-token</NextContinuationToken>'
+        $body =
+            '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><KeyCount>2</KeyCount><IsTruncated>true</IsTruncated><MaxKeys>1000</MaxKeys><NextContinuationToken>next-token</NextContinuationToken>'
             . '<Contents><Key>root/a.txt</Key><Size>11</Size><LastModified>2026-01-02T03:04:05.000Z</LastModified><ETag>&quot;abc123&quot;</ETag></Contents>'
             . '<Contents><Key>root/b.txt</Key><Size>22</Size><LastModified>2026-01-02T03:04:06.000Z</LastModified><ETag>&quot;def456&quot;</ETag></Contents>'
             . '</ListBucketResult>';
-        $client = new ScriptedClient([new Response(200, body: new Stream($body))->withHeader('content-type', 'application/xml')]);
+        $client = new ScriptedClient([new Response(200, body: new Stream($body))->withHeader(
+            'content-type',
+            'application/xml',
+        )]);
 
         $list = $this->device($client)->listFiles('/root/testing');
 
@@ -569,10 +598,14 @@ final class S3Test extends TestCase
     /** A lone element decodes as one associative entry rather than a list — the consumer must handle both. */
     public function testXmlListingWithSingleObjectIsDecoded(): void
     {
-        $body = '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><KeyCount>1</KeyCount><IsTruncated>false</IsTruncated>'
+        $body =
+            '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><KeyCount>1</KeyCount><IsTruncated>false</IsTruncated>'
             . '<Contents><Key>root/a.txt</Key><Size>11</Size><LastModified>2026-01-02T03:04:05.000Z</LastModified><ETag>&quot;abc123&quot;</ETag></Contents>'
             . '</ListBucketResult>';
-        $client = new ScriptedClient([new Response(200, body: new Stream($body))->withHeader('content-type', 'application/xml')]);
+        $client = new ScriptedClient([new Response(200, body: new Stream($body))->withHeader(
+            'content-type',
+            'application/xml',
+        )]);
 
         $list = $this->device($client)->listFiles('/root/testing');
 

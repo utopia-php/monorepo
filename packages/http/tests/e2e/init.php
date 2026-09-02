@@ -16,11 +16,9 @@ ini_set('display_startup_errors', '1');
 ini_set('display_socket_timeout', '-1');
 error_reporting(E_ALL);
 
-Http::get('/')
-    ->inject('response')
-    ->action(function (Response $response) {
-        $response->send('Hello World!');
-    });
+Http::get('/')->inject('response')->action(function (Response $response) {
+    $response->send('Hello World!');
+});
 
 Http::get('/value/:value')
     ->param('value', '', new Text(64))
@@ -28,7 +26,6 @@ Http::get('/value/:value')
     ->action(function (string $value, Response $response) {
         $response->send($value);
     });
-
 
 Http::get('/cookies')
     ->inject('request')
@@ -54,25 +51,19 @@ Http::get('/set-cookie')
         $response->send('OK');
     });
 
-Http::get('/chunked')
-    ->inject('response')
-    ->action(function (Response $response) {
-        foreach (['Hello ', 'World!'] as $key => $word) {
-            $response->chunk($word, $key === 1);
-        }
-    });
+Http::get('/chunked')->inject('response')->action(function (Response $response) {
+    foreach (['Hello ', 'World!'] as $key => $word) {
+        $response->chunk($word, $key === 1);
+    }
+});
 
-Http::get('/redirect')
-    ->inject('response')
-    ->action(function (Response $response) {
-        $response->redirect('/');
-    });
+Http::get('/redirect')->inject('response')->action(function (Response $response) {
+    $response->redirect('/');
+});
 
-Http::get('/humans.txt')
-    ->inject('response')
-    ->action(function (Response $response) {
-        $response->noContent();
-    });
+Http::get('/humans.txt')->inject('response')->action(function (Response $response) {
+    $response->noContent();
+});
 
 Http::get('/aliased')
     ->alias('/aliased-1')

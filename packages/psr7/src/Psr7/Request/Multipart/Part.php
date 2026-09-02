@@ -34,9 +34,14 @@ final readonly class Part
      *
      * @param array<string, string> $headers
      */
-    public static function file(string $name, string $path, ?string $filename = null, ?string $contentType = null, array $headers = []): self
-    {
-        if (!is_file($path)) {
+    public static function file(
+        string $name,
+        string $path,
+        ?string $filename = null,
+        ?string $contentType = null,
+        array $headers = [],
+    ): self {
+        if (! is_file($path)) {
             throw new RuntimeException('Unable to read multipart file.');
         }
 
@@ -46,8 +51,13 @@ final readonly class Part
     /**
      * @param array<string, string> $headers
      */
-    public static function body(string $name, string $body, ?string $filename = null, ?string $contentType = null, array $headers = []): self
-    {
+    public static function body(
+        string $name,
+        string $body,
+        ?string $filename = null,
+        ?string $contentType = null,
+        array $headers = [],
+    ): self {
         return new self($name, $body, null, $filename, $contentType, $headers);
     }
 

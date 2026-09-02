@@ -50,7 +50,13 @@ abstract class Adapter
     /**
      * Initialize Variables
      */
-    abstract public function initializeVariables(string $installationId, string $privateKey, ?string $appId = null, ?string $accessToken = null, ?string $refreshToken = null): void;
+    abstract public function initializeVariables(
+        string $installationId,
+        string $privateKey,
+        ?string $appId = null,
+        ?string $accessToken = null,
+        ?string $refreshToken = null,
+    ): void;
 
     /**
      * Generate Access Token
@@ -150,7 +156,12 @@ abstract class Adapter
     /**
      * Add Comment to Pull Request
      */
-    abstract public function createComment(string $owner, string $repositoryName, int $pullRequestNumber, string $comment): string;
+    abstract public function createComment(
+        string $owner,
+        string $repositoryName,
+        int $pullRequestNumber,
+        string $comment,
+    ): string;
 
     /**
      * Get Comment of Pull Request
@@ -171,12 +182,24 @@ abstract class Adapter
      * @param string $comment    The updated comment content
      * @return string            The ID of the updated comment
      */
-    abstract public function updateComment(string $owner, string $repositoryName, string $commentId, string $comment): string;
+    abstract public function updateComment(
+        string $owner,
+        string $repositoryName,
+        string $commentId,
+        string $comment,
+    ): string;
 
     /**
      * Generates a clone command using app access token
      */
-    abstract public function generateCloneCommand(string $owner, string $repositoryName, string $version, string $versionType, string $directory, string $rootDirectory): string;
+    abstract public function generateCloneCommand(
+        string $owner,
+        string $repositoryName,
+        string $version,
+        string $versionType,
+        string $directory,
+        string $rootDirectory,
+    ): string;
 
     /**
      * Validates a webhook payload signature.
@@ -290,7 +313,15 @@ abstract class Adapter
      * Updates status check of each commit
      * state can be one of: error, failure, pending, success
      */
-    abstract public function updateCommitStatus(string $repositoryName, string $SHA, string $owner, string $state, string $description = '', string $target_url = '', string $context = ''): void;
+    abstract public function updateCommitStatus(
+        string $repositoryName,
+        string $SHA,
+        string $owner,
+        string $state,
+        string $description = '',
+        string $target_url = '',
+        string $context = '',
+    ): void;
 
     /**
      * Creates a check run for a commit.
@@ -373,7 +404,12 @@ abstract class Adapter
      * @param bool $recursive Whether to fetch the tree recursively
      * @return array<string> List of files in the repository
      */
-    abstract public function getRepositoryTree(string $owner, string $repositoryName, string $branch, bool $recursive = false): array;
+    abstract public function getRepositoryTree(
+        string $owner,
+        string $repositoryName,
+        string $branch,
+        bool $recursive = false,
+    ): array;
 
     /**
      * Get repository languages
@@ -393,7 +429,12 @@ abstract class Adapter
      * @param  string  $ref The name of the commit/branch/tag
      * @return array<mixed> List of contents at the specified path
      */
-    abstract public function listRepositoryContents(string $owner, string $repositoryName, string $path = '', string $ref = ''): array;
+    abstract public function listRepositoryContents(
+        string $owner,
+        string $repositoryName,
+        string $path = '',
+        string $ref = '',
+    ): array;
 
     /**
      * Get contents of the specified file.
@@ -404,7 +445,12 @@ abstract class Adapter
      * @param  string  $ref The name of the commit/branch/tag
      * @return array<string, mixed> File details
      */
-    abstract public function getRepositoryContent(string $owner, string $repositoryName, string $path, string $ref = ''): array;
+    abstract public function getRepositoryContent(
+        string $owner,
+        string $repositoryName,
+        string $path,
+        string $ref = '',
+    ): array;
 
     /**
      * Get details of a commit using commit hash
@@ -437,8 +483,12 @@ abstract class Adapter
      *
      * @throws Exception when the adapter does not implement it (opt-in, mirrors createCheckRun())
      */
-    public function getRepositoryPresignedUrl(string $owner, string $repositoryName, string $ref = '', string $format = 'tarball'): string
-    {
+    public function getRepositoryPresignedUrl(
+        string $owner,
+        string $repositoryName,
+        string $ref = '',
+        string $format = 'tarball',
+    ): string {
         throw new Exception('getRepositoryPresignedUrl() is not implemented for ' . $this->getName());
     }
 
@@ -454,12 +504,22 @@ abstract class Adapter
      *
      * @throws Exception
      */
-    protected function call(string $method, string $path = '', array $headers = [], array $params = [], bool $decode = true, bool $followRedirects = true)
-    {
+    protected function call(
+        string $method,
+        string $path = '',
+        array $headers = [],
+        array $params = [],
+        bool $decode = true,
+        bool $followRedirects = true,
+    ) {
         $headers = array_merge($this->headers, $headers);
-        $ch = curl_init($this->endpoint . $path . (($method === self::METHOD_GET && $params !== []) ? '?' . http_build_query($params) : ''));
+        $ch = curl_init(
+            $this->endpoint
+            . $path
+            . ($method === self::METHOD_GET && $params !== [] ? '?' . http_build_query($params) : ''),
+        );
 
-        if (!$ch) {
+        if (! $ch) {
             throw new Exception('Curl failed to initialize');
         }
 
@@ -486,7 +546,11 @@ abstract class Adapter
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, $followRedirects);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36');
+        curl_setopt(
+            $ch,
+            CURLOPT_USERAGENT,
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36',
+        );
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headerLines);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 0);
         curl_setopt($ch, CURLOPT_TIMEOUT, 15);
@@ -534,14 +598,24 @@ abstract class Adapter
             }
         }
 
-        if ((curl_errno($ch) !== 0/* || 200 != $responseStatus*/)) {
+        if (curl_errno($ch) !== 0/* || 200 != $responseStatus*/ ) {
             throw new Exception(curl_error($ch) . ' with status code ' . $responseStatus, $responseStatus);
         }
 
         $responseHeaders['status-code'] = $responseStatus;
 
         if ($responseStatus === 500) {
-            echo 'Server error(' . $method . ': ' . $path . '. Params: ' . json_encode($params) . '): ' . json_encode($responseBody) . "\n";
+            echo
+                'Server error('
+                    . $method
+                    . ': '
+                    . $path
+                    . '. Params: '
+                    . json_encode($params)
+                    . '): '
+                    . json_encode($responseBody)
+                    . "\n"
+            ;
         }
 
         return [

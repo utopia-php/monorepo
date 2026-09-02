@@ -172,8 +172,20 @@ class Hook
     /**
      * Add Param
      */
-    public function param(string $key, mixed $default, Validator|callable $validator, string $description = '', bool $optional = false, array $injections = [], bool $skipValidation = false, bool $deprecated = false, string $example = '', ?string $model = null, array $aliases = [], ?object $enum = null): static
-    {
+    public function param(
+        string $key,
+        mixed $default,
+        Validator|callable $validator,
+        string $description = '',
+        bool $optional = false,
+        array $injections = [],
+        bool $skipValidation = false,
+        bool $deprecated = false,
+        string $example = '',
+        ?string $model = null,
+        array $aliases = [],
+        ?object $enum = null,
+    ): static {
         $this->params[$key] = [
             'default' => $default,
             'validator' => $validator,
@@ -223,7 +235,7 @@ class Hook
      */
     public function setParamValue(string $key, mixed $value): static
     {
-        if (!isset($this->params[$key])) {
+        if (! isset($this->params[$key])) {
             throw new \Exception('Unknown key');
         }
 
@@ -240,7 +252,7 @@ class Hook
      */
     public function getParamValue(string $key): mixed
     {
-        if (!isset($this->params[$key])) {
+        if (! isset($this->params[$key])) {
             throw new \Exception('Unknown key');
         }
 

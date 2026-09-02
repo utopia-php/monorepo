@@ -13,7 +13,9 @@ class Hostname extends Validator
      *
      * @param  string[]  $allowList
      */
-    public function __construct(protected array $allowList = []) {}
+    public function __construct(
+        protected array $allowList = [],
+    ) {}
 
     public function getDescription(): string
     {
@@ -43,7 +45,7 @@ class Hostname extends Validator
     public function isValid(mixed $value): bool
     {
         // Validate proper format
-        if (!\is_string($value) || ($value === '' || $value === '0')) {
+        if (! \is_string($value) || ($value === '' || $value === '0')) {
             return false;
         }
 

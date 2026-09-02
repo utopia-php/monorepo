@@ -73,10 +73,7 @@ class FastlyTls implements Provider
             return;
         }
 
-        $result = $this->request(
-            'DELETE',
-            '/tls/subscriptions/' . $subscription['resource']['id'] . '?force=true',
-        );
+        $result = $this->request('DELETE', '/tls/subscriptions/' . $subscription['resource']['id'] . '?force=true');
 
         if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
             throw new \RuntimeException($this->formatError('Failed to delete Fastly TLS subscription', $result));
@@ -100,12 +97,12 @@ class FastlyTls implements Provider
             throw new \RuntimeException($this->formatError('Failed to fetch Fastly TLS subscriptions', $result));
         }
 
-        if (!\is_array($result['response'])) {
+        if (! \is_array($result['response'])) {
             throw new \RuntimeException('Fastly TLS subscriptions response was not valid JSON.');
         }
 
         $data = $result['response']['data'] ?? null;
-        if (!\is_array($data)) {
+        if (! \is_array($data)) {
             throw new \RuntimeException('Fastly TLS subscriptions response was missing its data list.');
         }
 
@@ -114,12 +111,12 @@ class FastlyTls implements Provider
             return null;
         }
 
-        if (!\is_array($resource)) {
+        if (! \is_array($resource)) {
             throw new \RuntimeException('Fastly TLS subscription resource was malformed.');
         }
 
         $included = $result['response']['included'] ?? [];
-        if (!\is_array($included)) {
+        if (! \is_array($included)) {
             throw new \RuntimeException('Fastly TLS subscriptions response contained malformed included resources.');
         }
 
@@ -169,19 +166,22 @@ class FastlyTls implements Provider
             throw new \RuntimeException($this->formatError('Failed to create Fastly TLS subscription', $result));
         }
 
-        if (!\is_array($result['response'])) {
+        if (! \is_array($result['response'])) {
             throw new \RuntimeException('Fastly TLS subscription response was not valid JSON.');
         }
 
         $data = $result['response']['data'] ?? null;
 
-        if (!\is_array($data)) {
+        if (! \is_array($data)) {
             throw new \RuntimeException('Fastly TLS subscription response was missing data.');
         }
 
         $included = $result['response']['included'] ?? [];
 
-        return ['resource' => $data, 'included' => \is_array($included) ? array_values(array_filter($included, is_array(...))) : []];
+        return [
+            'resource' => $data,
+            'included' => \is_array($included) ? array_values(array_filter($included, is_array(...))) : [],
+        ];
     }
 
     /**
@@ -203,19 +203,22 @@ class FastlyTls implements Provider
             throw new \RuntimeException($this->formatError('Failed to retry Fastly TLS subscription', $result));
         }
 
-        if (!\is_array($result['response'])) {
+        if (! \is_array($result['response'])) {
             throw new \RuntimeException('Fastly TLS retry response was not valid JSON.');
         }
 
         $data = $result['response']['data'] ?? null;
 
-        if (!\is_array($data)) {
+        if (! \is_array($data)) {
             throw new \RuntimeException('Fastly TLS retry response was missing data.');
         }
 
         $included = $result['response']['included'] ?? [];
 
-        return ['resource' => $data, 'included' => \is_array($included) ? array_values(array_filter($included, is_array(...))) : []];
+        return [
+            'resource' => $data,
+            'included' => \is_array($included) ? array_values(array_filter($included, is_array(...))) : [],
+        ];
     }
 
     /**
@@ -245,7 +248,7 @@ class FastlyTls implements Provider
             if (($included['type'] ?? null) !== 'tls_certificate') {
                 continue;
             }
-            if (!\in_array($included['id'] ?? null, $certificateIds, true)) {
+            if (! \in_array($included['id'] ?? null, $certificateIds, true)) {
                 continue;
             }
             $notAfter = $included['attributes']['not_after'] ?? null;
@@ -305,10 +308,9 @@ class FastlyTls implements Provider
         $message = $result['error'] ?? null;
 
         if (\is_array($result['response'])) {
-            $message ??= $result['response']['errors'][0]['detail']
-                ?? $result['response']['errors'][0]['title']
-                ?? $result['response']['msg']
-                ?? null;
+            $message ??=
+                $result['response']['errors'][0]['detail'] ?? $result['response']['errors'][0]['title'] ?? $result['response']['msg']
+                    ?? null;
         }
 
         $message ??= 'Unknown Fastly TLS error';

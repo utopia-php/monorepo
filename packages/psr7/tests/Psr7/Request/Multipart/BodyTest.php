@@ -23,7 +23,8 @@ final class BodyTest extends TestCase
                 Part::file('doc', $path, 'doc.txt', 'text/plain'),
             ]);
 
-            $expected = "--abc123\r\n"
+            $expected =
+                "--abc123\r\n"
                 . "Content-Disposition: form-data; name=\"name\"\r\n\r\n"
                 . "Ada\r\n"
                 . "--abc123\r\n"
@@ -38,7 +39,7 @@ final class BodyTest extends TestCase
             // A chunked read reassembles the same bytes, and the body rewinds for retries.
             $body->rewind();
             $streamed = '';
-            while (!$body->eof()) {
+            while (! $body->eof()) {
                 $streamed .= $body->read(7);
             }
 

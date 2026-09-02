@@ -25,10 +25,7 @@ final class KeyValueWatchTest extends TestCase
         $this->conn = Connection::connect($url);
         $this->js = $this->conn->jetStream();
         $this->bucket = 'kvw_' . uniqid();
-        $this->kv = $this->js->createKeyValue(new KeyValueConfig(
-            bucket: $this->bucket,
-            history: 10,
-        ));
+        $this->kv = $this->js->createKeyValue(new KeyValueConfig(bucket: $this->bucket, history: 10));
     }
 
     protected function tearDown(): void

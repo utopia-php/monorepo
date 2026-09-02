@@ -138,7 +138,9 @@ final class ConsumerConfig
             replayPolicy: ReplayPolicy::tryFrom($data['replay_policy'] ?? '') ?? ReplayPolicy::Instant,
             maxWaiting: $data['max_waiting'] ?? null,
             maxAckPending: $data['max_ack_pending'] ?? null,
-            inactiveThreshold: isset($data['inactive_threshold']) ? StreamConfig::nanosToSeconds($data['inactive_threshold']) : null,
+            inactiveThreshold: isset($data['inactive_threshold'])
+                ? StreamConfig::nanosToSeconds($data['inactive_threshold'])
+                : null,
             optStartSeq: $data['opt_start_seq'] ?? null,
             optStartTime: $data['opt_start_time'] ?? null,
             maxBatch: $data['max_batch'] ?? null,
@@ -148,7 +150,9 @@ final class ConsumerConfig
             deliverSubject: $data['deliver_subject'] ?? null,
             deliverGroup: $data['deliver_group'] ?? null,
             flowControl: $data['flow_control'] ?? false,
-            idleHeartbeat: isset($data['idle_heartbeat']) ? StreamConfig::nanosToSeconds($data['idle_heartbeat']) : null,
+            idleHeartbeat: isset($data['idle_heartbeat'])
+                ? StreamConfig::nanosToSeconds($data['idle_heartbeat'])
+                : null,
             metadata: $data['metadata'] ?? null,
             backoff: isset($data['backoff']) ? array_map(StreamConfig::nanosToSeconds(...), $data['backoff']) : null,
         );

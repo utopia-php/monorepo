@@ -14,14 +14,12 @@ final class DeviceDetector
             return new Device();
         }
 
-        $device = self::console($userAgent)
-            ?? self::television($userAgent)
-            ?? self::apple($userAgent)
-            ?? self::windowsPhone($userAgent)
-            ?? self::kindle($userAgent)
-            ?? self::android($userAgent)
-            ?? self::blackBerry($userAgent)
-            ?? self::desktop($userAgent);
+        $device =
+            self::console($userAgent) ?? self::television($userAgent) ?? self::apple($userAgent) ?? self::windowsPhone(
+                $userAgent,
+            ) ?? self::kindle($userAgent) ?? self::android($userAgent) ?? self::blackBerry($userAgent) ?? self::desktop(
+                $userAgent,
+            );
 
         return $device ?? new Device();
     }
@@ -49,7 +47,12 @@ final class DeviceDetector
             return new Device('tv', 'Apple', 'Apple TV');
         }
 
-        if (preg_match('/(?:Smart-?TV|SMARTTV|HbbTV|GoogleTV|Android TV|BRAVIA|NetCast|Tizen TV|web0S|webOS)/i', $userAgent) === 1) {
+        if (
+            preg_match(
+                '/(?:Smart-?TV|SMARTTV|HbbTV|GoogleTV|Android TV|BRAVIA|NetCast|Tizen TV|web0S|webOS)/i',
+                $userAgent,
+            ) === 1
+        ) {
             return new Device('tv', self::televisionBrand($userAgent));
         }
 
@@ -116,9 +119,7 @@ final class DeviceDetector
         }
 
         $model = self::model($userAgent);
-        $type = stripos($userAgent, 'Mobile') === false || self::hasTabletModel($model)
-            ? 'tablet'
-            : 'smartphone';
+        $type = stripos($userAgent, 'Mobile') === false || self::hasTabletModel($model) ? 'tablet' : 'smartphone';
 
         return new Device($type, self::brand($userAgent, $model), $model);
     }
@@ -129,10 +130,12 @@ final class DeviceDetector
             return false;
         }
 
-        return preg_match(
-            '/^(?:SM-[TX]|GT-P|Nexus (?:7|9|10)\b|Pixel (?:C|Tablet)\b|(?:Lenovo )?(?:TB-|YT-|Tab\b)|(?:Huawei )?MediaPad\b|(?:Xiaomi |Redmi |OnePlus )?Pad\b)/i',
-            $model,
-        ) === 1;
+        return (
+            preg_match(
+                '/^(?:SM-[TX]|GT-P|Nexus (?:7|9|10)\b|Pixel (?:C|Tablet)\b|(?:Lenovo )?(?:TB-|YT-|Tab\b)|(?:Huawei )?MediaPad\b|(?:Xiaomi |Redmi |OnePlus )?Pad\b)/i',
+                $model,
+            ) === 1
+        );
     }
 
     private static function blackBerry(string $userAgent): ?Device
@@ -150,10 +153,7 @@ final class DeviceDetector
             return null;
         }
 
-        return new Device(
-            'desktop',
-            stripos($userAgent, 'Macintosh') !== false ? 'Apple' : null,
-        );
+        return new Device('desktop', stripos($userAgent, 'Macintosh') !== false ? 'Apple' : null);
     }
 
     private static function model(string $userAgent): ?string

@@ -129,7 +129,10 @@ class CircuitBreaker
         $this->failuresGauge = $telemetry->createGauge($this->metricName('breaker.failures'), '{failure}');
         $this->successesGauge = $telemetry->createGauge($this->metricName('breaker.successes'), '{success}');
 
-        $this->callbackFailures = $telemetry->createCounter($this->metricName('breaker.callback_failures'), '{failure}');
+        $this->callbackFailures = $telemetry->createCounter(
+            $this->metricName('breaker.callback_failures'),
+            '{failure}',
+        );
         $this->fallbacks = $telemetry->createCounter($this->metricName('breaker.fallbacks'), '{fallback}');
         $this->transitions = $telemetry->createCounter($this->metricName('breaker.transitions'), '{transition}');
         $this->eventTimestamp = $telemetry->createGauge($this->metricName('breaker.event.timestamp'), 's');
@@ -178,9 +181,7 @@ class CircuitBreaker
             }
 
             // Determine which callback to use
-            $callback = ($this->state === CircuitState::HALF_OPEN && $halfOpen !== null)
-                ? $halfOpen
-                : $close;
+            $callback = $this->state === CircuitState::HALF_OPEN && $halfOpen !== null ? $halfOpen : $close;
 
             try {
                 $result = $callback();
@@ -399,7 +400,7 @@ class CircuitBreaker
 
     private function syncFromCache(): void
     {
-        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
+        if (! $this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return;
         }
 
@@ -423,7 +424,7 @@ class CircuitBreaker
 
     private function incrementFailures(): int
     {
-        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
+        if (! $this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return ++$this->failures;
         }
 
@@ -438,7 +439,7 @@ class CircuitBreaker
 
     private function incrementSuccesses(): int
     {
-        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
+        if (! $this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return ++$this->successes;
         }
 
@@ -449,7 +450,7 @@ class CircuitBreaker
     {
         $this->openedAt = $openedAt;
 
-        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
+        if (! $this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return;
         }
 
@@ -464,12 +465,12 @@ class CircuitBreaker
 
     private function loadState(): CircuitState
     {
-        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
+        if (! $this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return $this->state;
         }
 
         $value = $this->cache->get($this->cacheField(self::STATE_FIELD));
-        if (!\is_string($value)) {
+        if (! \is_string($value)) {
             return CircuitState::CLOSED;
         }
 
@@ -478,7 +479,7 @@ class CircuitBreaker
 
     private function loadInteger(string $field): int
     {
-        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
+        if (! $this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return 0;
         }
 
@@ -489,7 +490,7 @@ class CircuitBreaker
 
     private function loadNullableInteger(string $field): ?int
     {
-        if (!$this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
+        if (! $this->cache instanceof \Utopia\CircuitBreaker\Adapter) {
             return null;
         }
 
@@ -580,9 +581,7 @@ class CircuitBreaker
     {
         $this->syncFromCache();
 
-        return $this->state === CircuitState::HALF_OPEN
-            ? $this->failures
-            : $this->windowFailureCount();
+        return $this->state === CircuitState::HALF_OPEN ? $this->failures : $this->windowFailureCount();
     }
 
     public function getSuccessCount(): int

@@ -24,14 +24,7 @@ final class TlsTransport implements Transport
 
         $context = stream_context_create(['ssl' => $this->buildSslOptions()]);
 
-        $stream = @stream_socket_client(
-            $address,
-            $errno,
-            $errstr,
-            $timeout,
-            STREAM_CLIENT_CONNECT,
-            $context,
-        );
+        $stream = @stream_socket_client($address, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $context);
 
         if ($stream === false) {
             throw new ConnectionException("Failed to connect to {$address}: [{$errno}] {$errstr}");
@@ -132,7 +125,7 @@ final class TlsTransport implements Transport
 
     public function isConnected(): bool
     {
-        return $this->stream !== null && !feof($this->stream);
+        return $this->stream !== null && ! feof($this->stream);
     }
 
     public function close(): void

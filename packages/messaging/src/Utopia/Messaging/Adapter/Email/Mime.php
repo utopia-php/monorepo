@@ -109,8 +109,6 @@ final class Mime
             return $email->getContent();
         }
 
-        return trim(strip_tags(
-            preg_replace('/<style\b[^>]*>(.*?)<\/style>/is', '', $email->getContent()) ?? '',
-        ));
+        return trim(strip_tags(preg_replace('/<style\b[^>]*>(.*?)<\/style>/is', '', $email->getContent()) ?? ''));
     }
 }

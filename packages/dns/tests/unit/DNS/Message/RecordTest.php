@@ -20,12 +20,8 @@ final class RecordTest extends TestCase
         );
 
         // Raw RR: example.com. 300 IN A 93.184.216.34
-        $expected = "\x07example\x03com\x00"
-            . "\x00\x01"
-            . "\x00\x01"
-            . "\x00\x00\x01\x2C"
-            . "\x00\x04"
-            . "\x5D\xB8\xD8\x22";
+        $expected =
+            "\x07example\x03com\x00" . "\x00\x01" . "\x00\x01" . "\x00\x00\x01\x2C" . "\x00\x04" . "\x5D\xB8\xD8\x22";
 
         $this->assertSame($expected, $record->encode());
     }
@@ -33,12 +29,8 @@ final class RecordTest extends TestCase
     public function testDecodeARecordParsesFields(): void
     {
         // Raw RR: example.com. 300 IN A 93.184.216.34
-        $data = "\x07example\x03com\x00"
-            . "\x00\x01"
-            . "\x00\x01"
-            . "\x00\x00\x01\x2C"
-            . "\x00\x04"
-            . "\x5D\xB8\xD8\x22";
+        $data =
+            "\x07example\x03com\x00" . "\x00\x01" . "\x00\x01" . "\x00\x00\x01\x2C" . "\x00\x04" . "\x5D\xB8\xD8\x22";
 
         $offset = 0;
         $record = Record::decode($data, $offset);
@@ -66,7 +58,8 @@ final class RecordTest extends TestCase
         );
 
         // Raw RR: mail.example.com. 3600 IN MX 10 mail.exchange.example.com.
-        $expected = "\x04mail\x07example\x03com\x00"
+        $expected =
+            "\x04mail\x07example\x03com\x00"
             . "\x00\x0F"
             . "\x00\x01"
             . "\x00\x00\x0E\x10"
@@ -80,7 +73,8 @@ final class RecordTest extends TestCase
     public function testDecodeMxRecordParsesFields(): void
     {
         // Raw RR: mail.example.com. 3600 IN MX 10 mail.exchange.example.com.
-        $data = "\x04mail\x07example\x03com\x00"
+        $data =
+            "\x04mail\x07example\x03com\x00"
             . "\x00\x0F"
             . "\x00\x01"
             . "\x00\x00\x0E\x10"
@@ -114,7 +108,8 @@ final class RecordTest extends TestCase
         );
 
         // Raw RR: _sip._tcp.example.com. 7200 IN SRV 5 10 5060 sip.example.com.
-        $expected = "\x04_sip\x04_tcp\x07example\x03com\x00"
+        $expected =
+            "\x04_sip\x04_tcp\x07example\x03com\x00"
             . "\x00\x21"
             . "\x00\x01"
             . "\x00\x00\x1C\x20"
@@ -128,7 +123,8 @@ final class RecordTest extends TestCase
     public function testDecodeSrvRecordParsesFields(): void
     {
         // Raw RR: _sip._tcp.example.com. 7200 IN SRV 5 10 5060 sip.example.com.
-        $data = "\x04_sip\x04_tcp\x07example\x03com\x00"
+        $data =
+            "\x04_sip\x04_tcp\x07example\x03com\x00"
             . "\x00\x21"
             . "\x00\x01"
             . "\x00\x00\x1C\x20"
@@ -161,12 +157,7 @@ final class RecordTest extends TestCase
         );
 
         // Raw RR: example.com. 600 IN TXT "hello"
-        $expected = "\x07example\x03com\x00"
-            . "\x00\x10"
-            . "\x00\x01"
-            . "\x00\x00\x02\x58"
-            . "\x00\x06"
-            . "\x05hello";
+        $expected = "\x07example\x03com\x00" . "\x00\x10" . "\x00\x01" . "\x00\x00\x02\x58" . "\x00\x06" . "\x05hello";
 
         $this->assertSame($expected, $record->encode());
     }
@@ -174,12 +165,7 @@ final class RecordTest extends TestCase
     public function testDecodeTxtRecordParsesFields(): void
     {
         // Raw RR: example.com. 600 IN TXT "hello"
-        $data = "\x07example\x03com\x00"
-            . "\x00\x10"
-            . "\x00\x01"
-            . "\x00\x00\x02\x58"
-            . "\x00\x06"
-            . "\x05hello";
+        $data = "\x07example\x03com\x00" . "\x00\x10" . "\x00\x01" . "\x00\x00\x02\x58" . "\x00\x06" . "\x05hello";
 
         $offset = 0;
         $record = Record::decode($data, $offset);
@@ -195,7 +181,8 @@ final class RecordTest extends TestCase
     public function testDecodeCnameRecordParsesNameRdata(): void
     {
         // Raw RR: www.example.com. 4000 IN CNAME cdn.example.com.
-        $data = "\x03www\x07example\x03com\x00"
+        $data =
+            "\x03www\x07example\x03com\x00"
             . "\x00\x05"
             . "\x00\x01"
             . "\x00\x00\x0F\xA0"
@@ -216,12 +203,7 @@ final class RecordTest extends TestCase
     public function testDecodeUnknownRecordKeepsHexData(): void
     {
         // Raw RR: example.com. 60 IN TYPE65400 RDATA=0x0aff
-        $data = "\x07example\x03com\x00"
-            . "\xFE\xF8"
-            . "\x00\x01"
-            . "\x00\x00\x00\x3C"
-            . "\x00\x02"
-            . "\x0A\xFF";
+        $data = "\x07example\x03com\x00" . "\xFE\xF8" . "\x00\x01" . "\x00\x00\x00\x3C" . "\x00\x02" . "\x0A\xFF";
 
         $offset = 0;
         $record = Record::decode($data, $offset);
@@ -237,11 +219,12 @@ final class RecordTest extends TestCase
     public function testDecodeSoaRecordParsesFields(): void
     {
         // Raw RR: example.com. 3600 IN SOA ns1.example.com. admin.example.com. 2024102701 7200 3600 1209600 86400
-        $data = "\x07example\x03com\x00"
-            . "\x00\x06"  // TYPE_SOA
-            . "\x00\x01"  // CLASS_IN
-            . "\x00\x00\x0E\x10"  // TTL: 3600
-            . "\x00\x38"  // RDLENGTH: 56 bytes (17 + 19 + 20)
+        $data =
+            "\x07example\x03com\x00"
+            . "\x00\x06" // TYPE_SOA
+            . "\x00\x01" // CLASS_IN
+            . "\x00\x00\x0E\x10" // TTL: 3600
+            . "\x00\x38" // RDLENGTH: 56 bytes (17 + 19 + 20)
             // MNAME: ns1.example.com (17 bytes)
             . "\x03ns1\x07example\x03com\x00"
             // RNAME: admin.example.com (19 bytes)
@@ -264,10 +247,7 @@ final class RecordTest extends TestCase
         $this->assertSame(Record::TYPE_SOA, $record->type);
         $this->assertSame(Record::CLASS_IN, $record->class);
         $this->assertSame(3600, $record->ttl);
-        $this->assertSame(
-            'ns1.example.com admin.example.com 2024102701 7200 3600 1209600 86400',
-            $record->rdata,
-        );
+        $this->assertSame('ns1.example.com admin.example.com 2024102701 7200 3600 1209600 86400', $record->rdata);
         $this->assertSame(\strlen($data), $offset);
     }
 
@@ -281,11 +261,12 @@ final class RecordTest extends TestCase
             rdata: 'ns1.example.com admin.example.com 2024102701 7200 3600 1209600 86400',
         );
 
-        $expected = "\x07example\x03com\x00"
+        $expected =
+            "\x07example\x03com\x00"
             . "\x00\x06"
             . "\x00\x01"
             . "\x00\x00\x0E\x10"
-            . "\x00\x38"  // RDLENGTH: 56 bytes
+            . "\x00\x38" // RDLENGTH: 56 bytes
             . "\x03ns1\x07example\x03com\x00"
             . "\x05admin\x07example\x03com\x00"
             . "\x78\xa5\x5b\x2d"
@@ -330,11 +311,12 @@ final class RecordTest extends TestCase
     public function testDecodeTxtRecordWithMultipleChunks(): void
     {
         // TXT with two chunks: "hello" (5 bytes) + "world" (5 bytes)
-        $data = "\x07example\x03com\x00"
-            . "\x00\x10"  // TYPE_TXT
-            . "\x00\x01"  // CLASS_IN
-            . "\x00\x00\x02\x58"  // TTL: 600
-            . "\x00\x0C"  // RDLENGTH: 12 bytes (1+5+1+5)
+        $data =
+            "\x07example\x03com\x00"
+            . "\x00\x10" // TYPE_TXT
+            . "\x00\x01" // CLASS_IN
+            . "\x00\x00\x02\x58" // TTL: 600
+            . "\x00\x0C" // RDLENGTH: 12 bytes (1+5+1+5)
             . "\x05hello"
             . "\x05world";
 
@@ -352,11 +334,12 @@ final class RecordTest extends TestCase
     public function testDecodeTxtRecordWithThreeChunks(): void
     {
         // TXT with three chunks: 1+3 + 1+3 + 1+3 = 12 bytes
-        $data = "\x07example\x03com\x00"
+        $data =
+            "\x07example\x03com\x00"
             . "\x00\x10"
             . "\x00\x01"
             . "\x00\x00\x02\x58"
-            . "\x00\x0C"  // RDLENGTH: 12 bytes (not 15)
+            . "\x00\x0C" // RDLENGTH: 12 bytes (not 15)
             . "\x03foo"
             . "\x03bar"
             . "\x03baz";
@@ -370,11 +353,12 @@ final class RecordTest extends TestCase
     public function testDecodeSoaRecordRoundTrip(): void
     {
         // Original SOA RR for round-trip comparison: example.com. 3600 IN SOA ns1.example.com. admin.example.com. 2024102701 7200 3600 1209600 86400
-        $original = "\x07example\x03com\x00"
+        $original =
+            "\x07example\x03com\x00"
             . "\x00\x06"
             . "\x00\x01"
             . "\x00\x00\x0E\x10"
-            . "\x00\x38"  // RDLENGTH: 56 bytes
+            . "\x00\x38" // RDLENGTH: 56 bytes
             . "\x03ns1\x07example\x03com\x00"
             . "\x05admin\x07example\x03com\x00"
             . "\x78\xa5\x5b\x2d"
@@ -463,11 +447,12 @@ final class RecordTest extends TestCase
     public function testEncodeTxtRecordRoundTripWithMultipleChunks(): void
     {
         // Test round-trip encoding/decoding of multi-chunk TXT record
-        $original = "\x07example\x03com\x00"
-            . "\x00\x10"  // TYPE_TXT
-            . "\x00\x01"  // CLASS_IN
-            . "\x00\x00\x02\x58"  // TTL: 600
-            . "\x00\x0C"  // RDLENGTH: 12 bytes (1+3+1+3+1+3)
+        $original =
+            "\x07example\x03com\x00"
+            . "\x00\x10" // TYPE_TXT
+            . "\x00\x01" // CLASS_IN
+            . "\x00\x00\x02\x58" // TTL: 600
+            . "\x00\x0C" // RDLENGTH: 12 bytes (1+3+1+3+1+3)
             . "\x03foo"
             . "\x03bar"
             . "\x03baz";
@@ -488,13 +473,7 @@ final class RecordTest extends TestCase
     public function testEncodeTxtRecordWithEmptyRdata(): void
     {
         // Test that empty TXT rdata is encoded as a single zero-length character-string
-        $record = new Record(
-            name: 'example.com',
-            type: Record::TYPE_TXT,
-            class: Record::CLASS_IN,
-            ttl: 600,
-            rdata: '',
-        );
+        $record = new Record(name: 'example.com', type: Record::TYPE_TXT, class: Record::CLASS_IN, ttl: 600, rdata: '');
 
         $encoded = $record->encode();
 

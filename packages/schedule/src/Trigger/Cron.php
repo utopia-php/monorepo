@@ -49,12 +49,28 @@ final readonly class Cron implements Trigger
     ];
 
     private const array MONTHS = [
-        'JAN' => 1, 'FEB' => 2, 'MAR' => 3, 'APR' => 4, 'MAY' => 5, 'JUN' => 6,
-        'JUL' => 7, 'AUG' => 8, 'SEP' => 9, 'OCT' => 10, 'NOV' => 11, 'DEC' => 12,
+        'JAN' => 1,
+        'FEB' => 2,
+        'MAR' => 3,
+        'APR' => 4,
+        'MAY' => 5,
+        'JUN' => 6,
+        'JUL' => 7,
+        'AUG' => 8,
+        'SEP' => 9,
+        'OCT' => 10,
+        'NOV' => 11,
+        'DEC' => 12,
     ];
 
     private const array DAYS = [
-        'SUN' => 0, 'MON' => 1, 'TUE' => 2, 'WED' => 3, 'THU' => 4, 'FRI' => 5, 'SAT' => 6,
+        'SUN' => 0,
+        'MON' => 1,
+        'TUE' => 2,
+        'WED' => 3,
+        'THU' => 4,
+        'FRI' => 5,
+        'SAT' => 6,
     ];
 
     /**
@@ -100,7 +116,7 @@ final readonly class Cron implements Trigger
         $normalized = self::MACROS[$normalized] ?? $normalized;
 
         $fields = preg_split('/\s+/', $normalized);
-        if (!\is_array($fields) || \count($fields) !== 5) {
+        if (! \is_array($fields) || \count($fields) !== 5) {
             throw new \InvalidArgumentException("Cron expression \"{$expression}\" must have exactly five fields");
         }
 
@@ -125,7 +141,7 @@ final readonly class Cron implements Trigger
         $this->dayOfMonthRestricted = $dayOfMonth !== '*' && $dayOfMonth !== '?';
         $this->dayOfWeekRestricted = $dayOfWeek !== '*' && $dayOfWeek !== '?';
 
-        if (!$this->nextMatch(new \DateTimeImmutable()) instanceof \DateTimeImmutable) {
+        if (! $this->nextMatch(new \DateTimeImmutable()) instanceof \DateTimeImmutable) {
             throw new \InvalidArgumentException("Cron expression \"{$expression}\" never matches a date");
         }
     }
@@ -174,20 +190,20 @@ final readonly class Cron implements Trigger
             $year = (int) $candidate->format('Y');
             $month = (int) $candidate->format('n');
 
-            if (!isset($this->months[$month])) {
+            if (! isset($this->months[$month])) {
                 $candidate = $month === 12
                     ? $candidate->setDate($year + 1, 1, 1)->setTime(0, 0)
                     : $candidate->setDate($year, $month + 1, 1)->setTime(0, 0);
                 continue;
             }
 
-            if (!$this->dayMatches($candidate)) {
+            if (! $this->dayMatches($candidate)) {
                 $candidate = $candidate->setTime(0, 0)->modify('+1 day');
                 continue;
             }
 
             $hour = (int) $candidate->format('G');
-            if (!isset($this->hours[$hour])) {
+            if (! isset($this->hours[$hour])) {
                 $nextHour = $this->firstAbove($this->hours, $hour);
                 $candidate = $nextHour === null
                     ? $candidate->setTime(0, 0)->modify('+1 day')
@@ -196,7 +212,7 @@ final readonly class Cron implements Trigger
             }
 
             $minute = (int) $candidate->format('i');
-            if (!isset($this->minutes[$minute])) {
+            if (! isset($this->minutes[$minute])) {
                 $nextMinute = $this->firstAbove($this->minutes, $minute);
                 $candidate = $nextMinute === null
                     ? $candidate->setTime($hour, 0)->modify('+1 hour')
@@ -360,11 +376,11 @@ final readonly class Cron implements Trigger
         $dayOfWeek = (int) $candidate->format('w');
 
         return match ($rule[0]) {
-            'L' => $day === $lastDay - $rule[1],
+            'L' => $day === ($lastDay - $rule[1]),
             'LW' => $day === $this->nearestWeekday($candidate, $lastDay),
             'W' => $rule[1] <= $lastDay && $day === $this->nearestWeekday($candidate, $rule[1]),
-            'DOW_LAST' => $dayOfWeek === $rule[1] && $day + 7 > $lastDay,
-            'DOW_NTH' => $dayOfWeek === $rule[1] && intdiv($day - 1, 7) + 1 === $rule[2],
+            'DOW_LAST' => $dayOfWeek === $rule[1] && ($day + 7) > $lastDay,
+            'DOW_NTH' => $dayOfWeek === $rule[1] && (intdiv($day - 1, 7) + 1) === $rule[2],
             default => false,
         };
     }
@@ -400,7 +416,7 @@ final readonly class Cron implements Trigger
 
             if (str_contains($part, '/')) {
                 [$range, $stepText] = explode('/', $part, 2);
-                if (!ctype_digit($stepText) || (int) $stepText < 1) {
+                if (! ctype_digit($stepText) || (int) $stepText < 1) {
                     throw new \InvalidArgumentException("Invalid cron step \"{$part}\"");
                 }
                 $step = (int) $stepText;

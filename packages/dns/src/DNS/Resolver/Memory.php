@@ -12,7 +12,9 @@ use Utopia\DNS\Zone\Resolver as ZoneResolver;
 
 class Memory implements Resolver
 {
-    public function __construct(private readonly Zone $zone) {}
+    public function __construct(
+        private readonly Zone $zone,
+    ) {}
 
     public function resolve(Query $query): Message
     {

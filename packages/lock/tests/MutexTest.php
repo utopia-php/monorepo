@@ -6,12 +6,11 @@ namespace Utopia\Lock\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
-
-use function Swoole\Coroutine\run;
-
 use Swoole\Coroutine\System;
 use Utopia\Lock\Exception\Contention;
 use Utopia\Lock\Mutex;
+
+use function Swoole\Coroutine\run;
 
 final class MutexTest extends TestCase
 {

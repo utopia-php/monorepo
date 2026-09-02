@@ -68,14 +68,14 @@ final class FileTest extends TestCase
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-\$TTL 1800
-{$soa}
+        \$ORIGIN example.com.
+        \$TTL 1800
+        {$soa}
 
-www IN A 192.168.1.10
-mail 300 IN MX 10 mail
-_sip._tcp 600 IN SRV 5 10 5060 sip
-ZONE;
+        www IN A 192.168.1.10
+        mail 300 IN MX 10 mail
+        _sip._tcp 600 IN SRV 5 10 5060 sip
+        ZONE;
 
         $zone = File::import($contents);
 
@@ -109,9 +109,9 @@ ZONE;
         $this->expectExceptionMessage('$INCLUDE directive is not supported');
 
         File::import(<<<ZONE
-\$ORIGIN example.com.
-\$INCLUDE other.zone
-ZONE);
+        \$ORIGIN example.com.
+        \$INCLUDE other.zone
+        ZONE);
     }
 
     public function testImportFailsWithUnknownRecordType(): void
@@ -121,10 +121,10 @@ ZONE);
 
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-www 300 IN BADTYPE data
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        www 300 IN BADTYPE data
+        ZONE;
 
         File::import($contents);
     }
@@ -136,10 +136,10 @@ ZONE;
 
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-mail 3600 IN MX mail.example.com.
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        mail 3600 IN MX mail.example.com.
+        ZONE;
 
         File::import($contents);
     }
@@ -151,10 +151,10 @@ ZONE;
 
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-_sip._tcp 600 IN SRV 5 10 5060
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        _sip._tcp 600 IN SRV 5 10 5060
+        ZONE;
 
         File::import($contents);
     }
@@ -163,13 +163,13 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
+        \$ORIGIN example.com.
+        {$soa}
 
-; comment line
+        ; comment line
 
-@ 3600 IN A 127.0.0.1
-ZONE;
+        @ 3600 IN A 127.0.0.1
+        ZONE;
 
         $zone = File::import($contents);
 
@@ -181,10 +181,10 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-@ 0 IN A 127.0.0.1
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        @ 0 IN A 127.0.0.1
+        ZONE;
 
         $zone = File::import($contents);
 
@@ -194,9 +194,9 @@ ZONE;
     public function testImportUsesDefaultOriginWhenDirectiveMissing(): void
     {
         $contents = <<<'ZONE'
-@ IN SOA ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
-www 600 IN A 192.0.2.10
-ZONE;
+        @ IN SOA ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
+        www 600 IN A 192.0.2.10
+        ZONE;
 
         $zone = File::import($contents, 'example.com');
 
@@ -207,9 +207,9 @@ ZONE;
     public function testImportAllowsEmailAddressSoaRnameToEncode(): void
     {
         $contents = <<<'ZONE'
-@ IN SOA ns1.example.com. first.last@example.com. 2025011801 7200 3600 1209600 1800
-www 600 IN A 192.0.2.10
-ZONE;
+        @ IN SOA ns1.example.com. first.last@example.com. 2025011801 7200 3600 1209600 1800
+        www 600 IN A 192.0.2.10
+        ZONE;
 
         $zone = File::import($contents, 'example.com');
 
@@ -230,12 +230,12 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-www     IN  A   192.0.2.10
-mail    IN  MX  10 mail
-alias   IN  CNAME   www
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        www     IN  A   192.0.2.10
+        mail    IN  MX  10 mail
+        alias   IN  CNAME   www
+        ZONE;
 
         $zone = File::import($contents);
 
@@ -254,10 +254,10 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-@ IN 3600 A 192.0.2.10
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        @ IN 3600 A 192.0.2.10
+        ZONE;
 
         $zone = File::import($contents);
 
@@ -270,10 +270,10 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-@ 600 A 192.0.2.11
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        @ 600 A 192.0.2.11
+        ZONE;
 
         $zone = File::import($contents);
 
@@ -285,13 +285,13 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-multiline 600 IN TXT (
-    "foo"
-    "bar"
-)
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        multiline 600 IN TXT (
+            "foo"
+            "bar"
+        )
+        ZONE;
 
         $zone = File::import($contents);
         $txt = $this->findRecord($zone->records, Record::TYPE_TXT);
@@ -303,10 +303,10 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-escaped 600 IN TXT "foo\\010bar"
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        escaped 600 IN TXT "foo\\010bar"
+        ZONE;
 
         $zone = File::import($contents);
         $txt = $this->findRecord($zone->records, Record::TYPE_TXT);
@@ -318,11 +318,11 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-\$FOO bar
-www IN A 192.168.1.10
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        \$FOO bar
+        www IN A 192.168.1.10
+        ZONE;
 
         $zone = File::import($contents);
 
@@ -334,10 +334,10 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-@ 3600 IN TXT "v=DMARC1; p=none; rua=mailto:jon@snow.got; ruf=mailto:jon@snow.got; fo=1;"
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        @ 3600 IN TXT "v=DMARC1; p=none; rua=mailto:jon@snow.got; ruf=mailto:jon@snow.got; fo=1;"
+        ZONE;
 
         $zone = File::import($contents);
         $record = $this->findRecord($zone->records, Record::TYPE_TXT);
@@ -350,9 +350,21 @@ ZONE;
         $zone = new Zone(
             'example.com',
             [
-                new Record('example.com', Record::TYPE_TXT, Record::CLASS_IN, 3600, 'v=DMARC1; text="quoted"; backslash=\\'),
+                new Record(
+                    'example.com',
+                    Record::TYPE_TXT,
+                    Record::CLASS_IN,
+                    3600,
+                    'v=DMARC1; text="quoted"; backslash=\\',
+                ),
             ],
-            new Record('example.com', Record::TYPE_SOA, Record::CLASS_IN, 3600, 'ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800'),
+            new Record(
+                'example.com',
+                Record::TYPE_SOA,
+                Record::CLASS_IN,
+                3600,
+                'ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800',
+            ),
         );
 
         $expected = "\$ORIGIN example.com.\n\$TTL 3600\n\n@\t3600\tIN\tSOA\tns1 admin (\n\t\t\t\t2025011801\t; serial\n\t\t\t\t7200\t; refresh\n\t\t\t\t3600\t; retry\n\t\t\t\t1209600\t; expire\n\t\t\t\t1800 )\t; minimum\n\n@\t3600\tIN\tTXT\t\"v=DMARC1; text=\\\"quoted\\\"; backslash=\\\\\"\n";
@@ -370,12 +382,12 @@ ZONE;
     public function testImportExportRoundTrip(): void
     {
         $contents = <<<ZONE
-\$ORIGIN example.com.
-\$TTL 1200
-@ IN SOA ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
-www IN A 192.168.1.10
-mail 600 IN MX 10 mail
-ZONE;
+        \$ORIGIN example.com.
+        \$TTL 1200
+        @ IN SOA ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
+        www IN A 192.168.1.10
+        mail 600 IN MX 10 mail
+        ZONE;
 
         $zone = File::import($contents);
         $this->assertCount(2, $zone->records);
@@ -396,9 +408,22 @@ ZONE;
             [
                 new Record('example.com', Record::TYPE_NS, Record::CLASS_IN, 3600, 'ns1.example.com'),
                 new Record('www.example.com', Record::TYPE_A, Record::CLASS_IN, 1800, '192.168.1.10'),
-                new Record('mail.example.com', Record::TYPE_MX, Record::CLASS_IN, 300, 'mail.example.com', priority: 10),
+                new Record(
+                    'mail.example.com',
+                    Record::TYPE_MX,
+                    Record::CLASS_IN,
+                    300,
+                    'mail.example.com',
+                    priority: 10,
+                ),
             ],
-            new Record('example.com', Record::TYPE_SOA, Record::CLASS_IN, 1800, 'ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800'),
+            new Record(
+                'example.com',
+                Record::TYPE_SOA,
+                Record::CLASS_IN,
+                1800,
+                'ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800',
+            ),
         );
 
         $expected = "\$ORIGIN example.com.\n\$TTL 1800\n\n@\t1800\tIN\tSOA\tns1 admin (\n\t\t\t\t2025011801\t; serial\n\t\t\t\t7200\t; refresh\n\t\t\t\t3600\t; retry\n\t\t\t\t1209600\t; expire\n\t\t\t\t1800 )\t; minimum\n\n@\t3600\tIN\tNS\tns1\n\nwww\t1800\tIN\tA\t192.168.1.10\n\nmail\t300\tIN\tMX\t10 mail\n";
@@ -415,10 +440,10 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-1 3600 IN PTR host.example.com.
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        1 3600 IN PTR host.example.com.
+        ZONE;
 
         $zone = File::import($contents);
         $ptr = $this->findRecord($zone->records, Record::TYPE_PTR);
@@ -430,18 +455,18 @@ ZONE;
     public function testImportSupportsMultilineSoa(): void
     {
         $contents = <<<'ZONE'
-$ORIGIN example.com.
-@ 3600 IN SOA (
-    ns1.example.com.
-    admin.example.com.
-    2025011801
-    7200
-    3600
-    1209600
-    1800
-)
-www 1800 IN A 192.0.2.10
-ZONE;
+        $ORIGIN example.com.
+        @ 3600 IN SOA (
+            ns1.example.com.
+            admin.example.com.
+            2025011801
+            7200
+            3600
+            1209600
+            1800
+        )
+        www 1800 IN A 192.0.2.10
+        ZONE;
 
         $zone = File::import($contents);
 
@@ -453,14 +478,14 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-www IN A 192.0.2.10
-\$ORIGIN sub.example.com.
-@ 600 IN AAAA 2001:db8::1
-\$ORIGIN example.com.
-api IN CNAME www
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        www IN A 192.0.2.10
+        \$ORIGIN sub.example.com.
+        @ 600 IN AAAA 2001:db8::1
+        \$ORIGIN example.com.
+        api IN CNAME www
+        ZONE;
 
         $zone = File::import($contents);
 
@@ -474,11 +499,11 @@ ZONE;
     {
         $soa = self::DEFAULT_SOA;
         $contents = <<<ZONE
-\$ORIGIN example.com.
-{$soa}
-www IN A 192.0.2.10
-    IN AAAA 2001:db8::1
-ZONE;
+        \$ORIGIN example.com.
+        {$soa}
+        www IN A 192.0.2.10
+            IN AAAA 2001:db8::1
+        ZONE;
 
         $zone = File::import($contents);
 
@@ -489,14 +514,11 @@ ZONE;
 
     public function testImportTxtWithEscapedSemicolon(): void
     {
-        $contents = \sprintf(
-            <<<'ZONE'
-$ORIGIN example.com.
-%s
-@ 3600 IN TXT "foo\;bar"
-ZONE,
-            self::DEFAULT_SOA,
-        );
+        $contents = \sprintf(<<<'ZONE'
+        $ORIGIN example.com.
+        %s
+        @ 3600 IN TXT "foo\;bar"
+        ZONE, self::DEFAULT_SOA);
 
         $zone = File::import($contents);
         $record = $this->findRecord($zone->records, Record::TYPE_TXT);
@@ -506,14 +528,11 @@ ZONE,
 
     public function testImportTxtWithSemicolonInQuotes(): void
     {
-        $contents = \sprintf(
-            <<<'ZONE'
-$ORIGIN example.com.
-%s
-@ 3600 IN TXT "not a comment; still text"
-ZONE,
-            self::DEFAULT_SOA,
-        );
+        $contents = \sprintf(<<<'ZONE'
+        $ORIGIN example.com.
+        %s
+        @ 3600 IN TXT "not a comment; still text"
+        ZONE, self::DEFAULT_SOA);
 
         $zone = File::import($contents);
         $record = $this->findRecord($zone->records, Record::TYPE_TXT);
@@ -523,14 +542,11 @@ ZONE,
 
     public function testImportExportRoundTripForAaaa(): void
     {
-        $contents = \sprintf(
-            <<<'ZONE'
-$ORIGIN example.com.
-%s
-www 600 IN AAAA 2001:db8::1
-ZONE,
-            self::DEFAULT_SOA,
-        );
+        $contents = \sprintf(<<<'ZONE'
+        $ORIGIN example.com.
+        %s
+        www 600 IN AAAA 2001:db8::1
+        ZONE, self::DEFAULT_SOA);
 
         $zone = File::import($contents);
         $this->assertSame(Record::TYPE_AAAA, $zone->records[0]->type);
@@ -565,14 +581,11 @@ ZONE,
 
     public function testCanImportZoneWithTemplateRecords(): void
     {
-        $contents = \sprintf(
-            <<<'ZONE'
-$ORIGIN example.com.
-%s
-www 600 IN AAAA b:b::b:b:b
-ZONE,
-            self::DEFAULT_SOA,
-        );
+        $contents = \sprintf(<<<'ZONE'
+        $ORIGIN example.com.
+        %s
+        www 600 IN AAAA b:b::b:b:b
+        ZONE, self::DEFAULT_SOA);
 
         $zone = File::import($contents);
 
@@ -584,14 +597,11 @@ ZONE,
 
     public function testImportExportRoundTripForCaa(): void
     {
-        $contents = \sprintf(
-            <<<'ZONE'
-$ORIGIN example.com.
-%s
-@ 3600 IN CAA 0 issue "letsencrypt.org"
-ZONE,
-            self::DEFAULT_SOA,
-        );
+        $contents = \sprintf(<<<'ZONE'
+        $ORIGIN example.com.
+        %s
+        @ 3600 IN CAA 0 issue "letsencrypt.org"
+        ZONE, self::DEFAULT_SOA);
 
         $zone = File::import($contents);
         $record = $this->findRecord($zone->records, Record::TYPE_CAA);
@@ -611,14 +621,11 @@ ZONE,
         $this->expectException(ImportException::class);
         $this->expectExceptionMessageMatches('/CAA value must be quoted/');
 
-        $contents = \sprintf(
-            <<<'ZONE'
-$ORIGIN example.com.
-%s
-@ 3600 IN CAA 0 issue letsencrypt.org
-ZONE,
-            self::DEFAULT_SOA,
-        );
+        $contents = \sprintf(<<<'ZONE'
+        $ORIGIN example.com.
+        %s
+        @ 3600 IN CAA 0 issue letsencrypt.org
+        ZONE, self::DEFAULT_SOA);
 
         File::import($contents);
     }
@@ -626,10 +633,10 @@ ZONE,
     public function testImportPtrWithReverseOrigin(): void
     {
         $contents = <<<'ZONE'
-$ORIGIN 2.0.192.in-addr.arpa.
-@ 3600 IN SOA ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
-1 3600 IN PTR host.example.com.
-ZONE;
+        $ORIGIN 2.0.192.in-addr.arpa.
+        @ 3600 IN SOA ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
+        1 3600 IN PTR host.example.com.
+        ZONE;
 
         $zone = File::import($contents);
         $ptr = $this->findRecord($zone->records, Record::TYPE_PTR);
@@ -643,10 +650,10 @@ ZONE;
         $this->expectExceptionMessage('Multiple SOA records found');
 
         $contents = <<<'ZONE'
-$ORIGIN example.com.
-@ IN SOA ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
-@ IN SOA ns2.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
-ZONE;
+        $ORIGIN example.com.
+        @ IN SOA ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
+        @ IN SOA ns2.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
+        ZONE;
 
         File::import($contents);
     }
@@ -656,28 +663,22 @@ ZONE;
         $this->expectException(ImportException::class);
         $this->expectExceptionMessage("Invalid record type '1H' (line 3).");
 
-        $contents = \sprintf(
-            <<<'ZONE'
-$ORIGIN example.com.
-%s
-www 1h IN A 192.0.2.10
-ZONE,
-            self::DEFAULT_SOA,
-        );
+        $contents = \sprintf(<<<'ZONE'
+        $ORIGIN example.com.
+        %s
+        www 1h IN A 192.0.2.10
+        ZONE, self::DEFAULT_SOA);
 
         File::import($contents);
     }
 
     public function testImportSupportsAlternativeClasses(): void
     {
-        $contents = \sprintf(
-            <<<'ZONE'
-$ORIGIN example.com.
-%s
-www CS A 192.0.2.10
-ZONE,
-            self::DEFAULT_SOA,
-        );
+        $contents = \sprintf(<<<'ZONE'
+        $ORIGIN example.com.
+        %s
+        www CS A 192.0.2.10
+        ZONE, self::DEFAULT_SOA);
 
         $zone = File::import($contents);
         $record = $this->findRecord($zone->records, Record::TYPE_A);
@@ -687,14 +688,11 @@ ZONE,
 
     public function testImportTxtWithEmbeddedQuoteAndBackslash(): void
     {
-        $contents = \sprintf(
-            <<<'ZONE'
-$ORIGIN example.com.
-%s
-@ 3600 IN TXT "a \"quote\" and a \\ backslash"
-ZONE,
-            self::DEFAULT_SOA,
-        );
+        $contents = \sprintf(<<<'ZONE'
+        $ORIGIN example.com.
+        %s
+        @ 3600 IN TXT "a \"quote\" and a \\ backslash"
+        ZONE, self::DEFAULT_SOA);
 
         $zone = File::import($contents);
         $record = $this->findRecord($zone->records, Record::TYPE_TXT);
@@ -704,14 +702,11 @@ ZONE,
 
     public function testImportTxtThreeDigitEscapeConsumesOnlyThreeDigits(): void
     {
-        $contents = \sprintf(
-            <<<'ZONE'
-$ORIGIN example.com.
-%s
-@ 3600 IN TXT "foo\0100bar"
-ZONE,
-            self::DEFAULT_SOA,
-        );
+        $contents = \sprintf(<<<'ZONE'
+        $ORIGIN example.com.
+        %s
+        @ 3600 IN TXT "foo\0100bar"
+        ZONE, self::DEFAULT_SOA);
 
         $zone = File::import($contents);
         $record = $this->findRecord($zone->records, Record::TYPE_TXT);
@@ -741,10 +736,10 @@ ZONE,
         $this->expectExceptionMessage('Owner omitted but no previous owner available');
 
         File::import(<<<ZONE
-\$ORIGIN example.com.
-    IN A 127.0.0.1
-@ IN SOA ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
-ZONE);
+        \$ORIGIN example.com.
+            IN A 127.0.0.1
+        @ IN SOA ns1.example.com. admin.example.com. 2025011801 7200 3600 1209600 1800
+        ZONE);
     }
 
     /**

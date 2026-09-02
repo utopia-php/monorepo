@@ -20,10 +20,12 @@ final class PurgeTest extends TestCase
      */
     private function recordingClient(int $status = 200): ClientInterface
     {
-        return new class ($status) implements ClientInterface {
+        return new class($status) implements ClientInterface {
             public ?RequestInterface $request = null;
 
-            public function __construct(private readonly int $status) {}
+            public function __construct(
+                private readonly int $status,
+            ) {}
 
             public function sendRequest(RequestInterface $request): ResponseInterface
             {
@@ -41,10 +43,7 @@ final class PurgeTest extends TestCase
 
         $this->assertNotNull($client->request);
         $this->assertSame('POST', $client->request->getMethod());
-        $this->assertSame(
-            'https://api.fastly.com/service/svc1/purge/homepage',
-            (string) $client->request->getUri(),
-        );
+        $this->assertSame('https://api.fastly.com/service/svc1/purge/homepage', (string) $client->request->getUri());
         $this->assertSame('secret-token', $client->request->getHeaderLine('Fastly-Key'));
         $this->assertSame('application/json', $client->request->getHeaderLine('Accept'));
     }
@@ -63,8 +62,7 @@ final class PurgeTest extends TestCase
     public function testCustomEndpointAndTokenHeader(): void
     {
         $client = $this->recordingClient();
-        new Fastly($client, 'svc1', 'tok', 'https://cdn.example.com/service/', 'X-Purge-Key')
-            ->purge('a');
+        new Fastly($client, 'svc1', 'tok', 'https://cdn.example.com/service/', 'X-Purge-Key')->purge('a');
 
         $this->assertSame('https://cdn.example.com/service/svc1/purge/a', (string) $client->request->getUri());
         $this->assertSame('tok', $client->request->getHeaderLine('X-Purge-Key'));

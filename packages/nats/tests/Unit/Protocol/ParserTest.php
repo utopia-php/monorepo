@@ -14,10 +14,12 @@ final class ParserTest extends TestCase
 {
     private function createParser(string $data): Parser
     {
-        $transport = new class ($data) implements Transport {
+        $transport = new class($data) implements Transport {
             private int $pos = 0;
 
-            public function __construct(private readonly string $data) {}
+            public function __construct(
+                private readonly string $data,
+            ) {}
 
             public function connect(string $host, int $port, float $timeout): void {}
 
@@ -48,10 +50,12 @@ final class ParserTest extends TestCase
             }
 
             public function upgradeTls(array $options): void {}
+
             public function isConnected(): bool
             {
                 return true;
             }
+
             public function close(): void {}
         };
 
@@ -157,10 +161,10 @@ final class ParserTest extends TestCase
     {
         $parser = $this->createParser("PING\r\n+OK\r\nMSG foo 1 3\r\nabc\r\n");
 
-        [$op1,] = $parser->next();
+        [$op1] = $parser->next();
         $this->assertSame(ServerOp::Ping, $op1);
 
-        [$op2,] = $parser->next();
+        [$op2] = $parser->next();
         $this->assertSame(ServerOp::Ok, $op2);
 
         [$op3, $data3] = $parser->next();

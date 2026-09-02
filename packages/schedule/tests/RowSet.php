@@ -16,7 +16,9 @@ final class RowSet
     /**
      * @param list<Row> $rows
      */
-    public function __construct(public array $rows = []) {}
+    public function __construct(
+        public array $rows = [],
+    ) {}
 
     /**
      * @return list<Row>

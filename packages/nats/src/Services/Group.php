@@ -25,11 +25,7 @@ final class Group
      */
     public function addGroup(string $name, ?string $queueGroup = null): self
     {
-        return new self(
-            $this->service,
-            $this->prefix . '.' . $name,
-            $queueGroup ?? $this->queueGroup,
-        );
+        return new self($this->service, $this->prefix . '.' . $name, $queueGroup ?? $this->queueGroup);
     }
 
     /**

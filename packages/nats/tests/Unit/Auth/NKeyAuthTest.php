@@ -18,7 +18,7 @@ final class NKeyAuthTest extends TestCase
 
     protected function setUp(): void
     {
-        if (!\function_exists('sodium_crypto_sign_seed_keypair')) {
+        if (! \function_exists('sodium_crypto_sign_seed_keypair')) {
             $this->markTestSkipped('sodium extension required');
         }
     }

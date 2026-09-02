@@ -197,18 +197,18 @@ class Client implements Adapter
      */
     private function transfer(RequestInterface $request, callable $sink): array
     {
-        if (!\extension_loaded('curl')) {
+        if (! \extension_loaded('curl')) {
             throw new AdapterPreconditionException($request, 'The curl extension is required.');
         }
 
         $uri = $request->getUri();
 
-        if (!\in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
+        if (! \in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getHost() === '') {
             throw new InvalidUriException($request, 'Requests must use an absolute URI.');
         }
 
         // Skipped when the caller negotiates encoding themselves.
-        $decompress = !$request->hasHeader(Header::ACCEPT_ENCODING);
+        $decompress = ! $request->hasHeader(Header::ACCEPT_ENCODING);
 
         $headers = '';
         $handle = $this->handle($request);
@@ -231,7 +231,7 @@ class Client implements Adapter
             throw $this->networkException($request, $message === '' ? 'Curl request failed.' : $message, $code);
         }
 
-        if (!preg_match("/\r\n\r\n|\n\n|\r\r/", $headers)) {
+        if (! preg_match("/\r\n\r\n|\n\n|\r\r/", $headers)) {
             throw new ConnectionException($request, 'Connection closed before a complete HTTP response was received.');
         }
 
@@ -264,7 +264,7 @@ class Client implements Adapter
 
         $handle = curl_init();
 
-        if (!$handle instanceof CurlHandle) {
+        if (! $handle instanceof CurlHandle) {
             throw new AdapterInitializationException($request, 'Unable to initialize curl.');
         }
 
@@ -317,7 +317,9 @@ class Client implements Adapter
             }
 
             $options[\CURLOPT_UPLOAD] = true;
-            $options[\CURLOPT_READFUNCTION] = static function (CurlHandle $handle, mixed $resource, int $length) use ($body): string {
+            $options[\CURLOPT_READFUNCTION] = static function (CurlHandle $handle, mixed $resource, int $length) use (
+                $body,
+            ): string {
                 unset($handle, $resource);
 
                 return $body->eof() ? '' : $body->read($length);
@@ -338,7 +340,7 @@ class Client implements Adapter
         // Authoritative over any caller-supplied CURLOPT_FORBID_REUSE /
         // CURLOPT_FOLLOWLOCATION so constructor options cannot silently override
         // the helpers.
-        $merged[\CURLOPT_FORBID_REUSE] = !$this->reuseConnections;
+        $merged[\CURLOPT_FORBID_REUSE] = ! $this->reuseConnections;
         $merged[\CURLOPT_FOLLOWLOCATION] = $this->followRedirects;
 
         if ($this->followRedirects) {
@@ -350,7 +352,7 @@ class Client implements Adapter
 
     private function milliseconds(float $seconds): int
     {
-        if ($seconds < 0.0 || !is_finite($seconds)) {
+        if ($seconds < 0.0 || ! is_finite($seconds)) {
             throw new ValueError('Timeout must be a finite number greater than or equal to zero.');
         }
 
@@ -363,68 +365,88 @@ class Client implements Adapter
             return new TimeoutException($request, $message, $code);
         }
 
-        if (\in_array($code, $this->curlCodes([
-            'CURLE_COULDNT_RESOLVE_HOST',
-            'CURLE_COULDNT_RESOLVE_PROXY',
-        ]), true)) {
+        if (\in_array(
+            $code,
+            $this->curlCodes([
+                'CURLE_COULDNT_RESOLVE_HOST',
+                'CURLE_COULDNT_RESOLVE_PROXY',
+            ]),
+            true,
+        )) {
             return new DnsException($request, $message, $code);
         }
 
-        if (\in_array($code, $this->curlCodes([
-            'CURLE_PROXY',
-            'CURLE_HTTP_PROXYTUNNEL',
-        ]), true)) {
+        if (\in_array(
+            $code,
+            $this->curlCodes([
+                'CURLE_PROXY',
+                'CURLE_HTTP_PROXYTUNNEL',
+            ]),
+            true,
+        )) {
             return new ProxyException($request, $message, $code);
         }
 
-        if (\in_array($code, $this->curlCodes([
-            'CURLE_SSL_CONNECT_ERROR',
-            'CURLE_PEER_FAILED_VERIFICATION',
-            'CURLE_SSL_CACERT',
-            'CURLE_SSL_PEER_CERTIFICATE',
-            'CURLE_SSL_CACERT_BADFILE',
-            'CURLE_SSL_CERTPROBLEM',
-            'CURLE_SSL_CIPHER',
-            'CURLE_SSL_ENGINE_NOTFOUND',
-            'CURLE_SSL_ENGINE_SETFAILED',
-            'CURLE_SSL_ENGINE_INITFAILED',
-            'CURLE_USE_SSL_FAILED',
-            'CURLE_SSL_SHUTDOWN_FAILED',
-            'CURLE_SSL_CRL_BADFILE',
-            'CURLE_SSL_ISSUER_ERROR',
-            'CURLE_SSL_PINNEDPUBKEYNOTMATCH',
-            'CURLE_SSL_INVALIDCERTSTATUS',
-            'CURLE_SSL_CLIENTCERT',
-            'CURLE_ECH_REQUIRED',
-        ]), true)) {
+        if (\in_array(
+            $code,
+            $this->curlCodes([
+                'CURLE_SSL_CONNECT_ERROR',
+                'CURLE_PEER_FAILED_VERIFICATION',
+                'CURLE_SSL_CACERT',
+                'CURLE_SSL_PEER_CERTIFICATE',
+                'CURLE_SSL_CACERT_BADFILE',
+                'CURLE_SSL_CERTPROBLEM',
+                'CURLE_SSL_CIPHER',
+                'CURLE_SSL_ENGINE_NOTFOUND',
+                'CURLE_SSL_ENGINE_SETFAILED',
+                'CURLE_SSL_ENGINE_INITFAILED',
+                'CURLE_USE_SSL_FAILED',
+                'CURLE_SSL_SHUTDOWN_FAILED',
+                'CURLE_SSL_CRL_BADFILE',
+                'CURLE_SSL_ISSUER_ERROR',
+                'CURLE_SSL_PINNEDPUBKEYNOTMATCH',
+                'CURLE_SSL_INVALIDCERTSTATUS',
+                'CURLE_SSL_CLIENTCERT',
+                'CURLE_ECH_REQUIRED',
+            ]),
+            true,
+        )) {
             return new TlsException($request, $message, $code);
         }
 
-        if (\in_array($code, $this->curlCodes([
-            'CURLE_UNSUPPORTED_PROTOCOL',
-            'CURLE_HTTP2',
-            'CURLE_HTTP2_STREAM',
-            'CURLE_HTTP3',
-            'CURLE_QUIC_CONNECT_ERROR',
-            'CURLE_WEIRD_SERVER_REPLY',
-            'CURLE_BAD_CONTENT_ENCODING',
-            'CURLE_CHUNK_FAILED',
-            'CURLE_TOO_MANY_REDIRECTS',
-            'CURLE_PARTIAL_FILE',
-        ]), true)) {
+        if (\in_array(
+            $code,
+            $this->curlCodes([
+                'CURLE_UNSUPPORTED_PROTOCOL',
+                'CURLE_HTTP2',
+                'CURLE_HTTP2_STREAM',
+                'CURLE_HTTP3',
+                'CURLE_QUIC_CONNECT_ERROR',
+                'CURLE_WEIRD_SERVER_REPLY',
+                'CURLE_BAD_CONTENT_ENCODING',
+                'CURLE_CHUNK_FAILED',
+                'CURLE_TOO_MANY_REDIRECTS',
+                'CURLE_PARTIAL_FILE',
+            ]),
+            true,
+        )) {
             return new ProtocolException($request, $message, $code);
         }
 
-        if (\in_array($code, $this->curlCodes([
-            'CURLE_COULDNT_CONNECT',
-            'CURLE_SEND_ERROR',
-            'CURLE_RECV_ERROR',
-            'CURLE_GOT_NOTHING',
-            'CURLE_INTERFACE_FAILED',
-            'CURLE_NO_CONNECTION_AVAILABLE',
-            'CURLE_UNRECOVERABLE_POLL',
-            'CURLE_AGAIN',
-        ]), true)) {
+        if (\in_array(
+            $code,
+            $this->curlCodes([
+                'CURLE_COULDNT_CONNECT',
+                'CURLE_SEND_ERROR',
+                'CURLE_RECV_ERROR',
+                'CURLE_GOT_NOTHING',
+                'CURLE_INTERFACE_FAILED',
+                'CURLE_NO_CONNECTION_AVAILABLE',
+                'CURLE_UNRECOVERABLE_POLL',
+                'CURLE_AGAIN',
+            ]),
+            true,
+        )) {
             return new ConnectionException($request, $message, $code);
         }
 
@@ -466,7 +488,7 @@ class Client implements Adapter
             }
         }
 
-        if (!$request->hasHeader('Host') && $request->getUri()->getHost() !== '') {
+        if (! $request->hasHeader('Host') && $request->getUri()->getHost() !== '') {
             $headers[] = 'Host: ' . $this->host($request);
         }
 
@@ -504,7 +526,7 @@ class Client implements Adapter
             }
         }
 
-        if (!$encoded) {
+        if (! $encoded) {
             return $headers;
         }
 
@@ -534,7 +556,13 @@ class Client implements Adapter
         $status = 0;
         $reason = '';
 
-        if (preg_match('/^HTTP\/(?P<protocol>\d+(?:\.\d+)?)\s+(?P<status>\d{3})(?:\s+(?P<reason>.*))?$/i', $statusLine, $matches) === 1) {
+        if (
+            preg_match(
+                '/^HTTP\/(?P<protocol>\d+(?:\.\d+)?)\s+(?P<status>\d{3})(?:\s+(?P<reason>.*))?$/i',
+                $statusLine,
+                $matches,
+            ) === 1
+        ) {
             $protocol = $matches['protocol'];
             $status = (int) $matches['status'];
             $reason = $matches['reason'] ?? '';
@@ -543,7 +571,7 @@ class Client implements Adapter
         $parsedHeaders = [];
 
         foreach ($lines as $line) {
-            if (!str_contains($line, ':')) {
+            if (! str_contains($line, ':')) {
                 continue;
             }
 

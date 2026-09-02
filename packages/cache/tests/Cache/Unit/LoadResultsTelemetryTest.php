@@ -32,24 +32,32 @@ final class LoadResultsTelemetryTest extends TestCase
         $captured = [];
 
         $cache = new Cache(new Memory());
-        $telemetry = new class ($captured) extends TestTelemetry {
+        $telemetry = new class($captured) extends TestTelemetry {
             /**
              * @param  array<int, array<string, mixed>>  $captured
              */
-            public function __construct(public array &$captured) {}
+            public function __construct(
+                public array &$captured,
+            ) {}
 
-            public function createCounter(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): \Utopia\Telemetry\Counter
-            {
+            public function createCounter(
+                string $name,
+                ?string $unit = null,
+                ?string $description = null,
+                array $advisory = [],
+            ): \Utopia\Telemetry\Counter {
                 if ($name !== 'cache.load.total') {
                     return parent::createCounter($name, $unit, $description, $advisory);
                 }
                 $captured = &$this->captured;
 
-                return $this->counters[$name] = new class ($captured) extends \Utopia\Telemetry\Counter {
+                return $this->counters[$name] = new class($captured) extends \Utopia\Telemetry\Counter {
                     /**
                      * @param  array<int, array<string, mixed>>  $captured
                      */
-                    public function __construct(public array &$captured) {}
+                    public function __construct(
+                        public array &$captured,
+                    ) {}
 
                     public function add(float|int $amount, iterable $attributes = []): void
                     {
@@ -80,24 +88,32 @@ final class LoadResultsTelemetryTest extends TestCase
         };
 
         $cache = new Cache($adapter);
-        $telemetry = new class ($captured) extends TestTelemetry {
+        $telemetry = new class($captured) extends TestTelemetry {
             /**
              * @param  array<int, array<string, mixed>>  $captured
              */
-            public function __construct(public array &$captured) {}
+            public function __construct(
+                public array &$captured,
+            ) {}
 
-            public function createCounter(string $name, ?string $unit = null, ?string $description = null, array $advisory = []): \Utopia\Telemetry\Counter
-            {
+            public function createCounter(
+                string $name,
+                ?string $unit = null,
+                ?string $description = null,
+                array $advisory = [],
+            ): \Utopia\Telemetry\Counter {
                 if ($name !== 'cache.load.total') {
                     return parent::createCounter($name, $unit, $description, $advisory);
                 }
                 $captured = &$this->captured;
 
-                return $this->counters[$name] = new class ($captured) extends \Utopia\Telemetry\Counter {
+                return $this->counters[$name] = new class($captured) extends \Utopia\Telemetry\Counter {
                     /**
                      * @param  array<int, array<string, mixed>>  $captured
                      */
-                    public function __construct(public array &$captured) {}
+                    public function __construct(
+                        public array &$captured,
+                    ) {}
 
                     public function add(float|int $amount, iterable $attributes = []): void
                     {

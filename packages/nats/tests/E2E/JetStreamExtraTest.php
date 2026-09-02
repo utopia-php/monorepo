@@ -52,11 +52,7 @@ final class JetStreamExtraTest extends TestCase
     private function createStream(string $subject): string
     {
         $name = 'JSX_' . uniqid();
-        $this->js->createStream(new StreamConfig(
-            name: $name,
-            subjects: [$subject],
-            storage: StorageType::Memory,
-        ));
+        $this->js->createStream(new StreamConfig(name: $name, subjects: [$subject], storage: StorageType::Memory));
         $this->streams[] = $name;
         return $name;
     }
@@ -140,11 +136,10 @@ final class JetStreamExtraTest extends TestCase
 
         $this->js->publish($subject, 'ack-me');
 
-        $consumer = $this->js->createConsumer($stream, new ConsumerConfig(
-            durableName: 'c_' . $id,
-            ackPolicy: AckPolicy::Explicit,
-            ackWait: 1.0,
-        ));
+        $consumer = $this->js->createConsumer(
+            $stream,
+            new ConsumerConfig(durableName: 'c_' . $id, ackPolicy: AckPolicy::Explicit, ackWait: 1.0),
+        );
 
         $batch = $consumer->fetch(1, 2.0);
         $messages = $batch->getMessages();
@@ -181,11 +176,10 @@ final class JetStreamExtraTest extends TestCase
         $this->assertSame(2, $msg->sequence);
 
         // Create a consumer and consume 2 of 3 without acking.
-        $consumer = $this->js->createConsumer($stream, new ConsumerConfig(
-            durableName: 'm_' . $id,
-            ackPolicy: AckPolicy::Explicit,
-            ackWait: 30.0,
-        ));
+        $consumer = $this->js->createConsumer(
+            $stream,
+            new ConsumerConfig(durableName: 'm_' . $id, ackPolicy: AckPolicy::Explicit, ackWait: 30.0),
+        );
 
         $before = $consumer->info(true);
         $this->assertSame(3, $before->numPending, 'all messages pending before consumption');

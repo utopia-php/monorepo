@@ -71,7 +71,16 @@ final readonly class Part
             return null;
         }
 
-        if (preg_match('/(?:^|;\s*)' . preg_quote($parameter, '/') . '=(?:"(?P<quoted>(?:[^"\\\\]|\\\\.)*)"|(?P<token>[^;\s]+))/', $contentDisposition, $matches, PREG_UNMATCHED_AS_NULL) !== 1) {
+        if (
+            preg_match(
+                '/(?:^|;\s*)'
+                . preg_quote($parameter, '/')
+                . '=(?:"(?P<quoted>(?:[^"\\\\]|\\\\.)*)"|(?P<token>[^;\s]+))/',
+                $contentDisposition,
+                $matches,
+                PREG_UNMATCHED_AS_NULL,
+            ) !== 1
+        ) {
             return null;
         }
 

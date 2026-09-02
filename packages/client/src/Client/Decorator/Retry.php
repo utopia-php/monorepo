@@ -41,7 +41,7 @@ final class Retry extends Decorator
     #[\Override]
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
-        for ($attempt = 1; ; $attempt++) {
+        for ($attempt = 1;; $attempt++) {
             try {
                 $response = $this->adapter->sendRequest($request);
                 $delay = $this->strategy->delay($request, $attempt, $response, null);
@@ -64,7 +64,7 @@ final class Retry extends Decorator
     #[\Override]
     public function stream(RequestInterface $request, callable $sink): ResponseInterface
     {
-        for ($attempt = 1; ; $attempt++) {
+        for ($attempt = 1;; $attempt++) {
             $delivered = 0;
             $countingSink = static function (string $chunk) use ($sink, &$delivered): void {
                 $delivered += \strlen($chunk);

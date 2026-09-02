@@ -47,7 +47,7 @@ class Msg91 extends SMSAdapter
         $metadata = array_intersect_key($metadata, array_flip(array_column(MetadataParameter::cases(), 'value')));
 
         foreach ($metadata as $key => $value) {
-            if (!\is_string($value)) {
+            if (! \is_string($value)) {
                 throw new \InvalidArgumentException("Msg91 {$key} metadata must be a string.");
             }
         }
@@ -55,12 +55,14 @@ class Msg91 extends SMSAdapter
         foreach ([MetadataParameter::CRQID, MetadataParameter::UUID] as $parameter) {
             $key = $parameter->value;
 
-            if (!\array_key_exists($key, $metadata)) {
+            if (! \array_key_exists($key, $metadata)) {
                 continue;
             }
 
-            if (\strlen($metadata[$key]) > 80 || !preg_match('/^[A-Za-z0-9_.-]+$/', $metadata[$key])) {
-                throw new \InvalidArgumentException("Msg91 {$key} metadata must be 80 characters or less and contain only alphanumeric characters, underscores, dots, or hyphens.");
+            if (\strlen($metadata[$key]) > 80 || ! preg_match('/^[A-Za-z0-9_.-]+$/', $metadata[$key])) {
+                throw new \InvalidArgumentException(
+                    "Msg91 {$key} metadata must be 80 characters or less and contain only alphanumeric characters, underscores, dots, or hyphens.",
+                );
             }
         }
 

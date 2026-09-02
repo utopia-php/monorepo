@@ -22,20 +22,14 @@ final class FailureRateWindowTest extends TestCase
 {
     private function failOnce(CircuitBreaker $breaker): mixed
     {
-        return $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: static function (): never {
-                throw new \RuntimeException('failed');
-            },
-        );
+        return $breaker->call(open: static fn(): string => 'fallback', close: static function (): never {
+            throw new \RuntimeException('failed');
+        });
     }
 
     private function succeedOnce(CircuitBreaker $breaker): mixed
     {
-        return $breaker->call(
-            open: static fn(): string => 'fallback',
-            close: static fn(): string => 'ok',
-        );
+        return $breaker->call(open: static fn(): string => 'fallback', close: static fn(): string => 'ok');
     }
 
     /**
@@ -45,12 +39,7 @@ final class FailureRateWindowTest extends TestCase
      */
     public function testABurstAmongHealthyTrafficDoesNotOpenTheCircuit(): void
     {
-        $breaker = new CircuitBreaker(
-            timeout: 30,
-            window: 60,
-            failureRatio: 0.5,
-            minimumThroughput: 20,
-        );
+        $breaker = new CircuitBreaker(timeout: 30, window: 60, failureRatio: 0.5, minimumThroughput: 20);
 
         for ($i = 0; $i < 1000; $i++) {
             $this->succeedOnce($breaker);
@@ -64,12 +53,7 @@ final class FailureRateWindowTest extends TestCase
 
     public function testSustainedFailureStillOpensTheCircuit(): void
     {
-        $breaker = new CircuitBreaker(
-            timeout: 30,
-            window: 60,
-            failureRatio: 0.5,
-            minimumThroughput: 20,
-        );
+        $breaker = new CircuitBreaker(timeout: 30, window: 60, failureRatio: 0.5, minimumThroughput: 20);
 
         for ($i = 0; $i < 20; $i++) {
             $this->failOnce($breaker);
@@ -80,12 +64,7 @@ final class FailureRateWindowTest extends TestCase
 
     public function testTheRatioIsNotTrustedBelowMinimumThroughput(): void
     {
-        $breaker = new CircuitBreaker(
-            timeout: 30,
-            window: 60,
-            failureRatio: 0.5,
-            minimumThroughput: 20,
-        );
+        $breaker = new CircuitBreaker(timeout: 30, window: 60, failureRatio: 0.5, minimumThroughput: 20);
 
         // Every call so far has failed, but nineteen calls is not enough evidence.
         for ($i = 0; $i < 19; $i++) {
@@ -99,12 +78,7 @@ final class FailureRateWindowTest extends TestCase
 
     public function testFailuresOlderThanTheWindowAreForgotten(): void
     {
-        $breaker = new CircuitBreaker(
-            timeout: 30,
-            window: 1,
-            failureRatio: 0.5,
-            minimumThroughput: 4,
-        );
+        $breaker = new CircuitBreaker(timeout: 30, window: 1, failureRatio: 0.5, minimumThroughput: 4);
 
         for ($i = 0; $i < 3; $i++) {
             $this->failOnce($breaker);
@@ -126,12 +100,7 @@ final class FailureRateWindowTest extends TestCase
 
     public function testSuccessesDoNotWipeTheWindow(): void
     {
-        $breaker = new CircuitBreaker(
-            timeout: 30,
-            window: 60,
-            failureRatio: 0.5,
-            minimumThroughput: 10,
-        );
+        $breaker = new CircuitBreaker(timeout: 30, window: 60, failureRatio: 0.5, minimumThroughput: 10);
 
         // Alternating outcomes: a consecutive counter never reaches two, while the
         // real failure rate is 50%.
@@ -246,7 +215,7 @@ final class FailureRateWindowTest extends TestCase
 
             public function increment(string $key, int $by = 1): int
             {
-                $next = ((int) ($this->values[$key] ?? 0)) + $by;
+                $next = (int) ($this->values[$key] ?? 0) + $by;
                 $this->values[$key] = $next;
 
                 return $next;

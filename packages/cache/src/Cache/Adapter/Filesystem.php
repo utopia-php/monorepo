@@ -12,7 +12,10 @@ class Filesystem implements Adapter
     /**
      * Filesystem constructor.
      */
-    public function __construct(protected string $path, protected bool $streaming = false) {}
+    public function __construct(
+        protected string $path,
+        protected bool $streaming = false,
+    ) {}
 
     /**
      * @param  int  $ttl time in seconds
@@ -22,7 +25,7 @@ class Filesystem implements Adapter
     {
         $file = $this->getPath($key);
 
-        if (file_exists($file) && (filemtime($file) + $ttl > time())) { // Cache is valid
+        if (file_exists($file) && (filemtime($file) + $ttl) > time()) { // Cache is valid
             if ($this->streaming) {
                 return fopen($file, 'rb');
             }
@@ -48,11 +51,11 @@ class Filesystem implements Adapter
         $file = $this->getPath($key);
         $dir = \dirname($file);
         try {
-            if (!file_exists($dir) && (!mkdir($dir, 0755, true) && ! file_exists($dir))) {
+            if (! file_exists($dir) && (! mkdir($dir, 0755, true) && ! file_exists($dir))) {
                 throw new Exception("Can't create directory {$dir}");
             }
 
-            return (file_put_contents($file, $data, LOCK_EX)) ? $data : false;
+            return file_put_contents($file, $data, LOCK_EX) ? $data : false;
         } catch (Exception $e) {
             throw new Exception($e->getMessage(), $e->getCode(), $e);
         }

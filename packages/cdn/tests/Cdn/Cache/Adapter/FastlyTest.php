@@ -83,7 +83,6 @@ final class FastlyTest extends TestCase
         $this->assertSame('https://api.fastly.com/service/service-id/purge_all', $client->calls[0]['url']);
     }
 
-
     public function testZonePurgeRequiresServiceId(): void
     {
         $this->expectException(UnsupportedOperation::class);
@@ -111,5 +110,4 @@ final class FastlyTest extends TestCase
 
         $this->assertSame('https://api.fastly.com/purge/example.com/a.png', $client->calls[0]['url']);
     }
-
 }

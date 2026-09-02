@@ -56,7 +56,7 @@ class Prompts
                 throw new InvalidPromptException("Invalid prompt value '{$value}'.");
             }
 
-            if (!\in_array($promptValue, $prompts, true)) {
+            if (! \in_array($promptValue, $prompts, true)) {
                 $prompts[] = $promptValue;
             }
         }

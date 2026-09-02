@@ -65,7 +65,6 @@ class Router
         self::$allowOverride = $value;
     }
 
-
     /**
      * Add route to router.
      *
@@ -78,16 +77,16 @@ class Router
         $method = $methods[0] ?? '';
         $additionalMethods = \array_slice($methods, 1);
 
-        if (!\array_key_exists($method, self::$routes)) {
+        if (! \array_key_exists($method, self::$routes)) {
             throw new Exception("Method ({$method}) not supported.");
         }
 
-        if (\array_key_exists($path, self::$routes[$method]) && !self::$allowOverride) {
+        if (\array_key_exists($path, self::$routes[$method]) && ! self::$allowOverride) {
             throw new Exception("Route for ({$method}:{$path}) already registered.");
         }
 
         foreach ($additionalMethods as $additionalMethod) {
-            if (!\array_key_exists($additionalMethod, self::$routes)) {
+            if (! \array_key_exists($additionalMethod, self::$routes)) {
                 throw new Exception("Method ({$additionalMethod}) not supported.");
             }
 
@@ -95,7 +94,7 @@ class Router
                 throw new Exception('Additional route methods are not supported for the wildcard route.');
             }
 
-            if (\array_key_exists($path, self::$routes[$additionalMethod]) && !self::$allowOverride) {
+            if (\array_key_exists($path, self::$routes[$additionalMethod]) && ! self::$allowOverride) {
                 throw new Exception("Route for ({$additionalMethod}:{$path}) already registered.");
             }
         }
@@ -122,11 +121,11 @@ class Router
         [$alias, $params] = self::preparePath($path);
 
         foreach ($methods as $method) {
-            if (!\array_key_exists($method, self::$routes)) {
+            if (! \array_key_exists($method, self::$routes)) {
                 throw new Exception("Method ({$method}) not supported.");
             }
 
-            if (\array_key_exists($alias, self::$routes[$method]) && !self::$allowOverride) {
+            if (\array_key_exists($alias, self::$routes[$method]) && ! self::$allowOverride) {
                 throw new Exception("Route for ({$method}:{$alias}) already registered.");
             }
         }
@@ -153,7 +152,7 @@ class Router
      */
     public static function match(string $method, string $path): ?RouteMatch
     {
-        if (!\array_key_exists($method, self::$routes)) {
+        if (! \array_key_exists($method, self::$routes)) {
             return self::$wildcard !== null ? new RouteMatch(self::$wildcard, []) : null;
         }
 
@@ -163,13 +162,7 @@ class Router
 
         foreach (self::combinations($filteredParams) as $sample) {
             $sample = array_filter($sample, fn(int $i) => $i <= $length);
-            $template = implode(
-                '/',
-                array_replace(
-                    $parts,
-                    array_fill_keys($sample, self::PLACEHOLDER_TOKEN),
-                ),
-            );
+            $template = implode('/', array_replace($parts, array_fill_keys($sample, self::PLACEHOLDER_TOKEN)));
 
             if (\array_key_exists($template, self::$routes[$method])) {
                 $route = self::$routes[$method][$template];
@@ -244,7 +237,7 @@ class Router
             if (str_starts_with($part, ':')) {
                 $prepare .= self::PLACEHOLDER_TOKEN;
                 $params[ltrim($part, ':')] = $key;
-                if (!\in_array($key, self::$params)) {
+                if (! \in_array($key, self::$params)) {
                     self::$params[] = $key;
                 }
             } else {

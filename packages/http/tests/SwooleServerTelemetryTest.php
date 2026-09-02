@@ -32,7 +32,12 @@ final class SwooleServerTelemetryTest extends TestCase
 
         $registered = array_keys($telemetry->observableGauges);
 
-        foreach (['swoole.connection.count', 'swoole.request.count', 'swoole.worker.count', 'swoole.reactor.threads'] as $serverWide) {
+        foreach ([
+            'swoole.connection.count',
+            'swoole.request.count',
+            'swoole.worker.count',
+            'swoole.reactor.threads',
+        ] as $serverWide) {
             $this->assertNotContains($serverWide, $registered);
         }
 

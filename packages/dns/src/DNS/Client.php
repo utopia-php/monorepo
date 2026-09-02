@@ -18,7 +18,7 @@ class Client
         protected ?\Socket $socket = null,
     ) {
         $validator = new IP(IP::ALL); // IPv4 + IPv6
-        if (!$validator->isValid($server)) {
+        if (! $validator->isValid($server)) {
             throw new Exception('Server must be an IP address.');
         }
 
@@ -45,7 +45,7 @@ class Client
             return $this->queryTcp($message);
         }
 
-        if (!$this->socket instanceof \Socket) {
+        if (! $this->socket instanceof \Socket) {
             throw new Exception('UDP socket not initialized.');
         }
 
@@ -66,7 +66,7 @@ class Client
             throw new Exception("Failed to receive data from $this->server: $errorMessage (Error code: $error)");
         }
 
-        if (empty($data) || !\is_string($data)) {
+        if (empty($data) || ! \is_string($data)) {
             throw new Exception("Empty response received from $this->server:$this->port");
         }
 
@@ -107,7 +107,9 @@ class Client
             }
 
             $unpacked = unpack('nlen', $lengthBytes);
-            $length = (\is_array($unpacked) && isset($unpacked['len']) && \is_int($unpacked['len'])) ? $unpacked['len'] : 0;
+            $length = \is_array($unpacked) && isset($unpacked['len']) && \is_int($unpacked['len'])
+                ? $unpacked['len']
+                : 0;
 
             if ($length === 0) {
                 throw new Exception('Received empty DNS TCP response.');
@@ -130,7 +132,9 @@ class Client
         $response = Message::decode($payload);
 
         if ($response->header->id !== $query->header->id) {
-            throw new Exception("Mismatched DNS transaction ID. Expected {$query->header->id}, got {$response->header->id}");
+            throw new Exception(
+                "Mismatched DNS transaction ID. Expected {$query->header->id}, got {$response->header->id}",
+            );
         }
 
         return $response;
@@ -138,7 +142,7 @@ class Client
 
     protected function readBytes(mixed $socket, int $length): string
     {
-        if (!\is_resource($socket)) {
+        if (! \is_resource($socket)) {
             return '';
         }
 
@@ -160,7 +164,7 @@ class Client
             if ($chunk === '') {
                 $meta = stream_get_meta_data($socket);
 
-                if (!empty($meta['timed_out']) || !empty($meta['eof'])) {
+                if (! empty($meta['timed_out']) || ! empty($meta['eof'])) {
                     break;
                 }
 

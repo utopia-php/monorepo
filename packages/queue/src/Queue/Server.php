@@ -115,8 +115,9 @@ class Server
     /**
      * Creates an instance of a Queue server.
      */
-    public function __construct(protected Adapter $adapter)
-    {
+    public function __construct(
+        protected Adapter $adapter,
+    ) {
         $this->job = new Job();
         $this->setTelemetry(new NoTelemetry());
     }
@@ -197,20 +198,14 @@ class Server
 
     public function setTelemetry(Telemetry $telemetry): void
     {
-        $this->jobWaitTime = $telemetry->createHistogram(
-            'messaging.process.wait.duration',
-            's',
-            null,
-            ['ExplicitBucketBoundaries' => self::DURATION_BUCKETS],
-        );
+        $this->jobWaitTime = $telemetry->createHistogram('messaging.process.wait.duration', 's', null, [
+            'ExplicitBucketBoundaries' => self::DURATION_BUCKETS,
+        ]);
 
         // https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/#metric-messagingprocessduration
-        $this->processDuration = $telemetry->createHistogram(
-            'messaging.process.duration',
-            's',
-            null,
-            ['ExplicitBucketBoundaries' => self::DURATION_BUCKETS],
-        );
+        $this->processDuration = $telemetry->createHistogram('messaging.process.duration', 's', null, [
+            'ExplicitBucketBoundaries' => self::DURATION_BUCKETS,
+        ]);
 
         $this->createDepthGauge(
             $telemetry,
@@ -227,16 +222,12 @@ class Server
         );
     }
 
-    private function createDepthGauge(
-        Telemetry $telemetry,
-        string $name,
-        string $description,
-        bool $failedJobs,
-    ): void {
+    private function createDepthGauge(Telemetry $telemetry, string $name, string $description, bool $failedJobs): void
+    {
         $gauge = $telemetry->createObservableGauge($name, '{message}', $description);
 
         $gauge->observe(function (callable $observe) use ($failedJobs): void {
-            if (!$this->adapter->consumer instanceof Publisher) {
+            if (! $this->adapter->consumer instanceof Publisher) {
                 return;
             }
 
@@ -323,10 +314,7 @@ class Server
                         // re-attributes the process's whole lifetime sum to
                         // one interval — one -20ms sample paged a two-hour
                         // queue wait on a queue that was empty throughout.
-                        $waitDuration = max(
-                            0.0,
-                            microtime(true) - $message->getTimestamp(),
-                        );
+                        $waitDuration = max(0.0, microtime(true) - $message->getTimestamp());
                         $this->jobWaitTime->record($waitDuration);
 
                         $this->context()->set('message', fn(): \Utopia\Queue\Message => $message);
@@ -334,11 +322,7 @@ class Server
                         if ($job->getHook()) {
                             foreach ($this->initHooks as $hook) {
                                 if (\in_array('*', $hook->getGroups())) {
-                                    $arguments = $this->getArguments(
-                                        $this->context(),
-                                        $hook,
-                                        $message->getPayload(),
-                                    );
+                                    $arguments = $this->getArguments($this->context(), $hook, $message->getPayload());
                                     $hook->getAction()(...$arguments);
                                 }
                             }
@@ -347,24 +331,17 @@ class Server
                         foreach ($job->getGroups() as $group) {
                             foreach ($this->initHooks as $hook) {
                                 if (\in_array($group, $hook->getGroups())) {
-                                    $arguments = $this->getArguments(
-                                        $this->context(),
-                                        $hook,
-                                        $message->getPayload(),
-                                    );
+                                    $arguments = $this->getArguments($this->context(), $hook, $message->getPayload());
                                     $hook->getAction()(...$arguments);
                                 }
                             }
                         }
 
-                        return \call_user_func_array(
-                            $job->getAction(),
-                            $this->getArguments(
-                                $this->context(),
-                                $job,
-                                $message->getPayload(),
-                            ),
-                        );
+                        return \call_user_func_array($job->getAction(), $this->getArguments(
+                            $this->context(),
+                            $job,
+                            $message->getPayload(),
+                        ));
                     } finally {
                         $this->processDuration->record(microtime(true) - $receivedAtTimestamp);
                     }
@@ -377,11 +354,7 @@ class Server
                     if ($job->getHook()) {
                         foreach ($this->shutdownHooks as $hook) {
                             if (\in_array('*', $hook->getGroups())) {
-                                $arguments = $this->getArguments(
-                                    $this->context(),
-                                    $hook,
-                                    $message->getPayload(),
-                                );
+                                $arguments = $this->getArguments($this->context(), $hook, $message->getPayload());
                                 $hook->getAction()(...$arguments);
                             }
                         }
@@ -390,11 +363,7 @@ class Server
                     foreach ($job->getGroups() as $group) {
                         foreach ($this->shutdownHooks as $hook) {
                             if (\in_array($group, $hook->getGroups())) {
-                                $arguments = $this->getArguments(
-                                    $this->context(),
-                                    $hook,
-                                    $message->getPayload(),
-                                );
+                                $arguments = $this->getArguments($this->context(), $hook, $message->getPayload());
                                 $hook->getAction()(...$arguments);
                             }
                         }
@@ -420,11 +389,7 @@ class Server
 
                 // Concurrent receive loops must not share a Redis/NATS receive
                 // connection — protocol responses and acks would miscorrelate.
-                if (
-                    \count($this->jobs) > 1
-                    && !\is_callable($this->consumer)
-                    && $this->adapter->sharesConsumer()
-                ) {
+                if (\count($this->jobs) > 1 && ! \is_callable($this->consumer) && $this->adapter->sharesConsumer()) {
                     throw new Exception(
                         'Multi-queue workers must pass a callable factory to the Adapter constructor (or Server::consumer()) — a shared Consumer cannot be used across concurrent receive loops',
                     );
@@ -518,7 +483,7 @@ class Server
         $arguments = [];
         foreach ($hook->getParams() as $key => $param) {
             $payloadKey = $key;
-            if (!\array_key_exists($key, $payload) && !empty($param['aliases'])) {
+            if (! \array_key_exists($key, $payload) && ! empty($param['aliases'])) {
                 foreach ($param['aliases'] as $alias) {
                     if (\array_key_exists($alias, $payload)) {
                         $payloadKey = $alias;
@@ -529,8 +494,7 @@ class Server
 
             // Get value from route or request object
             $value = $payload[$payloadKey] ?? $param['default'];
-            $value
-                = $value === '' || $value === null ? $param['default'] : $value;
+            $value = $value === '' || $value === null ? $param['default'] : $value;
 
             $this->validate($key, $param, $value, $context);
             $hook->setParamValue($key, $value);
@@ -538,9 +502,7 @@ class Server
         }
 
         foreach ($hook->getInjections() as $injection) {
-            $arguments[$injection['order']] = $context->get(
-                $injection['name'],
-            );
+            $arguments[$injection['order']] = $context->get($injection['name']);
         }
 
         // call_user_func_array passes integer keys in iteration order, not key
@@ -570,21 +532,15 @@ class Server
                 $validator = $context->get($validatorKey);
             }
 
-            if (!$validator instanceof Validator) {
+            if (! $validator instanceof Validator) {
                 // is the validator object an instance of the Validator class
-                throw new Exception(
-                    'Validator object is not an instance of the Validator class',
-                    500,
-                );
+                throw new Exception('Validator object is not an instance of the Validator class', 500);
             }
 
-            if (!$validator->isValid($value)) {
-                throw new Exception(
-                    'Invalid ' . $key . ': ' . $validator->getDescription(),
-                    400,
-                );
+            if (! $validator->isValid($value)) {
+                throw new Exception('Invalid ' . $key . ': ' . $validator->getDescription(), 400);
             }
-        } elseif (!$param['optional']) {
+        } elseif (! $param['optional']) {
             throw new Exception("Param $key is not optional.", 400);
         }
     }

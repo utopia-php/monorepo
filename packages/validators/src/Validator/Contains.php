@@ -22,8 +22,10 @@ class Contains extends Validator
      *
      * @param  bool  $strict enable case-sensitive matching
      */
-    public function __construct(array $patterns, protected bool $strict = false)
-    {
+    public function __construct(
+        array $patterns,
+        protected bool $strict = false,
+    ) {
         if ($patterns === []) {
             throw new \InvalidArgumentException('Patterns array cannot be empty');
         }
@@ -58,11 +60,11 @@ class Contains extends Validator
      */
     public function isValid($value): bool
     {
-        if (!\is_string($value)) {
+        if (! \is_string($value)) {
             return false;
         }
 
-        if (!$this->strict) {
+        if (! $this->strict) {
             $value = mb_strtolower($value, 'UTF-8');
         }
 

@@ -79,7 +79,7 @@ class Email implements Message
             return ['email' => $value];
         }
 
-        if (!isset($value['email']) || $value['email'] === '') {
+        if (! isset($value['email']) || $value['email'] === '') {
             throw new \InvalidArgumentException('Each recipient must have a non-empty "email" key.');
         }
 

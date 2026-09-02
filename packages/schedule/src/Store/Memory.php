@@ -25,7 +25,7 @@ final class Memory implements Store
     #[\Override]
     public function swap(?string $expected, Claim $next): bool
     {
-        if (($this->claim?->token) !== $expected) {
+        if ($this->claim?->token !== $expected) {
             return false;
         }
 

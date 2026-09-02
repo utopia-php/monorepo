@@ -39,11 +39,15 @@ final readonly class Fastly
      */
     public function purge(string $surrogateKey): void
     {
-        $url = rtrim($this->endpoint, '/')
-            . '/' . rawurlencode($this->serviceId)
-            . '/purge/' . rawurlencode($surrogateKey);
+        $url =
+            rtrim($this->endpoint, '/')
+            . '/'
+            . rawurlencode($this->serviceId)
+            . '/purge/'
+            . rawurlencode($surrogateKey);
 
-        $request = $this->requests->createRequest(Method::POST, $url)
+        $request = $this->requests
+            ->createRequest(Method::POST, $url)
             ->withHeader($this->tokenHeader, $this->token)
             ->withHeader('Accept', 'application/json');
 

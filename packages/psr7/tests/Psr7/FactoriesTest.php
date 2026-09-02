@@ -28,7 +28,8 @@ final class FactoriesTest extends TestCase
         $this->assertInstanceOf(ResponseFactoryInterface::class, $responseFactory);
         $this->assertInstanceOf(StreamFactoryInterface::class, $streamFactory);
 
-        $request = $requestFactory->createRequest('post', 'https://example.com/users?active=1')
+        $request = $requestFactory
+            ->createRequest('post', 'https://example.com/users?active=1')
             ->withHeader('Accept', ['application/json', 'text/plain'])
             ->withBody($streamFactory->createStream('body'));
 
@@ -37,7 +38,8 @@ final class FactoriesTest extends TestCase
         $this->assertSame('application/json, text/plain', $request->getHeaderLine('Accept'));
         $this->assertSame('body', (string) $request->getBody());
 
-        $response = $responseFactory->createResponse(201, 'Created')
+        $response = $responseFactory
+            ->createResponse(201, 'Created')
             ->withHeader('Content-Type', 'application/json')
             ->withBody($streamFactory->createStream('{}'));
 

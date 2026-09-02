@@ -35,11 +35,20 @@ final class CompressionTest extends TestCase
 
         // Supported
         $this->assertEquals(new GZIP(), Compression::fromAcceptEncoding('gzip;q=0.5, br;q=0.5', [Compression::GZIP]));
-        $this->assertEquals(new Snappy(), Compression::fromAcceptEncoding('snappy;q=0.6, br;q=0.4', [Compression::SNAPPY]));
+        $this->assertEquals(
+            new Snappy(),
+            Compression::fromAcceptEncoding('snappy;q=0.6, br;q=0.4', [Compression::SNAPPY]),
+        );
 
         // First in priority
-        $this->assertEquals(new Gzip(), Compression::fromAcceptEncoding('gzip;q=0.5, br;q=0.5', [Compression::BROTLI, Compression::GZIP]));
-        $this->assertEquals(new Snappy(), Compression::fromAcceptEncoding('snappy;q=0.6, br;q=0.4', [Compression::SNAPPY, Compression::BROTLI]));
+        $this->assertEquals(
+            new Gzip(),
+            Compression::fromAcceptEncoding('gzip;q=0.5, br;q=0.5', [Compression::BROTLI, Compression::GZIP]),
+        );
+        $this->assertEquals(
+            new Snappy(),
+            Compression::fromAcceptEncoding('snappy;q=0.6, br;q=0.4', [Compression::SNAPPY, Compression::BROTLI]),
+        );
 
         // Not supported
         $this->assertEquals(null, Compression::fromAcceptEncoding('gzip;q=0.5, br;q=0.5', [Compression::SNAPPY]));

@@ -59,26 +59,17 @@ final class SMTPHostsTest extends TestCase
     {
         // Splitting on the last colon would read this as the host ":" on port
         // 1, which is what PHPMailer's own pattern does.
-        $this->assertSame(
-            [['::1', 25, Encryption::None]],
-            $this->hosts(new SMTP(host: '::1')),
-        );
+        $this->assertSame([['::1', 25, Encryption::None]], $this->hosts(new SMTP(host: '::1')));
     }
 
     public function testABracketedAddressLiteralMayCarryAPort(): void
     {
-        $this->assertSame(
-            [['[::1]', 587, Encryption::None]],
-            $this->hosts(new SMTP(host: '[::1]:587')),
-        );
+        $this->assertSame([['[::1]', 587, Encryption::None]], $this->hosts(new SMTP(host: '[::1]:587')));
     }
 
     public function testABracketedAddressLiteralWithoutAPort(): void
     {
-        $this->assertSame(
-            [['[::1]', 25, Encryption::None]],
-            $this->hosts(new SMTP(host: '[::1]')),
-        );
+        $this->assertSame([['[::1]', 25, Encryption::None]], $this->hosts(new SMTP(host: '[::1]')));
     }
 
     public function testEmptyEntriesAreSkipped(): void

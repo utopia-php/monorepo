@@ -115,7 +115,10 @@ abstract class SQL extends Adapter
      */
     public function getAttributeDocuments(): array
     {
-        return array_map(static fn(array $attribute): \Utopia\Database\Document => new Document($attribute), $this->getAttributes());
+        return array_map(
+            static fn(array $attribute): \Utopia\Database\Document => new Document($attribute),
+            $this->getAttributes(),
+        );
     }
 
     /**
@@ -161,7 +164,10 @@ abstract class SQL extends Adapter
      */
     public function getIndexDocuments(): array
     {
-        return array_map(static fn(array $index): \Utopia\Database\Document => new Document($index), $this->getIndexes());
+        return array_map(
+            static fn(array $index): \Utopia\Database\Document => new Document($index),
+            $this->getIndexes(),
+        );
     }
 
     /**
@@ -227,7 +233,7 @@ abstract class SQL extends Adapter
         $resourceType = '';
         $resourceParent = '';
 
-        if ($count >= 2 && $count % 2 === 0) {
+        if ($count >= 2 && ($count % 2) === 0) {
             $resourceId = $parts[$count - 1];
             $resourceType = $parts[$count - 2];
 

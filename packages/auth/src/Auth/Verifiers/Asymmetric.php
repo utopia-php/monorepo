@@ -86,7 +86,7 @@ class Asymmetric extends Verifier
         }
 
         $details = openssl_pkey_get_details($publicKey);
-        if ($details === false || !isset($details['rsa']['n'])) {
+        if ($details === false || ! isset($details['rsa']['n'])) {
             throw new VerificationException('Public key is not an RSA key');
         }
 

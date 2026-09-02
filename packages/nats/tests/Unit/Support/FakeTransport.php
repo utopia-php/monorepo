@@ -26,7 +26,9 @@ final class FakeTransport implements Transport
     private bool $connected = false;
 
     /** @param array<string, mixed> $info Fields merged into the served INFO. */
-    public function __construct(private readonly array $info = []) {}
+    public function __construct(
+        private readonly array $info = [],
+    ) {}
 
     public function connect(string $host, int $port, float $timeout): void
     {
@@ -102,7 +104,7 @@ final class FakeTransport implements Transport
      */
     public function connectPayload(): array
     {
-        if (!preg_match('/CONNECT (\{.*?\})\r\n/', $this->written, $m)) {
+        if (! preg_match('/CONNECT (\{.*?\})\r\n/', $this->written, $m)) {
             throw new ConnectionException('No CONNECT sent');
         }
 

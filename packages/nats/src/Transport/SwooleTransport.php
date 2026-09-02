@@ -37,8 +37,10 @@ final class SwooleTransport implements Transport
         $client = new Client($flags);
         $client->set($this->buildSettings($timeout));
 
-        if (!$client->connect($host, $port, $timeout)) {
-            throw new ConnectionException("Failed to connect to {$host}:{$port}: [{$client->errCode}] {$client->errMsg}");
+        if (! $client->connect($host, $port, $timeout)) {
+            throw new ConnectionException(
+                "Failed to connect to {$host}:{$port}: [{$client->errCode}] {$client->errMsg}",
+            );
         }
 
         $this->client = $client;
@@ -98,7 +100,7 @@ final class SwooleTransport implements Transport
         $client = $this->ensureConnected();
         $client->set($this->buildTlsSettings($options));
 
-        if (!$client->enableSSL()) {
+        if (! $client->enableSSL()) {
             throw new ConnectionException('Failed to upgrade connection to TLS');
         }
     }
@@ -138,7 +140,7 @@ final class SwooleTransport implements Transport
 
     private function ensureConnected(): Client
     {
-        if (!$this->client instanceof \Swoole\Coroutine\Client) {
+        if (! $this->client instanceof \Swoole\Coroutine\Client) {
             throw new ConnectionException('Not connected');
         }
 
@@ -165,16 +167,16 @@ final class SwooleTransport implements Transport
     {
         $settings = [];
 
-        if (!empty($options['cafile'])) {
+        if (! empty($options['cafile'])) {
             $settings['ssl_cafile'] = $options['cafile'];
         }
-        if (!empty($options['local_cert'])) {
+        if (! empty($options['local_cert'])) {
             $settings['ssl_cert_file'] = $options['local_cert'];
         }
-        if (!empty($options['local_pk'])) {
+        if (! empty($options['local_pk'])) {
             $settings['ssl_key_file'] = $options['local_pk'];
         }
-        if (!empty($options['peer_name'])) {
+        if (! empty($options['peer_name'])) {
             $settings['ssl_host_name'] = $options['peer_name'];
         }
         $settings['ssl_verify_peer'] = $options['verify_peer'] ?? true;

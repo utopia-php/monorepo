@@ -45,12 +45,7 @@ final class ResendRoutingTest extends TestCase
             content: 'Body',
             fromName: 'Sender',
             fromEmail: 'from@example.com',
-            attachments: [new Attachment(
-                name: 'note.txt',
-                path: '',
-                type: 'text/plain',
-                content: 'hello',
-            )],
+            attachments: [new Attachment(name: 'note.txt', path: '', type: 'text/plain', content: 'hello')],
         );
 
         $response = $stub->send($message);
@@ -81,12 +76,7 @@ final class ResendRoutingTest extends TestCase
             content: 'Body',
             fromName: 'Sender',
             fromEmail: 'from@example.com',
-            attachments: [new Attachment(
-                name: 'note.txt',
-                path: '',
-                type: 'text/plain',
-                content: 'hello',
-            )],
+            attachments: [new Attachment(name: 'note.txt', path: '', type: 'text/plain', content: 'hello')],
         );
 
         $response = $stub->send($message);
@@ -114,7 +104,7 @@ final class ResendRoutingTest extends TestCase
                 name: 'large.bin',
                 path: '',
                 type: 'application/octet-stream',
-                content: str_repeat('x', 40 * 1024 * 1024 + 1),
+                content: str_repeat('x', (40 * 1024 * 1024) + 1),
             )],
         );
 

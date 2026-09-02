@@ -117,19 +117,10 @@ final class YAMLTest extends TestCase
 
         $this->assertArrayHasKey('user', $data['nested_object']);
         $this->assertArrayHasKey('profile', $data['nested_object']['user']);
-        $this->assertArrayHasKey(
-            'settings',
-            $data['nested_object']['user']['profile'],
-        );
+        $this->assertArrayHasKey('settings', $data['nested_object']['user']['profile']);
 
-        $this->assertSame(
-            'Jane',
-            $data['nested_object']['user']['profile']['name'],
-        );
-        $this->assertSame(
-            'dark',
-            $data['nested_object']['user']['profile']['settings']['theme'],
-        );
+        $this->assertSame('Jane', $data['nested_object']['user']['profile']['name']);
+        $this->assertSame('dark', $data['nested_object']['user']['profile']['settings']['theme']);
 
         $this->assertIsArray($data['empty_object']);
         $this->assertCount(0, $data['empty_object']);

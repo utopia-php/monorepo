@@ -12,6 +12,7 @@ class Discord extends Adapter
     protected const NAME = 'Discord';
     protected const TYPE = 'chat';
     protected const MESSAGE_TYPE = DiscordMessage::class;
+
     protected string $webhookId = '';
 
     /**
@@ -23,18 +24,18 @@ class Discord extends Adapter
     ) {
         parent::__construct();
         // Validate URL format
-        if (!filter_var($webhookURL, FILTER_VALIDATE_URL)) {
+        if (! filter_var($webhookURL, FILTER_VALIDATE_URL)) {
             throw new InvalidArgumentException('Invalid Discord webhook URL format.');
         }
 
         // Validate URL uses https scheme
         $urlParts = parse_url($webhookURL);
-        if (!isset($urlParts['scheme']) || $urlParts['scheme'] !== 'https') {
+        if (! isset($urlParts['scheme']) || $urlParts['scheme'] !== 'https') {
             throw new InvalidArgumentException('Discord webhook URL must use HTTPS scheme.');
         }
 
         // Validate host is discord.com
-        if (!isset($urlParts['host']) || $urlParts['host'] !== 'discord.com') {
+        if (! isset($urlParts['host']) || $urlParts['host'] !== 'discord.com') {
             throw new InvalidArgumentException('Discord webhook URL must use discord.com as host.');
         }
 
@@ -78,10 +79,10 @@ class Discord extends Adapter
     {
         $query = [];
 
-        if (!\is_null($message->getWait())) {
+        if (! \is_null($message->getWait())) {
             $query['wait'] = $message->getWait();
         }
-        if (!\is_null($message->getThreadId())) {
+        if (! \is_null($message->getThreadId())) {
             $query['thread_id'] = $message->getThreadId();
         }
 

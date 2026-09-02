@@ -102,11 +102,10 @@ class Image
     public function crop(int $width, int $height, string $gravity = Image::GRAVITY_CENTER): self
     {
         // if no changes to Gravity, Width or Height, don't process image
-        if ($gravity === Image::GRAVITY_CENTER
-            && (
-                ($width !== 0 && $height !== 0)
-                && ($width === $this->width && $height === $this->height)
-            )) {
+        if (
+            $gravity === Image::GRAVITY_CENTER
+            && ($width !== 0 && $height !== 0 && ($width === $this->width && $height === $this->height))
+        ) {
             return $this;
         }
 
@@ -235,12 +234,19 @@ class Image
         $mask = new Imagick();
         $mask->newImage($this->width, $this->height, new ImagickPixel('transparent'), 'png');
 
-        $rectwidth = ($this->borderWidth > 0 ? ($this->width - ($this->borderWidth + 1)) : $this->width - 1);
-        $rectheight = ($this->borderWidth > 0 ? ($this->height - ($this->borderWidth + 1)) : $this->height - 1);
+        $rectwidth = $this->borderWidth > 0 ? $this->width - ($this->borderWidth + 1) : $this->width - 1;
+        $rectheight = $this->borderWidth > 0 ? $this->height - ($this->borderWidth + 1) : $this->height - 1;
 
         $shape = new ImagickDraw();
         $shape->setFillColor(new ImagickPixel('black'));
-        $shape->roundRectangle($this->borderWidth, $this->borderWidth, $rectwidth, $rectheight, $cornerRadius, $cornerRadius);
+        $shape->roundRectangle(
+            $this->borderWidth,
+            $this->borderWidth,
+            $rectwidth,
+            $rectheight,
+            $cornerRadius,
+            $cornerRadius,
+        );
 
         $mask->drawImage($shape);
         $this->image->compositeImage($mask, Imagick::COMPOSITE_DSTIN, 0, 0);
@@ -256,7 +262,14 @@ class Image
             $shape2->setFillColor(new ImagickPixel('transparent'));
             $shape2->setStrokeWidth($this->borderWidth);
             $shape2->setStrokeColor($bc);
-            $shape2->roundRectangle($this->borderWidth, $this->borderWidth, $rectwidth, $rectheight, $cornerRadius, $cornerRadius);
+            $shape2->roundRectangle(
+                $this->borderWidth,
+                $this->borderWidth,
+                $rectwidth,
+                $rectheight,
+                $cornerRadius,
+                $cornerRadius,
+            );
 
             $strokeCanvas->drawImage($shape2);
             $strokeCanvas->compositeImage($this->image, Imagick::COMPOSITE_DEFAULT, 0, 0);
@@ -337,7 +350,7 @@ class Image
     public function save(?string $path = null, string $type = '', int $quality = 75): ?string
     {
         // Create directory with write permissions
-        if ($path !== null && !file_exists(\dirname($path)) && ! @mkdir(\dirname($path), 0755, true)) {
+        if ($path !== null && ! file_exists(\dirname($path)) && ! @mkdir(\dirname($path), 0755, true)) {
             throw new Exception('Can\'t create directory ' . \dirname($path));
         }
 

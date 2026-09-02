@@ -74,7 +74,7 @@ final class FileTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('bad magic header');
 
-        (new File('not a binlog'))->open();
+        new File('not a binlog')->open();
     }
 
     public function testTruncatedEventBodyThrows(): void
@@ -121,10 +121,12 @@ final class FileTest extends TestCase
         // event() helper then appends the 4-byte CRC trailer after it.
         $fde = str_repeat("\x00", 50) . \chr(1);
 
-        return $this->MAGIC()
+        return (
+            $this->MAGIC()
             . $this->event(Constants::FORMAT_DESCRIPTION_EVENT, $fde)
             . $this->transaction(5, 100, 'proj123')
-            . $this->transaction(6, 101, 'proj456');
+            . $this->transaction(6, 101, 'proj456')
+        );
     }
 
     /**
@@ -132,14 +134,17 @@ final class FileTest extends TestCase
      */
     private function transaction(int $gno, int $id, string $uid): string
     {
-        $gtid = "\x00"                              // commit flag
-            . hex2bin(self::SID_HEX)                // source UUID (16 bytes)
-            . pack('P', $gno);                      // transaction number (gno)
+        $gtid =
+            "\x00" // commit flag
+            . hex2bin(self::SID_HEX) // source UUID (16 bytes)
+            . pack('P', $gno); // transaction number (gno)
 
-        return $this->event(Constants::GTID_EVENT, $gtid)
+        return (
+            $this->event(Constants::GTID_EVENT, $gtid)
             . $this->event(Constants::TABLE_MAP_EVENT, $this->tableMapBody())
             . $this->event(Constants::WRITE_ROWS_EVENT_V2, $this->rowsHeader() . $this->cell($id, $uid))
-            . $this->event(Constants::XID_EVENT, pack('P', 1));
+            . $this->event(Constants::XID_EVENT, pack('P', 1))
+        );
     }
 
     private function MAGIC(): string
@@ -155,12 +160,13 @@ final class FileTest extends TestCase
     {
         $eventSize = Constants::EVENT_HEADER_SIZE + \strlen($body) + 4;
 
-        $header = "\x00\x00\x00\x00"      // timestamp
-            . \chr($type)                 // event type
-            . "\x00\x00\x00\x00"          // server id
-            . pack('V', $eventSize)       // event size (header + body + CRC)
-            . "\x00\x00\x00\x00"          // log position
-            . "\x00\x00";                 // flags
+        $header =
+            "\x00\x00\x00\x00" // timestamp
+            . \chr($type) // event type
+            . "\x00\x00\x00\x00" // server id
+            . pack('V', $eventSize) // event size (header + body + CRC)
+            . "\x00\x00\x00\x00" // log position
+            . "\x00\x00"; // flags
 
         return $header . $body . "\xDE\xAD\xBE\xEF"; // dummy CRC; the decoder strips, doesn't verify
     }
@@ -171,12 +177,18 @@ final class FileTest extends TestCase
      */
     private function tableMapBody(): string
     {
-        $body = $this->uint(self::TABLE_ID, 6)
+        $body =
+            $this->uint(self::TABLE_ID, 6)
             . "\x00\x00"
-            . \chr(\strlen(self::SCHEMA)) . self::SCHEMA . "\x00"
-            . \chr(\strlen(self::TABLE)) . self::TABLE . "\x00"
+            . \chr(\strlen(self::SCHEMA))
+            . self::SCHEMA
+            . "\x00"
+            . \chr(\strlen(self::TABLE))
+            . self::TABLE
+            . "\x00"
             . \chr(2)
-            . \chr(Constants::TYPE_LONGLONG) . \chr(Constants::TYPE_VAR_STRING);
+            . \chr(Constants::TYPE_LONGLONG)
+            . \chr(Constants::TYPE_VAR_STRING);
 
         $metadata = pack('v', 1020);
         $body .= pack('C', \strlen($metadata)) . $metadata;
@@ -190,11 +202,13 @@ final class FileTest extends TestCase
 
     private function rowsHeader(): string
     {
-        return $this->uint(self::TABLE_ID, 6)
-            . "\x00\x00"   // flags
-            . "\x02\x00"   // v2 extra-data length = 2 (none)
-            . \chr(2)      // column count
-            . \chr(0b11);  // both columns present
+        return (
+            $this->uint(self::TABLE_ID, 6)
+            . "\x00\x00" // flags
+            . "\x02\x00" // v2 extra-data length = 2 (none)
+            . \chr(2) // column count
+            . \chr(0b11) // both columns present
+        );
     }
 
     private function cell(int $id, string $uid): string
@@ -230,15 +244,15 @@ final class FileTest extends TestCase
         $source->open();
 
         $this->assertSame('', $source->position()); // a file carries no resume token
-        $source->close();                            // the caller owns any stream; nothing to release
-        $source->close();                            // idempotent
+        $source->close(); // the caller owns any stream; nothing to release
+        $source->close(); // idempotent
     }
 
     public function testIgnoresATrailingRotateEvent(): void
     {
         // Real binlog files end with a ROTATE pointing at the next file.
-        $binlog = $this->insertBinlog(checksum: true)
-            . $this->binlogEvent(Constants::ROTATE_EVENT, str_repeat("\x00", 30));
+        $binlog =
+            $this->insertBinlog(checksum: true) . $this->binlogEvent(Constants::ROTATE_EVENT, str_repeat("\x00", 30));
 
         $changes = $this->drain(new File($binlog));
 
@@ -253,10 +267,20 @@ final class FileTest extends TestCase
         $columns = [['type' => Constants::TYPE_BLOB, 'meta' => \chr(3), 'name' => 'data']];
         $value = $this->le(\strlen($payload), 3) . $payload; // 3-byte length prefix
 
-        $binlog = $this->binlogMagic()
+        $binlog =
+            $this->binlogMagic()
             . $this->binlogEvent(Constants::FORMAT_DESCRIPTION_EVENT, str_repeat("\x00", 50) . \chr(1))
-            . $this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $columns))
-            . $this->binlogEvent(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(self::TABLE_ID, 1, $this->binlogRow(1, $value)));
+            . $this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(
+                self::TABLE_ID,
+                self::SCHEMA,
+                self::TABLE,
+                $columns,
+            ))
+            . $this->binlogEvent(Constants::WRITE_ROWS_EVENT_V2, $this->binlogRowsV2(
+                self::TABLE_ID,
+                1,
+                $this->binlogRow(1, $value),
+            ));
 
         $chunks = (function () use ($binlog): \Generator {
             foreach (str_split($binlog, 64) as $chunk) {
@@ -275,8 +299,13 @@ final class FileTest extends TestCase
         // An event header whose event_size field claims 4 — smaller than the
         // 19-byte header itself. A corrupt archive must fail loudly, not frame
         // the malformed header as a valid (empty-body) event.
-        $header = "\x00\x00\x00\x00" . \chr(Constants::FORMAT_DESCRIPTION_EVENT) . "\x00\x00\x00\x00"
-            . pack('V', 4) . "\x00\x00\x00\x00" . "\x00\x00";
+        $header =
+            "\x00\x00\x00\x00"
+            . \chr(Constants::FORMAT_DESCRIPTION_EVENT)
+            . "\x00\x00\x00\x00"
+            . pack('V', 4)
+            . "\x00\x00\x00\x00"
+            . "\x00\x00";
 
         $source = new File($this->binlogMagic() . $header);
 
@@ -311,9 +340,15 @@ final class FileTest extends TestCase
         ];
         $rows = $this->binlogRowsV2(self::TABLE_ID, 2, $this->binlogRow(2, pack('P', 1), \chr(1) . 'x'));
 
-        return $this->binlogMagic()
+        return (
+            $this->binlogMagic()
             . $this->binlogEvent(Constants::FORMAT_DESCRIPTION_EVENT, $fde, $checksum)
-            . $this->binlogEvent(Constants::TABLE_MAP_EVENT, $this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $columns), $checksum)
-            . $this->binlogEvent(Constants::WRITE_ROWS_EVENT_V2, $rows, $checksum);
+            . $this->binlogEvent(
+                Constants::TABLE_MAP_EVENT,
+                $this->binlogTableMap(self::TABLE_ID, self::SCHEMA, self::TABLE, $columns),
+                $checksum,
+            )
+            . $this->binlogEvent(Constants::WRITE_ROWS_EVENT_V2, $rows, $checksum)
+        );
     }
 }

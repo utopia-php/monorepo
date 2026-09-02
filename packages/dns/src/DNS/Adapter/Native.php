@@ -22,8 +22,9 @@ class Native extends Adapter
     /**
      * @param list<Transport> $transports
      */
-    public function __construct(protected array $transports)
-    {
+    public function __construct(
+        protected array $transports,
+    ) {
         if ($transports === []) {
             throw new Exception('At least one transport is required.');
         }

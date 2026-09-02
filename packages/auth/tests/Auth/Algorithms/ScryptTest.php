@@ -32,12 +32,13 @@ final class ScryptTest extends TestCase
 
         $this->assertIsString($salt);
         $this->assertNotSame('', $salt);
-        $this->assertNotSame($salt, (new Scrypt())->getOption('salt'));
+        $this->assertNotSame($salt, new Scrypt()->getOption('salt'));
     }
 
     public function testCustomOptions(): void
     {
-        $this->scrypt->setCpuCost(16)
+        $this->scrypt
+            ->setCpuCost(16)
             ->setMemoryCost(15)
             ->setParallelCost(2)
             ->setLength(128)

@@ -10,6 +10,7 @@ use Tests\E2E\Client;
 final class ResponseSwooleTest extends TestCase
 {
     use BaseTest;
+
     protected Client $client;
 
     public function setUp(): void

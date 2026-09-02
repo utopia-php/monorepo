@@ -51,7 +51,9 @@ final class File implements Transport
      *                                        (e.g. a Generator) is single-pass and
      *                                        cannot be re-opened once drained.
      */
-    public function __construct(private readonly string|iterable $source) {}
+    public function __construct(
+        private readonly string|iterable $source,
+    ) {}
 
     public function open(?string $position = null): void
     {
@@ -77,9 +79,10 @@ final class File implements Transport
         // [algorithm byte][4-byte CRC slot], so the algorithm sits at len-5 — the
         // same offset MySQL's own Log_event_footer::get_checksum_alg reads. 1 = CRC32.
         $this->pending = $this->readEvent();
-        if ($this->pending !== null
+        if (
+            $this->pending !== null
             && \ord($this->pending[4]) === Constants::FORMAT_DESCRIPTION_EVENT
-            && \strlen($this->pending) >= Constants::EVENT_HEADER_SIZE + 5
+            && \strlen($this->pending) >= (Constants::EVENT_HEADER_SIZE + 5)
         ) {
             $this->checksum = \ord($this->pending[\strlen($this->pending) - 5]) === 1;
         }
@@ -130,7 +133,8 @@ final class File implements Transport
         }
 
         // event_size (header bytes 9-12, little-endian) covers header + body + CRC.
-        $eventSize = \ord($header[9]) | (\ord($header[10]) << 8) | (\ord($header[11]) << 16) | (\ord($header[12]) << 24);
+        $eventSize =
+            \ord($header[9]) | (\ord($header[10]) << 8) | (\ord($header[11]) << 16) | (\ord($header[12]) << 24);
         if ($eventSize < Constants::EVENT_HEADER_SIZE) {
             throw new Exception("Corrupt binlog: event_size {$eventSize} is smaller than the event header");
         }
@@ -154,7 +158,7 @@ final class File implements Transport
             return '';
         }
 
-        while (\strlen($this->buffer) < $bytes && !$this->exhausted) {
+        while (\strlen($this->buffer) < $bytes && ! $this->exhausted) {
             if ($this->chunks->valid()) {
                 $this->buffer .= $this->chunks->current();
                 $this->chunks->next();

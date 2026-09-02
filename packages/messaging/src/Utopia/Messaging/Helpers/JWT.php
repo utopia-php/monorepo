@@ -30,7 +30,7 @@ class JWT
             'alg' => $algorithm,
         ];
 
-        if (!\is_null($keyId)) {
+        if (! \is_null($keyId)) {
             $header['kid'] = $keyId;
         }
 
@@ -67,7 +67,7 @@ class JWT
 
                 $success = openssl_sign($data, $signature, $key, $algorithm);
 
-                if (!$success) {
+                if (! $success) {
                     throw new \Exception('OpenSSL sign failed for JWT');
                 }
 

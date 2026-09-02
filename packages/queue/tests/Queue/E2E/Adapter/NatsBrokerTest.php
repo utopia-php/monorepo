@@ -140,7 +140,11 @@ final class NatsBrokerTest extends TestCase
         $other = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
 
         $this->broker->enqueue($this->queue, ['q' => 'mine']);
-        $this->assertNotInstanceOf(Message::class, $this->broker->receive($other, 1), 'a message in one queue is invisible to another');
+        $this->assertNotInstanceOf(
+            Message::class,
+            $this->broker->receive($other, 1),
+            'a message in one queue is invisible to another',
+        );
         $this->assertSame(1, $this->broker->getQueueSize($this->queue));
 
         $mine = $this->broker->receive($this->queue, 2);
@@ -151,7 +155,11 @@ final class NatsBrokerTest extends TestCase
     public function testCompetingConsumersEachGetAMessageOnce(): void
     {
         // WorkQueue retention: every message is delivered to exactly one consumer.
-        $other = new Nats(Connection::connect(getenv('NATS_URL') ?: 'nats://127.0.0.1:14225'), ackWait: 2.0, maxDeliver: 5);
+        $other = new Nats(
+            Connection::connect(getenv('NATS_URL') ?: 'nats://127.0.0.1:14225'),
+            ackWait: 2.0,
+            maxDeliver: 5,
+        );
 
         for ($i = 0; $i < 6; $i++) {
             $this->broker->enqueue($this->queue, ['n' => $i]);
@@ -159,7 +167,7 @@ final class NatsBrokerTest extends TestCase
 
         $seen = [];
         for ($i = 0; $i < 6; $i++) {
-            $consumer = ($i % 2 === 0) ? $this->broker : $other;
+            $consumer = ($i % 2) === 0 ? $this->broker : $other;
             $message = $consumer->receive($this->queue, 3);
             $this->assertInstanceOf(Message::class, $message);
             $seen[] = $message->getPayload()['n'];
@@ -289,16 +297,16 @@ final class NatsBrokerTest extends TestCase
         $broker->enqueue($queue, ['poison' => true]);
 
         $this->assertInstanceOf(Message::class, $broker->receive($queue, 2)); // delivery 1
-        sleep(2);                                                              // > ackWait
+        sleep(2); // > ackWait
         $this->assertInstanceOf(Message::class, $broker->receive($queue, 2)); // delivery 2 == maxDeliver
-        sleep(2);                                                              // advisory fires
+        sleep(2); // advisory fires
 
         // Dead-lettering happens on the consume path (receive() drains the max-deliveries
         // advisory); getQueueSize() is a passive observer and never drains. Advisory
         // delivery is asynchronous, so pump receive() until the message lands on the dead
         // stream rather than assuming a single poll catches it.
         $deadLettered = false;
-        for ($i = 0; $i < 10 && !$deadLettered; $i++) {
+        for ($i = 0; $i < 10 && ! $deadLettered; $i++) {
             $broker->receive($queue, 1);
             $deadLettered = $broker->getQueueSize($queue, true) === 1;
         }
@@ -365,7 +373,11 @@ final class NatsBrokerTest extends TestCase
 
         $broker->close();
 
-        $this->assertNotInstanceOf(\Throwable::class, $error, 'getQueueSize collided with the consume connection: ' . ($error?->getMessage() ?? ''));
+        $this->assertNotInstanceOf(
+            \Throwable::class,
+            $error,
+            'getQueueSize collided with the consume connection: ' . ($error?->getMessage() ?? ''),
+        );
         $this->assertCount(3, $sizes, 'depth gauge ran to completion without crashing the worker');
     }
 
@@ -389,7 +401,11 @@ final class NatsBrokerTest extends TestCase
 
         // Second redelivery: due after backoff[1] = 3s, so a 1s window is too early…
         $tooEarly = $broker->receive($queue, 1);
-        $this->assertNotInstanceOf(\Utopia\Queue\Message::class, $tooEarly, 'redelivery arrived before the 3s backoff elapsed');
+        $this->assertNotInstanceOf(
+            \Utopia\Queue\Message::class,
+            $tooEarly,
+            'redelivery arrived before the 3s backoff elapsed',
+        );
 
         // …and a window past the full delay sees it.
         $third = $broker->receive($queue, 4);

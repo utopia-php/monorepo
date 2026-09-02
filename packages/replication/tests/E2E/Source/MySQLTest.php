@@ -46,12 +46,9 @@ final class MySQLTest extends TestCase
         $this->user = getenv('REPLICATION_TEST_USER') ?: 'root';
         $this->pass = getenv('REPLICATION_TEST_PASS') ?: 'password';
 
-        $this->pdo = new PDO(
-            "mysql:host={$this->host};port={$this->port}",
-            $this->user,
-            $this->pass,
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
-        );
+        $this->pdo = new PDO("mysql:host={$this->host};port={$this->port}", $this->user, $this->pass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        ]);
 
         $this->configureServer();
         $this->resetSchema();
@@ -66,11 +63,14 @@ final class MySQLTest extends TestCase
         });
 
         $this->assertCount(3, $changes);
-        $this->assertSame([Change::INSERT, Change::UPDATE, Change::DELETE], array_map(fn(\Utopia\Replication\Change $c): string => $c->action, $changes));
+        $this->assertSame(
+            [Change::INSERT, Change::UPDATE, Change::DELETE],
+            array_map(fn(\Utopia\Replication\Change $c): string => $c->action, $changes),
+        );
         $this->assertSame('proj_a', $changes[0]->rows[0]['_uid']);
         $this->assertSame('Second', $changes[1]->rows[0]['name']); // UPDATE after-image
         $this->assertSame(self::SCHEMA, $changes[0]->database);
-        $this->assertNotSame('', $changes[2]->gtid);                // checkpoint advanced
+        $this->assertNotSame('', $changes[2]->gtid); // checkpoint advanced
     }
 
     public function testLargeRowSpanningMultiplePackets(): void
@@ -100,9 +100,14 @@ final class MySQLTest extends TestCase
         $this->pdo->exec("GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'repl_full'@'%'");
         $this->pdo->exec('FLUSH PRIVILEGES');
 
-        $changes = $this->capture(1, function (PDO $pdo): void {
-            $pdo->exec('INSERT INTO ' . self::TABLE . " (_uid, name) VALUES ('proj_fa', 'FullAuth')");
-        }, user: 'repl_full', pass: 'Repl!Full#123');
+        $changes = $this->capture(
+            1,
+            function (PDO $pdo): void {
+                $pdo->exec('INSERT INTO ' . self::TABLE . " (_uid, name) VALUES ('proj_fa', 'FullAuth')");
+            },
+            user: 'repl_full',
+            pass: 'Repl!Full#123',
+        );
 
         $this->assertCount(1, $changes);
         $this->assertSame('proj_fa', $changes[0]->rows[0]['_uid']);
@@ -112,9 +117,14 @@ final class MySQLTest extends TestCase
     {
         // The test server presents MySQL's auto-generated self-signed cert, so
         // peer verification is disabled here; production defaults to verify=true.
-        $changes = $this->capture(1, function (PDO $pdo): void {
-            $pdo->exec('INSERT INTO ' . self::TABLE . " (_uid, name) VALUES ('proj_tls', 'Secure')");
-        }, ssl: true, sslVerify: false);
+        $changes = $this->capture(
+            1,
+            function (PDO $pdo): void {
+                $pdo->exec('INSERT INTO ' . self::TABLE . " (_uid, name) VALUES ('proj_tls', 'Secure')");
+            },
+            ssl: true,
+            sslVerify: false,
+        );
 
         $this->assertCount(1, $changes);
         $this->assertSame('proj_tls', $changes[0]->rows[0]['_uid']);
@@ -127,7 +137,7 @@ final class MySQLTest extends TestCase
         });
 
         $this->assertCount(1, $changes);
-        $this->assertSame(-42, $changes[0]->rows[0]['signed_val']);   // TINYINT SIGNED
+        $this->assertSame(-42, $changes[0]->rows[0]['signed_val']); // TINYINT SIGNED
         $this->assertSame(200, $changes[0]->rows[0]['unsigned_val']); // TINYINT UNSIGNED
     }
 
@@ -136,8 +146,14 @@ final class MySQLTest extends TestCase
      *
      * @return array<int, Change>
      */
-    private function capture(int $expected, callable $writer, string $user = '', string $pass = '', bool $ssl = false, bool $sslVerify = true): array
-    {
+    private function capture(
+        int $expected,
+        callable $writer,
+        string $user = '',
+        string $pass = '',
+        bool $ssl = false,
+        bool $sslVerify = true,
+    ): array {
         $collected = [];
         $error = null;
         $dsn = "mysql:host={$this->host};port={$this->port};dbname=" . self::SCHEMA;
@@ -147,9 +163,30 @@ final class MySQLTest extends TestCase
         $readerPass = $user !== '' ? $pass : $this->pass;
 
         $scheduler = new Scheduler();
-        $scheduler->add(function () use (&$collected, &$error, $writer, $expected, $dsn, $writerUser, $writerPass, $readerUser, $readerPass, $ssl, $sslVerify): void {
+        $scheduler->add(function () use (
+            &$collected,
+            &$error,
+            $writer,
+            $expected,
+            $dsn,
+            $writerUser,
+            $writerPass,
+            $readerUser,
+            $readerPass,
+            $ssl,
+            $sslVerify,
+        ): void {
             try {
-                $replication = new MySQL($this->host, $this->port, $readerUser, $readerPass, self::SERVER_ID, self::SCHEMA, $ssl, $sslVerify);
+                $replication = new MySQL(
+                    $this->host,
+                    $this->port,
+                    $readerUser,
+                    $readerPass,
+                    self::SERVER_ID,
+                    self::SCHEMA,
+                    $ssl,
+                    $sslVerify,
+                );
                 $replication->start();
 
                 Coroutine::create(function () use ($writer, $dsn, $writerUser, $writerPass): void {
@@ -197,8 +234,7 @@ final class MySQLTest extends TestCase
         $this->pdo->exec('CREATE DATABASE IF NOT EXISTS ' . self::SCHEMA);
         $this->pdo->exec('USE ' . self::SCHEMA);
         $this->pdo->exec('DROP TABLE IF EXISTS ' . self::TABLE);
-        $this->pdo->exec(
-            'CREATE TABLE ' . self::TABLE . ' (
+        $this->pdo->exec('CREATE TABLE ' . self::TABLE . ' (
                 _id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 _uid VARCHAR(255) NOT NULL,
                 name VARCHAR(255) NULL,
@@ -209,7 +245,6 @@ final class MySQLTest extends TestCase
                 unsigned_val TINYINT UNSIGNED NULL,
                 PRIMARY KEY (_id),
                 UNIQUE KEY (_uid)
-            )',
-        );
+            )');
     }
 }

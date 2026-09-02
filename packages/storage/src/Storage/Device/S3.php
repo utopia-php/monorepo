@@ -7,8 +7,8 @@ namespace Utopia\Storage\Device;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\StreamInterface;
-use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Client as HttpClient;
+use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Client\Decorator\Retry;
 use Utopia\Psr18\StreamingClientInterface;
 use Utopia\Psr7\Method;
@@ -67,9 +67,7 @@ class S3 extends Device
         protected readonly ?string $bucket = null,
     ) {
         $endpoint = Uri::parse(rtrim(
-            str_starts_with($host, 'http://') || str_starts_with($host, 'https://')
-                ? $host
-                : 'https://' . $host,
+            str_starts_with($host, 'http://') || str_starts_with($host, 'https://') ? $host : 'https://' . $host,
             '/',
         ));
         $authority = $endpoint->getHost();
@@ -81,15 +79,12 @@ class S3 extends Device
         $this->host = $authority;
         $this->path = rtrim($endpoint->getPath(), '/');
 
-        $this->client = $client ?? new Retry(
-            new HttpClient(new CurlAdapter(options: [
-                \CURLOPT_TIMEOUT_MS => 0,
-                \CURLOPT_LOW_SPEED_LIMIT => 1,
-                \CURLOPT_LOW_SPEED_TIME => 60,
-                \CURLOPT_TCP_KEEPALIVE => 1,
-            ])),
-            new S3\RetryStrategy(),
-        );
+        $this->client = $client ?? new Retry(new HttpClient(new CurlAdapter(options: [
+            \CURLOPT_TIMEOUT_MS => 0,
+            \CURLOPT_LOW_SPEED_LIMIT => 1,
+            \CURLOPT_LOW_SPEED_TIME => 60,
+            \CURLOPT_TCP_KEEPALIVE => 1,
+        ])), new S3\RetryStrategy());
     }
 
     public function getType(): DeviceType
@@ -116,7 +111,10 @@ class S3 extends Device
         $metadata['chunks'] ??= 0;
         $metadata['content_type'] ??= $contentType;
 
-        if ($chunks === 1 || isset($metadata['uploadId']) && ! \in_array($metadata['uploadId'], ['', '0', [], 0], true)) {
+        if (
+            $chunks === 1
+            || isset($metadata['uploadId']) && ! \in_array($metadata['uploadId'], ['', '0', [], 0], true)
+        ) {
             return;
         }
 
@@ -202,7 +200,7 @@ class S3 extends Device
             amzHeaders: ['x-amz-acl' => $this->acl->value],
         );
 
-        $uploadId = \is_array($response->body) ? ($response->body['UploadId'] ?? null) : null;
+        $uploadId = \is_array($response->body) ? $response->body['UploadId'] ?? null : null;
         if (! \is_string($uploadId)) {
             throw new RemoteException('Missing upload ID in S3 response');
         }
@@ -216,8 +214,13 @@ class S3 extends Device
      *
      * @throws StorageException
      */
-    protected function uploadPart(StreamInterface $data, string $path, string $contentType, int $chunk, string $uploadId): string
-    {
+    protected function uploadPart(
+        StreamInterface $data,
+        string $path,
+        string $contentType,
+        int $chunk,
+        string $uploadId,
+    ): string {
         $uri = $path !== '' ? '/' . str_replace(['%2F', '%3F'], ['/', '?'], rawurlencode($path)) : '/';
 
         // ACL header is not allowed in parts, only createMultipartUpload accepts this header.
@@ -292,7 +295,7 @@ class S3 extends Device
      */
     public function read(string $path, int $offset = 0, ?int $length = null): StreamInterface
     {
-        $uri = ($path !== '') ? '/' . str_replace('%2F', '/', rawurlencode($path)) : '/';
+        $uri = $path !== '' ? '/' . str_replace('%2F', '/', rawurlencode($path)) : '/';
 
         if ($length === 0) {
             return new Stream('');
@@ -311,7 +314,9 @@ class S3 extends Device
             throw new StorageException('Failed to allocate read buffer');
         }
 
-        $this->call(Method::GET, $uri, headers: $headers, decode: false, sink: static function (string $chunk) use ($handle): void {
+        $this->call(Method::GET, $uri, headers: $headers, decode: false, sink: static function (string $chunk) use (
+            $handle,
+        ): void {
             $written = 0;
             $total = \strlen($chunk);
             while ($written < $total) {
@@ -357,7 +362,7 @@ class S3 extends Device
      */
     public function delete(string $path, bool $recursive = false): bool
     {
-        $uri = ($path !== '') ? '/' . str_replace('%2F', '/', rawurlencode($path)) : '/';
+        $uri = $path !== '' ? '/' . str_replace('%2F', '/', rawurlencode($path)) : '/';
 
         $this->call(Method::DELETE, $uri);
 
@@ -371,8 +376,11 @@ class S3 extends Device
      *
      * @throws StorageException
      */
-    protected function listObjects(string $prefix = '', int $maxKeys = self::MAX_PAGE_SIZE, string $continuationToken = ''): array
-    {
+    protected function listObjects(
+        string $prefix = '',
+        int $maxKeys = self::MAX_PAGE_SIZE,
+        string $continuationToken = '',
+    ): array {
         if ($maxKeys > self::MAX_PAGE_SIZE) {
             throw new \InvalidArgumentException('Cannot list more than ' . self::MAX_PAGE_SIZE . ' objects');
         }
@@ -408,9 +416,13 @@ class S3 extends Device
      * @throws StorageException
      */
     #[\Override]
-    public function copy(string $source, string $target, ?Device $to = null, int $chunkSize = self::COPY_CHUNK_SIZE): bool
-    {
-        if ((!$to instanceof \Utopia\Storage\Device || $to === $this) && $this->bucket !== null) {
+    public function copy(
+        string $source,
+        string $target,
+        ?Device $to = null,
+        int $chunkSize = self::COPY_CHUNK_SIZE,
+    ): bool {
+        if ((! $to instanceof \Utopia\Storage\Device || $to === $this) && $this->bucket !== null) {
             return $this->copyObject($source, $target);
         }
 
@@ -462,7 +474,7 @@ class S3 extends Device
                     ],
                 );
 
-                $etag = \is_array($response->body) ? ($response->body['ETag'] ?? null) : null;
+                $etag = \is_array($response->body) ? $response->body['ETag'] ?? null : null;
                 if (! \is_string($etag)) {
                     throw new RemoteException('Missing ETag in S3 response');
                 }
@@ -504,7 +516,7 @@ class S3 extends Device
 
             $keys = [];
             foreach ($entries as $object) {
-                $key = \is_array($object) ? ($object['Key'] ?? null) : null;
+                $key = \is_array($object) ? $object['Key'] ?? null : null;
                 if (\is_string($key)) {
                     $keys[] = $key;
                 }
@@ -641,8 +653,13 @@ class S3 extends Device
      * @param  array<string, string>  $headers
      * @param  array<string, string>  $amzHeaders
      */
-    private function getSignatureV4(string $method, string $uri, array $parameters, array $headers, array $amzHeaders): string
-    {
+    private function getSignatureV4(
+        string $method,
+        string $uri,
+        array $parameters,
+        array $headers,
+        array $amzHeaders,
+    ): string {
         $service = 's3';
         $region = $this->region;
 
@@ -670,7 +687,7 @@ class S3 extends Device
         $amzPayload = [$method];
 
         $qsPos = strpos($uri, '?');
-        $amzPayload[] = ($qsPos === false ? $uri : substr($uri, 0, $qsPos));
+        $amzPayload[] = $qsPos === false ? $uri : substr($uri, 0, $qsPos);
 
         $amzPayload[] = $queryString;
 
@@ -704,7 +721,9 @@ class S3 extends Device
 
         $signature = hash_hmac('sha256', mb_convert_encoding($stringToSignStr, 'utf-8'), $kSigning);
 
-        return $algorithm . ' ' . implode(',', [
+        return $algorithm
+        . ' '
+        . implode(',', [
             'Credential=' . $this->accessKey . '/' . implode('/', $credentialScope),
             'SignedHeaders=' . implode(';', array_keys($combinedHeaders)),
             'Signature=' . $signature,
@@ -729,8 +748,16 @@ class S3 extends Device
      *
      * @throws StorageException
      */
-    protected function call(string $method, string $uri, StreamInterface|string $data = '', array $parameters = [], array $headers = [], array $amzHeaders = [], bool $decode = true, ?callable $sink = null): S3\Response
-    {
+    protected function call(
+        string $method,
+        string $uri,
+        StreamInterface|string $data = '',
+        array $parameters = [],
+        array $headers = [],
+        array $amzHeaders = [],
+        bool $decode = true,
+        ?callable $sink = null,
+    ): S3\Response {
         $uri = $this->path . $this->getAbsolutePath($uri);
         $url = $this->fqdn . $uri . '?' . http_build_query($parameters, '', '&', PHP_QUERY_RFC3986);
 
@@ -756,9 +783,13 @@ class S3 extends Device
         foreach ([...$amzHeaders, ...$headers] as $header => $value) {
             $request = $request->withHeader($header, $value);
         }
-        $request = $request
-            ->withHeader('authorization', $this->getSignatureV4($method, $uri, $parameters, $headers, $amzHeaders))
-            ->withHeader('user-agent', 'utopia-php/storage');
+        $request = $request->withHeader('authorization', $this->getSignatureV4(
+            $method,
+            $uri,
+            $parameters,
+            $headers,
+            $amzHeaders,
+        ))->withHeader('user-agent', 'utopia-php/storage');
 
         try {
             if ($sink === null) {
@@ -791,7 +822,9 @@ class S3 extends Device
         }
 
         $contentType = $responseHeaders['content-type'] ?? '';
-        $isXml = $contentType === 'application/xml' || (str_starts_with($responseBody, '<?xml') && $contentType !== 'image/svg+xml');
+        $isXml =
+            $contentType === 'application/xml'
+            || str_starts_with($responseBody, '<?xml') && $contentType !== 'image/svg+xml';
 
         return new S3\Response(
             code: $code,
@@ -907,18 +940,26 @@ class S3 extends Device
             'request-id' => $headers['x-amz-request-id'] ?? '',
             'id-2' => $headers['x-amz-id-2'] ?? '',
         ]);
-        $suffix = $requestIds === [] ? '' : ' [' . implode(', ', array_map(
-            fn(string $key, string $value): string => "$key: $value",
-            array_keys($requestIds),
-            $requestIds,
-        )) . ']';
+        $suffix = $requestIds === []
+            ? ''
+            : ' ['
+            . implode(', ', array_map(
+                fn(string $key, string $value): string => "$key: $value",
+                array_keys($requestIds),
+                $requestIds,
+            ))
+            . ']';
 
         // HEAD error responses carry no body, so the status code is the only signal.
         if ($statusCode === 404 || $errorCode === 'NoSuchKey') {
             throw new NotFoundException(($errorMessage ?? 'File not found') . $suffix, $statusCode);
         }
 
-        throw new RemoteException(($errorMessage ?? ($errorBody !== '' ? $errorBody : 'S3 request failed')) . $suffix, $statusCode, $errorCode);
+        throw new RemoteException(
+            ($errorMessage ?? ($errorBody !== '' ? $errorBody : 'S3 request failed')) . $suffix,
+            $statusCode,
+            $errorCode,
+        );
     }
 
     /**

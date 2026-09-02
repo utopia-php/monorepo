@@ -55,7 +55,11 @@ final class ClientTest extends AdapterContract
                 $peak = $this->peakWhileSending($request);
 
                 $this->assertSame('Ada:' . $size . ':' . hash_file('sha256', $path), $peak['body']);
-                $this->assertLessThan(2 * 1_048_576, $peak['peak'], 'Multipart uploads must not buffer the whole file.');
+                $this->assertLessThan(
+                    2 * 1_048_576,
+                    $peak['peak'],
+                    'Multipart uploads must not buffer the whole file.',
+                );
             });
         } finally {
             unlink($path);

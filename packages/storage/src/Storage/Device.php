@@ -60,7 +60,13 @@ abstract class Device
      *
      * @throws StorageException
      */
-    abstract protected function uploadChunk(StreamInterface $data, string $path, int $chunk, int $chunks, array &$metadata): int;
+    abstract protected function uploadChunk(
+        StreamInterface $data,
+        string $path,
+        int $chunk,
+        int $chunks,
+        array &$metadata,
+    ): int;
 
     /**
      * Finalize.
@@ -85,8 +91,14 @@ abstract class Device
      *
      * @throws StorageException
      */
-    public function upload(StreamInterface $data, string $path, string $contentType, int $chunk = 1, int $chunks = 1, array &$metadata = []): int
-    {
+    public function upload(
+        StreamInterface $data,
+        string $path,
+        string $contentType,
+        int $chunk = 1,
+        int $chunks = 1,
+        array &$metadata = [],
+    ): int {
         $this->prepare($path, $contentType, $chunks, $metadata);
         $chunksReceived = $this->uploadChunk($data, $path, $chunk, $chunks, $metadata);
 
@@ -128,8 +140,12 @@ abstract class Device
      *
      * @throws StorageException
      */
-    public function copy(string $source, string $target, ?Device $to = null, int $chunkSize = self::COPY_CHUNK_SIZE): bool
-    {
+    public function copy(
+        string $source,
+        string $target,
+        ?Device $to = null,
+        int $chunkSize = self::COPY_CHUNK_SIZE,
+    ): bool {
         if ($chunkSize <= 0) {
             throw new \InvalidArgumentException('Chunk size must be greater than zero');
         }

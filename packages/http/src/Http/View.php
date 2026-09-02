@@ -41,19 +41,21 @@ class View
     {
         $this->setPath($path);
 
-        $this
-            ->addFilter(self::FILTER_ESCAPE, fn(string $value) => htmlentities($value, ENT_QUOTES, 'UTF-8'))
-            ->addFilter(self::FILTER_NL2P, function (string $value) {
-                $paragraphs = '';
+        $this->addFilter(self::FILTER_ESCAPE, fn(string $value) => htmlentities(
+            $value,
+            ENT_QUOTES,
+            'UTF-8',
+        ))->addFilter(self::FILTER_NL2P, function (string $value) {
+            $paragraphs = '';
 
-                foreach (explode("\n\n", $value) as $line) {
-                    if (trim($line)) {
-                        $paragraphs .= '<p>' . $line . '</p>';
-                    }
+            foreach (explode("\n\n", $value) as $line) {
+                if (trim($line)) {
+                    $paragraphs .= '<p>' . $line . '</p>';
                 }
+            }
 
-                return str_replace("\n", '<br />', $paragraphs);
-            });
+            return str_replace("\n", '<br />', $paragraphs);
+        });
     }
 
     /**
@@ -182,17 +184,17 @@ class View
      */
     public function print(mixed $value, string|array $filter = ''): mixed
     {
-        if (!empty($filter)) {
+        if (! empty($filter)) {
             if (\is_array($filter)) {
                 foreach ($filter as $callback) {
-                    if (!isset($this->filters[$callback])) {
+                    if (! isset($this->filters[$callback])) {
                         throw new Exception('Filter "' . $callback . '" is not registered');
                     }
 
                     $value = $this->filters[$callback]($value);
                 }
             } else {
-                if (!isset($this->filters[$filter])) {
+                if (! isset($this->filters[$filter])) {
                     throw new Exception('Filter "' . $filter . '" is not registered');
                 }
 
@@ -242,14 +244,22 @@ class View
             preg_match_all('#\<pre.*\>.*\<\/pre\>#Uis', $html, $foundPre);
 
             // replacing both with <textarea>$index</textarea> / <pre>$index</pre>
-            $html = str_replace($foundTxt[0], array_map(fn($el) => '<textarea>' . $el . '</textarea>', array_keys($foundTxt[0])), $html);
-            $html = str_replace($foundPre[0], array_map(fn($el) => '<pre>' . $el . '</pre>', array_keys($foundPre[0])), $html);
+            $html = str_replace(
+                $foundTxt[0],
+                array_map(fn($el) => '<textarea>' . $el . '</textarea>', array_keys($foundTxt[0])),
+                $html,
+            );
+            $html = str_replace(
+                $foundPre[0],
+                array_map(fn($el) => '<pre>' . $el . '</pre>', array_keys($foundPre[0])),
+                $html,
+            );
 
             // your stuff
             $search = [
-                '/\>[^\S ]+/s',  // strip whitespaces after tags, except space
-                '/[^\S ]+\</s',  // strip whitespaces before tags, except space
-                '/(\s)+/s',       // shorten multiple whitespace sequences
+                '/\>[^\S ]+/s', // strip whitespaces after tags, except space
+                '/[^\S ]+\</s', // strip whitespaces before tags, except space
+                '/(\s)+/s', // shorten multiple whitespace sequences
             ];
 
             $replace = [
@@ -261,8 +271,16 @@ class View
             $html = preg_replace($search, $replace, $html) ?? $html;
 
             // Replacing back with content
-            $html = str_replace(array_map(fn($el) => '<textarea>' . $el . '</textarea>', array_keys($foundTxt[0])), $foundTxt[0], $html);
-            $html = str_replace(array_map(fn($el) => '<pre>' . $el . '</pre>', array_keys($foundPre[0])), $foundPre[0], $html);
+            $html = str_replace(
+                array_map(fn($el) => '<textarea>' . $el . '</textarea>', array_keys($foundTxt[0])),
+                $foundTxt[0],
+                $html,
+            );
+            $html = str_replace(
+                array_map(fn($el) => '<pre>' . $el . '</pre>', array_keys($foundPre[0])),
+                $foundPre[0],
+                $html,
+            );
         }
 
         return $html;

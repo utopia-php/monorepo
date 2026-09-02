@@ -13,8 +13,9 @@ class Sendgrid extends EmailAdapter
     /**
      * @param  string  $apiKey Your Sendgrid API key to authenticate with the API.
      */
-    public function __construct(private readonly string $apiKey)
-    {
+    public function __construct(
+        private readonly string $apiKey,
+    ) {
         parent::__construct();
     }
 
@@ -35,29 +36,26 @@ class Sendgrid extends EmailAdapter
     }
 
     /**
-    * {@inheritdoc}
-    *
-    * Uses Sendgrid's personalization recipient variables to send multiple emails at once.
-    *
-    * @link https://www.twilio.com/docs/sendgrid/for-developers/sending-email/personalizations#-Sending-Two-Different-Emails-to-Two-Different-Groups-of-Recipients
-    */
+     * {@inheritdoc}
+     *
+     * Uses Sendgrid's personalization recipient variables to send multiple emails at once.
+     *
+     * @link https://www.twilio.com/docs/sendgrid/for-developers/sending-email/personalizations#-Sending-Two-Different-Emails-to-Two-Different-Groups-of-Recipients
+     */
     protected function process(EmailMessage $message): array
     {
-        $personalizations = array_map(
-            fn(array $to): array => [
-                'to' => [empty($to['name'])
-                    ? ['email' => $to['email']]
-                    : ['email' => $to['email'], 'name' => $to['name']]],
-                'subject' => $message->getSubject(),
+        $personalizations = array_map(fn(array $to): array => [
+            'to' => [
+                empty($to['name']) ? ['email' => $to['email']] : ['email' => $to['email'], 'name' => $to['name']],
             ],
-            $message->getTo(),
-        );
+            'subject' => $message->getSubject(),
+        ], $message->getTo());
 
-        if (!\in_array($message->getCC(), [null, []], true)) {
+        if (! \in_array($message->getCC(), [null, []], true)) {
             foreach ($personalizations as &$personalization) {
                 foreach ($message->getCC() as $cc) {
                     $entry = ['email' => $cc['email']];
-                    if (!empty($cc['name'])) {
+                    if (! empty($cc['name'])) {
                         $entry['name'] = $cc['name'];
                     }
                     $personalization['cc'][] = $entry;
@@ -66,11 +64,11 @@ class Sendgrid extends EmailAdapter
             unset($personalization);
         }
 
-        if (!\in_array($message->getBCC(), [null, []], true)) {
+        if (! \in_array($message->getBCC(), [null, []], true)) {
             foreach ($personalizations as &$personalization) {
                 foreach ($message->getBCC() as $bcc) {
                     $entry = ['email' => $bcc['email']];
-                    if (!empty($bcc['name'])) {
+                    if (! empty($bcc['name'])) {
                         $entry['name'] = $bcc['name'];
                     }
                     $personalization['bcc'][] = $entry;
@@ -81,7 +79,7 @@ class Sendgrid extends EmailAdapter
 
         $attachments = [];
 
-        if (!\is_null($message->getAttachments())) {
+        if (! \is_null($message->getAttachments())) {
             $size = 0;
 
             foreach ($message->getAttachments() as $attachment) {
@@ -146,7 +144,7 @@ class Sendgrid extends EmailAdapter
             foreach ($message->getTo() as $to) {
                 if (\is_string($result['response'])) {
                     $response->addResult($to['email'], $result['response']);
-                } elseif (!\is_null($result['response']['errors'][0]['message'] ?? null)) {
+                } elseif (! \is_null($result['response']['errors'][0]['message'] ?? null)) {
                     $response->addResult($to['email'], $result['response']['errors'][0]['message']);
                 } else {
                     $response->addResult($to['email'], 'Unknown error');

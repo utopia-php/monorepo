@@ -20,7 +20,9 @@ class TestClient implements ClientInterface
     /**
      * @param array<int, ResponseInterface> $responses
      */
-    public function __construct(private array $responses) {}
+    public function __construct(
+        private array $responses,
+    ) {}
 
     public function sendRequest(RequestInterface $request): ResponseInterface
     {

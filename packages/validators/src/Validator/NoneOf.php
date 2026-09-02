@@ -16,7 +16,10 @@ class NoneOf extends Validator
     /**
      * @param array<Validator> $validators
      */
-    public function __construct(protected array $validators, protected string $type = self::TYPE_MIXED) {}
+    public function __construct(
+        protected array $validators,
+        protected string $type = self::TYPE_MIXED,
+    ) {}
 
     /**
      * Get Description
@@ -25,7 +28,7 @@ class NoneOf extends Validator
      */
     public function getDescription(): string
     {
-        if (!(\is_null($this->failedRule))) {
+        if (! \is_null($this->failedRule)) {
             return $this->failedRule->getDescription();
         }
         return $this->validators[0]->getDescription();

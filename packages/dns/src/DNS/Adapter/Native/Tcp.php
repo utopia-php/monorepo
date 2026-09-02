@@ -52,7 +52,7 @@ class Tcp extends Transport
     public function bind(): void
     {
         $listener = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-        if (!$listener instanceof Socket) {
+        if (! $listener instanceof Socket) {
             throw new Exception('Could not create TCP socket.');
         }
 
@@ -105,7 +105,7 @@ class Tcp extends Transport
     {
         $client = @socket_accept($listener);
 
-        if (!$client instanceof Socket) {
+        if (! $client instanceof Socket) {
             return;
         }
 
@@ -140,7 +140,7 @@ class Tcp extends Transport
         if ($chunk === '' || $chunk === false) {
             $error = socket_last_error($client);
 
-            if ($chunk === '' || !\in_array($error, [SOCKET_EAGAIN, SOCKET_EWOULDBLOCK], true)) {
+            if ($chunk === '' || ! \in_array($error, [SOCKET_EAGAIN, SOCKET_EWOULDBLOCK], true)) {
                 $this->close($client);
             }
 
@@ -150,7 +150,7 @@ class Tcp extends Transport
         // Update activity timestamp for idle timeout tracking
         $this->lastActivity[$clientId] = time();
 
-        if (\strlen($this->buffers[$clientId] ?? '') + \strlen($chunk) > $this->maxBufferSize) {
+        if ((\strlen($this->buffers[$clientId] ?? '') + \strlen($chunk)) > $this->maxBufferSize) {
             $this->close($client);
             return;
         }
@@ -165,7 +165,7 @@ class Tcp extends Transport
                 return;
             }
 
-            if (!$header instanceof \Utopia\DNS\ProxyProtocol) {
+            if (! $header instanceof \Utopia\DNS\ProxyProtocol) {
                 return;
             }
 
@@ -179,7 +179,9 @@ class Tcp extends Transport
 
         while (\strlen($this->buffers[$clientId]) >= 2) {
             $unpacked = unpack('n', substr($this->buffers[$clientId], 0, 2));
-            $payloadLength = (\is_array($unpacked) && \array_key_exists(1, $unpacked) && \is_int($unpacked[1])) ? $unpacked[1] : 0;
+            $payloadLength = \is_array($unpacked) && \array_key_exists(1, $unpacked) && \is_int($unpacked[1])
+                ? $unpacked[1]
+                : 0;
 
             // Close connection for invalid zero-length payloads, and enforce a
             // stricter frame limit than the 2-byte prefix allows to prevent
@@ -253,7 +255,13 @@ class Tcp extends Transport
     {
         $id = spl_object_id($client);
 
-        unset($this->clients[$id], $this->buffers[$id], $this->lastActivity[$id], $this->awaitingProxy[$id], $this->peers[$id]);
+        unset(
+            $this->clients[$id],
+            $this->buffers[$id],
+            $this->lastActivity[$id],
+            $this->awaitingProxy[$id],
+            $this->peers[$id],
+        );
 
         @socket_close($client);
     }

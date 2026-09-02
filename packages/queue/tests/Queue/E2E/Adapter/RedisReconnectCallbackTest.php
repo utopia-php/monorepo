@@ -18,7 +18,10 @@ final class RedisReconnectCallbackTest extends TestCase
         $broker = new RedisBroker($connection, $connection);
         $calls = [];
 
-        $broker->setReconnectCallback(function (Queue $queue, \Throwable $error, int $attempt, int $sleepMs) use (&$calls, $broker): void {
+        $broker->setReconnectCallback(function (Queue $queue, \Throwable $error, int $attempt, int $sleepMs) use (
+            &$calls,
+            $broker,
+        ): void {
             $calls[] = [
                 'queue' => $queue,
                 'error' => $error,

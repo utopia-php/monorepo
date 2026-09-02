@@ -46,7 +46,7 @@ class SMTP extends EmailAdapter
         private readonly int $timelimit = 30,
     ) {
         parent::__construct();
-        if (!\in_array($this->smtpSecure, ['', 'ssl', 'tls'])) {
+        if (! \in_array($this->smtpSecure, ['', 'ssl', 'tls'])) {
             throw new \InvalidArgumentException('Invalid SMTP secure prefix. Must be "", "ssl" or "tls"');
         }
     }
@@ -103,7 +103,7 @@ class SMTP extends EmailAdapter
                 $response->addResult($email, $exception->getMessage());
             }
         } finally {
-            if (!$this->keepAlive) {
+            if (! $this->keepAlive) {
                 $client->close();
                 $this->client = null;
             }
@@ -164,9 +164,7 @@ class SMTP extends EmailAdapter
             return $client;
         }
 
-        throw new \Utopia\SMTP\Exception\ConnectionException(
-            'No SMTP host answered: ' . implode('; ', $failures),
-        );
+        throw new \Utopia\SMTP\Exception\ConnectionException('No SMTP host answered: ' . implode('; ', $failures));
     }
 
     /**
@@ -265,12 +263,6 @@ class SMTP extends EmailAdapter
             throw new \Exception('Attachments size exceeds the maximum allowed size of 25MB');
         }
 
-        return Mime::message(
-            $message,
-            $message->getTo(),
-            $message->getCC() ?? [],
-            $message->getBCC() ?? [],
-            $headers,
-        );
+        return Mime::message($message, $message->getTo(), $message->getCC() ?? [], $message->getBCC() ?? [], $headers);
     }
 }

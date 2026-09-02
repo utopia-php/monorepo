@@ -155,16 +155,12 @@ final class JetStreamParityTest extends TestCase
     {
         $id = uniqid();
         $name = $this->track("PARITY_CM_{$id}");
-        $this->js->createStream(new StreamConfig(
-            name: $name,
-            subjects: ["cm.{$id}.>"],
-            storage: StorageType::Memory,
-        ));
+        $this->js->createStream(new StreamConfig(name: $name, subjects: ["cm.{$id}.>"], storage: StorageType::Memory));
 
-        $consumer = $this->js->createConsumer($name, new ConsumerConfig(
-            durableName: "dur_{$id}",
-            metadata: ['owner' => 'billing', 'tier' => 'gold'],
-        ));
+        $consumer = $this->js->createConsumer($name, new ConsumerConfig(durableName: "dur_{$id}", metadata: [
+            'owner' => 'billing',
+            'tier' => 'gold',
+        ]));
 
         $info = $consumer->info();
         $this->assertIsArray($info->metadata);
@@ -177,11 +173,7 @@ final class JetStreamParityTest extends TestCase
     {
         $id = uniqid();
         $name = $this->track("PARITY_CL_{$id}");
-        $this->js->createStream(new StreamConfig(
-            name: $name,
-            subjects: ["cl.{$id}.>"],
-            storage: StorageType::Memory,
-        ));
+        $this->js->createStream(new StreamConfig(name: $name, subjects: ["cl.{$id}.>"], storage: StorageType::Memory));
 
         $this->js->createConsumer($name, new ConsumerConfig(durableName: "one_{$id}"));
         $this->js->createConsumer($name, new ConsumerConfig(durableName: "two_{$id}"));
@@ -243,11 +235,7 @@ final class JetStreamParityTest extends TestCase
     {
         $id = uniqid();
         $name = $this->track("PARITY_ACC_{$id}");
-        $this->js->createStream(new StreamConfig(
-            name: $name,
-            subjects: ["acc.{$id}.>"],
-            storage: StorageType::Memory,
-        ));
+        $this->js->createStream(new StreamConfig(name: $name, subjects: ["acc.{$id}.>"], storage: StorageType::Memory));
 
         $info = $this->js->accountInfo();
         $this->assertInstanceOf(AccountInfo::class, $info);

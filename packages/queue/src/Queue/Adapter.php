@@ -166,10 +166,10 @@ abstract class Adapter
         $this->consumer = $consumer;
 
         try {
-            while (!$this->isStopped()) {
+            while (! $this->isStopped()) {
                 $message = $this->nextMessage($errorCallback);
 
-                if (!$message instanceof Message) {
+                if (! $message instanceof Message) {
                     continue;
                 }
 

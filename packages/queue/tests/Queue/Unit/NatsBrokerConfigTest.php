@@ -51,7 +51,13 @@ final class NatsBrokerConfigTest extends TestCase
 
     public function testValidBackoffConstructs(): void
     {
-        $broker = new Nats($this->neverConnect(), ackWait: 10.0, maxDeliver: 5, backoff: [10.0, 30.0, 120.0], deadMaxAge: 604800.0);
+        $broker = new Nats(
+            $this->neverConnect(),
+            ackWait: 10.0,
+            maxDeliver: 5,
+            backoff: [10.0, 30.0, 120.0],
+            deadMaxAge: 604800.0,
+        );
         $this->assertInstanceOf(Nats::class, $broker);
     }
 }

@@ -93,10 +93,7 @@ final class StreamConfig
             $data['mirror'] = $this->mirror->toArray();
         }
         if ($this->sources !== null) {
-            $data['sources'] = array_map(
-                static fn(StreamSource $s): array => $s->toArray(),
-                $this->sources,
-            );
+            $data['sources'] = array_map(static fn(StreamSource $s): array => $s->toArray(), $this->sources);
         }
         if ($this->republish instanceof \Utopia\NATS\JetStream\Republish) {
             $data['republish'] = $this->republish->toArray();
@@ -152,9 +149,7 @@ final class StreamConfig
             allowRollup: $data['allow_rollup_hdrs'] ?? false,
             metadata: $data['metadata'] ?? null,
             mirror: isset($data['mirror']) ? StreamSource::fromArray($data['mirror']) : null,
-            sources: isset($data['sources'])
-                ? array_map(StreamSource::fromArray(...), $data['sources'])
-                : null,
+            sources: isset($data['sources']) ? array_map(StreamSource::fromArray(...), $data['sources']) : null,
             republish: isset($data['republish']) ? Republish::fromArray($data['republish']) : null,
             subjectTransform: isset($data['subject_transform'])
                 ? SubjectTransform::fromArray($data['subject_transform'])

@@ -175,16 +175,12 @@ final class Client implements Adapter
 
     private function prepare(RequestInterface $request): RequestInterface
     {
-        return $this->applyTrace(
-            $this->applyHeaders(
-                $this->applyBaseUri($request),
-            ),
-        );
+        return $this->applyTrace($this->applyHeaders($this->applyBaseUri($request)));
     }
 
     private function applyBaseUri(RequestInterface $request): RequestInterface
     {
-        if (!$this->baseUri instanceof \Psr\Http\Message\UriInterface) {
+        if (! $this->baseUri instanceof \Psr\Http\Message\UriInterface) {
             return $request;
         }
 
@@ -205,7 +201,7 @@ final class Client implements Adapter
     private function applyHeaders(RequestInterface $request): RequestInterface
     {
         foreach ($this->headers as $header) {
-            if (!$request->hasHeader($header['name'])) {
+            if (! $request->hasHeader($header['name'])) {
                 $request = $request->withHeader($header['name'], $header['values']);
             }
         }
@@ -220,7 +216,7 @@ final class Client implements Adapter
      */
     private function applyTrace(RequestInterface $request): RequestInterface
     {
-        if (!$this->tracePropagation) {
+        if (! $this->tracePropagation) {
             return $request;
         }
 
@@ -243,7 +239,7 @@ final class Client implements Adapter
             return Redirect::removeDotSegments($path);
         }
 
-        if ($basePath === '' || !str_ends_with($basePath, '/')) {
+        if ($basePath === '' || ! str_ends_with($basePath, '/')) {
             $basePath .= '/';
         }
 
