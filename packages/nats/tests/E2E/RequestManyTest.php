@@ -87,12 +87,20 @@ final class RequestManyTest extends TestCase
 
         // Three fast replies then silence. A short stall window returns well
         // before the generous overall timeout would.
+        //
+        // The overall timeout is wide and the bound is set between the two, so
+        // this measures which of them stopped collection rather than how fast
+        // the runner is. The responders share the requester's connection, so
+        // the single loop has to carry the request out and three replies back
+        // through nextMessage() rounds of one stall window each; on a loaded
+        // runner that is comfortably over a second, while a stall that never
+        // fired would take the full ten.
         $start = microtime(true);
-        $replies = $conn->requestMany($subject, 'ping', ['timeout' => 3.0, 'stall' => 0.3]);
+        $replies = $conn->requestMany($subject, 'ping', ['timeout' => 10.0, 'stall' => 0.3]);
         $elapsed = microtime(true) - $start;
 
         $this->assertCount(3, $replies);
-        $this->assertLessThan(1.5, $elapsed);
+        $this->assertLessThan(5.0, $elapsed);
 
         $conn->close();
     }
