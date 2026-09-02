@@ -9,6 +9,116 @@ use Utopia\Validator\IP;
 
 class Client
 {
+    /**
+     * The resolver configuration libresolv reads, and therefore what the host
+     * itself resolves with.
+     */
+    public const string SYSTEM_RESOLV_CONF = '/etc/resolv.conf';
+
+    /**
+     * Nameservers already parsed out of a given path, against the file's size and
+     * modification time. Revalidating costs a stat where re-reading costs an open,
+     * a read and a pass over every line, so a caller resolving in a loop pays the
+     * parse once while a rewritten resolv.conf is still picked up.
+     *
+     * @var array<string, array{signature: string, nameservers: list<string>}>
+     */
+    private static array $resolvConf = [];
+
+    /**
+     * Build a client that queries the system's own resolver.
+     *
+     * Uses the first nameserver declared in resolv.conf. The `search` list is
+     * deliberately not applied: a caller vetting a public hostname must not have
+     * a bare name silently expanded into an internal one, and under a typical
+     * Kubernetes `ndots:5` that expansion also costs several failed lookups
+     * before the real one. Pass a name that is already fully qualified.
+     *
+     * @throws Exception when no nameserver can be read from $path
+     */
+    public static function fromSystem(
+        string $path = self::SYSTEM_RESOLV_CONF,
+        int $port = 53,
+        int $timeout = 5,
+        bool $useTcp = false,
+    ): self {
+        $nameservers = self::systemNameservers($path);
+
+        if ($nameservers === []) {
+            throw new Exception("No nameserver found in {$path}.");
+        }
+
+        return new self($nameservers[0], $port, $timeout, $useTcp);
+    }
+
+    /**
+     * Every nameserver address declared in resolv.conf, in file order.
+     *
+     * Exposed so callers that want failover can try each in turn; `fromSystem()`
+     * takes the first. Malformed addresses are skipped rather than fatal, so one
+     * bad line cannot cost you a working resolver.
+     *
+     * @return list<string>
+     *
+     * @throws Exception when $path cannot be read
+     */
+    public static function systemNameservers(string $path = self::SYSTEM_RESOLV_CONF): array
+    {
+        // PHP's stat cache holds one path at a time and its own writes clear it, so
+        // only a resolv.conf rewritten by another process (resolvconf, DHCP, kubelet)
+        // goes stale here -- and only for a caller resolving in a tight loop, which
+        // is the case this cache exists to serve. No unit test reproduces that: any
+        // intervening stat evicts the entry and hides it.
+        clearstatcache(true, $path);
+
+        // Second-resolution mtime cannot distinguish two writes within the same
+        // second, so the size is part of the signature too. resolv.conf changes on
+        // network events, never faster than that.
+        $signature = @filemtime($path) . ':' . @filesize($path);
+
+        if ((self::$resolvConf[$path]['signature'] ?? null) === $signature) {
+            return self::$resolvConf[$path]['nameservers'];
+        }
+
+        $contents = @file_get_contents($path);
+
+        if ($contents === false) {
+            throw new Exception("Unable to read {$path}.");
+        }
+
+        $validator = new IP(IP::ALL);
+        $nameservers = [];
+
+        foreach (preg_split("/\R/", $contents) ?: [] as $line) {
+            // `#` and `;` both open a comment, and either may trail a directive.
+            $line = trim(preg_replace('/[#;].*$/', '', $line) ?? '');
+
+            $fields = preg_split('/\s+/', $line, -1, PREG_SPLIT_NO_EMPTY);
+            if ($fields === false) {
+                continue;
+            }
+            if (\count($fields) !== 2) {
+                continue;
+            }
+            if ($fields[0] !== 'nameserver') {
+                continue;
+            }
+
+            // A scoped address (fe80::1%eth0) names an interface the socket is
+            // not bound to, so it is unusable here.
+            if (!$validator->isValid($fields[1])) {
+                continue;
+            }
+
+            $nameservers[] = $fields[1];
+        }
+
+        $nameservers = array_values(array_unique($nameservers));
+        self::$resolvConf[$path] = ['signature' => $signature, 'nameservers' => $nameservers];
+
+        return $nameservers;
+    }
+
     public function __construct(
         protected string $server = '127.0.0.1',
         protected int $port = 53,
@@ -26,7 +136,11 @@ class Client
             return;
         }
 
-        $socket = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        $domain = filter_var($server, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
+            ? AF_INET6
+            : AF_INET;
+
+        $socket = socket_create($domain, SOCK_DGRAM, SOL_UDP);
 
         if ($socket === false) {
             throw new Exception('Failed to create socket: ' . socket_strerror(socket_last_error()));
@@ -37,6 +151,11 @@ class Client
         socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, ['sec' => $timeout, 'usec' => 0]);
 
         $this->socket = $socket;
+    }
+
+    public function getServer(): string
+    {
+        return $this->server;
     }
 
     public function query(Message $message): Message
