@@ -91,6 +91,7 @@ jobs:
     needs: changed
     if: needs.changed.outputs.matrix != '[]'
     runs-on: ubuntu-latest
+    environment: ${{ matrix.package == 'vcs' && 'vcs' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -118,4 +119,10 @@ jobs:
       - if: ${{ !matrix.linked }}
         run: bin/monorepo check ${{ matrix.package }}
 
-      - run: bin/monorepo test ${{ matrix.package }} ${{ matrix.linked && '--linked' || '' }}
+      - env:
+          TESTS_GITHUB_PRIVATE_KEY: ${{ secrets.TESTS_GITHUB_PRIVATE_KEY }}
+          TESTS_GITHUB_APP_IDENTIFIER: ${{ secrets.TESTS_GITHUB_APP_IDENTIFIER }}
+          TESTS_GITHUB_INSTALLATION_ID: ${{ secrets.TESTS_GITHUB_INSTALLATION_ID }}
+          TESTS_BITBUCKET_ACCESS_TOKEN: ${{ secrets.TESTS_BITBUCKET_ACCESS_TOKEN }}
+          TESTS_BITBUCKET_WORKSPACE: ${{ secrets.TESTS_BITBUCKET_WORKSPACE }}
+        run: bin/monorepo test ${{ matrix.package }} ${{ matrix.linked && '--linked' || '' }}
