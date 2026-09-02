@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Utopia\NATS\KeyValue;
 
 use Utopia\NATS\Connection;
+use Utopia\NATS\Exception\JetStreamException;
 use Utopia\NATS\Exception\KeyValueException;
 use Utopia\NATS\Headers;
 use Utopia\NATS\JetStream\AckPolicy;
@@ -92,7 +93,15 @@ final class KeyValue
 
         try {
             $ack = $this->js->publish($subject, $value, $headers);
-        } catch (\Throwable $e) {
+        } catch (JetStreamException $e) {
+            // Only a rejected CAS publish means the key exists. Anything else --
+            // a stale connection, a timeout, a permissions error -- must keep its
+            // own identity, because "you lost the race" is a verdict the caller
+            // acts on by not retrying.
+            if ($e->apiError?->errCode !== JetStream::ERR_WRONG_LAST_SEQUENCE) {
+                throw $e;
+            }
+
             throw new KeyValueException("Key already exists: {$key}", $e->getCode(), previous: $e);
         }
 
@@ -114,7 +123,11 @@ final class KeyValue
                 $value,
                 expectedLastSubjectSeq: $revision,
             );
-        } catch (\Throwable $e) {
+        } catch (JetStreamException $e) {
+            if ($e->apiError?->errCode !== JetStream::ERR_WRONG_LAST_SEQUENCE) {
+                throw $e;
+            }
+
             throw new KeyValueException("Wrong last revision for key: {$key}", $e->getCode(), previous: $e);
         }
 

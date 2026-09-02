@@ -47,20 +47,26 @@ final class TlsTransport implements Transport
 
     public function write(string $data): int
     {
-        $stream = $this->ensureConnected();
+        $this->ensureConnected();
         $total = \strlen($data);
         $written = 0;
 
         // Loop until every byte is on the wire: fwrite may perform a short write.
+        // Re-resolved on every pass rather than captured once. fwrite() is a
+        // yield point under Swoole's stream hooks, so a close() can land between
+        // two iterations of a short write -- and the next fwrite() on the
+        // handle the first pass captured raises TypeError, an \Error, which is
+        // precisely what the reconnect paths in Connection do not catch. The
+        // classification helpers below were hardened for this; the write itself
+        // was still holding the stale handle.
         while ($written < $total) {
-            $chunk = @fwrite($stream, substr($data, $written));
+            $chunk = @fwrite($this->ensureConnected(), substr($data, $written));
 
             if ($chunk === false || $chunk === 0) {
-                $info = stream_get_meta_data($stream);
-                if ($info['timed_out']) {
+                if ($this->isTimedOut()) {
                     throw new TimeoutException('Write timed out');
                 }
-                if (feof($stream)) {
+                if ($this->isAtEof()) {
                     throw new ConnectionException('Connection closed by server');
                 }
                 throw new ConnectionException('Failed to write to TLS socket');
@@ -85,14 +91,13 @@ final class TlsTransport implements Transport
         $data = @fread($stream, $maxBytes);
 
         if ($data === false) {
-            $info = stream_get_meta_data($stream);
-            if ($info['timed_out']) {
+            if ($this->isTimedOut()) {
                 throw new TimeoutException('Read timed out');
             }
             throw new ConnectionException('Failed to read from TLS socket');
         }
 
-        if ($data === '' && feof($stream)) {
+        if ($data === '' && $this->isAtEof()) {
             throw new ConnectionException('Connection closed by server');
         }
 
@@ -112,11 +117,10 @@ final class TlsTransport implements Transport
         $line = @fgets($stream);
 
         if ($line === false) {
-            $info = stream_get_meta_data($stream);
-            if ($info['timed_out']) {
+            if ($this->isTimedOut()) {
                 throw new TimeoutException('Read timed out');
             }
-            if (feof($stream)) {
+            if ($this->isAtEof()) {
                 throw new ConnectionException('Connection closed by server');
             }
             throw new ConnectionException('Failed to read line from TLS socket');
@@ -132,7 +136,7 @@ final class TlsTransport implements Transport
 
     public function isConnected(): bool
     {
-        return $this->stream !== null && !feof($this->stream);
+        return \is_resource($this->stream) && !feof($this->stream);
     }
 
     public function close(): void
@@ -169,10 +173,39 @@ final class TlsTransport implements Transport
     /** @return resource */
     private function ensureConnected()
     {
-        if ($this->stream === null) {
+        // See TcpTransport::ensureConnected(): a concurrently closed stream is
+        // still a resource-typed property but raises TypeError on use, and that
+        // \Error bypasses the reconnect paths in Connection.
+        if (!\is_resource($this->stream)) {
             throw new ConnectionException('Not connected');
         }
 
         return $this->stream;
+    }
+
+    /**
+     * Whether the stream hit its timeout, re-reading the property rather than
+     * trusting a caller's copy that a concurrent close() may have invalidated.
+     */
+    private function isTimedOut(): bool
+    {
+        if (!\is_resource($this->stream)) {
+            return false;
+        }
+
+        return stream_get_meta_data($this->stream)['timed_out'];
+    }
+
+    /**
+     * Whether the stream is at end of file. A closed or vanished stream counts
+     * as EOF so callers report "connection closed" rather than raising.
+     */
+    private function isAtEof(): bool
+    {
+        if (!\is_resource($this->stream)) {
+            return true;
+        }
+
+        return feof($this->stream);
     }
 }

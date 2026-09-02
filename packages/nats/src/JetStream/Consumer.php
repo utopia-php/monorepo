@@ -6,9 +6,17 @@ namespace Utopia\NATS\JetStream;
 
 use Utopia\NATS\Connection;
 use Utopia\NATS\Exception\TimeoutException;
+use Utopia\NATS\Subscription;
 
 final class Consumer
 {
+    /**
+     * Seconds by which the server's pull-request expiry is pulled in ahead of
+     * the client deadline. Capped at a tenth of the timeout so a short fetch
+     * still leaves the server most of the window.
+     */
+    private const FETCH_EXPIRY_MARGIN = 0.1;
+
     public function __construct(
         private readonly Connection $conn,
         private readonly string $stream,
@@ -24,9 +32,15 @@ final class Consumer
         $timeout ??= 5.0;
         $requestSubject = "{$this->apiPrefix}.CONSUMER.MSG.NEXT.{$this->stream}.{$this->getName()}";
 
+        // Expire the server's pull request just before the client stops waiting.
+        // On an identical deadline a message the server dispatches at the
+        // boundary is dropped here while the server has already counted the
+        // delivery, burning an attempt against maxDeliver for nothing.
+        $serverExpiry = $timeout - min(self::FETCH_EXPIRY_MARGIN, $timeout * 0.1);
+
         $request = [
             'batch' => $batch,
-            'expires' => StreamConfig::secondsToNanos($timeout),
+            'expires' => StreamConfig::secondsToNanos($serverExpiry),
         ];
         if ($noWait) {
             $request['no_wait'] = true;
@@ -40,9 +54,31 @@ final class Consumer
         $inbox = $this->conn->newInbox();
         $sub = $this->conn->subscribe($inbox);
 
-        $this->conn->publish($requestSubject, $payload, $inbox);
-
         $messageBatch = new MessageBatch($this->conn);
+
+        try {
+            $this->conn->publish($requestSubject, $payload, $inbox);
+            $this->collectBatch($sub, $messageBatch, $batch, $timeout);
+        } finally {
+            // Outside a finally this leaked the inbox subscription on any throw,
+            // and attemptReconnect() re-subscribes every leaked sid on each
+            // reconnect -- so the leak compounds across a reconnect storm.
+            $sub->unsubscribe();
+        }
+
+        return $messageBatch;
+    }
+
+    /**
+     * Gather up to $batch messages for a pull request, stopping on the server's
+     * terminal status messages or when the client deadline passes.
+     */
+    private function collectBatch(
+        Subscription $sub,
+        MessageBatch $messageBatch,
+        int $batch,
+        float $timeout,
+    ): void {
         $deadline = microtime(true) + $timeout;
 
         while (\count($messageBatch) < $batch) {
@@ -73,10 +109,6 @@ final class Consumer
 
             $messageBatch->addMessage($msg);
         }
-
-        $sub->unsubscribe();
-
-        return $messageBatch;
     }
 
     /**

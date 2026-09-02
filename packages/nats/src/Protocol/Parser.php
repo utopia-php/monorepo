@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Utopia\NATS\Protocol;
 
+use Utopia\NATS\Exception\ConnectionException;
 use Utopia\NATS\Exception\ProtocolException;
 use Utopia\NATS\Transport\Transport;
 
 final class Parser
 {
     private string $buffer = '';
+    private bool $poisoned = false;
 
     public function __construct(
         private readonly Transport $transport,
@@ -22,6 +24,12 @@ final class Parser
      */
     public function next(?float $timeout = null): array
     {
+        // Once a frame body has been partially consumed the buffer no longer
+        // starts on a frame boundary, so nothing after that point can be parsed.
+        if ($this->poisoned) {
+            throw new ConnectionException('Parser desynced from the stream; the connection must be rebuilt');
+        }
+
         $line = $this->readLine($timeout);
         $line = rtrim($line, "\r\n");
 
@@ -59,12 +67,12 @@ final class Parser
 
         // MSG <subject> <sid> [reply-to] <#bytes>
         if (str_starts_with($line, 'MSG ')) {
-            return $this->parseMsg(substr($line, 4));
+            return $this->readFrame(fn(): array => $this->parseMsg(substr($line, 4), $timeout));
         }
 
         // HMSG <subject> <sid> [reply-to] <#header-bytes> <#total-bytes>
         if (str_starts_with($line, 'HMSG ')) {
-            return $this->parseHmsg(substr($line, 5));
+            return $this->readFrame(fn(): array => $this->parseHmsg(substr($line, 5), $timeout));
         }
 
         throw new ProtocolException("Unknown protocol operation: {$line}");
@@ -75,7 +83,7 @@ final class Parser
      *
      * @return array{0: ServerOp, 1: array{subject: string, sid: string, replyTo: ?string, payload: string}}
      */
-    private function parseMsg(string $args): array
+    private function parseMsg(string $args, ?float $timeout = null): array
     {
         $parts = preg_split('/\s+/', trim($args));
 
@@ -91,9 +99,9 @@ final class Parser
         }
 
         $bytes = (int) $byteCount;
-        $payload = $this->readExactly($bytes);
+        $payload = $this->readExactly($bytes, $timeout);
         // Consume trailing \r\n
-        $this->readExactly(2);
+        $this->readExactly(2, $timeout);
 
         return [ServerOp::Msg, [
             'subject' => $subject,
@@ -109,7 +117,7 @@ final class Parser
      *
      * @return array{0: ServerOp, 1: array{subject: string, sid: string, replyTo: ?string, payload: string, headers: string}}
      */
-    private function parseHmsg(string $args): array
+    private function parseHmsg(string $args, ?float $timeout = null): array
     {
         $parts = preg_split('/\s+/', trim($args));
 
@@ -132,10 +140,10 @@ final class Parser
             throw new ProtocolException("Invalid HMSG byte counts: header={$hdrLen}, total={$totalLen}");
         }
 
-        $headerBlock = $this->readExactly($hdrLen);
-        $payload = $payloadLen > 0 ? $this->readExactly($payloadLen) : '';
+        $headerBlock = $this->readExactly($hdrLen, $timeout);
+        $payload = $payloadLen > 0 ? $this->readExactly($payloadLen, $timeout) : '';
         // Consume trailing \r\n
-        $this->readExactly(2);
+        $this->readExactly(2, $timeout);
 
         return [ServerOp::HMsg, [
             'subject' => $subject,
@@ -170,10 +178,18 @@ final class Parser
         }
     }
 
-    private function readExactly(int $bytes): string
+    /**
+     * Read exactly $bytes, passing the timeout explicitly on every transport
+     * read. Previously it passed none, so the read inherited whatever deadline
+     * the last readLine() happened to leave on the stream. The timeout applies
+     * per read rather than to the frame as a whole: a large payload arrives
+     * across several segments, and charging the whole body to one deadline
+     * would fail frames that are making steady progress.
+     */
+    private function readExactly(int $bytes, ?float $timeout = null): string
     {
         while (\strlen($this->buffer) < $bytes) {
-            $data = $this->transport->read(max(65536, $bytes - \strlen($this->buffer)));
+            $data = $this->transport->read(max(65536, $bytes - \strlen($this->buffer)), $timeout);
             if ($data === '') {
                 throw new ProtocolException('Unexpected end of data while reading payload');
             }
@@ -183,5 +199,30 @@ final class Parser
         $result = substr($this->buffer, 0, $bytes);
         $this->buffer = substr($this->buffer, $bytes);
         return $result;
+    }
+
+    /**
+     * Run a frame-body read, turning any failure into a poisoned parser.
+     *
+     * The header line is already consumed by the time this runs, so a partial
+     * body read leaves the buffer mid-frame. Reporting that as a timeout would
+     * be indistinguishable from "nothing arrived" -- the caller would carry on
+     * against a stream whose next bytes are payload, not protocol. Raising
+     * ConnectionException instead routes it to the reconnect path, which builds
+     * a fresh parser. The dropped frame is often the PubAck itself.
+     *
+     * @param \Closure(): array{0: ServerOp, 1: mixed} $read
+     * @return array{0: ServerOp, 1: mixed}
+     */
+    private function readFrame(\Closure $read): array
+    {
+        try {
+            return $read();
+        } catch (\Throwable $e) {
+            $this->poisoned = true;
+            $this->buffer = '';
+
+            throw new ConnectionException("Failed mid-frame, parser desynced from the stream: {$e->getMessage()}", $e->getCode(), previous: $e);
+        }
     }
 }

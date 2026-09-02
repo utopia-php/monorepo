@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Utopia\NATS\ObjectStore;
 
 use Utopia\NATS\Connection;
+use Utopia\NATS\Exception\JetStreamException;
 use Utopia\NATS\Exception\ObjectStoreException;
 use Utopia\NATS\Headers;
 use Utopia\NATS\JetStream\AckPolicy;
@@ -87,7 +88,15 @@ final class ObjectStore
                 $headers,
                 expectedLastSubjectSeq: $expectedSeq,
             );
-        } catch (\Throwable $e) {
+        } catch (JetStreamException $e) {
+            // Purge only when the server actually rejected the CAS publish. On a
+            // transport failure the meta publish is ambiguous -- it may well have
+            // landed -- and purging here would delete the chunks this put just
+            // wrote successfully.
+            if ($e->apiError?->errCode !== JetStream::ERR_WRONG_LAST_SEQUENCE) {
+                throw $e;
+            }
+
             $this->purgeChunks($nuid);
             throw new ObjectStoreException("conflicting concurrent write for object: {$name}", $e->getCode(), previous: $e);
         }
@@ -425,7 +434,11 @@ final class ObjectStore
                 $headers,
                 expectedLastSubjectSeq: $expectedSeq,
             );
-        } catch (\Throwable $e) {
+        } catch (JetStreamException $e) {
+            if ($e->apiError?->errCode !== JetStream::ERR_WRONG_LAST_SEQUENCE) {
+                throw $e;
+            }
+
             throw new ObjectStoreException("conflicting concurrent write for object: {$meta->name}", $e->getCode(), previous: $e);
         }
     }

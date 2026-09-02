@@ -22,6 +22,13 @@ final class FakeTransport implements Transport
     /** @var list<array<string, mixed>> */
     public array $tlsUpgrades = [];
 
+    /**
+     * Whether the server answers PINGs. Set false to emulate a server that has
+     * gone away without closing the socket -- the case the stale-connection
+     * budget exists for.
+     */
+    public bool $answerPings = true;
+
     private string $inbound = '';
     private bool $connected = false;
 
@@ -40,9 +47,11 @@ final class FakeTransport implements Transport
         $this->writes[] = $data;
 
         // Answer PINGs so the handshake / flush / drain barrier completes.
-        $pings = substr_count($data, "PING\r\n");
-        for ($i = 0; $i < $pings; $i++) {
-            $this->inbound .= "PONG\r\n";
+        if ($this->answerPings) {
+            $pings = substr_count($data, "PING\r\n");
+            for ($i = 0; $i < $pings; $i++) {
+                $this->inbound .= "PONG\r\n";
+            }
         }
 
         return \strlen($data);
