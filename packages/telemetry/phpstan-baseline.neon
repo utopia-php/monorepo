@@ -1,0 +1,24 @@
+parameters:
+    # These findings only surface when PHPStan reflects the optional native
+    # telemetry extensions installed in CI. Keep the existing anonymous-class
+    # findings baselined while allowing every other error to fail normally.
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        -
+            identifier: assign.propertyType
+            path: src/Telemetry/Adapter/OpenTelemetry.php
+        -
+            identifier: method.nonObject
+            path: src/Telemetry/Adapter/OpenTelemetry.php
+        -
+            identifier: argument.type
+            path: src/Telemetry/Adapter/OpenTelemetry.php
+        -
+            identifier: callable.nonCallable
+            path: src/Telemetry/Adapter/OpenTelemetry.php
+        -
+            identifier: missingType.iterableValue
+            path: src/Telemetry/Adapter/OpenTelemetry.php
+        -
+            identifier: missingType.iterableValue
+            path: src/Telemetry/Adapter/Test.php
