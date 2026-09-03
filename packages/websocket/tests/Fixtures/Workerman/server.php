@@ -7,8 +7,11 @@ require_once __DIR__ . '/../../../vendor/autoload.php';
 use Utopia\WebSocket;
 use Workerman\Connection\TcpConnection;
 use Workerman\Protocols\Http\Request;
+use Workerman\Worker;
 
-$adapter = new WebSocket\Adapter\Workerman();
+Worker::$logFile = '/dev/null';
+
+$adapter = new WebSocket\Adapter\Workerman('127.0.0.1', 18082);
 $adapter->setWorkerNumber(1); // Important for tests
 
 $server = new WebSocket\Server($adapter);
@@ -52,9 +55,6 @@ $server
     })
     ->onRequest(function (TcpConnection $connection, Request $request) use (&$connections): void {
         $path = $request->path();
-        if (!is_string($path)) {
-            throw new \Exception('Invalid path ' . $path . ' for request: ' . json_encode($request, JSON_PRETTY_PRINT));
-        }
         echo 'HTTP request received: ', $path, PHP_EOL;
 
         if ($path === '/health') {

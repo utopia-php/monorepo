@@ -53,6 +53,13 @@ $server->start();
 
 Utopia Framework requires PHP 8.0 or later. We recommend using the latest PHP version whenever possible.
 
+## Testing
+
+```sh
+composer test       # unit tests, with no servers
+composer test:e2e   # starts local Swoole and Workerman fixture servers
+```
+
 ## Copyright and license
 
 The MIT License (MIT) [http://www.opensource.org/licenses/mit-license.php](http://www.opensource.org/licenses/mit-license.php)

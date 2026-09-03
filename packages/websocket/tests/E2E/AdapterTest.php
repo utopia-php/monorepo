@@ -19,16 +19,14 @@ final class AdapterTest extends TestCase
         ]);
     }
 
-    public function setUp(): void {}
-
     public function testSwoole(): void
     {
-        $this->testServer('127.0.0.1', 8001);
+        $this->testServer('127.0.0.1', 18081);
     }
 
     public function testWorkerman(): void
     {
-        $this->testServer('127.0.0.1', 8002);
+        $this->testServer('127.0.0.1', 18082);
     }
 
     private function testServer(string $host, int $port): void

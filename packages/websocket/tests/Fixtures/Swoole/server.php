@@ -8,7 +8,7 @@ use Swoole\Http\Request;
 use Swoole\Http\Response;
 use Utopia\WebSocket;
 
-$adapter = new WebSocket\Adapter\Swoole();
+$adapter = new WebSocket\Adapter\Swoole('127.0.0.1', 18081);
 $adapter->setWorkerNumber(1); // Important for tests
 
 $server = new WebSocket\Server($adapter);
