@@ -155,6 +155,40 @@ final class GitHubTest extends Base
         );
         $this->assertSame(1, $verified);
         $claims = json_decode(base64_decode(strtr($payload, '-_', '+/')), true);
-        $this->assertSame('5678', $claims['iss']);
+        // An App ID has to land as a JSON integer. Asserted as the string it
+        // was read from, this passed while GitHub answered every token request
+        // 401 "'Issuer' claim ('iss') must be an Integer".
+        $this->assertIsInt($claims['iss']);
+        $this->assertSame(5678, $claims['iss']);
+    }
+
+    public function testInitializeVariablesKeepsAClientIdentifierAsAString(): void
+    {
+        $keyPair = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
+        $this->assertNotFalse($keyPair);
+        openssl_pkey_export($keyPair, $pem);
+
+        $adapter = new class (new Cache(new None())) extends GitHub {
+            /** @var array<string, mixed> */
+            public array $captured = [];
+
+            protected function call(string $method, string $path = '', array $headers = [], array $params = [], bool $decode = true, bool $followRedirects = true): array
+            {
+                $this->captured = ['headers' => $headers];
+
+                return [
+                    'body' => ['token' => 'installation-token'],
+                    'headers' => ['status-code' => 201],
+                ];
+            }
+        };
+
+        // A client ID is a legitimate string issuer, so the integer cast that
+        // fixes the App ID must not reach it.
+        $adapter->initializeVariables('1234', $pem, 'Iv23liABCDEF');
+
+        $jwt = substr((string) $adapter->captured['headers']['Authorization'], \strlen('Bearer '));
+        $claims = json_decode(base64_decode(strtr(explode('.', $jwt)[1], '-_', '+/')), true);
+        $this->assertSame('Iv23liABCDEF', $claims['iss']);
     }
 }

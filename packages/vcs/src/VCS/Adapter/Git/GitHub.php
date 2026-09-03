@@ -650,7 +650,11 @@ class GitHub extends Git
             throw new Exception('Failed to read the GitHub App private key');
         }
 
-        $appIdentifier = $appId;
+        // GitHub reads `iss` as a JSON integer when it holds an App ID: sent as
+        // a string it answers 401 "'Issuer' claim ('iss') must be an Integer"
+        // and no token is ever issued. A client ID (Iv23li...) is a legitimate
+        // string issuer, so only an all-digit identifier is cast.
+        $appIdentifier = ctype_digit((string) $appId) ? (int) $appId : $appId;
 
         $iat = time();
         $exp = $iat + self::GITHUB_APP_JWT_EXPIRY;
