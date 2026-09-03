@@ -137,7 +137,10 @@ jobs:
   lowest:
     name: lowest (${{ matrix.package }})
     needs: changed
-    if: needs.changed.outputs.matrix != '[]'
+    # --linked pins siblings to the checkout, so the constraint is never
+    # exercised. Skipping at the job level rather than the step keeps a linked
+    # entry from booting a runner only to report a no-op pass.
+    if: ${{ needs.changed.outputs.matrix != '[]' && !matrix.linked }}
     runs-on: ubuntu-latest
     continue-on-error: true
     strategy:
@@ -161,7 +164,4 @@ jobs:
           extensions: ${{ steps.meta.outputs.extensions }}
           coverage: none
 
-      # --linked pins siblings to the checkout, so the constraint is not
-      # exercised at all; only the registry-resolved half is meaningful here.
-      - if: ${{ !matrix.linked }}
-        run: bin/monorepo check ${{ matrix.package }} --lowest
+      - run: bin/monorepo check ${{ matrix.package }} --lowest
