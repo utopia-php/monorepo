@@ -138,9 +138,9 @@ jobs:
   # above resolves the newest, so a range that is too loose still installs a
   # sibling new enough to satisfy the code and nothing fails — which is how
   # queue shipped 1.6.0 calling Pool::maintain() under `pools: ^2.0`, a method
-  # that only exists from 2.1.0. Informational for now: 9 packages currently
-  # carry the same defect (see PR #201), and this becomes a gate once they are
-  # fixed.
+  # that only exists from 2.1.0. Informational for now: cache, cli, http,
+  # platform, pools, servers and telemetry carry the same defect today, and
+  # gating on it would block unrelated work. Becomes a gate once they are fixed.
   lowest:
     name: lowest (${{ matrix.package }})
     needs: changed
