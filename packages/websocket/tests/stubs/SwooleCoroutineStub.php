@@ -1,13 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Swoole\Coroutine;
 
 /**
  * Run a coroutine callback
- *
- * @param callable $callback
- * @return mixed
  */
-function run(callable $callback)
+function run(callable $callback): void
 {
+    $callback();
 }

@@ -1,6 +1,8 @@
 <?php
 
-require_once __DIR__.'/../../../vendor/autoload.php';
+declare(strict_types=1);
+
+require_once __DIR__ . '/../../../vendor/autoload.php';
 
 use Utopia\WebSocket;
 use Workerman\Connection\TcpConnection;
@@ -15,21 +17,21 @@ $server = new WebSocket\Server($adapter);
 $connections = [];
 
 $server
-    ->onWorkerStart(function (int $workerId) {
+    ->onWorkerStart(function (int $workerId): void {
         echo 'worker started ', $workerId, PHP_EOL;
     })
-    ->onWorkerStop(function (int $workerId) {
-        echo "worker stopped ", $workerId, PHP_EOL;
+    ->onWorkerStop(function (int $workerId): void {
+        echo 'worker stopped ', $workerId, PHP_EOL;
     })
-    ->onOpen(function (int $connection, array $request) use (&$connections) {
+    ->onOpen(function (int $connection, array $request) use (&$connections): void {
         $connections[$connection] = true;
         echo 'connected ', $connection, PHP_EOL;
     })
-    ->onClose(function (int $connection) use (&$connections) {
+    ->onClose(function (int $connection) use (&$connections): void {
         unset($connections[$connection]);
         echo 'disconnected ', $connection, PHP_EOL;
     })
-    ->onMessage(function (int $connection, string $message) use ($server, &$connections) {
+    ->onMessage(function (int $connection, string $message) use ($server, &$connections): void {
         echo $message, PHP_EOL;
 
         switch ($message) {
@@ -48,7 +50,7 @@ $server
                 break;
         }
     })
-    ->onRequest(function (TcpConnection $connection, Request $request) use (&$connections) {
+    ->onRequest(function (TcpConnection $connection, Request $request) use (&$connections): void {
         $path = $request->path();
         if (!is_string($path)) {
             throw new \Exception('Invalid path ' . $path . ' for request: ' . json_encode($request, JSON_PRETTY_PRINT));
@@ -56,23 +58,23 @@ $server
         echo 'HTTP request received: ', $path, PHP_EOL;
 
         if ($path === '/health') {
-            $connection->send('HTTP/1.1 200 OK' . "\r\n" .
-                             'Content-Type: application/json' . "\r\n" .
-                             'Connection: close' . "\r\n\r\n" .
-                             json_encode(['status' => 'ok', 'message' => 'WebSocket server is running']));
+            $connection->send('HTTP/1.1 200 OK' . "\r\n"
+                             . 'Content-Type: application/json' . "\r\n"
+                             . 'Connection: close' . "\r\n\r\n"
+                             . json_encode(['status' => 'ok', 'message' => 'WebSocket server is running']));
         } elseif ($path === '/info') {
-            $connection->send('HTTP/1.1 200 OK' . "\r\n" .
-                             'Content-Type: application/json' . "\r\n" .
-                             'Connection: close' . "\r\n\r\n" .
-                             json_encode([
+            $connection->send('HTTP/1.1 200 OK' . "\r\n"
+                             . 'Content-Type: application/json' . "\r\n"
+                             . 'Connection: close' . "\r\n\r\n"
+                             . json_encode([
                                  'server' => 'Workerman WebSocket',
                                  'connections' => count($connections),
-                                 'timestamp' => time()
+                                 'timestamp' => time(),
                              ]));
         } else {
-            $connection->send('HTTP/1.1 404 Not Found' . "\r\n" .
-                             'Connection: close' . "\r\n\r\n" .
-                             'Not Found');
+            $connection->send('HTTP/1.1 404 Not Found' . "\r\n"
+                             . 'Connection: close' . "\r\n\r\n"
+                             . 'Not Found');
         }
     })
     ->start();

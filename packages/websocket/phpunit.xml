@@ -1,19 +1,11 @@
-<phpunit backupGlobals="false"
-         backupStaticAttributes="false"
-         bootstrap="vendor/autoload.php"
-         colors="true"
-         convertErrorsToExceptions="true"
-         convertNoticesToExceptions="true"
-         convertWarningsToExceptions="true"
-         processIsolation="true"
-         stopOnFailure="true"
-        >
-    <testsuites>
-        <testsuite name="Unit">
-            <directory>./tests/unit/</directory>
-        </testsuite>
-        <testsuite name="E2E">
-            <directory>./tests/e2e/</directory>
-        </testsuite>
-    </testsuites>
+<?xml version="1.0"?>
+<phpunit backupGlobals="false" bootstrap="vendor/autoload.php" colors="true" processIsolation="true" stopOnFailure="true" cacheDirectory=".phpunit.cache" backupStaticProperties="false">
+  <testsuites>
+    <testsuite name="Unit">
+      <directory>./tests/unit/</directory>
+    </testsuite>
+    <testsuite name="E2E">
+      <directory>./tests/e2e/</directory>
+    </testsuite>
+  </testsuites>
 </phpunit>

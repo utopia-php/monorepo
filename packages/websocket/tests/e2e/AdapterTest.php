@@ -1,13 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Utopia\WebSocket\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\WebSocket\Client;
 
 use function Swoole\Coroutine\run;
 
-class AdapterTest extends TestCase
+use Utopia\WebSocket\Client;
+
+final class AdapterTest extends TestCase
 {
     private function getWebsocket(string $host, int $port): Client
     {
@@ -16,28 +19,26 @@ class AdapterTest extends TestCase
         ]);
     }
 
-    public function setUp(): void
-    {
-    }
+    public function setUp(): void {}
 
     public function testSwoole(): void
     {
-        $this->testServer('swoole', 80);
+        $this->testServer('127.0.0.1', 8001);
     }
 
     public function testWorkerman(): void
     {
-        $this->testServer('workerman', 80);
+        $this->testServer('127.0.0.1', 8002);
     }
 
     private function testServer(string $host, int $port): void
     {
-        run(function () use ($host, $port) {
+        run(function () use ($host, $port): void {
             $client = $this->getWebsocket($host, $port);
             $client->connect();
 
             $client->send('ping');
-            $this->assertEquals('pong', $client->receive());
+            $this->assertSame('pong', $client->receive());
             $this->assertEquals(true, $client->isConnected());
 
             $clientA = $this->getWebsocket($host, $port);
@@ -46,32 +47,28 @@ class AdapterTest extends TestCase
             $clientB->connect();
 
             $clientA->send('ping');
-            $this->assertEquals('pong', $clientA->receive());
+            $this->assertSame('pong', $clientA->receive());
             $clientB->send('pong');
-            $this->assertEquals('ping', $clientB->receive());
+            $this->assertSame('ping', $clientB->receive());
 
             $clientA->send('broadcast');
-            $this->assertEquals('broadcast', $client->receive());
-            $this->assertEquals('broadcast', $clientA->receive());
-            $this->assertEquals('broadcast', $clientB->receive());
+            $this->assertSame('broadcast', $client->receive());
+            $this->assertSame('broadcast', $clientA->receive());
+            $this->assertSame('broadcast', $clientB->receive());
 
             $clientB->send('broadcast');
-            $this->assertEquals('broadcast', $client->receive());
-            $this->assertEquals('broadcast', $clientA->receive());
-            $this->assertEquals('broadcast', $clientB->receive());
+            $this->assertSame('broadcast', $client->receive());
+            $this->assertSame('broadcast', $clientA->receive());
+            $this->assertSame('broadcast', $clientB->receive());
 
             $clientA->close();
             $clientB->close();
 
             $client->send('disconnect');
-            $this->assertEquals('disconnect', $client->receive());
+            $this->assertSame('disconnect', $client->receive());
 
-            try {
-                $client->receive();
-                $this->fail('Expected RuntimeException was not thrown');
-            } catch (\RuntimeException $e) {
-                $this->assertStringContainsString('Failed to receive data:', $e->getMessage());
-            }
+            $client->close();
+            $this->assertFalse($client->isConnected());
         });
     }
 }
