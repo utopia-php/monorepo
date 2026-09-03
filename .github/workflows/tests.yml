@@ -126,3 +126,42 @@ jobs:
           TESTS_BITBUCKET_ACCESS_TOKEN: ${{ secrets.TESTS_BITBUCKET_ACCESS_TOKEN }}
           TESTS_BITBUCKET_WORKSPACE: ${{ secrets.TESTS_BITBUCKET_WORKSPACE }}
         run: bin/monorepo test ${{ matrix.package }} ${{ matrix.linked && '--linked' || '' }}
+
+  # Resolves every constraint to the oldest release it admits. The `test` job
+  # above resolves the newest, so a range that is too loose still installs a
+  # sibling new enough to satisfy the code and nothing fails — which is how
+  # queue shipped 1.6.0 calling Pool::maintain() under `pools: ^2.0`, a method
+  # that only exists from 2.1.0. Informational for now: 9 packages currently
+  # carry the same defect (see PR #201), and this becomes a gate once they are
+  # fixed.
+  lowest:
+    name: lowest (${{ matrix.package }})
+    needs: changed
+    if: needs.changed.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.changed.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6
+
+      - id: meta
+        run: |
+          EXTENSIONS=$(jq -r '[(.require, ."require-dev", .suggest | select(. != null)) | keys[] | select(startswith("ext-")) | ltrimstr("ext-")] | unique | join(", ")' packages/${{ matrix.package }}/composer.json)
+          FLOOR=$(jq -r '.require.php // ""' packages/${{ matrix.package }}/composer.json | grep -oE '[0-9]+\.[0-9]+' | head -1)
+          PHP=$(printf '%s\n8.4\n' "$FLOOR" | grep -E '^[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          echo "extensions=$EXTENSIONS" >> "$GITHUB_OUTPUT"
+          echo "php=$PHP" >> "$GITHUB_OUTPUT"
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # ratchet:shivammathur/setup-php@v2
+        with:
+          php-version: ${{ steps.meta.outputs.php }}
+          extensions: ${{ steps.meta.outputs.extensions }}
+          coverage: none
+
+      # --linked pins siblings to the checkout, so the constraint is not
+      # exercised at all; only the registry-resolved half is meaningful here.
+      - if: ${{ !matrix.linked }}
+        run: bin/monorepo check ${{ matrix.package }} --lowest

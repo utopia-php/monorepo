@@ -605,6 +605,12 @@ switch ($command) {
     case 'check':
         $targets = $arguments !== [] ? $arguments : packages();
         toolchain();
+        // --lowest resolves every constraint to the oldest release it admits,
+        // which is the only combination that proves the constraints are honest.
+        // The default `composer update` takes the newest, so a range that is
+        // too loose still installs a sibling new enough to satisfy the code and
+        // nothing fails. Forces a re-resolve even when vendor/ is populated.
+        $lowest = isset($options['lowest']) ? ' --prefer-lowest' : '';
         $failed = [];
         foreach ($targets as $package) {
             is_dir("packages/{$package}") || fail("unknown package: {$package}");
@@ -613,8 +619,8 @@ switch ($command) {
             $directory = "packages/{$package}";
 
             // phpstan and rector reflect against the package's autoloader
-            if (!is_dir("{$directory}/vendor")) {
-                passthru("cd {$directory} && composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs", $code);
+            if (!is_dir("{$directory}/vendor") || $lowest !== '') {
+                passthru("cd {$directory} && composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs{$lowest}", $code);
                 if ($code !== 0) {
                     $failed[] = "{$package} (composer)";
                     continue;
@@ -690,6 +696,13 @@ switch ($command) {
             out("==> {$package}");
             $directory = "packages/{$package}";
 
+            // --lowest: see the note in `check`. Meaningless with --linked,
+            // which pins siblings to the checkout regardless of the constraint.
+            $lowest = isset($options['lowest']) ? ' --prefer-lowest' : '';
+            if ($lowest !== '' && isset($options['linked'])) {
+                fail('--lowest and --linked are mutually exclusive: --linked ignores the declared constraint');
+            }
+
             // --linked: resolve monorepo siblings from the local checkout
             // instead of Packagist, via a generated manifest (COMPOSER env)
             // with a path repository claiming constraint-satisfying versions.
@@ -718,7 +731,7 @@ switch ($command) {
             // --ignore-platform-reqs: CI installs each package's declared
             // extensions, and exotic transitive ones (e.g. ext-opentelemetry)
             // must not block resolution.
-            passthru("cd {$directory} && {$environment}composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs", $code);
+            passthru("cd {$directory} && {$environment}composer update --no-interaction --prefer-dist --no-progress --ignore-platform-reqs{$lowest}", $code);
 
             // The test contract: `composer test` is the unit tier and runs on
             // a bare host; `composer test:e2e` runs on the host against the
@@ -815,9 +828,11 @@ switch ($command) {
           release <name> <version> [--dry-run]
                                               preview notes, tag <name>/<version> and push it (CI does the rest)
           validate                            check package composer.json conventions
-          check [name...] [--fix]             run pint, phpstan and rector against packages
-          test [name...] [--linked]           install dependencies and run package test suites
-                                              (--linked resolves monorepo siblings from the local checkout)
+          check [name...] [--fix] [--lowest]  run pint, phpstan and rector against packages
+          test [name...] [--linked|--lowest]  install dependencies and run package test suites
+                                              (--linked resolves monorepo siblings from the local checkout;
+                                               --lowest resolves every constraint to its oldest allowed release,
+                                               proving the declared ranges actually carry the APIs the code calls)
           benchmark [name...]                 run the `bench` script of packages that declare one
           dependents <name...>                list packages that depend on the given ones (transitively)
           graph                               regenerate the dependency graph in README.md
