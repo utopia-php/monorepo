@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.changed.outputs.matrix }}
+      lowest: ${{ steps.changed.outputs.lowest }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6
         with:
@@ -46,6 +47,7 @@ jobs:
           # docs-only change: no packages to test
           if [ -z "$CHANGED" ]; then
             echo "matrix=[]" >> "$GITHUB_OUTPUT"
+            echo "lowest=[]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -68,6 +70,11 @@ jobs:
             } | jq --compact-output --slurp 'unique'
           )
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+          # The lowest job only has something to prove where the constraint is
+          # actually exercised. A linked entry pins siblings to the checkout,
+          # so filter those out here rather than starting a runner that skips.
+          echo "lowest=$(echo "$MATRIX" | jq -c '[.[] | select(.linked | not)]')" >> "$GITHUB_OUTPUT"
 
   validate:
     runs-on: ubuntu-latest
@@ -137,16 +144,13 @@ jobs:
   lowest:
     name: lowest (${{ matrix.package }})
     needs: changed
-    # --linked pins siblings to the checkout, so the constraint is never
-    # exercised. Skipping at the job level rather than the step keeps a linked
-    # entry from booting a runner only to report a no-op pass.
-    if: ${{ needs.changed.outputs.matrix != '[]' && !matrix.linked }}
+    if: needs.changed.outputs.lowest != '[]'
     runs-on: ubuntu-latest
     continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.changed.outputs.matrix) }}
+        include: ${{ fromJson(needs.changed.outputs.lowest) }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6
 
