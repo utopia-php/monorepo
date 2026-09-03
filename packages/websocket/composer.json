@@ -29,6 +29,7 @@
         "php": ">=8.0"
     },
     "require-dev": {
+        "ext-swoole": "*",
         "swoole/ide-helper": "5.1.2",
         "textalk/websocket": "1.5.2",
         "workerman/workerman": "4.1.*"
