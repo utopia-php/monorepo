@@ -104,6 +104,7 @@ graph TD
     nats
     replication
     user-agent
+    websocket
 ```
 <!-- /graph -->
 
