@@ -48,6 +48,10 @@ final readonly class Specification
     {
         $visited = [];
         while ($schema instanceof ReferenceSchema) {
+            if (! str_starts_with($schema->reference, '#')) {
+                break;
+            }
+
             $name = null;
             $reference = rawurldecode($schema->reference);
             foreach (['#/components/schemas/', '#/definitions/'] as $prefix) {

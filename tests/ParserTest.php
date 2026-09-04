@@ -169,6 +169,7 @@ final class ParserTest extends TestCase
                 'Encoded' => ['$ref' => '#/components/schemas/Encoded%20Name'],
                 'Missing' => ['$ref' => '#/components/schemas/Unknown'],
                 'External' => ['$ref' => 'schemas.json#/Binary'],
+                'EncodedExternal' => ['$ref' => '%23/components/schemas/Binary'],
                 'CycleA' => ['$ref' => '#/components/schemas/CycleB'],
                 'CycleB' => ['$ref' => '#/components/schemas/CycleA'],
             ]],
@@ -180,6 +181,7 @@ final class ParserTest extends TestCase
         self::assertSame($spec->schemas['Encoded Name'], $spec->resolveSchema($spec->schemas['Encoded']));
         self::assertSame($spec->schemas['Missing'], $spec->resolveSchema($spec->schemas['Missing']));
         self::assertSame($spec->schemas['External'], $spec->resolveSchema($spec->schemas['External']));
+        self::assertSame($spec->schemas['EncodedExternal'], $spec->resolveSchema($spec->schemas['EncodedExternal']));
         self::assertSame($spec->schemas['CycleA'], $spec->resolveSchema($spec->schemas['CycleA']));
     }
 
