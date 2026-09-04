@@ -144,6 +144,38 @@ Publishers are unchanged: enqueue to each queue by name (`$publisher->enqueue(ne
 
 With [`utopia-php/platform`](https://github.com/utopia-php/platform), pass `workers` and `jobs` (`queue` / `maxCoroutines` per action) into `Platform::init(Service::TYPE_WORKER, …)`.
 
+## Inline adapter
+
+`Adapter\Inline` is both the transport and the publisher. `enqueue()` runs the matching `job()` in the same process and returns when the handler finishes. `start()` registers those handlers and returns — there is no consume loop and no worker process.
+
+Payloads are JSON-round-tripped before the handler runs (same as Redis/Nats), so handlers always receive plain arrays — never live objects.
+
+```php
+use Utopia\Queue;
+use Utopia\Queue\Adapter\Inline;
+use Utopia\Queue\Message;
+use Utopia\Queue\Queue;
+
+$adapter = new Inline();
+$server = new Queue\Server($adapter);
+
+$server
+    ->job('v1-mails')
+    ->inject('message')
+    ->action(function (Message $message) {
+        // Runs inside enqueue(), before it returns
+    });
+
+$server->start();
+
+$adapter->enqueue(new Queue('v1-mails'), [
+    'type' => 'test_number',
+    'value' => 123,
+]);
+```
+
+A failed handler is reported through the Server error hook. `enqueue()` still returns `true`, the same as a broker that accepted the message. Queues with no registered job are accepted and ignored. `getQueueSize()` is always `0`.
+
 ## System requirements
 
 Utopia Queue requires PHP 8.5 or later and recommends the latest PHP version whenever possible.
