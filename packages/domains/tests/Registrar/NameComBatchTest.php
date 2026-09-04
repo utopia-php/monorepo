@@ -47,7 +47,7 @@ final class NameComBatchTest extends TestCase
         $this->assertTrue($result['domain-1.com']);
         $this->assertFalse($result['domain-25.com']);
         $this->assertCount(2, $adapter->requests);
-        $this->assertSame(50, \count($adapter->requests[0]['data']['domainNames']));
+        $this->assertCount(50, $adapter->requests[0]['data']['domainNames']);
         $this->assertSame(['domain-51.com'], $adapter->requests[1]['data']['domainNames']);
 
         foreach ($adapter->requests as $request) {
