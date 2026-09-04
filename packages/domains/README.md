@@ -133,7 +133,7 @@ $contact = new Contact(
     'Example Inc.',
 );
 
-$available = $registrar->available('example.com');
+$availability = $registrar->available(['example.com', 'example.net']);
 $orderId = $registrar->purchase('example.com', $contact, 1);
 $suggestions = $registrar->suggest(['example'], ['com', 'net'], 10);
 $details = $registrar->getDomain('example.com');
@@ -142,7 +142,7 @@ $transferOrderId = $registrar->transfer('example.com', 'auth-code');
 $registrar->updateDomain('example.com', new UpdateDetails(autoRenew: true));
 ```
 
-The registrar API also provides `tlds()`, `updateNameservers()`, `getPrice()`, `getAuthCode()`, `cancelPurchase()`, and `checkTransferStatus()`.
+The registrar API also provides `tlds()`, `updateNameservers()`, `getPrice()`, `getAuthCode()`, `cancelPurchase()`, and `checkTransferStatus()`. Batch availability results are keyed by domain name. The Name.com adapter checks up to 50 domains in each API request and automatically splits larger batches.
 
 ## Testing
 
