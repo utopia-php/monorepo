@@ -96,6 +96,77 @@ final class BackgroundTest extends TestCase
         $this->assertSame(range(1, 20), $ids);
     }
 
+    public function testShutdownWaitsForEnqueuesAlreadyBlockedByBackPressure(): void
+    {
+        $gate = new Channel(3);
+        $publisher = new class ($gate) implements Synchronous {
+            /** @var list<array<string, mixed>> */
+            private array $published = [];
+
+            public function __construct(private readonly Channel $gate) {}
+
+            public function publish(Queue $queue, array $payload, bool $priority = false): bool
+            {
+                $this->gate->pop();
+                $this->published[] = $payload;
+
+                return true;
+            }
+
+            public function enqueueMany(Queue $queue, array $payloads, bool $priority = false): bool
+            {
+                return true;
+            }
+
+            public function retry(Queue $queue, ?int $limit = null): void {}
+
+            public function getQueueSize(Queue $queue, bool $failedJobs = false): int
+            {
+                return 0;
+            }
+
+            /** @return list<array<string, mixed>> */
+            public function published(): array
+            {
+                return $this->published;
+            }
+        };
+        $background = new Background($publisher, capacity: 1);
+
+        Coroutine\run(function () use ($background, $gate): void {
+            $background->start();
+            $background->enqueue(new Queue('emails'), ['id' => 1]);
+            $background->enqueue(new Queue('emails'), ['id' => 2]);
+
+            Coroutine::create(function () use ($background): void {
+                $background->enqueue(new Queue('emails'), ['id' => 3]);
+            });
+            Coroutine::sleep(0.01);
+
+            Coroutine::create(function () use ($gate): void {
+                Coroutine::sleep(0.01);
+                $gate->push(true);
+                $gate->push(true);
+                $gate->push(true);
+            });
+
+            $background->shutdown();
+        });
+
+        $this->assertSame([1, 2, 3], array_column($publisher->published(), 'id'));
+    }
+
+    public function testStartRequiresCoroutineRuntime(): void
+    {
+        $published = [];
+        $background = new Background($this->recordingPublisher($published));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('must be started inside a coroutine runtime');
+
+        $background->start();
+    }
+
     public function testDelegatesManagementCalls(): void
     {
         $published = [['id' => 1], ['id' => 2]];
@@ -116,6 +187,11 @@ final class BackgroundTest extends TestCase
             {
                 $this->gate->pop();
 
+                return true;
+            }
+
+            public function enqueueMany(Queue $queue, array $payloads, bool $priority = false): bool
+            {
                 return true;
             }
 
@@ -197,6 +273,15 @@ final class BackgroundTest extends TestCase
             public function publish(Queue $queue, array $payload, bool $priority = false): bool
             {
                 $this->buffer[] = $payload;
+
+                return true;
+            }
+
+            public function enqueueMany(Queue $queue, array $payloads, bool $priority = false): bool
+            {
+                foreach ($payloads as $payload) {
+                    $this->buffer[] = $payload;
+                }
 
                 return true;
             }

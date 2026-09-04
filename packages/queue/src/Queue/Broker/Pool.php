@@ -83,7 +83,7 @@ readonly class Pool implements Synchronous, Consumer
      */
     public function extend(Queue $queue, Message $message): void
     {
-        $this->consumer?->use(function (Publisher|Consumer $adapter) use ($queue, $message): void {
+        $this->consumer?->use(function (Synchronous|Consumer $adapter) use ($queue, $message): void {
             $extend = [$adapter, 'extend'];
 
             if (\is_callable($extend)) {
@@ -103,7 +103,7 @@ readonly class Pool implements Synchronous, Consumer
      */
     public function extendInterval(): ?float
     {
-        return $this->consumer?->use(function (Publisher|Consumer $adapter): ?float {
+        return $this->consumer?->use(function (Synchronous|Consumer $adapter): ?float {
             $interval = [$adapter, 'extendInterval'];
 
             return \is_callable($interval) ? (float) $interval() : null;

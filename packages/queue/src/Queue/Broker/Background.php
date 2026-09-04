@@ -49,6 +49,10 @@ class Background implements Synchronous, Asynchronous
 
     private bool $started = false;
 
+    private int $readers = 0;
+
+    private int $activeEnqueues = 0;
+
     public function __construct(
         private readonly Synchronous $publisher,
         int $capacity = 512,
@@ -80,12 +84,16 @@ class Background implements Synchronous, Asynchronous
             return;
         }
 
+        if (Coroutine::getCid() === -1) {
+            throw new \RuntimeException('Background publisher must be started inside a coroutine runtime.');
+        }
+
         $this->started = true;
 
         for ($i = 0; $i < $this->coroutines; $i++) {
             $this->waitGroup->add();
 
-            Coroutine::create(function (): void {
+            $cid = Coroutine::create(function (): void {
                 try {
                     while (($task = $this->channel->pop()) instanceof \Closure) {
                         $task();
@@ -94,6 +102,22 @@ class Background implements Synchronous, Asynchronous
                     $this->waitGroup->done();
                 }
             });
+
+            if ($cid === false) {
+                $this->waitGroup->done();
+                $this->started = false;
+
+                for ($reader = 0; $reader < $this->readers; $reader++) {
+                    $this->channel->push(null);
+                }
+
+                $this->waitGroup->wait();
+                $this->readers = 0;
+
+                throw new \RuntimeException('Failed to create a background publisher coroutine.');
+            }
+
+            $this->readers++;
         }
     }
 
@@ -107,12 +131,20 @@ class Background implements Synchronous, Asynchronous
             return;
         }
 
-        for ($i = 0; $i < $this->coroutines; $i++) {
+        // Stop accepting background work before placing sentinels. Enqueues
+        // already blocked on a full channel are allowed to finish first, so no
+        // task can land behind a sentinel and be silently abandoned.
+        $this->started = false;
+        while ($this->activeEnqueues > 0) {
+            Coroutine::sleep(0.001);
+        }
+
+        for ($i = 0; $i < $this->readers; $i++) {
             $this->channel->push(null); // one sentinel per reader; pop() returns non-Closure → loop ends
         }
 
         $this->waitGroup->wait();
-        $this->started = false;
+        $this->readers = 0;
     }
 
     /**
@@ -121,6 +153,11 @@ class Background implements Synchronous, Asynchronous
     public function publish(Queue $queue, array $payload, bool $priority = false): bool
     {
         return $this->publisher->publish($queue, $payload, $priority);
+    }
+
+    public function enqueueMany(Queue $queue, array $payloads, bool $priority = false): bool
+    {
+        return $this->publisher->enqueueMany($queue, $payloads, $priority);
     }
 
     /**
@@ -139,14 +176,22 @@ class Background implements Synchronous, Asynchronous
             return;
         }
 
-        $accepted = $this->channel->push(function () use ($queue, $payload, $priority): void {
-            try {
-                $this->publisher->publish($queue, $payload, $priority);
-            } catch (\Throwable $error) {
-                // Fire-and-forget: no producer to surface to, so log and move on.
-                error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
-            }
-        }, $this->timeout);
+        $this->activeEnqueues++;
+
+        try {
+            $accepted = $this->channel->push(function () use ($queue, $payload, $priority): void {
+                try {
+                    if (!$this->publisher->publish($queue, $payload, $priority)) {
+                        error_log('Background queue publisher failed to publish a message.');
+                    }
+                } catch (\Throwable $error) {
+                    // Fire-and-forget: no producer to surface to, so log and move on.
+                    error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
+                }
+            }, $this->timeout);
+        } finally {
+            $this->activeEnqueues--;
+        }
 
         if ($accepted === false) {
             throw new BufferFullException('Publisher buffer full; enqueue timed out.');
