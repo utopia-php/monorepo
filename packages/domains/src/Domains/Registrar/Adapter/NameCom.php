@@ -687,7 +687,7 @@ class NameCom extends Adapter
      * @param array|null $data Request data
      * @return array Response data
      */
-    protected function send(string $method, string $path, ?array $data = null): array
+    private function send(string $method, string $path, ?array $data = null): array
     {
         $url = "{$this->endpoint}{$path}";
 

@@ -142,7 +142,7 @@ $transferOrderId = $registrar->transfer('example.com', 'auth-code');
 $registrar->updateDomain('example.com', new UpdateDetails(autoRenew: true));
 ```
 
-The registrar API also provides `tlds()`, `updateNameservers()`, `getPrice()`, `getAuthCode()`, `cancelPurchase()`, and `checkTransferStatus()`. Batch availability results are keyed by domain name. The Name.com adapter checks up to 50 domains in each API request and automatically splits larger batches.
+The registrar API also provides `tlds()`, `updateNameservers()`, `getPrice()`, `getAuthCode()`, `cancelPurchase()`, and `checkTransferStatus()`.
 
 ## Testing
 
