@@ -8,6 +8,7 @@ use Utopia\OpenAPI\Model\ExternalDocumentation;
 use Utopia\OpenAPI\Model\Info;
 use Utopia\OpenAPI\Model\Operation;
 use Utopia\OpenAPI\Model\PathItem;
+use Utopia\OpenAPI\Model\ReferenceSchema;
 use Utopia\OpenAPI\Model\Schema;
 use Utopia\OpenAPI\Model\SecurityRequirement;
 use Utopia\OpenAPI\Model\SecurityScheme;
@@ -39,6 +40,36 @@ final readonly class Specification
         public ?string $jsonSchemaDialect = null,
         public ?ExternalDocumentation $externalDocumentation = null,
     ) {}
+
+    /**
+     * Resolve chained local component references without expanding recursive schema graphs.
+     */
+    public function resolveSchema(Schema $schema): Schema
+    {
+        $visited = [];
+        while ($schema instanceof ReferenceSchema) {
+            if (! str_starts_with($schema->reference, '#')) {
+                break;
+            }
+
+            $name = null;
+            $reference = rawurldecode($schema->reference);
+            foreach (['#/components/schemas/', '#/definitions/'] as $prefix) {
+                if (str_starts_with($reference, $prefix)) {
+                    $name = str_replace(['~1', '~0'], ['/', '~'], substr($reference, strlen($prefix)));
+                    break;
+                }
+            }
+
+            if ($name === null || isset($visited[$name]) || ! isset($this->schemas[$name])) {
+                break;
+            }
+            $visited[$name] = true;
+            $schema = $this->schemas[$name];
+        }
+
+        return $schema;
+    }
 
     /** @return list<Operation> */
     public function operations(): array
