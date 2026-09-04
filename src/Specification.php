@@ -49,9 +49,10 @@ final readonly class Specification
         $visited = [];
         while ($schema instanceof ReferenceSchema) {
             $name = null;
+            $reference = rawurldecode($schema->reference);
             foreach (['#/components/schemas/', '#/definitions/'] as $prefix) {
-                if (str_starts_with($schema->reference, $prefix)) {
-                    $name = str_replace(['~1', '~0'], ['/', '~'], substr($schema->reference, strlen($prefix)));
+                if (str_starts_with($reference, $prefix)) {
+                    $name = str_replace(['~1', '~0'], ['/', '~'], substr($reference, strlen($prefix)));
                     break;
                 }
             }

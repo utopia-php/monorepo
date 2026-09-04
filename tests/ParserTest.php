@@ -129,7 +129,9 @@ final class ParserTest extends TestCase
         $operation = $spec->paths['/pets']->operation(HttpMethod::POST);
         self::assertTrue($operation?->requestBody?->required);
         self::assertInstanceOf(ReferenceSchema::class, $operation?->requestBody?->content['application/json']->schema);
-        self::assertInstanceOf(ReferenceSchema::class, $operation?->responses['200']->content['application/json']->schema);
+        $responseSchema = $operation?->responses['200']->content['application/json']->schema;
+        self::assertInstanceOf(ReferenceSchema::class, $responseSchema);
+        self::assertSame($spec->schemas['Pet'], $spec->resolveSchema($responseSchema));
     }
 
     public function test_parses_open_api2_form_data_as_request_body(): void
@@ -163,6 +165,8 @@ final class ParserTest extends TestCase
                 'Binary' => ['type' => 'string', 'format' => 'binary'],
                 'Alias' => ['$ref' => '#/components/schemas/Binary'],
                 'Chained' => ['$ref' => '#/components/schemas/Alias'],
+                'Encoded Name' => ['type' => 'string'],
+                'Encoded' => ['$ref' => '#/components/schemas/Encoded%20Name'],
                 'Missing' => ['$ref' => '#/components/schemas/Unknown'],
                 'External' => ['$ref' => 'schemas.json#/Binary'],
                 'CycleA' => ['$ref' => '#/components/schemas/CycleB'],
@@ -173,6 +177,7 @@ final class ParserTest extends TestCase
         self::assertSame($spec->schemas['Binary'], $spec->resolveSchema($spec->schemas['Binary']));
         self::assertSame($spec->schemas['Binary'], $spec->resolveSchema($spec->schemas['Alias']));
         self::assertSame($spec->schemas['Binary'], $spec->resolveSchema($spec->schemas['Chained']));
+        self::assertSame($spec->schemas['Encoded Name'], $spec->resolveSchema($spec->schemas['Encoded']));
         self::assertSame($spec->schemas['Missing'], $spec->resolveSchema($spec->schemas['Missing']));
         self::assertSame($spec->schemas['External'], $spec->resolveSchema($spec->schemas['External']));
         self::assertSame($spec->schemas['CycleA'], $spec->resolveSchema($spec->schemas['CycleA']));
