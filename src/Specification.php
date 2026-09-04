@@ -41,11 +41,21 @@ final readonly class Specification
         public ?ExternalDocumentation $externalDocumentation = null,
     ) {}
 
+    /**
+     * Resolve chained local component references without expanding recursive schema graphs.
+     */
     public function resolveSchema(Schema $schema): Schema
     {
         $visited = [];
         while ($schema instanceof ReferenceSchema) {
-            $name = $this->schemaName($schema->reference);
+            $name = null;
+            foreach (['#/components/schemas/', '#/definitions/'] as $prefix) {
+                if (str_starts_with($schema->reference, $prefix)) {
+                    $name = str_replace(['~1', '~0'], ['/', '~'], substr($schema->reference, strlen($prefix)));
+                    break;
+                }
+            }
+
             if ($name === null || isset($visited[$name]) || ! isset($this->schemas[$name])) {
                 break;
             }
@@ -54,17 +64,6 @@ final readonly class Specification
         }
 
         return $schema;
-    }
-
-    private function schemaName(string $reference): ?string
-    {
-        foreach (['#/components/schemas/', '#/definitions/'] as $prefix) {
-            if (str_starts_with($reference, $prefix)) {
-                return str_replace(['~1', '~0'], ['/', '~'], substr($reference, strlen($prefix)));
-            }
-        }
-
-        return null;
     }
 
     /** @return list<Operation> */
