@@ -153,6 +153,31 @@ final class ParserTest extends TestCase
         self::assertSame('binary', $body?->content['multipart/form-data']->schema->properties['file']->format);
     }
 
+    public function test_resolves_schema_references_explicitly(): void
+    {
+        $spec = Parser::parse([
+            'openapi' => '3.1.0',
+            'info' => ['title' => 'References', 'version' => '1'],
+            'paths' => [],
+            'components' => ['schemas' => [
+                'Binary' => ['type' => 'string', 'format' => 'binary'],
+                'Alias' => ['$ref' => '#/components/schemas/Binary'],
+                'Chained' => ['$ref' => '#/components/schemas/Alias'],
+                'Missing' => ['$ref' => '#/components/schemas/Unknown'],
+                'External' => ['$ref' => 'schemas.json#/Binary'],
+                'CycleA' => ['$ref' => '#/components/schemas/CycleB'],
+                'CycleB' => ['$ref' => '#/components/schemas/CycleA'],
+            ]],
+        ]);
+
+        self::assertSame($spec->schemas['Binary'], $spec->resolveSchema($spec->schemas['Binary']));
+        self::assertSame($spec->schemas['Binary'], $spec->resolveSchema($spec->schemas['Alias']));
+        self::assertSame($spec->schemas['Binary'], $spec->resolveSchema($spec->schemas['Chained']));
+        self::assertSame($spec->schemas['Missing'], $spec->resolveSchema($spec->schemas['Missing']));
+        self::assertSame($spec->schemas['External'], $spec->resolveSchema($spec->schemas['External']));
+        self::assertSame($spec->schemas['CycleA'], $spec->resolveSchema($spec->schemas['CycleA']));
+    }
+
     public function test_resolves_escaped_local_json_pointer_and_detects_reference_cycles(): void
     {
         $resolver = new LocalResolver([

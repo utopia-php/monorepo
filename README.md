@@ -156,7 +156,13 @@ if ($schema instanceof ReferenceSchema) {
 }
 ```
 
-This makes valid recursive schemas safe to parse.
+This makes valid recursive schemas safe to parse. Resolve a schema's local component reference explicitly when its concrete type is needed:
+
+```php
+$resolved = $specification->resolveSchema($schema);
+```
+
+`resolveSchema()` follows chained local schema references and leaves missing, external, or cyclic references unresolved.
 
 OpenAPI 3.1 annotated enumerations (`oneOf` or `anyOf` of `const` + `title`)
 are mapped onto `StringSchema` fields. The type name is the composite `title`.
