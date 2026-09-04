@@ -106,7 +106,14 @@ Each queue is a WorkQueue-retention stream (a message is removed once acknowledg
 use Swoole\Coroutine;
 use Utopia\Queue\Broker\Background;
 
-$publisher = new Background($broker, capacity: 512, coroutines: 1, timeout: 0.1);
+$publisher = new Background(
+    $broker,
+    capacity: 512,
+    coroutines: 1,
+    timeout: 0.1,
+    maxBatchInterval: 0.01,
+    maxBatchSize: 100,
+);
 
 Coroutine\run(function () use ($publisher, $queue, $payload): void {
     $publisher->start();
@@ -115,7 +122,7 @@ Coroutine\run(function () use ($publisher, $queue, $payload): void {
 });
 ```
 
-When the configured timeout expires, `enqueue()` throws `Publisher\BufferFullException`. More than one reader coroutine requires a concurrency-safe wrapped publisher, such as `Broker\Pool`; it also gives up FIFO dispatch order.
+When the configured timeout expires, `enqueue()` throws `Publisher\BufferFullException`. Set `maxBatchInterval` and `maxBatchSize` together to opt into batching; a batch flushes when either limit is reached, and messages with different queues or priorities are never mixed. More than one reader coroutine requires a concurrency-safe wrapped publisher, such as `Broker\Pool`; it also gives up FIFO dispatch order.
 
 ## Multiple queues in one process
 

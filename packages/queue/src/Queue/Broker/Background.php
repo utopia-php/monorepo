@@ -27,6 +27,11 @@ use Utopia\Telemetry\Adapter\None as NoTelemetry;
  * unbounded work. $timeout caps that wait: enqueue() throws BufferFullException
  * if no slot frees within it; -1 (the default) waits indefinitely.
  *
+ * Set $maxBatchInterval and $maxBatchSize together to coalesce consecutive
+ * messages for the same queue and priority into enqueueMany() calls. A partial
+ * batch is flushed when its oldest message reaches the interval, and shutdown
+ * always flushes accepted messages before the readers exit.
+ *
  * $coroutines sets how many reader coroutines dispatch concurrently. Values above
  * 1 only make sense when the wrapped publisher tolerates concurrent use across
  * coroutines: a single-connection broker (e.g. a bare Redis) must not be shared
@@ -59,7 +64,21 @@ class Background implements Synchronous, Asynchronous
         int $coroutines = 1,
         private readonly float $timeout = -1,
         Telemetry $telemetry = new NoTelemetry(),
+        private readonly ?float $maxBatchInterval = null,
+        private readonly ?int $maxBatchSize = null,
     ) {
+        if (($maxBatchInterval === null) !== ($maxBatchSize === null)) {
+            throw new \InvalidArgumentException('maxBatchInterval and maxBatchSize must be configured together.');
+        }
+
+        if ($maxBatchInterval !== null && $maxBatchInterval <= 0) {
+            throw new \InvalidArgumentException('maxBatchInterval must be greater than zero.');
+        }
+
+        if ($maxBatchSize !== null && $maxBatchSize < 1) {
+            throw new \InvalidArgumentException('maxBatchSize must be at least one.');
+        }
+
         $this->channel = new Channel(max(1, $capacity));
         $this->waitGroup = new WaitGroup();
         $this->coroutines = max(1, $coroutines);
@@ -95,9 +114,7 @@ class Background implements Synchronous, Asynchronous
 
             $cid = Coroutine::create(function (): void {
                 try {
-                    while (($task = $this->channel->pop()) instanceof \Closure) {
-                        $task();
-                    }
+                    $this->runReader();
                 } finally {
                     $this->waitGroup->done();
                 }
@@ -179,22 +196,94 @@ class Background implements Synchronous, Asynchronous
         $this->activeEnqueues++;
 
         try {
-            $accepted = $this->channel->push(function () use ($queue, $payload, $priority): void {
-                try {
-                    if (!$this->publisher->publish($queue, $payload, $priority)) {
-                        error_log('Background queue publisher failed to publish a message.');
-                    }
-                } catch (\Throwable $error) {
-                    // Fire-and-forget: no producer to surface to, so log and move on.
-                    error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
-                }
-            }, $this->timeout);
+            $accepted = $this->channel->push([
+                'queue' => $queue,
+                'payload' => $payload,
+                'priority' => $priority,
+                'enqueuedAt' => microtime(true),
+            ], $this->timeout);
         } finally {
             $this->activeEnqueues--;
         }
 
         if ($accepted === false) {
             throw new BufferFullException('Publisher buffer full; enqueue timed out.');
+        }
+    }
+
+    private function runReader(): void
+    {
+        $pending = null;
+
+        while (true) {
+            $task = $pending ?? $this->channel->pop();
+            $pending = null;
+
+            if (!\is_array($task)) {
+                return;
+            }
+
+            if ($this->maxBatchInterval === null || $this->maxBatchSize === null) {
+                $this->dispatch($task['queue'], [$task['payload']], $task['priority'], batched: false);
+                continue;
+            }
+
+            $queue = $task['queue'];
+            $priority = $task['priority'];
+            $payloads = [$task['payload']];
+            $deadline = $task['enqueuedAt'] + $this->maxBatchInterval;
+            $stopping = false;
+
+            while (\count($payloads) < $this->maxBatchSize) {
+                $remaining = $deadline - microtime(true);
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $next = $this->channel->pop($remaining);
+                if ($next === false) {
+                    break;
+                }
+
+                if (!\is_array($next)) {
+                    $stopping = true;
+                    break;
+                }
+
+                if ($next['queue']->name !== $queue->name
+                    || $next['queue']->namespace !== $queue->namespace
+                    || $next['priority'] !== $priority) {
+                    $pending = $next;
+                    break;
+                }
+
+                $payloads[] = $next['payload'];
+            }
+
+            $this->dispatch($queue, $payloads, $priority, batched: true);
+
+            if ($stopping) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $payloads
+     */
+    private function dispatch(Queue $queue, array $payloads, bool $priority, bool $batched): void
+    {
+        try {
+            $published = $batched
+                ? $this->publisher->enqueueMany($queue, $payloads, $priority)
+                : $this->publisher->publish($queue, $payloads[0], $priority);
+
+            if (!$published) {
+                error_log('Background queue publisher failed to publish a message.');
+            }
+        } catch (\Throwable $error) {
+            // Fire-and-forget: no producer to surface to, so log and move on.
+            error_log('Uncaught error while publishing queue message: ' . $error->getMessage());
         }
     }
 

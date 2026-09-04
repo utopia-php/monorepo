@@ -96,6 +96,80 @@ final class BackgroundTest extends TestCase
         $this->assertSame(range(1, 20), $ids);
     }
 
+    public function testBatchFlushesAtMaximumMessageCount(): void
+    {
+        $batches = [];
+        $background = new Background(
+            $this->batchRecordingPublisher($batches),
+            maxBatchInterval: 1,
+            maxBatchSize: 3,
+        );
+
+        Coroutine\run(function () use ($background): void {
+            $background->start();
+            $background->enqueue(new Queue('emails'), ['id' => 1]);
+            $background->enqueue(new Queue('emails'), ['id' => 2]);
+            $background->enqueue(new Queue('emails'), ['id' => 3]);
+            $background->shutdown();
+        });
+
+        $this->assertSame([[1, 2, 3]], array_map(
+            static fn(array $batch): array => array_column($batch['payloads'], 'id'),
+            $batches,
+        ));
+    }
+
+    public function testBatchFlushesAtMaximumInterval(): void
+    {
+        $batches = [];
+        $background = new Background(
+            $this->batchRecordingPublisher($batches),
+            maxBatchInterval: 0.02,
+            maxBatchSize: 10,
+        );
+
+        Coroutine\run(function () use ($background): void {
+            $background->start();
+            $background->enqueue(new Queue('emails'), ['id' => 1]);
+            $background->enqueue(new Queue('emails'), ['id' => 2]);
+            Coroutine::sleep(0.05);
+            $background->shutdown();
+        });
+
+        $this->assertSame([[1, 2]], array_map(
+            static fn(array $batch): array => array_column($batch['payloads'], 'id'),
+            $batches,
+        ));
+    }
+
+    public function testBatchPreservesQueueAndPriorityBoundaries(): void
+    {
+        $batches = [];
+        $background = new Background(
+            $this->batchRecordingPublisher($batches),
+            maxBatchInterval: 1,
+            maxBatchSize: 10,
+        );
+
+        Coroutine\run(function () use ($background): void {
+            $background->start();
+            $background->enqueue(new Queue('emails'), ['id' => 1]);
+            $background->enqueue(new Queue('sms'), ['id' => 2]);
+            $background->enqueue(new Queue('sms'), ['id' => 3], priority: true);
+            $background->shutdown();
+        });
+
+        $this->assertSame([
+            ['queue' => 'emails', 'priority' => false, 'ids' => [1]],
+            ['queue' => 'sms', 'priority' => false, 'ids' => [2]],
+            ['queue' => 'sms', 'priority' => true, 'ids' => [3]],
+        ], array_map(static fn(array $batch): array => [
+            'queue' => $batch['queue'],
+            'priority' => $batch['priority'],
+            'ids' => array_column($batch['payloads'], 'id'),
+        ], $batches));
+    }
+
     public function testShutdownWaitsForEnqueuesAlreadyBlockedByBackPressure(): void
     {
         $gate = new Channel(3);
@@ -291,6 +365,42 @@ final class BackgroundTest extends TestCase
             public function getQueueSize(Queue $queue, bool $failedJobs = false): int
             {
                 return \count($this->buffer);
+            }
+        };
+    }
+
+    /**
+     * @param list<array{queue: string, priority: bool, payloads: list<array<string, mixed>>}> $batches
+     */
+    private function batchRecordingPublisher(array &$batches): Synchronous
+    {
+        return new class ($batches) implements Synchronous {
+            /**
+             * @param list<array{queue: string, priority: bool, payloads: list<array<string, mixed>>}> $batches
+             */
+            public function __construct(private array &$batches) {}
+
+            public function publish(Queue $queue, array $payload, bool $priority = false): bool
+            {
+                return $this->enqueueMany($queue, [$payload], $priority);
+            }
+
+            public function enqueueMany(Queue $queue, array $payloads, bool $priority = false): bool
+            {
+                $this->batches[] = [
+                    'queue' => $queue->name,
+                    'priority' => $priority,
+                    'payloads' => $payloads,
+                ];
+
+                return true;
+            }
+
+            public function retry(Queue $queue, ?int $limit = null): void {}
+
+            public function getQueueSize(Queue $queue, bool $failedJobs = false): int
+            {
+                return \count($this->batches);
             }
         };
     }
