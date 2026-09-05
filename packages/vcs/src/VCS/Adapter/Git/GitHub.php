@@ -650,7 +650,15 @@ class GitHub extends Git
             throw new Exception('Failed to read the GitHub App private key');
         }
 
-        $appIdentifier = $appId;
+        // GitHub reads `iss` as a JSON integer when it holds an App ID: sent as
+        // a string it answers 401 "'Issuer' claim ('iss') must be an Integer"
+        // and no token is ever issued. A client ID (Iv23li...) is a legitimate
+        // string issuer, so only an all-digit identifier is cast. Trimmed
+        // first because the identifier usually arrives from an environment
+        // variable or a CI secret, where a trailing newline is invisible and
+        // would otherwise leave the digits looking non-numeric.
+        $appIdentifier = trim((string) $appId);
+        $appIdentifier = ctype_digit($appIdentifier) ? (int) $appIdentifier : $appId;
 
         $iat = time();
         $exp = $iat + self::GITHUB_APP_JWT_EXPIRY;
@@ -669,7 +677,11 @@ class GitHub extends Git
         $statusCode = $response['headers']['status-code'] ?? 0;
         if (!\array_key_exists('token', $responseBody)) {
             $safeBody = json_encode(array_intersect_key($responseBody, array_flip(['message', 'documentation_url'])));
-            throw new Exception('Failed to retrieve access token from GitHub API. Status: ' . $statusCode . '. Response: ' . $safeBody, $statusCode);
+            // The issuer's type and length, never its value: GitHub rejects an
+            // App ID sent as a string, and the response alone cannot tell you
+            // whether the claim or the credential behind it was at fault.
+            $issuer = get_debug_type($appIdentifier) . '(' . \strlen((string) $appIdentifier) . ')';
+            throw new Exception('Failed to retrieve access token from GitHub API. Status: ' . $statusCode . '. Issuer: ' . $issuer . '. Response: ' . $safeBody, $statusCode);
         }
         $this->accessToken = $responseBody['token'] ?? '';
     }
