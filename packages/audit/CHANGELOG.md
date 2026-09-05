@@ -4,6 +4,52 @@ All notable changes to `utopia-php/audit` are documented in this file.
 
 ## Unreleased
 
+### ClickHouse adapter — origin column
+
+The ClickHouse adapter now stores the `Origin` request header. `hostname` records
+the host that *served* a request; `origin` records who *made* it, which is what an
+audit trail needs to tell a console click apart from a script replaying a session
+cookie. Browsers always send the header, so a null `origin` identifies a caller
+that was not a browser.
+
+#### Added
+
+- `Log::getOrigin()` getter for ClickHouse-backed log reads.
+
+#### ClickHouse schema changes
+
+- Column `origin` `Nullable(String)` — the `Origin` request header (e.g.
+  `https://cloud.appwrite.io`); optional. Deliberately *not* `LowCardinality`:
+  origins are per-project and the table is shared across every tenant, so the
+  distinct-value count is unbounded (same reasoning as `autonomousSystemNumber`).
+- Index `_key_origin` — bloom-filter index on the `origin` column.
+
+The column is optional (`required = false`) so `createBatch()` never throws when a
+caller omits it.
+
+### ClickHouse adapter — `setup()` reconciles columns on existing tables
+
+#### Changed
+
+- `setup()` now adds schema columns that an existing table is missing, via
+  `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. Previously it only issued
+  `CREATE TABLE IF NOT EXISTS`, so a release that added a column never reached a
+  table that already existed — while `createBatch()` names every schema column in
+  its `INSERT`, so the first write after such a release failed instead of
+  degrading. Every column added since the ClickHouse adapter shipped (`sdk`,
+  `sdkVersion`, the premium geo columns, the user-agent columns and now `origin`)
+  is reconciled by this, so the out-of-band `ALTER TABLE` those releases asked for
+  is no longer needed.
+
+`setup()` reads `system.columns` once and issues an `ALTER` only per missing
+column, so the steady-state cost is a single extra query. Adding a nullable column
+with no `DEFAULT` is metadata-only: parts written before the `ALTER` read the new
+column back as `NULL` and no data is rewritten.
+
+Only columns are reconciled, not indexes. A skip index added to a populated table
+covers new parts only until it is materialized, so a missing index costs read
+performance where a missing column costs every write.
+
 ### ClickHouse adapter — migrated to the utopia-php/query 0.6 builder
 
 #### Changed

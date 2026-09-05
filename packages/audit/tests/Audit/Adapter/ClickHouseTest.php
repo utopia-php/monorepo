@@ -551,6 +551,7 @@ final class ClickHouseTest extends TestCase
             // sdk
             'sdk',
             'sdkVersion',
+            'origin',
             // user-agent — parsed OS / client / device
             'osCode',
             'osName',
@@ -794,6 +795,130 @@ final class ClickHouseTest extends TestCase
     }
 
     /**
+     * The `Origin` header must round-trip, and a log written without one must
+     * read back as null rather than an empty string. A non-browser caller is
+     * exactly the request that carries no Origin, so "absent" is the signal the
+     * column exists to record — collapsing it into '' would make a scripted
+     * call indistinguishable from a browser that sent an empty header.
+     */
+    public function testOriginRoundTrip(): void
+    {
+        $withOrigin = 'origin-actor-' . uniqid('', true);
+        $withoutOrigin = 'origin-actor-' . uniqid('', true);
+
+        $batchEvents = $this->applyRequiredAttributesToBatch([
+            [
+                'actorId' => $withOrigin,
+                'event' => 'origin.roundtrip',
+                'resource' => 'document/origin-1',
+                'userAgent' => 'RoundTrip/1.0',
+                'ip' => '8.8.8.8',
+                'data' => [],
+                'origin' => 'https://cloud.appwrite.io',
+                'time' => \Utopia\Database\DateTime::formatTz(\Utopia\Database\DateTime::now()) ?? '',
+            ],
+            [
+                'actorId' => $withoutOrigin,
+                'event' => 'origin.roundtrip',
+                'resource' => 'document/origin-2',
+                'userAgent' => 'RoundTrip/1.0',
+                'ip' => '8.8.8.8',
+                'data' => [],
+                'time' => \Utopia\Database\DateTime::formatTz(\Utopia\Database\DateTime::now()) ?? '',
+            ],
+        ]);
+        $this->assertTrue($this->audit->logBatch($batchEvents));
+
+        $logs = $this->audit->getLogsByUser($withOrigin);
+        $this->assertGreaterThan(0, \count($logs), 'origin round-trip log was not persisted');
+        $this->assertSame('https://cloud.appwrite.io', $logs[0]->getAttribute('origin'));
+        $this->assertSame('https://cloud.appwrite.io', $logs[0]->getOrigin());
+
+        $logs = $this->audit->getLogsByUser($withoutOrigin);
+        $this->assertGreaterThan(0, \count($logs), 'origin-less log was not persisted');
+        $this->assertNull($logs[0]->getOrigin(), 'a request with no Origin header must read back as null');
+    }
+
+    /**
+     * `setup()` must bring an existing table up to the current schema, not just
+     * create a missing one. A table that predates a column is the state every
+     * deployed environment is in the moment a release adds one, and
+     * `createBatch()` names every schema column in its `INSERT` — so without
+     * reconciliation the first write after that release fails, rather than
+     * degrading.
+     *
+     * Runs against its own table so dropping a column cannot disturb the shared
+     * fixture.
+     */
+    public function testSetupAddsAColumnMissingFromAnExistingTable(): void
+    {
+        $database = getenv('CLICKHOUSE_DATABASE') ?: 'default';
+        $table = 'audits_setup_reconcile';
+
+        $adapter = new ClickHouse(
+            host: getenv('CLICKHOUSE_HOST') ?: 'localhost',
+            username: getenv('CLICKHOUSE_USER') ?: 'default',
+            password: getenv('CLICKHOUSE_PASSWORD') ?: 'clickhouse',
+            port: (int) (getenv('CLICKHOUSE_PORT') ?: 18123),
+            secure: filter_var(getenv('CLICKHOUSE_SECURE') ?: false, FILTER_VALIDATE_BOOLEAN),
+        );
+        $adapter->setDatabase($database)->setTable($table);
+
+        $audit = new Audit($adapter);
+        $audit->setup();
+
+        // Reduce the table to the shape it had before the column was added.
+        // Reflection is the only way to reach raw DDL, and it is used to build
+        // the precondition — every assertion below goes through the public API.
+        //
+        // The index goes first: ClickHouse refuses to drop a column a skip
+        // index still references. A table that predates the column has neither,
+        // so dropping both is what reproduces that state — and setup() bringing
+        // back only the column is the documented behaviour, since an index added
+        // to a populated table covers new parts only until it is materialized.
+        $query = new \ReflectionMethod($adapter, 'query');
+        $query->invoke($adapter, "ALTER TABLE `{$database}`.`{$table}` DROP INDEX IF EXISTS _key_origin");
+        $query->invoke($adapter, "ALTER TABLE `{$database}`.`{$table}` DROP COLUMN IF EXISTS origin");
+
+        $audit->setup();
+
+        $actorId = 'reconcile-actor-' . uniqid('', true);
+        $this->assertTrue($audit->logBatch($this->applyRequiredAttributesToBatch([[
+            'actorId' => $actorId,
+            'event' => 'origin.reconcile',
+            'resource' => 'document/reconcile-1',
+            'userAgent' => 'RoundTrip/1.0',
+            'ip' => '8.8.8.8',
+            'data' => [],
+            'origin' => 'https://cloud.appwrite.io',
+            'time' => \Utopia\Database\DateTime::formatTz(\Utopia\Database\DateTime::now()) ?? '',
+        ]])), 'writing to a reconciled table must succeed');
+
+        $logs = $audit->getLogsByUser($actorId);
+        $this->assertGreaterThan(0, \count($logs));
+        $this->assertSame('https://cloud.appwrite.io', $logs[0]->getOrigin());
+    }
+
+    /**
+     * Origin stays a plain Nullable(String). Origins are per-project and the
+     * audit table is shared across every tenant, so the distinct-value count is
+     * unbounded — the same reasoning that keeps autonomousSystemNumber out of
+     * LowCardinality.
+     */
+    public function testOriginIsNotLowCardinality(): void
+    {
+        $adapter = new ClickHouse(
+            host: 'clickhouse',
+            username: 'default',
+            password: 'clickhouse',
+        );
+
+        $method = new \ReflectionMethod($adapter, 'getColumnDefinition');
+
+        $this->assertEquals('origin Nullable(String)', $method->invoke($adapter, 'origin'));
+    }
+
+    /**
      * Test that ClickHouse adapter has all required indexes
      */
     public function testClickHouseAdapterIndexes(): void
@@ -817,6 +942,7 @@ final class ClickHouseTest extends TestCase
             '_key_country',
             '_key_hostname',
             '_key_sdk',
+            '_key_origin',
         ];
 
         foreach ($expectedClickHouseIndexes as $expected) {

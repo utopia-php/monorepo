@@ -630,6 +630,20 @@ class ClickHouse extends SQL
                 'array' => false,
                 'filters' => [],
             ],
+            [
+                // Browser-set `Origin` request header. Unlike `hostname` (the
+                // host that served the request) this identifies the caller, and
+                // its absence marks a request that no browser made.
+                '$id' => 'origin',
+                'type' => Database::VAR_STRING,
+                'format' => '',
+                'size' => Database::LENGTH_KEY,
+                'signed' => true,
+                'required' => false,
+                'default' => null,
+                'array' => false,
+                'filters' => [],
+            ],
             // user-agent — parsed OS / client / device dimensions
             [
                 '$id' => 'osCode',
@@ -841,6 +855,13 @@ class ClickHouse extends SQL
                 '$id' => '_key_sdk',
                 'type' => Database::INDEX_KEY,
                 'attributes' => ['sdk'],
+                'lengths' => [],
+                'orders' => [],
+            ],
+            [
+                '$id' => '_key_origin',
+                'type' => Database::INDEX_KEY,
+                'attributes' => ['origin'],
                 'lengths' => [],
                 'orders' => [],
             ],
@@ -1099,6 +1120,41 @@ class ClickHouse extends SQL
         $table->settings($settings);
 
         $this->query($table->createIfNotExists()->query);
+
+        // CREATE TABLE IF NOT EXISTS leaves an existing table exactly as it
+        // was, so a release that adds a column never reaches one — while
+        // createBatch() names every schema column in its INSERT, which then
+        // fails against the older table. Reconcile the difference here, so
+        // setup() is what keeps a table current rather than an out-of-band
+        // migration that has to land before the writer deploys.
+        //
+        // Only the columns are reconciled. A skip index added to a populated
+        // table covers new parts only until it is materialized, so a missing
+        // index costs read performance, where a missing column costs every
+        // write.
+        $existing = array_filter(explode("\n", trim($this->query(
+            'SELECT name FROM system.columns WHERE database = {database:String} AND table = {table:String}',
+            ['database' => $this->database, 'table' => $tableName],
+        ))));
+
+        foreach ($this->getColumnNames() as $columnName) {
+            // `time` is the partition key, created NOT NULL by the DDL above
+            // and never the column that is missing.
+            if ($columnName === 'time') {
+                continue;
+            }
+            if (\in_array($columnName, $existing, true)) {
+                continue;
+            }
+
+            // Metadata-only for a nullable column with no DEFAULT: parts written
+            // before the ALTER read the new column back as NULL, and no data is
+            // rewritten.
+            $this->query(
+                "ALTER TABLE {$escapedDatabaseAndTable} ADD COLUMN IF NOT EXISTS "
+                . $this->getColumnDefinition($columnName),
+            );
+        }
 
         // Apply retention as a separate, idempotent ALTER. CREATE TABLE IF NOT
         // EXISTS won't add a TTL to a table that already exists, and MODIFY TTL

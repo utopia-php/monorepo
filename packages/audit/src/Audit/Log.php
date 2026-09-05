@@ -111,6 +111,19 @@ class Log extends ArrayObject
     }
 
     /**
+     * Get the `Origin` request header associated with this log entry.
+     *
+     * Optional column: returns null when the origin was never recorded, which
+     * is also what a non-browser caller produces — browsers always send the
+     * header, so an absent origin is a signal rather than missing data.
+     */
+    public function getOrigin(): ?string
+    {
+        $origin = $this->getAttribute('origin');
+        return \is_string($origin) ? $origin : null;
+    }
+
+    /**
      * Get the parsed user-agent OS short code (e.g. `IOS`, `WIN`).
      *
      * ClickHouse-only optional column: returns null when it was never recorded.
