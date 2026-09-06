@@ -5,10 +5,10 @@
 
 In-process IP reputation lookups against a [Verdict](https://github.com/appwrite-labs/verdict) MMDB.
 
-Constructing `Reputation` does not open the database. `get()` memory-maps the
-file on first use and reopens it when the file's mtime changes, so a replaced
-MMDB is picked up without a process restart. Callers that never look up an IP
-never map the file.
+Constructing `Reputation` and calling `get()` do not open the database. The
+file is memory-mapped on the first `getVerdict()`, `getScore()`, or
+`getCategories()` call and reopened when the file's mtime changes, so a
+replaced MMDB is picked up without a process restart.
 
 A missing file, an unreadable database, an invalid IP, or an unknown verdict
 returns `Verdict::Clean`.
@@ -28,11 +28,11 @@ use Utopia\Reputation\Verdict;
 $reputation = new Reputation('/path/to/verdict.mmdb');
 $record = $reputation->get($_SERVER['REMOTE_ADDR'] ?? '');
 
-echo $record->verdict->value; // clean, low, suspicious, or block
-echo $record->score;
-print_r($record->categories);
+echo $record->getVerdict()->value; // clean, low, suspicious, or block
+echo $record->getScore();
+print_r($record->getCategories());
 
-if ($record->verdict === Verdict::Block) {
+if ($record->getVerdict() === Verdict::Block) {
     // deny
 }
 ```

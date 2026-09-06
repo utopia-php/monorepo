@@ -9,9 +9,10 @@ use MaxMind\Db\Reader;
 /**
  * In-process IP-reputation lookups against a Verdict MMDB.
  *
- * Constructing this object does not open the database. {@see get()} memory-maps
- * the file on first use and reopens it when the file's mtime changes, so a
- * replaced MMDB is picked up without a process restart.
+ * Constructing this object, and {@see get()}, do not open the database.
+ * The file is memory-mapped on the first field read of a {@see Record} and
+ * reopened when the file's mtime changes, so a replaced MMDB is picked up
+ * without a process restart.
  *
  * @see \Utopia\Reputation\Tests\ReputationTest
  */
@@ -36,12 +37,7 @@ final class Reputation
             return Record::clean($ip);
         }
 
-        $payload = $this->payload($ip);
-        if ($payload === null) {
-            return Record::clean($ip);
-        }
-
-        return $this->record($ip, $payload);
+        return Record::pending($ip, fn(): mixed => $this->payload($ip));
     }
 
     /**
@@ -60,37 +56,12 @@ final class Reputation
     }
 
     /**
-     * @param array<mixed, mixed> $payload
-     */
-    private function record(string $ip, array $payload): Record
-    {
-        $rawVerdict = $payload['verdict'] ?? null;
-        $verdict = \is_string($rawVerdict)
-            ? (Verdict::tryFrom(strtolower($rawVerdict)) ?? Verdict::Clean)
-            : Verdict::Clean;
-
-        $rawScore = $payload['score'] ?? null;
-        $score = \is_int($rawScore) ? $rawScore : 0;
-
-        $categories = [];
-        if (isset($payload['categories']) && \is_array($payload['categories'])) {
-            foreach ($payload['categories'] as $category) {
-                if (\is_string($category)) {
-                    $categories[] = $category;
-                }
-            }
-        }
-
-        return new Record($ip, $verdict, $score, $categories);
-    }
-
-    /**
      * @return array<mixed, mixed>|null
      */
     private function readMmdb(string $ip): ?array
     {
         $reader = $this->reader();
-        if (!$reader instanceof Reader) {
+        if (! $reader instanceof Reader) {
             return null;
         }
 
@@ -130,7 +101,7 @@ final class Reputation
 
     private function close(): void
     {
-        if (!$this->reader instanceof Reader) {
+        if (! $this->reader instanceof Reader) {
             return;
         }
 
