@@ -4,10 +4,23 @@ declare(strict_types=1);
 
 namespace Utopia\Reputation;
 
-enum Verdict: string
+final class Verdict
 {
-    case Clean = 'clean';
-    case Low = 'low';
-    case Suspicious = 'suspicious';
-    case Block = 'block';
+    public const string CLEAN = 'clean';
+    public const string LOW = 'low';
+    public const string SUSPICIOUS = 'suspicious';
+    public const string BLOCK = 'block';
+
+    /**
+     * @return list<string>
+     */
+    public static function all(): array
+    {
+        return [
+            self::CLEAN,
+            self::LOW,
+            self::SUSPICIOUS,
+            self::BLOCK,
+        ];
+    }
 }

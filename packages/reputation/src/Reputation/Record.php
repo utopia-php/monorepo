@@ -11,7 +11,7 @@ namespace Utopia\Reputation;
  */
 final class Record
 {
-    private Verdict $verdict = Verdict::Clean;
+    private string $verdict = Verdict::CLEAN;
 
     private int $score = 0;
 
@@ -23,7 +23,7 @@ final class Record
     /**
      * @param (callable(): mixed)|null $lookup
      *        Fetches the raw MMDB (or test) payload. Null means no search —
-     *        the record stays {@see Verdict::Clean}.
+     *        the record stays {@see Verdict::CLEAN}.
      */
     private function __construct(
         private readonly string $ip,
@@ -49,7 +49,7 @@ final class Record
         return $this->ip;
     }
 
-    public function getVerdict(): Verdict
+    public function getVerdict(): string
     {
         $this->load();
 
@@ -92,9 +92,14 @@ final class Record
         }
 
         $rawVerdict = $payload['verdict'] ?? null;
-        $this->verdict = \is_string($rawVerdict)
-            ? (Verdict::tryFrom(strtolower($rawVerdict)) ?? Verdict::Clean)
-            : Verdict::Clean;
+        if (\is_string($rawVerdict)) {
+            $verdict = strtolower($rawVerdict);
+            $this->verdict = \in_array($verdict, Verdict::all(), true)
+                ? $verdict
+                : Verdict::CLEAN;
+        } else {
+            $this->verdict = Verdict::CLEAN;
+        }
 
         $rawScore = $payload['score'] ?? null;
         $this->score = \is_int($rawScore) ? $rawScore : 0;

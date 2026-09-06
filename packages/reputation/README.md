@@ -11,7 +11,7 @@ file is memory-mapped on the first `getVerdict()`, `getScore()`, or
 replaced MMDB is picked up without a process restart.
 
 A missing file, an unreadable database, an invalid IP, or an unknown verdict
-returns `Verdict::Clean`.
+returns `Verdict::CLEAN`.
 
 ## Installation
 
@@ -28,11 +28,11 @@ use Utopia\Reputation\Verdict;
 $reputation = new Reputation('/path/to/verdict.mmdb');
 $record = $reputation->get($_SERVER['REMOTE_ADDR'] ?? '');
 
-echo $record->getVerdict()->value; // clean, low, suspicious, or block
+echo $record->getVerdict(); // clean, low, suspicious, or block
 echo $record->getScore();
 print_r($record->getCategories());
 
-if ($record->getVerdict() === Verdict::Block) {
+if ($record->getVerdict() === Verdict::BLOCK) {
     // deny
 }
 ```
