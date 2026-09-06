@@ -7,8 +7,8 @@ In-process IP reputation lookups against a [Verdict](https://github.com/appwrite
 
 Constructing `Reputation` and calling `get()` do not open the database. The
 file is memory-mapped on the first `getVerdict()`, `getScore()`, or
-`getCategories()` call and reopened when the file's mtime changes, so a
-replaced MMDB is picked up without a process restart.
+`getCategories()` call and reopened when the file's modification time
+changes, so a replaced MMDB is picked up without a process restart.
 
 A missing file, an unreadable database, an invalid IP, or an unknown verdict
 returns `Verdict::CLEAN`.
