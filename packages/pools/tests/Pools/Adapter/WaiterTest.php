@@ -9,9 +9,79 @@ use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use Utopia\Pools\Adapter\Swoole;
 use Utopia\Pools\Pool;
+use Utopia\Telemetry\Adapter\Test as TestTelemetry;
 
 final class WaiterTest extends TestCase
 {
+    public function testReturningABorrowerCannotUntrackItsWaitingSuccessor(): void
+    {
+        $telemetry = new TestTelemetry();
+        $adapter = new Swoole();
+        $created = 0;
+        $pool = new Pool($adapter, 'handoff', 1, static function () use (&$created): object {
+            ++$created;
+            return new \stdClass();
+        }, 0.1, $telemetry);
+        $failure = new \RuntimeException('successor failed');
+        $results = [];
+        $snapshots = [];
+        $identities = [];
+        $sample = static function () use ($telemetry, $pool, $adapter): array {
+            $active = null;
+            /** @var object{callbacks: array<int, \Closure>} $gauge */
+            $gauge = $telemetry->observableGauges['pool.connection.active.count'];
+            foreach ($gauge->callbacks as $callback) {
+                $callback(static function (float|int $value) use (&$active): void {
+                    $active = $value;
+                });
+            }
+            return [$active, $adapter->count(), $pool->count()];
+        };
+        Coroutine\run(static function () use ($pool, $failure, $sample, &$results, &$snapshots, &$identities): void {
+            $first = $pool->pop();
+            $identities[] = $first->resource;
+            $completed = new Channel(2);
+            $entered = new Channel(1);
+            Coroutine::create(static function () use ($pool, $failure, $completed, $entered, &$identities): void {
+                try {
+                    $pool->use(static function (object $resource) use ($failure, $entered, &$identities): never {
+                        $identities[] = $resource;
+                        $entered->push(true);
+                        Coroutine::sleep(0.02);
+                        throw $failure;
+                    });
+                } catch (\Throwable $error) {
+                    $completed->push($error);
+                }
+            });
+            Coroutine::create(static function () use ($pool, $completed, &$identities): void {
+                try {
+                    $completed->push($pool->use(static function (object $resource) use (&$identities): string {
+                        $identities[] = $resource;
+                        return 'replacement';
+                    }));
+                } catch (\Throwable $error) {
+                    $completed->push($error);
+                }
+            });
+            $pool->reclaim($first);
+            // Sample after the successor owns the checkout, including adapters
+            // that schedule it after the predecessor releases the bookkeeping lock.
+            $entered->pop(1);
+            $snapshots[] = $sample();
+            $results = [$completed->pop(1), $completed->pop(1)];
+            $snapshots[] = $sample();
+        });
+        $this->assertSame([1, 0, 0], $snapshots[0]);
+        $this->assertContains($failure, $results);
+        $this->assertContains('replacement', $results);
+        $this->assertSame(2, $created);
+        $this->assertCount(3, $identities);
+        $this->assertSame($identities[0], $identities[1]);
+        $this->assertNotSame($identities[1], $identities[2]);
+        $this->assertSame([0, 1, 1], $snapshots[1]);
+    }
+
     public function testDiscardingAFailedBorrowerWakesAnExistingWaiter(): void
     {
         $failure = new \RuntimeException('request failed');

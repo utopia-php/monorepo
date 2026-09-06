@@ -443,9 +443,13 @@ class Pool
      */
     public function push(Connection $connection): static
     {
-        $this->recordUse($connection->id);
-        $this->adapter->push($connection);
-        unset($this->active[$connection->id]);
+        $this->adapter->synchronized(function () use ($connection): void {
+            $this->recordUse($connection->id);
+            // A push can resume a waiting borrower inline. Its track() must wait
+            // until the previous checkout has been removed from active ownership.
+            $this->adapter->push($connection);
+            unset($this->active[$connection->id]);
+        });
 
         return $this;
     }
