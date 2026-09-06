@@ -52,7 +52,11 @@ try {
     $parts = explode('.', $token);
     $claims = json_decode(base64_decode(strtr($parts[1], '-_', '+/'), true), true, flags: JSON_THROW_ON_ERROR);
     $diagnostic['issuerType'] = get_debug_type($claims['iss'] ?? null);
-    $diagnostic['issuerMatchesIdentifier'] = ($claims['iss'] ?? null) === $identifier;
+    $diagnostic['issuerMatchesIdentifier'] = (string) ($claims['iss'] ?? '') === $identifier;
+    if ($diagnostic['identifierNumeric'] && $diagnostic['issuerType'] !== 'int') {
+        $diagnostic['errorCategory'] = 'issuer';
+        throw new RuntimeException();
+    }
 
     $request = curl_init('https://api.github.com/app');
     curl_setopt_array($request, [
