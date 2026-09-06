@@ -192,6 +192,7 @@ class Pool
         } catch (\Throwable) {
             $untrack();
         }
+        $this->adapter->notify();
 
         return $this;
     }
@@ -323,6 +324,7 @@ class Pool
         $this->adapter->synchronized(function (): void {
             --$this->reserved;
         });
+        $this->adapter->notify();
     }
 
     /**
@@ -339,48 +341,55 @@ class Pool
         $deadline = $start + $this->timeout;
 
         try {
-            $slot = $this->adapter->synchronized(function (): bool {
-                if ($this->adapter->count() === 0 && $this->reserved < $this->size) {
-                    ++$this->reserved;
+            do {
+                $slot = $this->adapter->synchronized(function (): bool {
+                    if ($this->adapter->count() === 0 && $this->reserved < $this->size) {
+                        ++$this->reserved;
 
-                    return true;
-                }
+                        return true;
+                    }
 
-                return false;
-            });
+                    return false;
+                });
 
-            if ($slot === true) {
-                // The slot is reserved before the resource exists, so every path out
-                // of this block has to release it or the capacity is lost for the
-                // lifetime of the process.
-                $handedOver = false;
+                if ($slot === true) {
+                    // The slot is reserved before the resource exists, so every path out
+                    // of this block has to release it or the capacity is lost for the
+                    // lifetime of the process.
+                    $handedOver = false;
 
-                try {
-                    $connection = $this->createConnection();
-                    $this->track($connection, $start);
-                    $handedOver = true;
+                    try {
+                        $connection = $this->createConnection();
+                        $this->track($connection, $start);
+                        $handedOver = true;
 
-                    // Creation failures propagate untouched rather than falling
-                    // through to a wait. Waiting for someone else's connection after
-                    // our own create failed is a retry in disguise, and callers keep
-                    // the original exception type to act on.
-                    return $connection;
-                } finally {
-                    if (! $handedOver) {
-                        $this->adapter->synchronized(function (): void {
-                            --$this->reserved;
-                        });
+                        // Creation failures propagate untouched rather than falling
+                        // through to a wait. Waiting for someone else's connection after
+                        // our own create failed is a retry in disguise, and callers keep
+                        // the original exception type to act on.
+                        return $connection;
+                    } finally {
+                        if (! $handedOver) {
+                            $this->adapter->synchronized(function (): void {
+                                --$this->reserved;
+                            });
+                            $this->adapter->notify();
+                        }
                     }
                 }
-            }
 
-            $connection = $this->adapter->pop(max(0.0, $deadline - microtime(true)));
+                $connection = $this->adapter->pop(max(0.0, $deadline - microtime(true)));
 
-            if ($connection instanceof Connection) {
-                $this->track($connection, $start);
+                if ($connection instanceof Connection) {
+                    $this->track($connection, $start);
 
-                return $connection;
-            }
+                    return $connection;
+                }
+
+                if ($connection !== Wakeup::Capacity || microtime(true) >= $deadline) {
+                    break;
+                }
+            } while (true);
 
             throw new Exception(\sprintf(
                 "Pool '%s' could not provide a connection within %ss (size %d, active %d, idle %d)",
@@ -495,6 +504,7 @@ class Pool
             unset($this->active[$connection->id]);
             --$this->reserved;
         });
+        $this->adapter->notify();
 
         return $this;
     }

@@ -7,6 +7,7 @@ namespace Utopia\Pools\Adapter;
 use Swoole\Coroutine\Channel;
 use Swoole\Coroutine\Lock;
 use Utopia\Pools\Adapter;
+use Utopia\Pools\Wakeup;
 
 class Swoole extends Adapter
 {
@@ -17,6 +18,9 @@ class Swoole extends Adapter
 
     protected Lock $lock;
 
+    /** @var Channel<bool> Coalesced capacity notifications, separate from idle resources. */
+    private Channel $notifications;
+
     /** Shortest wait Swoole will honour without treating it as unbounded. */
     private const float POLL = 0.001;
 
@@ -25,6 +29,7 @@ class Swoole extends Adapter
 
         $this->pool = new Channel($size);
         $this->lock = new Lock();
+        $this->notifications = new Channel(1);
 
         return $this;
     }
@@ -33,6 +38,7 @@ class Swoole extends Adapter
     {
         // Push connection to channel
         $this->pool->push($connection);
+        $this->notify();
 
         return $this;
     }
@@ -46,9 +52,35 @@ class Swoole extends Adapter
     {
         // Swoole reads a non-positive channel timeout as "wait forever", the exact
         // opposite of a zero budget, so clamp to a single short poll instead.
-        return $this->pool->pop($timeout > 0.0 ? $timeout : self::POLL);
+        if ($this->count() > 0) {
+            if ($this->notifications->length() > 0) {
+                $this->notifications->pop(self::POLL);
+            }
+            return $this->pool->pop(self::POLL);
+        }
+
+        if ($this->notifications->pop($timeout > 0.0 ? $timeout : self::POLL) === false) {
+            return false;
+        }
+
+        return $this->count() > 0 ? $this->pool->pop(self::POLL) : Wakeup::Capacity;
     }
 
+    #[\Override]
+    public function notify(): static
+    {
+        // Remember one change even if a waiter has not entered pop() yet.
+        // Notifications never occupy or inflate the idle-resource queue.
+        if ($this->notifications->length() === 0) {
+            $this->notifications->push(true);
+        }
+        return $this;
+    }
+
+    /**
+     * Another coroutine can change the idle contents during a blocking pop().
+     * @phpstan-impure
+     */
     public function count(): int
     {
         return (int) $this->pool->length();

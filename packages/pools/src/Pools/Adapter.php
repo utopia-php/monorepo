@@ -34,6 +34,15 @@ abstract class Adapter
     abstract public function count(): int;
 
     /**
+     * Wake a blocked acquisition when capacity is freed without an idle resource.
+     * Adapters without a separate wake mechanism retain their existing behavior.
+     */
+    public function notify(): static
+    {
+        return $this;
+    }
+
+    /**
      * Run $callback atomically with respect to other pool operations.
      *
      * Adapters without concurrency satisfy this by construction and may call
