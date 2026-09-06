@@ -20,6 +20,7 @@ $privateKey = str_replace('\\n', "\n", System::getEnv('TESTS_GITHUB_PRIVATE_KEY'
 $diagnostic = [
     'identifierPresent' => $identifier !== '' && $identifier !== '0',
     'identifierNumeric' => ctype_digit($identifier),
+    'identifierClientIdPrefix' => str_starts_with($identifier, 'Iv1.'),
     'identifierWhitespace' => $identifier !== trim($identifier),
     'identifierQuoted' => str_starts_with($identifier, '"') || str_ends_with($identifier, '"')
         || str_starts_with($identifier, "'") || str_ends_with($identifier, "'"),
