@@ -6,6 +6,7 @@ use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Utopia\Cdn\Certificates\Provider;
 use Utopia\Cdn\Certificates\Status;
+use Utopia\Cdn\Exception\Certificate;
 use Utopia\Client;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Psr7\Header;
@@ -51,7 +52,29 @@ class FastlyTls implements Provider
             return Status::UNKNOWN;
         }
 
-        return $this->mapStatus($subscription['resource']['attributes']['state'] ?? '');
+        $status = $this->mapStatus($subscription['resource']['attributes']['state'] ?? '');
+        if ($status === Status::ISSUED) {
+            return $status;
+        }
+
+        $details = $this->getAuthorizationDetails($subscription, $domain);
+        if ($status !== Status::FAILED && $details['blocked']) {
+            $status = Status::BLOCKED;
+        }
+
+        if ($status === Status::BLOCKED || $status === Status::FAILED) {
+            $message = $status === Status::BLOCKED ? 'Certificate issuance is blocked.' : 'Certificate issuance failed.';
+            foreach ($details['instructions'] as $instruction) {
+                $message .= ' ' . $instruction;
+            }
+            foreach ($details['records'] as $record) {
+                $message .= ' Add a ' . $record['type'] . " record '" . $record['name'] . "' with value(s) '" . implode("', '", $record['values']) . "' in your DNS provider.";
+            }
+
+            throw new Certificate($message, $status, $details['records']);
+        }
+
+        return $status;
     }
 
     public function isRenewRequired(string $domain, ?string $domainType): bool
@@ -73,6 +96,10 @@ class FastlyTls implements Provider
             return;
         }
 
+        if ($this->getSubscriptionDomains($subscription) !== [strtolower(rtrim($domain, '.'))]) {
+            throw new \RuntimeException('Refusing to delete a Fastly TLS subscription without exclusive ownership of the requested domain.');
+        }
+
         $result = $this->request(
             'DELETE',
             '/tls/subscriptions/' . $subscription['resource']['id'] . '?force=true',
@@ -90,7 +117,7 @@ class FastlyTls implements Provider
     {
         $query = http_build_query([
             'filter[tls_domains.id]' => $domain,
-            'include' => 'tls_certificates',
+            'include' => 'tls_certificates,tls_authorizations',
             'page[size]' => 1,
         ]);
 
@@ -105,7 +132,7 @@ class FastlyTls implements Provider
         }
 
         $data = $result['response']['data'] ?? null;
-        if (!\is_array($data)) {
+        if (!\is_array($data) || !array_is_list($data)) {
             throw new \RuntimeException('Fastly TLS subscriptions response was missing its data list.');
         }
 
@@ -114,7 +141,7 @@ class FastlyTls implements Provider
             return null;
         }
 
-        if (!\is_array($resource)) {
+        if (!\is_array($resource) || !\is_string($resource['id'] ?? null) || $resource['id'] === '') {
             throw new \RuntimeException('Fastly TLS subscription resource was malformed.');
         }
 
@@ -124,6 +151,125 @@ class FastlyTls implements Provider
         }
 
         return ['resource' => $resource, 'included' => array_values(array_filter($included, is_array(...)))];
+    }
+
+    /**
+     * @param array{resource:array<string, mixed>,included:array<int, array<string, mixed>>} $subscription
+     * @return list<string>|null
+     */
+    private function getSubscriptionDomains(array $subscription): ?array
+    {
+        $references = $subscription['resource']['relationships']['tls_domains']['data'] ?? null;
+        if (!\is_array($references) || !array_is_list($references)) {
+            return null;
+        }
+
+        $domains = [];
+        foreach ($references as $reference) {
+            if (!\is_array($reference) || ($reference['type'] ?? null) !== 'tls_domain' || !\is_string($reference['id'] ?? null) || $reference['id'] === '') {
+                return null;
+            }
+            $domains[] = strtolower(rtrim($reference['id'], '.'));
+        }
+
+        return $domains;
+    }
+
+    /**
+     * @param array{resource:array<string, mixed>,included:array<int, array<string, mixed>>} $subscription
+     * @return array{blocked:bool,instructions:list<string>,records:list<array{type:string,name:string,values:list<string>}>}
+     */
+    private function getAuthorizationDetails(array $subscription, string $domain): array
+    {
+        $domain = strtolower(rtrim($domain, '.'));
+        $challengeDomain = str_starts_with($domain, '*.') ? substr($domain, 2) : $domain;
+        $relationships = $subscription['resource']['relationships'] ?? [];
+        $domains = $this->getSubscriptionDomains($subscription);
+        if ($domains === null || !\in_array($domain, $domains, true)) {
+            return ['blocked' => false, 'instructions' => [], 'records' => []];
+        }
+        $singleDomain = $domains === [$domain];
+        $references = $relationships['tls_authorizations']['data'] ?? [];
+        $ids = [];
+        if (\is_array($references)) {
+            foreach ($references as $reference) {
+                if (\is_array($reference) && ($reference['type'] ?? null) === 'tls_authorization' && \is_string($reference['id'] ?? null)) {
+                    $ids[] = $reference['id'];
+                }
+            }
+        }
+
+        $blocked = false;
+        $instructions = [];
+        $records = [];
+        foreach ($subscription['included'] as $authorization) {
+            if (($authorization['type'] ?? null) !== 'tls_authorization') {
+                continue;
+            }
+            if (!\in_array($authorization['id'] ?? null, $ids, true)) {
+                continue;
+            }
+            $attributes = $authorization['attributes'] ?? [];
+            if (!\is_array($attributes)) {
+                continue;
+            }
+            $challenges = $attributes['challenges'] ?? [];
+            $authorizationRecords = [];
+            if (\is_array($challenges)) {
+                foreach ($challenges as $challenge) {
+                    if (!\is_array($challenge)) {
+                        continue;
+                    }
+                    if (!\is_string($challenge['record_name'] ?? null)) {
+                        continue;
+                    }
+                    if (!\is_string($challenge['record_type'] ?? null)) {
+                        continue;
+                    }
+                    if (!\is_array($challenge['values'] ?? null)) {
+                        continue;
+                    }
+                    $name = strtolower(rtrim($challenge['record_name'], '.'));
+                    if ($name !== $challengeDomain && $name !== '_acme-challenge.' . $challengeDomain) {
+                        continue;
+                    }
+                    $type = strtoupper(trim($challenge['record_type']));
+                    $values = array_values(array_unique(array_filter($challenge['values'], static fn(mixed $value): bool => \is_string($value) && trim($value) !== '')));
+                    if ($type === '') {
+                        continue;
+                    }
+                    if ($values === []) {
+                        continue;
+                    }
+                    $record = ['type' => $type, 'name' => $name, 'values' => $values];
+                    if (!\in_array($record, $authorizationRecords, true)) {
+                        $authorizationRecords[] = $record;
+                    }
+                }
+            }
+
+            // A shared subscription can contain authorizations for other domains.
+            if (!$singleDomain && $authorizationRecords === []) {
+                continue;
+            }
+            $blocked = $blocked || ($attributes['state'] ?? null) === 'blocked';
+            $warnings = $attributes['warnings'] ?? [];
+            if (\is_array($warnings)) {
+                foreach ($warnings as $warning) {
+                    $instruction = \is_array($warning) ? ($warning['instructions'] ?? null) : null;
+                    if (\is_string($instruction) && trim($instruction) !== '' && !\in_array($instruction, $instructions, true)) {
+                        $instructions[] = $instruction;
+                    }
+                }
+            }
+            foreach ($authorizationRecords as $record) {
+                if (!\in_array($record, $records, true)) {
+                    $records[] = $record;
+                }
+            }
+        }
+
+        return ['blocked' => $blocked, 'instructions' => $instructions, 'records' => $records];
     }
 
     /**
@@ -266,7 +412,7 @@ class FastlyTls implements Provider
 
     /**
      * @param array<string, mixed>|null $body
-     * @return array{statusCode:int,response:array<string, mixed>|string|null,error:string|null}
+     * @return array{statusCode:int,response:mixed,error:string|null}
      */
     private function request(string $method, string $path, ?array $body = null): array
     {
@@ -298,7 +444,7 @@ class FastlyTls implements Provider
     }
 
     /**
-     * @param array{statusCode:int,response:array<string, mixed>|string|null,error:string|null} $result
+     * @param array{statusCode:int,response:mixed,error:string|null} $result
      */
     private function formatError(string $prefix, array $result): string
     {
@@ -324,6 +470,7 @@ class FastlyTls implements Provider
             'issued' => Status::ISSUED,
             'renewing' => Status::RENEWING,
             'failed' => Status::FAILED,
+            'blocked' => Status::BLOCKED,
             default => Status::UNKNOWN,
         };
     }

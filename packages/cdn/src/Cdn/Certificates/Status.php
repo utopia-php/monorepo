@@ -11,5 +11,6 @@ class Status
     public const ISSUED = 'issued';
     public const RENEWING = 'renewing';
     public const FAILED = 'failed';
+    public const BLOCKED = 'blocked';
     public const UNKNOWN = 'unknown';
 }

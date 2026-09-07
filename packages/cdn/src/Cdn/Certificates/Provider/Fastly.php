@@ -74,7 +74,7 @@ class Fastly implements Provider
             }
 
             if ($existingServiceId === null) {
-                if ($this->isClassicDomain($domain)) {
+                if ($this->findClassicService($domain) !== null) {
                     return null;
                 }
 
@@ -166,7 +166,7 @@ class Fastly implements Provider
         }
 
         if ($serviceId === null) {
-            return !$this->isClassicDomain($domain);
+            return $this->findClassicService($domain) === null;
         }
 
         if ($serviceId !== $this->serviceId) {
@@ -181,44 +181,87 @@ class Fastly implements Provider
         $domain = Domain::validate($domain);
         $domainInfo = $this->findDomain($domain);
 
+        $serviceId = $domainInfo['service_id'] ?? null;
+        if ($serviceId !== null && (!\is_string($serviceId) || $serviceId === '')) {
+            throw new \RuntimeException('Fastly domain response contained an invalid service ID.');
+        }
+
+        $routingId = $domainInfo['routing_configuration_id'] ?? null;
+        if ($routingId !== null) {
+            if (!\is_string($routingId) || $routingId === '') {
+                throw new \RuntimeException('Fastly domain response contained an invalid routing configuration ID.');
+            }
+
+            return;
+        }
+
+        if ($serviceId === null) {
+            $classicServiceId = $this->findClassicService($domain);
+            if ($classicServiceId !== null) {
+                if ($classicServiceId === $this->serviceId) {
+                    $this->deleteClassicDomain($domain, $domainType);
+                }
+
+                return;
+            }
+        } elseif ($serviceId !== $this->serviceId) {
+            return;
+        }
+
         if ($domainInfo === null) {
             $this->tls->deleteCertificate($domain, $domainType);
             return;
         }
 
-        $serviceId = $domainInfo['service_id'] ?? null;
-        if (!\is_string($serviceId) || $serviceId === '') {
-            $this->deleteClassicDomain($domain, $domainType);
-            return;
-        }
-
-        if ($serviceId !== $this->serviceId) {
-            return;
-        }
-
+        // Remove the provider record before its TLS subscription. Retrying a
+        // partial cleanup uses the missing-domain branch to finish TLS removal.
         $this->deleteVersionlessDomain($domainInfo, $domainType);
     }
 
     /** @return array<string, mixed>|null */
     private function findDomain(string $domain): ?array
     {
-        $query = http_build_query(['fqdn' => $domain, 'limit' => 100]);
-        $result = $this->request('GET', '/domain-management/v1/domains?' . $query);
+        $query = http_build_query(['fqdn' => $domain, 'fqdn_match' => 'exact', 'limit' => 100]);
+        $result = $this->request('GET', '/domain-management/v1/domains?' . $query, associative: false);
         $this->assertSuccess('fetch Fastly domains', $result);
 
-        if (!\is_array($result['response'])) {
-            throw new \RuntimeException('Fastly domains response was not valid JSON.');
+        if (!$result['response'] instanceof \stdClass) {
+            throw new \RuntimeException('Fastly domains response was not a valid JSON object.');
         }
 
-        $domains = $result['response']['data'] ?? null;
+        $domains = $result['response']->data ?? null;
         if (!\is_array($domains)) {
             throw new \RuntimeException('Fastly domains response was missing its data list.');
         }
 
+        $match = null;
         foreach ($domains as $candidate) {
-            if (\is_array($candidate) && ($candidate['fqdn'] ?? null) === $domain) {
-                return $candidate;
+            if (!$candidate instanceof \stdClass || !\is_string($candidate->fqdn ?? null) || $candidate->fqdn === '') {
+                throw new \RuntimeException('Fastly domains response contained a malformed domain.');
             }
+
+            if ($candidate->fqdn === $domain) {
+                if ($match !== null) {
+                    throw new \RuntimeException('Fastly domains response contained repeated exact matches.');
+                }
+
+                $match = (array) $candidate;
+            }
+        }
+
+        if ($match !== null) {
+            return $match;
+        }
+
+        // Do not infer absence from a truncated fuzzy result if an older API
+        // ignores fqdn_match. Missing-domain cleanup can otherwise delete TLS.
+        $meta = $result['response']->meta ?? null;
+        if ($meta !== null && !$meta instanceof \stdClass) {
+            throw new \RuntimeException('Fastly domains response contained malformed pagination metadata.');
+        }
+        $cursor = $meta->next_cursor ?? null;
+        if (($cursor !== null && $cursor !== '') || \count($domains) >= 100) {
+            throw new \RuntimeException('Fastly domain lookup did not establish a complete exact result.');
         }
 
         return null;
@@ -240,12 +283,12 @@ class Fastly implements Provider
         $this->tls->deleteCertificate($domain, $domainType);
     }
 
-    private function isClassicDomain(string $domain): bool
+    private function findClassicService(string $domain): ?string
     {
         // A null service_id also occurs on orphaned versionless domains. Check
-        // classic ownership across services before creating a new association.
+        // classic ownership across services before changing an unlinked domain.
         if ($this->hasClassicDomain($this->serviceId, $domain)) {
-            return true;
+            return $this->serviceId;
         }
 
         // Service inventory is filtered by both token and user permissions. A
@@ -253,13 +296,13 @@ class Fastly implements Provider
         $token = $this->request('GET', '/tokens/self');
         $this->assertSuccess('fetch Fastly token permissions', $token);
         if (($token['response']['services'] ?? null) !== []) {
-            throw new \RuntimeException('Repairing an unlinked Fastly domain requires access to all services.');
+            throw new \RuntimeException('Managing an unlinked Fastly domain requires access to all services.');
         }
 
         $user = $this->request('GET', '/current_user');
         $this->assertSuccess('fetch Fastly user permissions', $user);
         if (($user['response']['limit_services'] ?? null) !== false) {
-            throw new \RuntimeException('Repairing an unlinked Fastly domain requires an unrestricted service inventory.');
+            throw new \RuntimeException('Managing an unlinked Fastly domain requires an unrestricted service inventory.');
         }
 
         $seen = [];
@@ -287,7 +330,7 @@ class Fastly implements Provider
                 }
 
                 if ($this->hasClassicDomain($serviceId, $domain)) {
-                    return true;
+                    return $serviceId;
                 }
             }
 
@@ -300,7 +343,7 @@ class Fastly implements Provider
             throw new \RuntimeException('Fastly services response did not include the configured service.');
         }
 
-        return false;
+        return null;
     }
 
     private function hasClassicDomain(string $serviceId, string $domain): bool
@@ -414,7 +457,7 @@ class Fastly implements Provider
      * @param array<string, mixed>|null $body
      * @return array{statusCode:int,response:mixed,error:string|null}
      */
-    private function request(string $method, string $path, ?array $body = null): array
+    private function request(string $method, string $path, ?array $body = null, bool $associative = true): array
     {
         $factory = new RequestFactory();
         $request = $body === null
@@ -434,7 +477,7 @@ class Fastly implements Provider
         $contents = (string) $response->getBody();
 
         try {
-            $decoded = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+            $decoded = json_decode($contents, $associative, flags: JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
             $decoded = $contents;
         }
@@ -457,10 +500,14 @@ class Fastly implements Provider
         }
 
         $message = $result['error'];
-        if (\is_array($result['response'])) {
-            $message ??= $result['response']['errors'][0]['detail']
-                ?? $result['response']['errors'][0]['title']
-                ?? $result['response']['msg']
+        $response = $result['response'];
+        if ($response instanceof \stdClass) {
+            $response = json_decode(json_encode($response, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+        }
+        if (\is_array($response)) {
+            $message ??= $response['errors'][0]['detail']
+                ?? $response['errors'][0]['title']
+                ?? $response['msg']
                 ?? null;
         }
 
