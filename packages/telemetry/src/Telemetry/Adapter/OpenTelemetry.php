@@ -87,7 +87,7 @@ class OpenTelemetry implements Adapter
      */
     protected function initMeter(MetricExporterInterface $exporter, AttributesInterface $attributes): MeterInterface
     {
-        $this->reader = new ExportingReader($exporter);
+        $this->reader = new ExportingReader(new SkipEmpty($exporter));
         $meterProvider = MeterProvider::builder()
             ->setResource(ResourceInfo::create($attributes, ResourceAttributes::SCHEMA_URL))
             ->addReader($this->reader)
@@ -106,7 +106,7 @@ class OpenTelemetry implements Adapter
     protected function createExporter(TransportInterface $transport): MetricExporterInterface
     {
         /** @phpstan-ignore argument.type */
-        return new SkipEmpty(new MetricExporter($transport, Temporality::CUMULATIVE));
+        return new MetricExporter($transport, Temporality::CUMULATIVE);
     }
 
     /**

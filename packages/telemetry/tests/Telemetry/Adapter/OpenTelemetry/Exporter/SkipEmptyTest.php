@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Tests\Telemetry\Adapter\OpenTelemetry\Exporter;
 
 use OpenTelemetry\Contrib\Otlp\ContentTypes;
+use OpenTelemetry\Contrib\Otlp\MetricExporter;
 use OpenTelemetry\SDK\Common\Export\TransportInterface;
 use OpenTelemetry\SDK\Common\Future\CancellationInterface;
 use OpenTelemetry\SDK\Common\Future\CompletedFuture;
 use OpenTelemetry\SDK\Common\Future\FutureInterface;
+use OpenTelemetry\SDK\Metrics\Data\Temporality;
+use OpenTelemetry\SDK\Metrics\MetricExporterInterface;
 use PHPUnit\Framework\TestCase;
 use Utopia\Telemetry\Adapter\OpenTelemetry;
 
@@ -65,6 +68,32 @@ final class SkipEmptyTest extends TestCase
         $telemetry->collect();
 
         $this->assertSame([], $transport->payloads, 'A batch holding only empty instruments must not be sent at all');
+    }
+
+    public function testAnOverriddenExporterIsStillFiltered(): void
+    {
+        $transport = $this->transport();
+        $telemetry = new class ('http://localhost:4318/v1/metrics', 'tests', 'skip-empty', 'instance', $transport) extends OpenTelemetry {
+            protected function createExporter(TransportInterface $transport): MetricExporterInterface
+            {
+                /** @phpstan-ignore argument.type */
+                return new MetricExporter($transport, Temporality::DELTA);
+            }
+        };
+
+        $telemetry->createObservableGauge('never.observed')->observe(function (callable $observe): void {});
+        $telemetry->createCounter('always.counted')->add(1);
+
+        $telemetry->collect();
+
+        $payload = implode('', $transport->payloads);
+
+        $this->assertStringContainsString('always.counted', $payload);
+        $this->assertStringNotContainsString(
+            'never.observed',
+            $payload,
+            'Filtering must not depend on createExporter() remembering to apply it',
+        );
     }
 
     /**

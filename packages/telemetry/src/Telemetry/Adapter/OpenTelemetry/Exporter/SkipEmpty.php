@@ -8,6 +8,7 @@ use OpenTelemetry\SDK\Metrics\Data\Histogram;
 use OpenTelemetry\SDK\Metrics\Data\Metric;
 use OpenTelemetry\SDK\Metrics\Data\Sum;
 use OpenTelemetry\SDK\Metrics\Data\Temporality;
+use OpenTelemetry\SDK\Metrics\MetricExporterInterface;
 use OpenTelemetry\SDK\Metrics\MetricMetadataInterface;
 use OpenTelemetry\SDK\Metrics\PushMetricExporterInterface;
 
@@ -19,11 +20,16 @@ use OpenTelemetry\SDK\Metrics\PushMetricExporterInterface;
  * payload with HTTP 500 for the entire OTLP request and rolls back everything
  * already appended, so one empty instrument discards every healthy metric
  * batched alongside it (prometheus/prometheus#19338).
+ *
+ * ExportingReader probes the exporter for the two optional interfaces below and
+ * changes behaviour when either is absent, so both are delegated only when the
+ * wrapped exporter provides them. Answering null temporality for an exporter
+ * that selects none leaves ExportingReader::add() on its original early return.
  */
 final class SkipEmpty implements AggregationTemporalitySelectorInterface, PushMetricExporterInterface
 {
     public function __construct(
-        private readonly PushMetricExporterInterface&AggregationTemporalitySelectorInterface $exporter,
+        private readonly MetricExporterInterface $exporter,
     ) {}
 
     /**
@@ -47,12 +53,16 @@ final class SkipEmpty implements AggregationTemporalitySelectorInterface, PushMe
 
     public function temporality(MetricMetadataInterface $metric): Temporality|string|null
     {
-        return $this->exporter->temporality($metric);
+        return $this->exporter instanceof AggregationTemporalitySelectorInterface
+            ? $this->exporter->temporality($metric)
+            : null;
     }
 
     public function forceFlush(): bool
     {
-        return $this->exporter->forceFlush();
+        return $this->exporter instanceof PushMetricExporterInterface
+            ? $this->exporter->forceFlush()
+            : true;
     }
 
     public function shutdown(): bool
