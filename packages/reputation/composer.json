@@ -1,0 +1,30 @@
+{
+    "name": "utopia-php/reputation",
+    "description": "In-process IP reputation lookups against a Verdict MMDB",
+    "type": "library",
+    "keywords": [
+        "php",
+        "utopia",
+        "reputation",
+        "mmdb",
+        "ip"
+    ],
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Utopia\\Reputation\\": "src/Reputation/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Utopia\\Reputation\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": ">=8.4",
+        "maxmind-db/reader": "^1.12"
+    },
+    "scripts": {
+        "test": "phpunit"
+    }
+}
