@@ -25,8 +25,17 @@ final class GitHubTest extends Base
         return 'sha256=' . hash_hmac('sha256', $payload, $secret);
     }
 
-    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false): string
+    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false, array $olderCommits = []): string
     {
+        $repositoryUrl = 'https://github.com/' . self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME;
+
+        $olderEntries = array_map(fn(string $hash): array => [
+            'id' => $hash,
+            'message' => 'Older commit',
+            'url' => $repositoryUrl . '/commit/' . $hash,
+            'author' => ['name' => 'Older Author', 'email' => 'older@example.com'],
+        ], $olderCommits);
+
         return (string) json_encode([
             'created' => $created,
             'deleted' => $deleted,
@@ -38,17 +47,17 @@ final class GitHubTest extends Base
                 'name' => self::EVENT_REPOSITORY_NAME,
                 'full_name' => self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME,
                 'private' => true,
-                'html_url' => 'https://github.com/' . self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME,
+                'html_url' => $repositoryUrl,
                 'owner' => ['name' => self::EVENT_OWNER, 'login' => self::EVENT_OWNER],
             ],
             'installation' => ['id' => 1234],
             'head_commit' => [
                 'id' => self::EVENT_COMMIT_HASH,
                 'message' => self::EVENT_COMMIT_MESSAGE,
-                'url' => 'https://github.com/' . self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME . '/commit/' . self::EVENT_COMMIT_HASH,
+                'url' => $repositoryUrl . '/commit/' . self::EVENT_COMMIT_HASH,
                 'author' => ['name' => self::EVENT_AUTHOR_NAME, 'email' => self::EVENT_AUTHOR_EMAIL],
             ],
-            'commits' => [[
+            'commits' => [...$olderEntries, [
                 'id' => self::EVENT_COMMIT_HASH,
                 'added' => $added,
                 'removed' => $removed,
@@ -61,12 +70,12 @@ final class GitHubTest extends Base
         ]);
     }
 
-    protected function pullRequestPayload(bool $external = false): string
+    protected function pullRequestPayload(bool $external = false, string $action = 'opened'): string
     {
         $headOwner = $external ? 'someone-else' : self::EVENT_OWNER;
 
         return (string) json_encode([
-            'action' => 'opened',
+            'action' => $action,
             'number' => self::EVENT_PULL_REQUEST_NUMBER,
             'pull_request' => [
                 'id' => 1303283688,

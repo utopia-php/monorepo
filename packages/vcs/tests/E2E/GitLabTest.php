@@ -12,7 +12,6 @@ use Utopia\VCS\Adapter\Git\GitLab;
 final class GitLabTest extends Base
 {
     protected static string $owner = '';
-    protected static string $defaultBranch = 'main';
     protected static string $openPullRequestState = 'opened';
 
     /**
@@ -26,8 +25,6 @@ final class GitLabTest extends Base
 
     protected static string $presignedTarballFragment = '/repository/archive.tar.gz?access_token=';
     protected static string $presignedZipballFragment = '/repository/archive.zip?access_token=';
-    protected static string $repositoryNotFoundException = \Exception::class;
-    protected static bool $deletesRepositoriesSynchronously = false;
     protected static bool $supportsCheckRuns = false;
     protected static bool $supportsInstallationRepository = false;
     protected static bool $reportsCommitAuthorAvatar = false;

@@ -26,6 +26,19 @@ final class BitbucketTest extends Base
     protected static string $pushEventName = 'repo:push';
     protected static string $pullRequestEventName = 'pullrequest:created';
 
+    /**
+     * Bitbucket names the action in the event rather than the payload, and
+     * has no reopen event.
+     *
+     * @var array<string, string>
+     */
+    protected static array $pullRequestActions = [
+        'pullrequest:created' => 'opened',
+        'pullrequest:updated' => 'synchronize',
+        'pullrequest:fulfilled' => 'closed',
+        'pullrequest:rejected' => 'closed',
+    ];
+
     // Bitbucket's push payload carries no file lists at all
     protected static bool $reportsAffectedFilesInPushEvent = false;
 
@@ -38,7 +51,13 @@ final class BitbucketTest extends Base
         return 'sha256=' . hash_hmac('sha256', $payload, $secret);
     }
 
-    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false): string
+    #[\Override]
+    protected function pullRequestEventFor(string $action): string
+    {
+        return $action;
+    }
+
+    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false, array $olderCommits = []): string
     {
         $ref = [
             'type' => 'branch',
@@ -51,6 +70,16 @@ final class BitbucketTest extends Base
             ],
         ];
 
+        // The adapter reads the head off new.target, so the commit list is
+        // there to prove the first commit listed is not taken for it
+        $commits = array_map(fn(string $hash): array => [
+            'hash' => $hash,
+            'message' => 'Older commit',
+            'author' => ['raw' => 'Older Author <older@example.com>'],
+            'links' => ['html' => ['href' => self::REPOSITORY_URL . '/commits/' . $hash]],
+        ], $olderCommits);
+        $commits[] = $ref['target'];
+
         // A created branch has no old state and a deleted one no new state. The
         // file lists go unused, Bitbucket naming no files in a push.
         return (string) json_encode([
@@ -62,12 +91,16 @@ final class BitbucketTest extends Base
                     'closed' => $deleted,
                     'old' => $created ? null : $ref,
                     'new' => $deleted ? null : $ref,
+                    'commits' => $commits,
                 ]],
             ],
         ]);
     }
 
-    protected function pullRequestPayload(bool $external = false): string
+    /**
+     * The event names the action, so the payload is the same for every one.
+     */
+    protected function pullRequestPayload(bool $external = false, string $action = 'pullrequest:created'): string
     {
         return (string) json_encode([
             'actor' => $this->eventActor(),
@@ -155,23 +188,5 @@ final class BitbucketTest extends Base
         ]);
 
         $this->assertSame([], $this->vcsAdapter->getEvents(self::$pushEventName, $tagsOnly));
-    }
-
-    public function testGetEventPullRequestActionMapping(): void
-    {
-        $mapping = [
-            'pullrequest:created' => 'opened',
-            'pullrequest:updated' => 'synchronize',
-            'pullrequest:fulfilled' => 'closed',
-            'pullrequest:rejected' => 'closed',
-        ];
-
-        foreach ($mapping as $event => $action) {
-            $events = $this->vcsAdapter->getEvents($event, $this->pullRequestPayload());
-            $this->assertCount(1, $events);
-            $result = $events[0];
-
-            $this->assertSame($action, $result['action'], "event '{$event}' should map to '{$action}'");
-        }
     }
 }

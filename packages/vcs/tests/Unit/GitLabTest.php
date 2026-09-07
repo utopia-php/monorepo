@@ -15,6 +15,19 @@ final class GitLabTest extends Base
     protected static string $pushEventName = 'Push Hook';
     protected static string $pullRequestEventName = 'Merge Request Hook';
 
+    /**
+     * GitLab names merge request actions as verbs, and a merged one is closed.
+     *
+     * @var array<string, string>
+     */
+    protected static array $pullRequestActions = [
+        'open' => 'opened',
+        'reopen' => 'reopened',
+        'update' => 'synchronize',
+        'close' => 'closed',
+        'merge' => 'closed',
+    ];
+
     protected function createAdapter(): GitLab
     {
         return new GitLab(new Cache(new None()));
@@ -24,10 +37,17 @@ final class GitLabTest extends Base
         return $secret;
     }
 
-    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false): string
+    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false, array $olderCommits = []): string
     {
         $blank = str_repeat('0', 40);
         $repositoryUrl = 'http://example.com/' . self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME;
+
+        $olderEntries = array_map(fn(string $hash): array => [
+            'id' => $hash,
+            'message' => 'Older commit',
+            'url' => $repositoryUrl . '/-/commit/' . $hash,
+            'author' => ['name' => 'Older Author', 'email' => 'older@example.com'],
+        ], $olderCommits);
 
         return (string) json_encode([
             'object_kind' => 'push',
@@ -43,7 +63,7 @@ final class GitLabTest extends Base
                 'namespace' => self::EVENT_OWNER,
                 'web_url' => $repositoryUrl,
             ],
-            'commits' => $deleted ? [] : [[
+            'commits' => $deleted ? [] : [...$olderEntries, [
                 'id' => self::EVENT_COMMIT_HASH,
                 'message' => self::EVENT_COMMIT_MESSAGE,
                 'url' => $repositoryUrl . '/-/commit/' . self::EVENT_COMMIT_HASH,
@@ -55,7 +75,7 @@ final class GitLabTest extends Base
         ]);
     }
 
-    protected function pullRequestPayload(bool $external = false): string
+    protected function pullRequestPayload(bool $external = false, string $action = 'open'): string
     {
         return (string) json_encode([
             'object_kind' => 'merge_request',
@@ -68,8 +88,7 @@ final class GitLabTest extends Base
             'object_attributes' => [
                 'iid' => self::EVENT_PULL_REQUEST_NUMBER,
                 'title' => 'Test MR',
-                // GitLab calls it 'open' and normalizes to 'opened'
-                'action' => 'open',
+                'action' => $action,
                 'source_branch' => self::EVENT_HEAD_BRANCH,
                 'target_branch' => self::$defaultBranch,
                 'source_project_id' => $external ? 456 : (int) self::EVENT_REPOSITORY_ID,
@@ -83,66 +102,5 @@ final class GitLabTest extends Base
                 ],
             ],
         ]);
-    }
-
-    public function testGetEventPushMatchesCheckoutSha(): void
-    {
-        $payload = json_encode([
-            'object_kind' => 'push',
-            'ref' => 'refs/heads/main',
-            'checkout_sha' => 'def456',
-            'project' => [
-                'name' => 'test-repo',
-                'namespace' => 'test-org',
-            ],
-            'commits' => [
-                [
-                    'id' => 'abc123',
-                    'message' => 'Older commit',
-                    'url' => 'http://example.com/commit/abc123',
-                    'author' => ['name' => 'Old Author'],
-                ],
-                [
-                    'id' => 'def456',
-                    'message' => 'Head commit',
-                    'url' => 'http://example.com/commit/def456',
-                    'author' => ['name' => 'Head Author'],
-                ],
-            ],
-        ]);
-
-        if ($payload === false) {
-            $this->fail('Failed to encode JSON payload');
-        }
-
-        $events = $this->vcsAdapter->getEvents('Push Hook', $payload);
-        $this->assertCount(1, $events);
-        $result = $events[0];
-
-        $this->assertIsArray($result);
-        $this->assertSame('def456', $result['commitHash']);
-        $this->assertSame('Head Author', $result['headCommitAuthorName']);
-        $this->assertSame('Head commit', $result['headCommitMessage']);
-        $this->assertSame('http://example.com/commit/def456', $result['headCommitUrl']);
-    }
-
-    public function testGetEventPullRequestActionMapping(): void
-    {
-        foreach (['open' => 'opened', 'reopen' => 'reopened', 'update' => 'synchronize', 'close' => 'closed', 'merge' => 'closed'] as $native => $mapped) {
-            $payload = json_encode([
-                'object_kind' => 'merge_request',
-                'project' => ['id' => 1, 'name' => 'r', 'namespace' => 'o', 'web_url' => 'http://example.com/o/r'],
-                'object_attributes' => ['iid' => 1, 'action' => $native, 'source_branch' => 'f', 'target_branch' => 'main'],
-            ]);
-
-            if ($payload === false) {
-                $this->fail('Failed to encode JSON payload');
-            }
-
-            $events = $this->vcsAdapter->getEvents('Merge Request Hook', $payload);
-            $this->assertCount(1, $events);
-            $result = $events[0];
-            $this->assertSame($mapped, $result['action'], "native action '{$native}' should map to '{$mapped}'");
-        }
     }
 }
