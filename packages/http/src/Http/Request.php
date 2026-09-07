@@ -581,40 +581,25 @@ abstract class Request
     /**
      * Decode a JSON request body into params.
      *
-     * Params are associative arrays, but PHP has no empty associative array, so
-     * `json_decode($body, true)` returns the same `[]` for `{}` and for `[]` and
-     * re-encoding an empty object emits `[]`. Bodies that can contain an empty
-     * object are decoded into objects instead, and only the empty ones are kept
-     * as `stdClass`; everything else becomes the associative array the params
-     * contract expects.
+     * The body is decoded to its natural PHP shape and handed over untouched: a
+     * JSON object becomes a `stdClass`, a list becomes an array. This keeps `{}`
+     * distinct from `[]` (unlike `json_decode($body, true)`, which collapses both
+     * to `[]`) without the request layer reshaping the payload. The top-level
+     * object is cast to the param map the contract requires; nested values keep
+     * whatever `json_decode` produced. Anything that is not an object or list
+     * (a scalar, or invalid JSON) carries no params.
      *
      * @return array<string, mixed>
      */
     protected function decodePayload(string $raw): array
     {
-        // An empty JSON object is always `{`, JSON whitespace, `}`, and `\s` covers
-        // every JSON whitespace character, so no match means no empty object at any
-        // depth. A `{}` inside a string literal matches and costs only the walk.
-        $decoded = preg_match('/\{\s*\}/', $raw) === 0
-            ? json_decode($raw, true)
-            : $this->toAssociative(json_decode($raw));
+        $decoded = json_decode($raw);
+
+        if ($decoded instanceof \stdClass) {
+            $decoded = (array) $decoded;
+        }
 
         return \is_array($decoded) ? $decoded : [];
-    }
-
-    private function toAssociative(mixed $value): mixed
-    {
-        if ($value instanceof \stdClass) {
-            $properties = (array) $value;
-
-            return $properties === [] ? $value : array_map($this->toAssociative(...), $properties);
-        }
-
-        if (\is_array($value)) {
-            return array_map($this->toAssociative(...), $value);
-        }
-
-        return $value;
     }
 
     /**
