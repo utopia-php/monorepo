@@ -49,6 +49,18 @@ $server->onClose(function (int $connection) {
 $server->start();
 ```
 
+## Slow clients
+
+The Swoole adapter defaults to a 512KB output buffer per connection. When a push fails, the adapter disconnects that client so it can reconnect and resynchronize. This changes the previous behavior for clients that stop reading or fall behind.
+
+Set the buffer limit when constructing the adapter:
+
+```php
+$adapter = new WebSocket\Adapter\Swoole(socketBufferSize: 1048576); // 1MB
+```
+
+Pass `socketBufferSize: 0` to retain Swoole's default buffer size and `send_yield` behavior. Failed pushes still disconnect the client.
+
 ## System requirements
 
 Utopia Framework requires PHP 8.0 or later. We recommend using the latest PHP version whenever possible.

@@ -11,20 +11,41 @@ use Utopia\WebSocket\Adapter;
 
 class Swoole extends Adapter
 {
+    /**
+     * Bytes the reactor may buffer per connection for a client that is not keeping up.
+     */
+    public const DEFAULT_SOCKET_BUFFER_SIZE = 524288;
+
     protected Server $server;
 
     protected string $host;
 
     protected int $port;
 
-    public function __construct(string $host = '0.0.0.0', int $port = 80)
-    {
+    /**
+     * @param int $socketBufferSize Per-connection output buffer limit in bytes.
+     *   Pass 0 to retain Swoole's default buffer size and send_yield behavior.
+     */
+    public function __construct(
+        string $host = '0.0.0.0',
+        int $port = 80,
+        int $socketBufferSize = self::DEFAULT_SOCKET_BUFFER_SIZE,
+    ) {
         parent::__construct($host, $port);
 
         $this->server = new Server($this->host, $this->port);
 
         // Set maximum connections to Swoole's limit of 1 Million
         $this->config['max_connection'] = 1_000_000;
+
+        if ($socketBufferSize > 0) {
+            // The listen port captures its buffer size at construction. Setting
+            // socket_buffer_size on the server later does not update that copy.
+            $this->server->ports[0]->set(['socket_buffer_size' => $socketBufferSize]);
+            // Yielding on a full buffer would accumulate pending sends in the
+            // worker instead of allowing send() to disconnect the slow client.
+            $this->config['send_yield'] = false;
+        }
     }
 
     public function start(): void
@@ -47,14 +68,22 @@ class Swoole extends Adapter
 
         foreach ($connections as $connection) {
             go(function () use ($connection, $message, $flags): void {
-                if ($this->server->exist($connection) && $this->server->isEstablished($connection)) {
-                    $this->server->push(
-                        $connection,
-                        $message,
-                        SWOOLE_WEBSOCKET_OPCODE_TEXT,
-                        $flags,
-                    );
-                } else {
+                if (!$this->server->exist($connection) || !$this->server->isEstablished($connection)) {
+                    $this->server->close($connection);
+
+                    return;
+                }
+
+                $pushed = $this->server->push(
+                    $connection,
+                    $message,
+                    SWOOLE_WEBSOCKET_OPCODE_TEXT,
+                    $flags,
+                );
+
+                // A failed push loses a message. Disconnect so the client can
+                // reconnect and resynchronize instead of remaining out of sync.
+                if (!$pushed) {
                     $this->server->close($connection);
                 }
             });
