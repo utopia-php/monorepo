@@ -34,10 +34,14 @@ abstract class Adapter
     abstract public function count(): int;
 
     /**
-     * Wake a blocked acquisition when capacity is freed without an idle resource.
-     * Adapters without a separate wake mechanism retain their existing behavior.
+     * Release anyone currently blocked in {@see pop()}, without handing over a
+     * resource. They will find out for themselves whether the state they were
+     * waiting on has changed; this says only that it is worth looking again.
+     *
+     * Adapters with no way to block satisfy this by construction: a caller that
+     * never waits has nothing to release.
      */
-    public function notify(): static
+    public function unblock(): static
     {
         return $this;
     }

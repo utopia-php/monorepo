@@ -148,7 +148,7 @@ final class WaiterTest extends TestCase
         $this->assertSame(2, $created);
         $this->assertTrue($pool->isFull());
     }
-    public function testCapacityNotificationsDoNotExtendTheOriginalDeadline(): void
+    public function testReleasedWaitsDoNotExtendTheOriginalDeadline(): void
     {
         $adapter = new Swoole();
         $pool = new Pool($adapter, 'deadline', 1, static fn(): string => 'occupied', 0.04);
@@ -160,7 +160,7 @@ final class WaiterTest extends TestCase
             Coroutine::create(static function () use ($adapter): void {
                 for ($index = 0; $index < 10; ++$index) {
                     Coroutine::sleep(0.01);
-                    $adapter->notify();
+                    $adapter->unblock();
                 }
             });
             try {

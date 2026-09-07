@@ -192,7 +192,7 @@ class Pool
         } catch (\Throwable) {
             $untrack();
         }
-        $this->adapter->notify();
+        $this->adapter->unblock();
 
         return $this;
     }
@@ -324,7 +324,7 @@ class Pool
         $this->adapter->synchronized(function (): void {
             --$this->reserved;
         });
-        $this->adapter->notify();
+        $this->adapter->unblock();
     }
 
     /**
@@ -373,7 +373,7 @@ class Pool
                             $this->adapter->synchronized(function (): void {
                                 --$this->reserved;
                             });
-                            $this->adapter->notify();
+                            $this->adapter->unblock();
                         }
                     }
                 }
@@ -386,7 +386,12 @@ class Pool
                     return $connection;
                 }
 
-                if ($connection !== Wakeup::Capacity || microtime(true) >= $deadline) {
+                // Empty-handed. That is not the same as out of time: capacity may
+                // have been freed by a caller that discarded its connection rather
+                // than returning one, and this acquisition can now create its own.
+                // Re-evaluate against the SAME deadline — the budget the caller
+                // asked for is never extended by looping.
+                if (microtime(true) >= $deadline) {
                     break;
                 }
             } while (true);
@@ -508,7 +513,7 @@ class Pool
             unset($this->active[$connection->id]);
             --$this->reserved;
         });
-        $this->adapter->notify();
+        $this->adapter->unblock();
 
         return $this;
     }
