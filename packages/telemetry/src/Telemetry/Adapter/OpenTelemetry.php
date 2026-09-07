@@ -43,6 +43,15 @@ class OpenTelemetry implements Adapter
     private MeterInterface $meter;
 
     /**
+     * Guards against overlapping collect() calls. Under Swoole the export yields on the HTTP
+     * transport's cURL handle; if a slow or loop-starved export is still parked in its coroutine
+     * when the next collect() fires, a second call would operate the same handle concurrently and
+     * Swoole throws an uncaught "cURL handle is currently executing in coroutine" fatal that kills
+     * the whole process. While one collect() is in flight, subsequent calls are skipped.
+     */
+    private bool $collecting = false;
+
+    /**
      * @var array<class-string, array<string, Counter|UpDownCounter|Histogram|Gauge|ObservableGauge>>
      */
     private array $meterStorage = [
@@ -289,10 +298,22 @@ class OpenTelemetry implements Adapter
     }
 
     /**
-     * Collect and export metrics
+     * Collect and export metrics.
+     *
+     * Re-entrancy-safe: returns false without touching the exporter when a previous collect() is
+     * still in flight, so the shared transport handle is never operated by two coroutines at once.
      */
     public function collect(): bool
     {
-        return $this->reader->collect();
+        if ($this->collecting) {
+            return false;
+        }
+
+        $this->collecting = true;
+        try {
+            return $this->reader->collect();
+        } finally {
+            $this->collecting = false;
+        }
     }
 }
