@@ -71,7 +71,7 @@ final class MockTest extends Base
     }
 
     #[\Override]
-    protected function getPremiumTestDomain(): ?string
+    protected function getPremiumTestDomain(): string
     {
         return 'premium.com';
     }

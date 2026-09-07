@@ -144,7 +144,10 @@ class NameCom extends Adapter
 
             foreach ($result['results'] ?? [] as $domain) {
                 $domainName = $domain['domainName'] ?? null;
-                if ($domainName === null || !\array_key_exists($domainName, $availability)) {
+                if ($domainName === null) {
+                    continue;
+                }
+                if (!\array_key_exists((string) $domainName, $availability)) {
                     continue;
                 }
 
@@ -155,8 +158,10 @@ class NameCom extends Adapter
                 }
 
                 $this->cache->save("{$domainName}_availability", $domain);
-
-                if (empty($domain['purchasable']) || !isset($domain['purchasePrice'])) {
+                if (empty($domain['purchasable'])) {
+                    continue;
+                }
+                if (!isset($domain['purchasePrice'])) {
                     continue;
                 }
 
@@ -475,7 +480,7 @@ class NameCom extends Adapter
                     $availability = $availabilityResult['results'][0] ?? null;
                 } catch (RateLimitException $e) {
                     throw $e;
-                } catch (Exception $e) {
+                } catch (Exception) {
                     // Registry pricing is still usable for standard domains; skip
                     // the premium override and skip caching so the merge is
                     // retried on the next request
