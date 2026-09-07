@@ -70,7 +70,7 @@ Unknown verdict strings in the database are treated as `Verdict::CLEAN`.
 
 A missing file, an unreadable database, an invalid IP, a failed MaxMind read, or an unknown verdict returns `Verdict::CLEAN` with score `0` and no categories. Callers can deny only on an explicit `Verdict::BLOCK` (or another verdict they choose) without treating lookup failures as blocks.
 
-Invalid IPs never call into the database.
+Invalid IP addresses never call into the database.
 
 ## Database
 
@@ -103,7 +103,7 @@ From this package:
 composer test
 ```
 
-Unit tests run on a bare host with no live database. They cover lazy field reads, invalid IPs, unknown verdicts, and a missing MMDB path. They do not download Verdict data.
+Unit tests run on a bare host with no live database. They cover lazy field reads, invalid IP addresses, unknown verdicts, and a missing MMDB path. They do not download Verdict data.
 
 ## Security
 
