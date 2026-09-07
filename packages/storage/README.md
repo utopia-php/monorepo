@@ -56,6 +56,12 @@ use Utopia\Storage\Device\Local;
 $device = new Local('/path/to/storage');
 ```
 
+Recursive walks — `delete($path, recursive: true)`, `deletePath()` and `getDirectorySize()` — visit at most 100,000 entries and then throw a `StorageException`, so a large tree cannot hold a request worker indefinitely. Raise the budget for background jobs that must cover the whole tree:
+
+```php
+$device = new Local('/path/to/storage', maxEntries: PHP_INT_MAX);
+```
+
 ### AWS S3
 
 Store files in Amazon S3 or compatible services.
