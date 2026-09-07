@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Development happens in [`packages/reputation`](https://github.com/utopia-php/monorepo/tree/main/packages/reputation) — please open issues and pull requests there.
 
-[![Build Status](https://github.com/utopia-php/reputation/actions/workflows/tests.yml/badge.svg)](https://github.com/utopia-php/reputation/actions/workflows/tests.yml)
+[![Tests](https://github.com/utopia-php/monorepo/actions/workflows/tests.yml/badge.svg)](https://github.com/utopia-php/monorepo/actions/workflows/tests.yml)
 ![Total Downloads](https://img.shields.io/packagist/dt/utopia-php/reputation.svg)
 [![Discord](https://img.shields.io/discord/564160730845151244?label=discord)](https://appwrite.io/discord)
 
