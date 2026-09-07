@@ -36,6 +36,7 @@ Bcrypt
 binlog
 BlackBerry
 bool
+cgroup(?:s)?
 CI
 cicd
 ClaudeBot
