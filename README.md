@@ -234,6 +234,20 @@ is represented as two `SecurityRequirement` objects and means:
 (Project AND Session) OR (Project AND JWT)
 ```
 
+Operations expose scheme names across these alternatives:
+
+```php
+$operation->getAcceptedSecuritySchemeNames(); // ['Project', 'Session', 'JWT']
+$operation->getRequiredSecuritySchemeNames(); // ['Project']
+```
+
+Accepted names are the union; required names are the intersection. Both are
+unique lists in first-seen order. No security requirements yields two empty
+lists. An anonymous alternative makes the required list empty without removing
+accepted names from other alternatives. These methods inspect names only:
+`$operation->security` retains each alternative and its OAuth scopes, and must
+still be used to evaluate complete authentication requirements.
+
 Security inheritance is also preserved:
 
 - A missing operation `security` inherits root security.

@@ -30,4 +30,44 @@ final readonly class Operation
         public ?ExternalDocumentation $externalDocumentation = null,
         public array $extensions = [],
     ) {}
+
+    /**
+     * Names present in any security alternative, in first-seen order.
+     *
+     * This is not a combined authentication requirement: alternatives and
+     * their OAuth scopes remain separate in $security.
+     *
+     * @return list<string>
+     */
+    public function getAcceptedSecuritySchemeNames(): array
+    {
+        $names = [];
+        foreach ($this->security as $requirement) {
+            foreach (array_keys($requirement->schemes) as $name) {
+                if (! in_array($name, $names, true)) {
+                    $names[] = $name;
+                }
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * Names present in every security alternative, in first-seen order.
+     *
+     * No security requirements or an anonymous alternative yields no names.
+     * This does not imply that OAuth scopes are identical across alternatives.
+     *
+     * @return list<string>
+     */
+    public function getRequiredSecuritySchemeNames(): array
+    {
+        $names = array_keys($this->security[0]->schemes ?? []);
+        foreach ($this->security as $requirement) {
+            $names = array_values(array_intersect($names, array_keys($requirement->schemes)));
+        }
+
+        return $names;
+    }
 }
