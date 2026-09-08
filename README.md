@@ -102,6 +102,7 @@ graph TD
     auth
     image
     nats
+    openapi
     replication
     reputation
     user-agent
