@@ -42,18 +42,18 @@ final class ParserTest extends TestCase
     }
 
     #[DataProvider('securityAlternatives')]
-    public function test_security_scheme_names(array $alternatives, array $accepted, array $required): void
+    public function testSecuritySchemeNames(array $alternatives, array $accepted, array $required): void
     {
-        $security = array_map(static fn (array $schemes): SecurityRequirement => new SecurityRequirement($schemes), $alternatives);
+        $security = array_map(static fn(array $schemes): SecurityRequirement => new SecurityRequirement($schemes), $alternatives);
         $operation = new Operation(id: 'test', method: HttpMethod::GET, path: '/test', security: $security);
 
         self::assertSame($accepted, $operation->acceptedSecuritySchemeNames());
         self::assertSame($required, $operation->requiredSecuritySchemeNames());
         self::assertSame($security, $operation->security);
-        self::assertSame($alternatives, array_map(static fn (SecurityRequirement $requirement): array => $requirement->schemes, $operation->security));
+        self::assertSame($alternatives, array_map(static fn(SecurityRequirement $requirement): array => $requirement->schemes, $operation->security));
     }
 
-    public function test_parses_open_api31_into_canonical_model(): void
+    public function testParsesOpenApi31IntoCanonicalModel(): void
     {
         $document = [
             'openapi' => '3.1.1',
@@ -121,7 +121,7 @@ final class ParserTest extends TestCase
         self::assertInstanceOf(ReferenceSchema::class, $get->responses['200']->content['application/json']->schema);
     }
 
-    public function test_parses_open_api30_nullability_and_request_body(): void
+    public function testParsesOpenApi30NullabilityAndRequestBody(): void
     {
         $spec = Parser::parse([
             'openapi' => '3.0.3',
@@ -139,7 +139,7 @@ final class ParserTest extends TestCase
         self::assertTrue($body->content['application/json']->schema?->nullable);
     }
 
-    public function test_parses_open_api2_directly(): void
+    public function testParsesOpenApi2Directly(): void
     {
         $spec = Parser::parse([
             'swagger' => '2.0',
@@ -161,14 +161,16 @@ final class ParserTest extends TestCase
         self::assertSame('https://api.example.com/v1', $spec->servers[0]->url);
         self::assertSame('basic', $spec->securitySchemes['Basic']->scheme);
         $operation = $spec->paths['/pets']->operation(HttpMethod::POST);
-        self::assertTrue($operation?->requestBody?->required);
-        self::assertInstanceOf(ReferenceSchema::class, $operation?->requestBody?->content['application/json']->schema);
-        $responseSchema = $operation?->responses['200']->content['application/json']->schema;
+        self::assertNotNull($operation);
+        self::assertNotNull($operation->requestBody);
+        self::assertTrue($operation->requestBody->required);
+        self::assertInstanceOf(ReferenceSchema::class, $operation->requestBody->content['application/json']->schema);
+        $responseSchema = $operation->responses['200']->content['application/json']->schema;
         self::assertInstanceOf(ReferenceSchema::class, $responseSchema);
         self::assertSame($spec->schemas['Pet'], $spec->resolveSchema($responseSchema));
     }
 
-    public function test_parses_open_api2_form_data_as_request_body(): void
+    public function testParsesOpenApi2FormDataAsRequestBody(): void
     {
         $spec = Parser::parse([
             'swagger' => '2.0',
@@ -184,12 +186,13 @@ final class ParserTest extends TestCase
         ]);
 
         $body = $spec->paths['/upload']->operation(HttpMethod::POST)?->requestBody;
-        self::assertInstanceOf(ObjectSchema::class, $body?->content['multipart/form-data']->schema);
-        self::assertInstanceOf(StringSchema::class, $body?->content['multipart/form-data']->schema->properties['file']);
-        self::assertSame('binary', $body?->content['multipart/form-data']->schema->properties['file']->format);
+        self::assertNotNull($body);
+        self::assertInstanceOf(ObjectSchema::class, $body->content['multipart/form-data']->schema);
+        self::assertInstanceOf(StringSchema::class, $body->content['multipart/form-data']->schema->properties['file']);
+        self::assertSame('binary', $body->content['multipart/form-data']->schema->properties['file']->format);
     }
 
-    public function test_resolves_schema_references_explicitly(): void
+    public function testResolvesSchemaReferencesExplicitly(): void
     {
         $spec = Parser::parse([
             'openapi' => '3.1.0',
@@ -219,7 +222,7 @@ final class ParserTest extends TestCase
         self::assertSame($spec->schemas['CycleA'], $spec->resolveSchema($spec->schemas['CycleA']));
     }
 
-    public function test_resolves_escaped_local_json_pointer_and_detects_reference_cycles(): void
+    public function testResolvesEscapedLocalJsonPointerAndDetectsReferenceCycles(): void
     {
         $resolver = new LocalResolver([
             'components' => ['parameters' => ['a/b~c' => ['name' => 'id']]],
@@ -232,7 +235,7 @@ final class ParserTest extends TestCase
         $resolver->resolveObject('#/a');
     }
 
-    public function test_empty_json_objects_are_not_confused_with_lists(): void
+    public function testEmptyJsonObjectsAreNotConfusedWithLists(): void
     {
         $spec = Parser::parse('{"openapi":"3.1.0","info":{"title":"Empty","version":"1"},"paths":{},"components":{"schemas":{"Anything":{}}}}');
 
@@ -240,7 +243,7 @@ final class ParserTest extends TestCase
         self::assertArrayHasKey('Anything', $spec->schemas);
     }
 
-    public function test_controlled_errors(): void
+    public function testControlledErrors(): void
     {
         try {
             Parser::parse('{');

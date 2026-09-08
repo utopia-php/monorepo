@@ -27,6 +27,6 @@ final readonly class Parameter
 
     public function identity(): string
     {
-        return $this->location->value."\0".$this->name;
+        return $this->location->value . "\0" . $this->name;
     }
 }

@@ -143,7 +143,7 @@ abstract class AbstractReader implements Reader
             $schemes = [];
             foreach ($data as $name => $scopes) {
                 $schemes[(string) $name] = array_map(
-                    static fn (mixed $scope): string => (string) $scope,
+                    static fn(mixed $scope): string => (string) $scope,
                     Value::list($scopes, "{$location}/{$index}/{$name}"),
                 );
             }
@@ -176,13 +176,13 @@ abstract class AbstractReader implements Reader
                     contentType: Value::optionalString($value, 'contentType'),
                     headers: $this->parseHeaders($value['headers'] ?? [], "{$location}/{$name}/encoding/{$property}/headers"),
                     style: Value::optionalString($value, 'style'),
-                    explode: array_key_exists('explode', $value) ? (bool) $value['explode'] : null,
+                    explode: \array_key_exists('explode', $value) ? (bool) $value['explode'] : null,
                     allowReserved: (bool) ($value['allowReserved'] ?? false),
                     extensions: Value::extensions($value),
                 );
             }
             $content[(string) $name] = new MediaType(
-                schema: array_key_exists('schema', $data) ? $this->schemas->read($data['schema'], "{$location}/{$name}/schema") : null,
+                schema: \array_key_exists('schema', $data) ? $this->schemas->read($data['schema'], "{$location}/{$name}/schema") : null,
                 example: $data['example'] ?? null,
                 examples: $examples,
                 encoding: $encoding,
@@ -200,7 +200,7 @@ abstract class AbstractReader implements Reader
         foreach (Value::object($raw, $location) as $name => $item) {
             $data = $this->resolveObject($item, "{$location}/{$name}");
             $schema = null;
-            if (array_key_exists('schema', $data)) {
+            if (\array_key_exists('schema', $data)) {
                 $schema = $this->schemas->read($data['schema'], "{$location}/{$name}/schema");
             } elseif ($openApi2 && isset($data['type'])) {
                 $schema = $this->schemas->readParameterFields($data, "{$location}/{$name}");
@@ -212,7 +212,7 @@ abstract class AbstractReader implements Reader
                 schema: $schema,
                 content: isset($data['content']) ? $this->parseMediaTypes($data['content'], "{$location}/{$name}/content") : [],
                 style: Value::optionalString($data, 'style'),
-                explode: array_key_exists('explode', $data) ? (bool) $data['explode'] : null,
+                explode: \array_key_exists('explode', $data) ? (bool) $data['explode'] : null,
                 extensions: Value::extensions($data),
             );
         }
@@ -318,7 +318,7 @@ abstract class AbstractReader implements Reader
     {
         $result = [];
         foreach (Value::object($raw, $location) as $key => $value) {
-            if (! is_string($value)) {
+            if (! \is_string($value)) {
                 throw new InvalidSpecification("Expected string at {$location}/{$key}");
             }
             $result[(string) $key] = $value;

@@ -56,7 +56,7 @@ final readonly class Specification
             $reference = rawurldecode($schema->reference);
             foreach (['#/components/schemas/', '#/definitions/'] as $prefix) {
                 if (str_starts_with($reference, $prefix)) {
-                    $name = str_replace(['~1', '~0'], ['/', '~'], substr($reference, strlen($prefix)));
+                    $name = str_replace(['~1', '~0'], ['/', '~'], substr($reference, \strlen($prefix)));
                     break;
                 }
             }
@@ -87,7 +87,7 @@ final readonly class Specification
     {
         return array_values(array_filter(
             $this->operations(),
-            static fn (Operation $operation): bool => in_array($tag, $operation->tags, true),
+            static fn(Operation $operation): bool => \in_array($tag, $operation->tags, true),
         ));
     }
 }

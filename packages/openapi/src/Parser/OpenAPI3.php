@@ -57,15 +57,15 @@ abstract class OpenAPI3 extends AbstractReader
     {
         $paths = [];
         foreach (Value::object($this->document['paths'] ?? [], '#/paths') as $path => $raw) {
-            $location = '#/paths/'.str_replace(['~', '/'], ['~0', '~1'], (string) $path);
+            $location = '#/paths/' . str_replace(['~', '/'], ['~0', '~1'], (string) $path);
             $data = $this->resolveObject($raw, $location);
             $pathParameters = $this->parseParameters($data['parameters'] ?? [], "{$location}/parameters");
-            $pathServers = array_key_exists('servers', $data)
+            $pathServers = \array_key_exists('servers', $data)
                 ? $this->parseServers($data['servers'], "{$location}/servers")
                 : $rootServers;
             $operations = [];
             foreach (HttpMethod::cases() as $method) {
-                if (! array_key_exists($method->value, $data)) {
+                if (! \array_key_exists($method->value, $data)) {
                     continue;
                 }
                 $operations[$method->value] = $this->parseOperation(
@@ -105,7 +105,7 @@ abstract class OpenAPI3 extends AbstractReader
         $operationParameters = $this->parseParameters($data['parameters'] ?? [], "{$location}/parameters");
         $parameters = $this->mergeParameters($pathParameters, $operationParameters);
         $requestBody = null;
-        if (array_key_exists('requestBody', $data)) {
+        if (\array_key_exists('requestBody', $data)) {
             $value = $this->resolveObject($data['requestBody'], "{$location}/requestBody");
             $requestBody = new RequestBody(
                 description: Value::optionalString($value, 'description') ?? '',
@@ -129,10 +129,10 @@ abstract class OpenAPI3 extends AbstractReader
         $tags = isset($data['tags'])
             ? array_map(strval(...), Value::list($data['tags'], "{$location}/tags"))
             : [];
-        $security = array_key_exists('security', $data)
+        $security = \array_key_exists('security', $data)
             ? $this->parseSecurity($data['security'], "{$location}/security")
             : $rootSecurity;
-        $servers = array_key_exists('servers', $data)
+        $servers = \array_key_exists('servers', $data)
             ? $this->parseServers($data['servers'], "{$location}/servers")
             : $inheritedServers;
 
@@ -179,10 +179,10 @@ abstract class OpenAPI3 extends AbstractReader
                 required: $required,
                 deprecated: (bool) ($data['deprecated'] ?? false),
                 allowEmptyValue: (bool) ($data['allowEmptyValue'] ?? false),
-                schema: array_key_exists('schema', $data) ? $this->schemas->read($data['schema'], "{$location}/{$index}/schema") : null,
+                schema: \array_key_exists('schema', $data) ? $this->schemas->read($data['schema'], "{$location}/{$index}/schema") : null,
                 content: isset($data['content']) ? $this->parseMediaTypes($data['content'], "{$location}/{$index}/content") : [],
                 style: Value::optionalString($data, 'style'),
-                explode: array_key_exists('explode', $data) ? (bool) $data['explode'] : null,
+                explode: \array_key_exists('explode', $data) ? (bool) $data['explode'] : null,
                 allowReserved: (bool) ($data['allowReserved'] ?? false),
                 extensions: Value::extensions($data),
             );
@@ -201,10 +201,10 @@ abstract class OpenAPI3 extends AbstractReader
         }
         foreach ($operation as $parameter) {
             $identity = $parameter->identity();
-            if (array_key_exists((string) $identity, $indexes)) {
+            if (\array_key_exists((string) $identity, $indexes)) {
                 $merged[$indexes[$identity]] = $parameter;
             } else {
-                $indexes[$identity] = count($merged);
+                $indexes[$identity] = \count($merged);
                 $merged[] = $parameter;
             }
         }

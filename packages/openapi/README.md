@@ -1,5 +1,8 @@
 # Utopia OpenAPI
 
+> [!IMPORTANT]
+> This repository is a read-only mirror of the [utopia-php monorepo](https://github.com/utopia-php/monorepo). Development happens in [`packages/openapi`](https://github.com/utopia-php/monorepo/tree/main/packages/openapi) — please open issues and pull requests there.
+
 A framework-independent PHP library for parsing OpenAPI documents into one immutable, typed model.
 
 OpenAPI 2.0, 3.0, and 3.1 documents all produce the same `Utopia\OpenAPI\Specification` object. Consumers can work with metadata, operations, schemas, requests, responses, and security without handling each source format separately.
@@ -156,7 +159,7 @@ if ($schema instanceof ReferenceSchema) {
 }
 ```
 
-This makes valid recursive schemas safe to parse. Resolve a schema's local component reference explicitly when its concrete type is needed:
+This makes valid recursive schemas safe to parse. Resolve the local component reference of a schema explicitly when its concrete type is needed:
 
 ```php
 $resolved = $specification->resolveSchema($schema);
@@ -196,13 +199,13 @@ walk the union.
 An `anyOf` that adds an unconstrained `type: string` branch documents
 suggested values without closing the set (`open: true`). That includes a
 legacy multi-value string enum next to `type: string`, a flattened list of
-consts plus `type: string`, and a nested annotated `oneOf` plus `type: string`.
+`const` values plus `type: string`, and a nested annotated `oneOf` plus `type: string`.
 `openStringEnumBranch()` returns the same `StringSchema` only when `open` is
 true.
 
 `allOf`, unions with `$ref` members, and unions with multiple multi-value
-enum branches are not treated as string enums. Mixed const and object, numeric
-const, or multi-value enum branches throw `InvalidSpecification`.
+enum branches are not treated as string enums. Mixed `const` and object, numeric
+`const`, or multi-value enum branches throw `InvalidSpecification`.
 
 ### Parameters and request bodies
 
@@ -328,20 +331,17 @@ A missing `operationId` is currently accepted and represented as an empty string
 
 ## Development
 
-Install dependencies and run the checks:
+Development takes place in the [utopia-php monorepo](https://github.com/utopia-php/monorepo). From its root, run:
 
 ```sh
-composer install
-composer test
-composer lint
-composer format:check
-composer rector:check
-composer validate --strict
+bin/monorepo test openapi
+bin/monorepo check openapi
+bin/monorepo validate
 ```
 
-Run `composer format` to apply Pint formatting and `composer format:check` to verify formatting without changing files. Run `composer rector` to apply automated refactoring and `composer rector:check` to check for suggested changes without modifying files. `composer check` runs syntax, formatting, Rector, and PHPUnit checks together.
+Run `bin/monorepo check openapi --fix` to apply Pint formatting and Rector refactoring. PHPStan findings require manual fixes. The monorepo provides the shared QA tools; this package keeps its Rector configuration.
 
-GitHub Actions run PHPUnit, Composer validation, PHP syntax checks, Pint, and Rector for pull requests and pushes to `main`.
+`composer test` is the unit tier and runs on the host against local fixtures. No services or containers are required. Monorepo CI runs tests and QA checks for changed packages, validates package conventions, and lints Markdown with Vale.
 
 The test suite covers version handling, metadata, operations, parameter inheritance, requests, responses, schemas, recursive references, security semantics, OpenAPI 2.0 normalization, and JSON Pointer escaping.
 

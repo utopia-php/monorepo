@@ -32,7 +32,7 @@ final class CrossVersionFixtureTest extends TestCase
     }
 
     #[DataProvider('specificationProvider')]
-    public function test_equivalent_documents_produce_equivalent_canonical_behavior(
+    public function testEquivalentDocumentsProduceEquivalentCanonicalBehavior(
         string $fixture,
         Version $version,
         string $sourceVersion,
@@ -90,9 +90,10 @@ final class CrossVersionFixtureTest extends TestCase
         self::assertSame(['Project', 'Basic'], $get->acceptedSecuritySchemeNames());
         self::assertSame(['Project'], $get->requiredSecuritySchemeNames());
         $delete = $specification->paths['/pets/{id}']->operation(HttpMethod::DELETE);
-        self::assertSame([], $delete?->security);
-        self::assertSame([], $delete?->acceptedSecuritySchemeNames());
-        self::assertSame([], $delete?->requiredSecuritySchemeNames());
+        self::assertNotNull($delete);
+        self::assertSame([], $delete->security);
+        self::assertSame([], $delete->acceptedSecuritySchemeNames());
+        self::assertSame([], $delete->requiredSecuritySchemeNames());
 
         self::assertSame(SecuritySchemeType::API_KEY, $specification->securitySchemes['Project']->type);
         self::assertSame('X-Project', $specification->securitySchemes['Project']->name);
@@ -117,7 +118,7 @@ final class CrossVersionFixtureTest extends TestCase
     }
 
     #[DataProvider('specificationProvider')]
-    public function test_fixture_can_be_parsed_from_json_and_decoded_array(
+    public function testFixtureCanBeParsedFromJsonAndDecodedArray(
         string $fixture,
         Version $version,
         string $sourceVersion,
@@ -132,7 +133,7 @@ final class CrossVersionFixtureTest extends TestCase
         self::assertSame($sourceVersion, $fromArray->sourceVersion);
     }
 
-    public function test_fixtures_have_equivalent_semantic_snapshots(): void
+    public function testFixturesHaveEquivalentSemanticSnapshots(): void
     {
         $snapshots = [];
         foreach (self::specificationProvider() as [$fixture]) {
@@ -150,7 +151,7 @@ final class CrossVersionFixtureTest extends TestCase
 
     private function fixtureContents(string $fixture): string
     {
-        $contents = file_get_contents(__DIR__.'/Fixtures/'.$fixture);
+        $contents = file_get_contents(__DIR__ . '/Fixtures/' . $fixture);
         self::assertNotFalse($contents, "Unable to read fixture {$fixture}");
 
         return $contents;
@@ -174,19 +175,21 @@ final class CrossVersionFixtureTest extends TestCase
         self::assertNotNull($create);
         self::assertNotNull($get);
         self::assertNotNull($delete);
+        self::assertNotNull($create->requestBody);
         self::assertInstanceOf(ObjectSchema::class, $pet);
+        self::assertInstanceOf(StringSchema::class, $pet->properties['name']);
 
         return [
             'info' => [$specification->info->title, $specification->info->description, $specification->info->version],
-            'servers' => array_map(static fn (Server $server): string => $server->url, $specification->servers),
+            'servers' => array_map(static fn(Server $server): string => $server->url, $specification->servers),
             'tags' => array_keys($specification->tags),
             'operations' => array_map(
-                static fn (Operation $operation): array => [$operation->id, $operation->method->value, $operation->path, $operation->tags],
+                static fn(Operation $operation): array => [$operation->id, $operation->method->value, $operation->path, $operation->tags],
                 $specification->operations(),
             ),
             'create' => [
-                'requestMedia' => array_keys($create->requestBody?->content ?? []),
-                'requestRequired' => $create->requestBody?->required,
+                'requestMedia' => array_keys($create->requestBody->content),
+                'requestRequired' => $create->requestBody->required,
                 'responseCodes' => array_keys($create->responses),
                 'responseMedia' => array_keys($create->responses['201']->content),
                 'headers' => array_keys($create->responses['201']->headers),
@@ -194,11 +197,11 @@ final class CrossVersionFixtureTest extends TestCase
             'get' => [
                 'parameter' => [$get->parameters[0]->name, $get->parameters[0]->location->value, $get->parameters[0]->description],
                 'responses' => array_keys($get->responses),
-                'security' => array_map(static fn (SecurityRequirement $requirement): array => $requirement->schemes, $get->security),
+                'security' => array_map(static fn(SecurityRequirement $requirement): array => $requirement->schemes, $get->security),
             ],
             'deleteSecurity' => $delete->security,
             'securitySchemes' => array_map(
-                static fn (SecurityScheme $scheme): array => [$scheme->type->value, $scheme->name, $scheme->location?->value, $scheme->scheme],
+                static fn(SecurityScheme $scheme): array => [$scheme->type->value, $scheme->name, $scheme->location?->value, $scheme->scheme],
                 $specification->securitySchemes,
             ),
             'pet' => [

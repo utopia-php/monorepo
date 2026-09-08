@@ -39,12 +39,12 @@ final readonly class Reader
 
     public function read(mixed $raw, string $location): Schema
     {
-        if (is_bool($raw)) {
+        if (\is_bool($raw)) {
             if (! $this->dialect->booleanSchemas) {
                 throw new InvalidSpecification("Boolean schemas are only supported by OpenAPI 3.1 at {$location}");
             }
 
-            return $raw ? new AnySchema : new NeverSchema;
+            return $raw ? new AnySchema() : new NeverSchema();
         }
 
         $data = Value::object($raw, $location);
@@ -59,17 +59,17 @@ final readonly class Reader
 
         $nullable = $common['nullable'];
         $type = $data['type'] ?? null;
-        if (is_array($type)) {
+        if (\is_array($type)) {
             if (! $this->dialect->typeArrays || ! array_is_list($type)) {
                 throw new InvalidSpecification("Invalid schema type at {$location}/type");
             }
-            $types = array_values(array_filter($type, static fn (mixed $item): bool => $item !== 'null'));
-            $nullable = count($types) !== count($type);
+            $types = array_values(array_filter($type, static fn(mixed $item): bool => $item !== 'null'));
+            $nullable = \count($types) !== \count($type);
             $common['nullable'] = $nullable;
-            if (count($types) > 1) {
+            if (\count($types) > 1) {
                 $schemas = [];
                 foreach ($types as $index => $memberType) {
-                    if (! is_string($memberType)) {
+                    if (! \is_string($memberType)) {
                         throw new InvalidSpecification("Invalid schema type at {$location}/type/{$index}");
                     }
                     $schemas[] = $this->read(['type' => $memberType], "{$location}/type/{$index}");
@@ -79,27 +79,27 @@ final readonly class Reader
             }
             $type = $types[0] ?? null;
         }
-        if ($type !== null && ! is_string($type)) {
+        if ($type !== null && ! \is_string($type)) {
             throw new InvalidSpecification("Invalid schema type at {$location}/type");
         }
 
         foreach ([Composition::ONE_OF, Composition::ANY_OF, Composition::ALL_OF] as $composition) {
-            if (array_key_exists($composition->value, $data)) {
+            if (\array_key_exists($composition->value, $data)) {
                 $schemas = [];
                 foreach (Value::list($data[$composition->value], "{$location}/{$composition->value}") as $index => $schema) {
                     $schemas[] = $this->read($schema, "{$location}/{$composition->value}/{$index}");
                 }
-                $not = array_key_exists('not', $data) ? $this->read($data['not'], "{$location}/not") : null;
+                $not = \array_key_exists('not', $data) ? $this->read($data['not'], "{$location}/not") : null;
 
                 return new CompositeSchema($composition, $schemas, $not, $this->discriminator($data), ...$common, location: $location);
             }
         }
-        if (array_key_exists('not', $data)) {
+        if (\array_key_exists('not', $data)) {
             return new CompositeSchema(null, [], $this->read($data['not'], "{$location}/not"), $this->discriminator($data), ...$common, location: $location);
         }
 
         if ($type === null) {
-            if (isset($data['properties']) || array_key_exists('additionalProperties', $data)) {
+            if (isset($data['properties']) || \array_key_exists('additionalProperties', $data)) {
                 $type = 'object';
             } elseif (isset($data['items'])) {
                 $type = 'array';
@@ -112,9 +112,15 @@ final readonly class Reader
                 maxLength: Value::nullableInt($data['maxLength'] ?? null, "{$location}/maxLength"),
                 pattern: Value::optionalString($data, 'pattern'),
                 format: $type === 'file' ? 'binary' : $common['format'],
-                title: $common['title'], description: $common['description'], nullable: $nullable,
-                default: $common['default'], enum: $common['enum'], readOnly: $common['readOnly'],
-                writeOnly: $common['writeOnly'], deprecated: $common['deprecated'], example: $common['example'],
+                title: $common['title'],
+                description: $common['description'],
+                nullable: $nullable,
+                default: $common['default'],
+                enum: $common['enum'],
+                readOnly: $common['readOnly'],
+                writeOnly: $common['writeOnly'],
+                deprecated: $common['deprecated'],
+                example: $common['example'],
                 extensions: $common['extensions'],
             ),
             'integer' => $this->integer($data, $location, $common),
@@ -122,7 +128,7 @@ final readonly class Reader
             'boolean' => new BooleanSchema(...$common),
             'array' => new ArraySchema(
                 ...[
-                    'items' => array_key_exists('items', $data) ? $this->read($data['items'], "{$location}/items") : new AnySchema,
+                    'items' => \array_key_exists('items', $data) ? $this->read($data['items'], "{$location}/items") : new AnySchema(),
                     'minItems' => Value::nullableInt($data['minItems'] ?? null, "{$location}/minItems"),
                     'maxItems' => Value::nullableInt($data['maxItems'] ?? null, "{$location}/maxItems"),
                     'uniqueItems' => (bool) ($data['uniqueItems'] ?? false),
@@ -154,7 +160,7 @@ final readonly class Reader
     private function common(array $data): array
     {
         $enum = isset($data['enum']) ? Value::list($data['enum'], 'schema/enum') : [];
-        if ($this->dialect->constKeyword && array_key_exists('const', $data) && ! isset($data['enum'])) {
+        if ($this->dialect->constKeyword && \array_key_exists('const', $data) && ! isset($data['enum'])) {
             $enum = [$data['const']];
         }
 
@@ -205,11 +211,11 @@ final readonly class Reader
         $maximum = Value::nullableNumber($data['maximum'] ?? null, "{$location}/maximum");
         $exclusiveMinimum = $data['exclusiveMinimum'] ?? false;
         $exclusiveMaximum = $data['exclusiveMaximum'] ?? false;
-        if (is_int($exclusiveMinimum) || is_float($exclusiveMinimum)) {
+        if (\is_int($exclusiveMinimum) || \is_float($exclusiveMinimum)) {
             $minimum = $exclusiveMinimum;
             $exclusiveMinimum = true;
         }
-        if (is_int($exclusiveMaximum) || is_float($exclusiveMaximum)) {
+        if (\is_int($exclusiveMaximum) || \is_float($exclusiveMaximum)) {
             $maximum = $exclusiveMaximum;
             $exclusiveMaximum = true;
         }
@@ -231,7 +237,7 @@ final readonly class Reader
             ? array_map(strval(...), Value::list($data['required'], "{$location}/required"))
             : [];
         $additional = $data['additionalProperties'] ?? null;
-        if ($additional !== null && ! is_bool($additional)) {
+        if ($additional !== null && ! \is_bool($additional)) {
             $additional = $this->read($additional, "{$location}/additionalProperties");
         }
 
@@ -251,13 +257,13 @@ final readonly class Reader
         if (! isset($data['discriminator'])) {
             return null;
         }
-        if (is_string($data['discriminator'])) {
+        if (\is_string($data['discriminator'])) {
             return new Discriminator($data['discriminator']);
         }
         $value = Value::object($data['discriminator'], 'schema/discriminator');
         $mapping = [];
         foreach (Value::object($value['mapping'] ?? [], 'schema/discriminator/mapping') as $name => $reference) {
-            if (! is_string($reference)) {
+            if (! \is_string($reference)) {
                 throw new InvalidSpecification('Discriminator mappings must be strings');
             }
             $mapping[(string) $name] = $reference;

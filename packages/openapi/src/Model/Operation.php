@@ -9,7 +9,7 @@ final readonly class Operation
     /**
      * @param  list<string>  $tags
      * @param  list<Parameter>  $parameters
-     * @param  array<string, Response>  $responses
+     * @param  array<int|string, Response>  $responses
      * @param  list<SecurityRequirement>  $security
      * @param  list<Server>  $servers
      * @param  array<string, mixed>  $extensions
@@ -45,7 +45,7 @@ final readonly class Operation
         foreach ($this->security as $requirement) {
             foreach (array_keys($requirement->schemes) as $name) {
                 $name = (string) $name;
-                if (! in_array($name, $names, true)) {
+                if (! \in_array($name, $names, true)) {
                     $names[] = $name;
                 }
             }
@@ -64,7 +64,7 @@ final readonly class Operation
      */
     public function requiredSecuritySchemeNames(): array
     {
-        $names = array_map(static fn (string|int $name): string => (string) $name, array_keys($this->security[0]->schemes ?? []));
+        $names = array_map(static fn(string|int $name): string => (string) $name, array_keys($this->security[0]->schemes ?? []));
         foreach ($this->security as $requirement) {
             $names = array_values(array_intersect($names, array_keys($requirement->schemes)));
         }

@@ -26,7 +26,7 @@ final class ReaderTest extends TestCase
         return new Reader(Dialect::for($version));
     }
 
-    public function test_boolean_schemas_are_read_only_under_the_three_one_dialect(): void
+    public function testBooleanSchemasAreReadOnlyUnderTheThreeOneDialect(): void
     {
         $reader = $this->reader(Version::V3_1);
 
@@ -37,7 +37,7 @@ final class ReaderTest extends TestCase
         $this->reader(Version::V3_0)->read(true, '#/x');
     }
 
-    public function test_type_arrays_are_read_only_under_the_three_one_dialect(): void
+    public function testTypeArraysAreReadOnlyUnderTheThreeOneDialect(): void
     {
         $reader = $this->reader(Version::V3_1);
 
@@ -55,24 +55,24 @@ final class ReaderTest extends TestCase
         $this->reader(Version::V3_0)->read(['type' => ['string', 'null']], '#/x');
     }
 
-    public function test_const_becomes_a_single_value_enum_only_under_the_three_one_dialect(): void
+    public function testConstBecomesASingleValueEnumOnlyUnderTheThreeOneDialect(): void
     {
         self::assertSame(['pets'], $this->reader(Version::V3_1)->read(['type' => 'string', 'const' => 'pets'], '#/x')->enum);
         self::assertSame([], $this->reader(Version::V3_0)->read(['type' => 'string', 'const' => 'pets'], '#/x')->enum);
     }
 
-    public function test_an_explicit_enum_wins_over_const(): void
+    public function testAnExplicitEnumWinsOverConst(): void
     {
         self::assertSame(['a', 'b'], $this->reader(Version::V3_1)->read(['type' => 'string', 'const' => 'c', 'enum' => ['a', 'b']], '#/x')->enum);
     }
 
-    public function test_nullability_is_read_from_the_nullable_keyword(): void
+    public function testNullabilityIsReadFromTheNullableKeyword(): void
     {
         self::assertTrue($this->reader(Version::V3_0)->read(['type' => 'string', 'nullable' => true], '#/x')->nullable);
         self::assertFalse($this->reader(Version::V3_0)->read(['type' => 'string'], '#/x')->nullable);
     }
 
-    public function test_x_nullable_remains_an_uninterpreted_extension(): void
+    public function testXNullableRemainsAnUninterpretedExtension(): void
     {
         $schema = $this->reader(Version::V2)->read(['type' => 'string', 'x-nullable' => true], '#/x');
 
@@ -80,7 +80,7 @@ final class ReaderTest extends TestCase
         self::assertSame(['x-nullable' => true], $schema->extensions);
     }
 
-    public function test_references_are_left_unexpanded_so_recursive_graphs_terminate(): void
+    public function testReferencesAreLeftUnexpandedSoRecursiveGraphsTerminate(): void
     {
         $schema = $this->reader(Version::V3_1)->read(['$ref' => '#/components/schemas/Pet'], '#/x');
 
@@ -88,7 +88,7 @@ final class ReaderTest extends TestCase
         self::assertSame('#/components/schemas/Pet', $schema->reference);
     }
 
-    public function test_composition_and_not(): void
+    public function testCompositionAndNot(): void
     {
         $reader = $this->reader(Version::V3_0);
 
@@ -119,7 +119,7 @@ final class ReaderTest extends TestCase
         ];
     }
 
-    public function test_closed_annotated_one_of_const_titles_become_a_string_enum(): void
+    public function testClosedAnnotatedOneOfConstTitlesBecomeAStringEnum(): void
     {
         $schema = $this->reader(Version::V3_1)->read($this->annotatedWebhookEvent(), '#/x');
 
@@ -134,7 +134,7 @@ final class ReaderTest extends TestCase
         self::assertCount(2, $schema->schemas);
     }
 
-    public function test_closed_annotated_any_of_const_titles_become_a_string_enum(): void
+    public function testClosedAnnotatedAnyOfConstTitlesBecomeAStringEnum(): void
     {
         $schema = $this->reader(Version::V3_1)->read([
             'title' => 'WebhookEvent',
@@ -146,14 +146,15 @@ final class ReaderTest extends TestCase
 
         self::assertInstanceOf(CompositeSchema::class, $schema);
         $enum = $schema->stringEnum();
-        self::assertSame(['user.created', 'user.updated'], $enum?->enum);
-        self::assertSame(['UserCreated', 'UserUpdated'], $enum?->enumKeys);
-        self::assertSame('WebhookEvent', $enum?->enumName);
-        self::assertFalse($enum?->open);
+        self::assertInstanceOf(StringSchema::class, $enum);
+        self::assertSame(['user.created', 'user.updated'], $enum->enum);
+        self::assertSame(['UserCreated', 'UserUpdated'], $enum->enumKeys);
+        self::assertSame('WebhookEvent', $enum->enumName);
+        self::assertFalse($enum->open);
         self::assertNull($schema->openStringEnumBranch());
     }
 
-    public function test_plain_string_enum_title_does_not_fill_enum_name_or_keys(): void
+    public function testPlainStringEnumTitleDoesNotFillEnumNameOrKeys(): void
     {
         $schema = $this->reader(Version::V3_0)->read([
             'title' => 'WebhookEvent',
@@ -168,7 +169,7 @@ final class ReaderTest extends TestCase
         self::assertFalse($schema->open);
     }
 
-    public function test_missing_branch_titles_leave_enum_keys_empty(): void
+    public function testMissingBranchTitlesLeaveEnumKeysEmpty(): void
     {
         $schema = $this->reader(Version::V3_1)->read([
             'title' => 'WebhookEvent',
@@ -179,12 +180,14 @@ final class ReaderTest extends TestCase
         ], '#/x');
 
         self::assertInstanceOf(CompositeSchema::class, $schema);
-        self::assertSame(['user.created', 'user.updated'], $schema->stringEnum()?->enum);
-        self::assertSame([], $schema->stringEnum()?->enumKeys);
-        self::assertSame('WebhookEvent', $schema->stringEnum()?->enumName);
+        $enum = $schema->stringEnum();
+        self::assertInstanceOf(StringSchema::class, $enum);
+        self::assertSame(['user.created', 'user.updated'], $enum->enum);
+        self::assertSame([], $enum->enumKeys);
+        self::assertSame('WebhookEvent', $enum->enumName);
     }
 
-    public function test_open_annotated_nested_one_of_preserves_keys(): void
+    public function testOpenAnnotatedNestedOneOfPreservesKeys(): void
     {
         $schema = $this->reader(Version::V3_1)->read([
             'anyOf' => [
@@ -206,7 +209,7 @@ final class ReaderTest extends TestCase
         self::assertFalse($schema->schemas[1]->open);
     }
 
-    public function test_open_flattened_consts_plus_unconstrained_string_preserve_keys(): void
+    public function testOpenFlattenedConstsPlusUnconstrainedStringPreserveKeys(): void
     {
         $reader = $this->reader(Version::V3_1);
         $consts = [
@@ -220,14 +223,15 @@ final class ReaderTest extends TestCase
 
             self::assertInstanceOf(CompositeSchema::class, $schema);
             $enum = $schema->openStringEnumBranch();
-            self::assertTrue($enum?->open);
-            self::assertSame(['user.created', 'user.updated'], $enum?->enum);
-            self::assertSame(['UserCreated', 'UserUpdated'], $enum?->enumKeys);
-            self::assertSame('WebhookEvent', $enum?->enumName);
+            self::assertInstanceOf(StringSchema::class, $enum);
+            self::assertTrue($enum->open);
+            self::assertSame(['user.created', 'user.updated'], $enum->enum);
+            self::assertSame(['UserCreated', 'UserUpdated'], $enum->enumKeys);
+            self::assertSame('WebhookEvent', $enum->enumName);
         }
     }
 
-    public function test_one_of_consts_only_is_not_open(): void
+    public function testOneOfConstsOnlyIsNotOpen(): void
     {
         $schema = $this->reader(Version::V3_1)->read($this->annotatedWebhookEvent(), '#/x');
 
@@ -236,7 +240,7 @@ final class ReaderTest extends TestCase
         self::assertNull($schema->openStringEnumBranch());
     }
 
-    public function test_object_const_mix_is_rejected(): void
+    public function testObjectConstMixIsRejected(): void
     {
         $this->expectException(InvalidSpecification::class);
         $this->expectExceptionMessage('#/components/schemas/Event');
@@ -249,7 +253,7 @@ final class ReaderTest extends TestCase
         ], '#/components/schemas/Event');
     }
 
-    public function test_numeric_const_mix_is_rejected(): void
+    public function testNumericConstMixIsRejected(): void
     {
         $this->expectException(InvalidSpecification::class);
         $this->expectExceptionMessage('#/x');
@@ -262,7 +266,7 @@ final class ReaderTest extends TestCase
         ], '#/x');
     }
 
-    public function test_multi_value_enum_mixed_with_const_is_rejected(): void
+    public function testMultiValueEnumMixedWithConstIsRejected(): void
     {
         $this->expectException(InvalidSpecification::class);
         $this->expectExceptionMessage('#/x');
@@ -275,7 +279,7 @@ final class ReaderTest extends TestCase
         ], '#/x');
     }
 
-    public function test_two_multi_value_enum_branches_are_not_an_annotated_enum(): void
+    public function testTwoMultiValueEnumBranchesAreNotAnAnnotatedEnum(): void
     {
         $schema = $this->reader(Version::V3_0)->read([
             'anyOf' => [
@@ -289,7 +293,7 @@ final class ReaderTest extends TestCase
         self::assertNull($schema->openStringEnumBranch());
     }
 
-    public function test_legacy_open_multi_value_enum_still_sets_open(): void
+    public function testLegacyOpenMultiValueEnumStillSetsOpen(): void
     {
         $reader = $this->reader(Version::V3_0);
         $enum = [
@@ -303,15 +307,18 @@ final class ReaderTest extends TestCase
 
             self::assertInstanceOf(CompositeSchema::class, $schema);
             $enumBranch = $schema->openStringEnumBranch();
-            self::assertSame(['network.requests', 'network.inbound'], $enumBranch?->enum);
-            self::assertNull($enumBranch?->enumName);
-            self::assertSame([], $enumBranch?->enumKeys);
-            self::assertTrue($enumBranch?->open);
-            self::assertFalse($schema->schemas[$enumBranch === $schema->schemas[0] ? 1 : 0]->open);
+            self::assertInstanceOf(StringSchema::class, $enumBranch);
+            self::assertSame(['network.requests', 'network.inbound'], $enumBranch->enum);
+            self::assertNull($enumBranch->enumName);
+            self::assertSame([], $enumBranch->enumKeys);
+            self::assertTrue($enumBranch->open);
+            $openBranch = $schema->schemas[$enumBranch === $schema->schemas[0] ? 1 : 0];
+            self::assertInstanceOf(StringSchema::class, $openBranch);
+            self::assertFalse($openBranch->open);
         }
     }
 
-    public function test_one_element_enums_plus_unconstrained_string_flatten_as_open_annotated(): void
+    public function testOneElementEnumsPlusUnconstrainedStringFlattenAsOpenAnnotated(): void
     {
         $schema = $this->reader(Version::V3_0)->read([
             'anyOf' => [
@@ -323,12 +330,13 @@ final class ReaderTest extends TestCase
 
         self::assertInstanceOf(CompositeSchema::class, $schema);
         $enum = $schema->openStringEnumBranch();
-        self::assertTrue($enum?->open);
-        self::assertSame(['first', 'second'], $enum?->enum);
-        self::assertSame(['First', 'Second'], $enum?->enumKeys);
+        self::assertInstanceOf(StringSchema::class, $enum);
+        self::assertTrue($enum->open);
+        self::assertSame(['first', 'second'], $enum->enum);
+        self::assertSame(['First', 'Second'], $enum->enumKeys);
     }
 
-    public function test_const_only_string_stays_a_closed_single_value_enum(): void
+    public function testConstOnlyStringStaysAClosedSingleValueEnum(): void
     {
         $schema = $this->reader(Version::V3_1)->read(['type' => 'string', 'const' => 'pets'], '#/x');
 
@@ -339,7 +347,7 @@ final class ReaderTest extends TestCase
         self::assertSame([], $schema->enumKeys);
     }
 
-    public function test_annotated_const_branches_may_omit_type(): void
+    public function testAnnotatedConstBranchesMayOmitType(): void
     {
         $schema = $this->reader(Version::V3_1)->read([
             'title' => 'WebhookEvent',
@@ -351,11 +359,13 @@ final class ReaderTest extends TestCase
 
         self::assertInstanceOf(CompositeSchema::class, $schema);
         self::assertInstanceOf(AnySchema::class, $schema->schemas[0]);
-        self::assertSame(['user.created', 'user.updated'], $schema->stringEnum()?->enum);
-        self::assertSame(['UserCreated', 'UserUpdated'], $schema->stringEnum()?->enumKeys);
+        $enum = $schema->stringEnum();
+        self::assertInstanceOf(StringSchema::class, $enum);
+        self::assertSame(['user.created', 'user.updated'], $enum->enum);
+        self::assertSame(['UserCreated', 'UserUpdated'], $enum->enumKeys);
     }
 
-    public function test_open_string_enum_requires_any_of(): void
+    public function testOpenStringEnumRequiresAnyOf(): void
     {
         $reader = $this->reader(Version::V3_0);
         $branches = [
@@ -371,7 +381,7 @@ final class ReaderTest extends TestCase
         }
     }
 
-    public function test_open_string_enum_requires_one_enum_and_an_open_string_branch(): void
+    public function testOpenStringEnumRequiresOneEnumAndAnOpenStringBranch(): void
     {
         $reader = $this->reader(Version::V3_0);
         $invalidUnions = [
@@ -391,7 +401,7 @@ final class ReaderTest extends TestCase
         }
     }
 
-    public function test_open_string_enum_requires_an_unrestricted_string_branch(): void
+    public function testOpenStringEnumRequiresAnUnrestrictedStringBranch(): void
     {
         $reader = $this->reader(Version::V3_0);
         $enum = ['type' => 'string', 'enum' => ['a', 'b']];
@@ -417,7 +427,7 @@ final class ReaderTest extends TestCase
         }
     }
 
-    public function test_reference_mixed_with_const_is_not_an_annotated_enum(): void
+    public function testReferenceMixedWithConstIsNotAnAnnotatedEnum(): void
     {
         $schema = $this->reader(Version::V3_1)->read([
             'oneOf' => [
@@ -430,14 +440,15 @@ final class ReaderTest extends TestCase
         self::assertNull($schema->stringEnum());
     }
 
-    public function test_discriminator_is_read_from_both_the_string_and_object_forms(): void
+    public function testDiscriminatorIsReadFromBothTheStringAndObjectForms(): void
     {
         $reader = $this->reader(Version::V3_0);
 
         $fromString = $reader->read(['oneOf' => [], 'discriminator' => 'kind'], '#/x');
         self::assertInstanceOf(CompositeSchema::class, $fromString);
-        self::assertSame('kind', $fromString->discriminator?->propertyName);
-        self::assertSame([], $fromString->discriminator?->mapping);
+        self::assertNotNull($fromString->discriminator);
+        self::assertSame('kind', $fromString->discriminator->propertyName);
+        self::assertSame([], $fromString->discriminator->mapping);
 
         $fromObject = $reader->read([
             'oneOf' => [],
@@ -447,7 +458,7 @@ final class ReaderTest extends TestCase
         self::assertSame(['cat' => '#/components/schemas/Cat'], $fromObject->discriminator?->mapping);
     }
 
-    public function test_discriminator_captures_extensions(): void
+    public function testDiscriminatorCapturesExtensions(): void
     {
         $reader = $this->reader(Version::V3_0);
 
@@ -473,11 +484,11 @@ final class ReaderTest extends TestCase
             'x-propertyNames' => ['type', 'format'],
         ], $schema->discriminator?->extensions);
 
-        self::assertSame('type', $schema->discriminator?->propertyName);
-        self::assertSame(['string' => '#/components/schemas/Text'], $schema->discriminator?->mapping);
+        self::assertSame('type', $schema->discriminator->propertyName);
+        self::assertSame(['string' => '#/components/schemas/Text'], $schema->discriminator->mapping);
     }
 
-    public function test_discriminator_extensions_default_to_empty(): void
+    public function testDiscriminatorExtensionsDefaultToEmpty(): void
     {
         $reader = $this->reader(Version::V3_0);
 
@@ -493,7 +504,7 @@ final class ReaderTest extends TestCase
         self::assertSame([], $fromObject->discriminator?->extensions);
     }
 
-    public function test_object_and_array_types_are_implied_from_their_keywords(): void
+    public function testObjectAndArrayTypesAreImpliedFromTheirKeywords(): void
     {
         $reader = $this->reader(Version::V3_0);
 
@@ -503,7 +514,7 @@ final class ReaderTest extends TestCase
         self::assertInstanceOf(AnySchema::class, $reader->read([], '#/x'));
     }
 
-    public function test_array_without_items_accepts_anything(): void
+    public function testArrayWithoutItemsAcceptsAnything(): void
     {
         $schema = $this->reader(Version::V3_0)->read(['type' => 'array'], '#/x');
 
@@ -511,7 +522,7 @@ final class ReaderTest extends TestCase
         self::assertInstanceOf(AnySchema::class, $schema->items);
     }
 
-    public function test_additional_properties_reads_as_boolean_or_schema(): void
+    public function testAdditionalPropertiesReadsAsBooleanOrSchema(): void
     {
         $reader = $this->reader(Version::V3_0);
 
@@ -536,7 +547,7 @@ final class ReaderTest extends TestCase
      * The 'file' type is 2.0-only in the specification but is accepted under every
      * dialect here. Pinning current behaviour: gating it is a separate change.
      */
-    public function test_file_type_reads_as_binary_string_under_every_dialect(): void
+    public function testFileTypeReadsAsBinaryStringUnderEveryDialect(): void
     {
         foreach ([Version::V2, Version::V3_0, Version::V3_1] as $version) {
             $schema = $this->reader($version)->read(['type' => 'file'], '#/x');
@@ -549,7 +560,7 @@ final class ReaderTest extends TestCase
      * Numeric exclusive bounds are draft-2020 shaped, but are accepted under every
      * dialect here. Pinning current behaviour: gating it is a separate change.
      */
-    public function test_numeric_exclusive_bounds_collapse_into_bound_plus_flag(): void
+    public function testNumericExclusiveBoundsCollapseIntoBoundPlusFlag(): void
     {
         foreach ([Version::V2, Version::V3_0, Version::V3_1] as $version) {
             $schema = $this->reader($version)->read(['type' => 'integer', 'exclusiveMinimum' => 5], '#/x');
@@ -564,7 +575,7 @@ final class ReaderTest extends TestCase
         self::assertTrue($boolean->exclusiveMinimum);
     }
 
-    public function test_parameter_fields_are_lifted_into_a_schema_and_non_schema_keys_dropped(): void
+    public function testParameterFieldsAreLiftedIntoASchemaAndNonSchemaKeysDropped(): void
     {
         $schema = $this->reader(Version::V2)->readParameterFields([
             'name' => 'limit',
@@ -581,7 +592,7 @@ final class ReaderTest extends TestCase
         self::assertSame([], $schema->extensions);
     }
 
-    public function test_extensions_are_carried_onto_the_schema(): void
+    public function testExtensionsAreCarriedOntoTheSchema(): void
     {
         self::assertSame(
             ['x-appwrite' => ['method' => 'get']],
@@ -589,7 +600,7 @@ final class ReaderTest extends TestCase
         );
     }
 
-    public function test_unsupported_type_names_the_location(): void
+    public function testUnsupportedTypeNamesTheLocation(): void
     {
         $this->expectException(InvalidSpecification::class);
         $this->expectExceptionMessage('#/components/schemas/Pet');
@@ -597,7 +608,7 @@ final class ReaderTest extends TestCase
         $this->reader(Version::V3_1)->read(['type' => 'widget'], '#/components/schemas/Pet');
     }
 
-    public function test_nested_failures_name_their_own_location(): void
+    public function testNestedFailuresNameTheirOwnLocation(): void
     {
         $this->expectException(InvalidSpecification::class);
         $this->expectExceptionMessage('#/x/properties/inner/items');

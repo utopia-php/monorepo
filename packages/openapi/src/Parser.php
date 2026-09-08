@@ -42,7 +42,7 @@ final class Parser
     /** @return array<string, mixed> */
     private function decode(string|array $input): array
     {
-        if (is_array($input)) {
+        if (\is_array($input)) {
             if ($input !== [] && array_is_list($input)) {
                 throw new InvalidSpecification('The OpenAPI document root must be an object');
             }
@@ -54,10 +54,10 @@ final class Parser
             $decoded = json_decode($input, false, 512, JSON_THROW_ON_ERROR);
             $document = $this->normalizeDecodedValue($decoded);
         } catch (JsonException $exception) {
-            throw new ParseException('Invalid JSON: '.$exception->getMessage(), previous: $exception);
+            throw new ParseException('Invalid JSON: ' . $exception->getMessage(), previous: $exception);
         }
 
-        if (! is_array($document) || ($document !== [] && array_is_list($document))) {
+        if (! \is_array($document) || ($document !== [] && array_is_list($document))) {
             throw new InvalidSpecification('The OpenAPI document root must be an object');
         }
 
@@ -74,7 +74,7 @@ final class Parser
 
             return $object;
         }
-        if (is_array($value)) {
+        if (\is_array($value)) {
             return array_map($this->normalizeDecodedValue(...), $value);
         }
 
@@ -84,15 +84,15 @@ final class Parser
     /** @param array<string, mixed> $document @return array{Version, string} */
     private function detectVersion(array $document): array
     {
-        if (array_key_exists('swagger', $document)) {
-            if (! is_string($document['swagger'])) {
+        if (\array_key_exists('swagger', $document)) {
+            if (! \is_string($document['swagger'])) {
                 throw new InvalidSpecification("The 'swagger' version must be a string");
             }
 
             return [Version::fromDocumentVersion($document['swagger']), $document['swagger']];
         }
-        if (array_key_exists('openapi', $document)) {
-            if (! is_string($document['openapi'])) {
+        if (\array_key_exists('openapi', $document)) {
+            if (! \is_string($document['openapi'])) {
                 throw new InvalidSpecification("The 'openapi' version must be a string");
             }
 

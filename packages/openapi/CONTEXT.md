@@ -26,7 +26,7 @@ Terms used across this library. Use these words in code, tests, and commits.
 
 **Reference schema** — a `$ref` left deliberately unexpanded. Recursive schema graphs are legal, so schema references are never followed during reading; only object references (parameters, responses, examples, security schemes) are resolved.
 
-**Annotations** — the fields every schema kind shares: title, description, nullable, default, enum, format, readOnly, writeOnly, deprecated, example, extensions.
+**Annotations** — the fields every schema kind shares: `title`, `description`, `nullable`, `default`, `enum`, `format`, `readOnly`, `writeOnly`, `deprecated`, `example`, `extensions`.
 
 **Annotated enumeration** — an OAS 3.1 `oneOf` or `anyOf` whose members are string `const` (or one-element `enum`) schemas, optionally with `title`/`description`. Mapped onto `StringSchema` (`enum`, `enumName` from the composite title, `enumKeys` from branch titles, `open` when composed with an unconstrained string). Exposed on `CompositeSchema` as `stringEnum()` without collapsing the union tree.
 

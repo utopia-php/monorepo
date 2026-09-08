@@ -125,7 +125,7 @@ final readonly class CompositeSchema extends Schema
                 continue;
             }
 
-            if ($enumBranchIndex !== null || count($schema->enum) < 2) {
+            if ($enumBranchIndex !== null || \count($schema->enum) < 2) {
                 return null;
             }
 
@@ -208,7 +208,7 @@ final readonly class CompositeSchema extends Schema
                 continue;
             }
 
-            if ($schema instanceof StringSchema && count($schema->enum) > 1) {
+            if ($schema instanceof StringSchema && \count($schema->enum) > 1) {
                 $multiValue[] = $schema;
 
                 continue;
@@ -238,20 +238,20 @@ final readonly class CompositeSchema extends Schema
             if ($composition !== Composition::ANY_OF) {
                 return null;
             }
-            if (count($multiValue) === 1 && $consts === [] && $nested === [] && ! $hasNumericConst && ! $hasNonString) {
+            if (\count($multiValue) === 1 && $consts === [] && $nested === [] && ! $hasNumericConst && ! $hasNonString) {
                 return $multiValue[0];
             }
-            if (count($nested) === 1 && $consts === [] && $multiValue === []) {
+            if (\count($nested) === 1 && $consts === [] && $multiValue === []) {
                 return self::openFrom($nested[0], $title, $description, $nullable, $default, $extensions);
             }
-            if ($consts !== [] && $nested === [] && $multiValue === []) {
+            if ($consts !== []) {
                 return self::synthesize($consts, true, $title, $description, $nullable, $default, $extensions);
             }
 
             return null;
         }
 
-        if ($consts !== [] && $nested === [] && $multiValue === []) {
+        if ($consts !== []) {
             return self::synthesize($consts, false, $title, $description, $nullable, $default, $extensions);
         }
 
@@ -339,7 +339,7 @@ final readonly class CompositeSchema extends Schema
 
     private static function stringConstValue(Schema $schema): ?string
     {
-        if (count($schema->enum) !== 1 || ! is_string($schema->enum[0])) {
+        if (\count($schema->enum) !== 1 || ! \is_string($schema->enum[0])) {
             return null;
         }
         if ($schema instanceof StringSchema || $schema instanceof AnySchema) {
@@ -351,6 +351,6 @@ final readonly class CompositeSchema extends Schema
 
     private static function isNonStringConst(Schema $schema): bool
     {
-        return count($schema->enum) === 1 && ! is_string($schema->enum[0]);
+        return \count($schema->enum) === 1 && ! \is_string($schema->enum[0]);
     }
 }

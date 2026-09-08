@@ -70,7 +70,7 @@ final class OpenAPI2 extends AbstractReader
         }
 
         return array_map(
-            static fn (string $scheme): Server => new Server(rtrim($scheme.'://'.$host, '/').($basePath === '/' ? '' : $basePath)),
+            static fn(string $scheme): Server => new Server(rtrim($scheme . '://' . $host, '/') . ($basePath === '/' ? '' : $basePath)),
             $schemes,
         );
     }
@@ -80,12 +80,12 @@ final class OpenAPI2 extends AbstractReader
     {
         $paths = [];
         foreach (Value::object($this->document['paths'] ?? [], '#/paths') as $path => $raw) {
-            $location = '#/paths/'.str_replace(['~', '/'], ['~0', '~1'], (string) $path);
+            $location = '#/paths/' . str_replace(['~', '/'], ['~0', '~1'], (string) $path);
             $data = $this->resolveObject($raw, $location);
             $pathParameters = $this->rawParameters($data['parameters'] ?? [], "{$location}/parameters");
             $operations = [];
             foreach (HttpMethod::cases() as $method) {
-                if (! array_key_exists($method->value, $data)) {
+                if (! \array_key_exists($method->value, $data)) {
                     continue;
                 }
                 $operations[$method->value] = $this->parseOperation((string) $path, $method, $data[$method->value], $pathParameters, $rootSecurity, $rootConsumes, $rootProduces, "{$location}/{$method->value}");
@@ -107,8 +107,8 @@ final class OpenAPI2 extends AbstractReader
         $data = Value::object($raw, $location);
         $operationParameters = $this->rawParameters($data['parameters'] ?? [], "{$location}/parameters");
         $rawParameters = $this->mergeRawParameters($pathParameters, $operationParameters);
-        $consumes = array_key_exists('consumes', $data) ? $this->mediaNames($data['consumes'], "{$location}/consumes") : $rootConsumes;
-        $produces = array_key_exists('produces', $data) ? $this->mediaNames($data['produces'], "{$location}/produces") : $rootProduces;
+        $consumes = \array_key_exists('consumes', $data) ? $this->mediaNames($data['consumes'], "{$location}/consumes") : $rootConsumes;
+        $produces = \array_key_exists('produces', $data) ? $this->mediaNames($data['produces'], "{$location}/produces") : $rootProduces;
 
         $parameters = [];
         $body = null;
@@ -119,7 +119,7 @@ final class OpenAPI2 extends AbstractReader
                 if ($body !== null) {
                     throw new InvalidSpecification("Multiple body parameters at {$location}");
                 }
-                $schema = array_key_exists('schema', $parameter) ? $this->schemas->read($parameter['schema'], "{$location}/parameters/{$index}/schema") : null;
+                $schema = \array_key_exists('schema', $parameter) ? $this->schemas->read($parameter['schema'], "{$location}/parameters/{$index}/schema") : null;
                 $content = [];
                 foreach ($consumes as $mediaName) {
                     $content[$mediaName] = new MediaType($schema);
@@ -148,7 +148,7 @@ final class OpenAPI2 extends AbstractReader
             $value = $this->resolveObject($rawResponse, "{$location}/responses/{$status}");
             $content = [];
             $examplesByMedia = $this->openApi2Examples($value['examples'] ?? [], "{$location}/responses/{$status}/examples");
-            $schema = array_key_exists('schema', $value)
+            $schema = \array_key_exists('schema', $value)
                 ? $this->schemas->read($value['schema'], "{$location}/responses/{$status}/schema")
                 : null;
             foreach (array_values(array_unique([...$produces, ...array_keys($examplesByMedia)])) as $mediaName) {
@@ -176,7 +176,7 @@ final class OpenAPI2 extends AbstractReader
             parameters: $parameters,
             requestBody: $body,
             responses: $responses,
-            security: array_key_exists('security', $data) ? $this->parseSecurity($data['security'], "{$location}/security") : $rootSecurity,
+            security: \array_key_exists('security', $data) ? $this->parseSecurity($data['security'], "{$location}/security") : $rootSecurity,
             externalDocumentation: isset($data['externalDocs']) ? $this->parseExternalDocumentation($data['externalDocs'], "{$location}/externalDocs") : null,
             extensions: Value::extensions($data),
         );
@@ -265,10 +265,10 @@ final class OpenAPI2 extends AbstractReader
         }
         foreach ($operation as $parameter) {
             $identity = $this->rawParameterIdentity($parameter);
-            if (array_key_exists($identity, $indexes)) {
+            if (\array_key_exists($identity, $indexes)) {
                 $merged[$indexes[$identity]] = $parameter;
             } else {
-                $indexes[$identity] = count($merged);
+                $indexes[$identity] = \count($merged);
                 $merged[] = $parameter;
             }
         }
@@ -278,7 +278,7 @@ final class OpenAPI2 extends AbstractReader
 
     private function rawParameterIdentity(array $parameter): string
     {
-        return (string) ($parameter['in'] ?? '')."\0".(string) ($parameter['name'] ?? '');
+        return (string) ($parameter['in'] ?? '') . "\0" . (string) ($parameter['name'] ?? '');
     }
 
     /** @return list<string> */
