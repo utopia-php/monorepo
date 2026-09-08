@@ -173,6 +173,8 @@ $renewRequired = $certificates->isRenewRequired('cdn.example.com', null);
 
 `issueCertificate()` returns a renew date when Fastly already has an issued or renewing certificate. For asynchronous states like `pending` or `processing`, it returns `null`.
 
+`getCertificateStatus()` throws `Utopia\Cdn\Exception\Certificate` when Fastly reports a failed subscription or blocked authorization. The exception exposes `getStatus()` and `getDnsRecords()`; each DNS record contains `type`, `name`, and `values`. Its message includes provider instructions and explains the validation alternatives. Transport and unreadable-response errors remain `RuntimeException` failures and do not establish that issuance failed.
+
 When Fastly domain management owns the domain lifecycle, use the managed provider instead. It creates domains without a service version on the configured service and removes both the domain and TLS subscription on deletion. Classic domains are removed by cloning and activating their service version first.
 
 ```php
@@ -183,6 +185,8 @@ $fastlyCertificates = new Fastly(
     serviceId: 'YOUR_SERVICE_ID',
 );
 ```
+
+Before creating or linking an unassociated domain, the managed provider checks classic exact and wildcard routes across services. Establishing that no classic route owns the hostname requires a token with access to all services and a user without service restrictions. Failed or incomplete ownership lookups stop the operation. Deletion uses the same checks for unassociated or missing domains and refuses to delete a TLS subscription shared by several domains.
 
 ### Cloudflare certificates
 
@@ -232,11 +236,13 @@ Utopia CDN requires PHP 8.1 or later. We recommend using the latest PHP version 
 
 ## Tests
 
-Run the test suite:
+Run the unit test suite:
 
 ```bash
 composer test
 ```
+
+Provider tests use scripted HTTP responses. They verify request construction, ownership decisions, and certificate states without contacting Fastly, resolving DNS, or issuing certificates. This package has no end-to-end suite; a staging validation must exercise domain association and certificate issuance through the consuming application.
 
 Run static analysis:
 

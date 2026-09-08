@@ -31,6 +31,9 @@ final class FastlyTest extends TestCase
 
         $this->assertCount(8, $client->calls);
         $this->assertSame('https://api.fastly.com/service/service_1/details', $client->calls[1]['url']);
+        $this->assertSame('https://api.fastly.com/tokens/self', $client->calls[2]['url']);
+        $this->assertSame('https://api.fastly.com/current_user', $client->calls[3]['url']);
+        $this->assertSame('https://api.fastly.com/service?page=1&per_page=20', $client->calls[4]['url']);
         $this->assertSame('PATCH', $client->calls[5]['method']);
         $this->assertSame('https://api.fastly.com/domain-management/v1/domains/domain_1', $client->calls[5]['url']);
         $this->assertSame(['service_id' => 'service_1'], $client->calls[5]['body']);
@@ -115,6 +118,36 @@ final class FastlyTest extends TestCase
         $this->assertSame(['GET'], array_values(array_unique(array_column($client->calls, 'method'))));
     }
 
+    public function testMalformedNextServicesPageCannotEstablishAbsence(): void
+    {
+        $services = [['id' => 'service_1']];
+        for ($index = 1; $index < 20; $index++) {
+            $services[] = ['id' => 'inactive_' . $index];
+        }
+        $responses = [
+            $this->json('{"data":[{"id":"domain_1","fqdn":"example.com","service_id":null}]}'),
+            $this->json('{"active_version":null}'),
+            $this->json('{"services":[]}'),
+            $this->json('{"limit_services":false}'),
+            $this->json(json_encode($services, JSON_THROW_ON_ERROR)),
+        ];
+        for ($index = 1; $index < 20; $index++) {
+            $responses[] = $this->json('{"active_version":null}');
+        }
+        $responses[] = $this->json('{}');
+        $client = new TestClient($responses);
+
+        try {
+            new Fastly('token', 'service_1', client: $client)->isRenewRequired('example.com', null);
+            $this->fail('Expected malformed service pagination to stop the ownership check.');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('not a valid list', $error->getMessage());
+        }
+
+        $this->assertCount(25, $client->calls);
+        $this->assertSame('https://api.fastly.com/service?page=2&per_page=20', $client->calls[24]['url']);
+    }
+
     public function testFailedOrphanAssociationDoesNotRequestTls(): void
     {
         $client = new TestClient([
@@ -180,10 +213,12 @@ final class FastlyTest extends TestCase
             } else {
                 $provider->issueCertificate('cert', 'example.com', null);
             }
-            $this->fail('Expected unreadable ownership to stop issuance.');
         } catch (\RuntimeException) {
             $this->assertSame(['GET', 'GET'], array_column($client->calls, 'method'));
+            return;
         }
+
+        $this->fail('Expected unreadable ownership to stop issuance.');
     }
 
     #[DataProvider('unreadableServices')]
@@ -199,10 +234,12 @@ final class FastlyTest extends TestCase
 
         try {
             new Fastly('token', 'service_1', client: $client)->issueCertificate('cert', 'example.com', null);
-            $this->fail('Expected unreadable service inventory to stop issuance.');
         } catch (\RuntimeException) {
             $this->assertSame(['GET', 'GET', 'GET', 'GET', 'GET'], array_column($client->calls, 'method'));
+            return;
         }
+
+        $this->fail('Expected unreadable service inventory to stop issuance.');
     }
 
     /** @return iterable<string, array{bool}> */
@@ -222,6 +259,7 @@ final class FastlyTest extends TestCase
             yield $operation . ' missing version' => [$renew, '{}', 200];
             yield $operation . ' missing domains' => [$renew, '{"active_version":{"number":3}}', 200];
             yield $operation . ' invalid domains' => [$renew, '{"active_version":{"domains":[{}]}}', 200];
+            yield $operation . ' domains object' => [$renew, '{"active_version":{"domains":{}}}', 200];
         }
     }
 
@@ -266,10 +304,12 @@ final class FastlyTest extends TestCase
             } else {
                 $provider->issueCertificate('cert', 'example.com', null);
             }
-            $this->fail('Expected malformed domain association to stop issuance.');
         } catch (\RuntimeException) {
             $this->assertSame(['GET'], array_column($client->calls, 'method'));
+            return;
         }
+
+        $this->fail('Expected malformed domain association to stop issuance.');
     }
 
     /** @return iterable<string, array{bool, string}> */
@@ -341,7 +381,6 @@ final class FastlyTest extends TestCase
             } else {
                 $provider->issueCertificate('cert', 'example.com', null);
             }
-            $this->fail('Expected incomplete service visibility to stop issuance.');
         } catch (\RuntimeException) {
             $this->assertCount(\count($responses), $client->calls);
             $this->assertSame(['GET'], array_values(array_unique(array_column($client->calls, 'method'))));
@@ -349,7 +388,10 @@ final class FastlyTest extends TestCase
                 $user === null ? 'https://api.fastly.com/tokens/self' : 'https://api.fastly.com/current_user',
                 array_last($client->calls)['url'],
             );
+            return;
         }
+
+        $this->fail('Expected incomplete service visibility to stop issuance.');
     }
 
     /** @return iterable<string, array{bool, string, ?string}> */
@@ -359,6 +401,7 @@ final class FastlyTest extends TestCase
             yield $operation . ' scoped token' => [$renew, '{"services":["service_1"]}', null];
             yield $operation . ' unknown token scope' => [$renew, '{}', null];
             yield $operation . ' malformed token scope' => [$renew, '{"services":false}', null];
+            yield $operation . ' token scope object' => [$renew, '{"services":{}}', null];
             yield $operation . ' restricted user' => [$renew, '{"services":[]}', '{"limit_services":true}'];
             yield $operation . ' unknown user scope' => [$renew, '{"services":[]}', '{}'];
             yield $operation . ' malformed user scope' => [$renew, '{"services":[]}', '{"limit_services":0}'];
@@ -369,6 +412,10 @@ final class FastlyTest extends TestCase
     {
         $client = new TestClient([
             $this->json('{"data":[]}'),
+            $this->json('{"active_version":{"number":3,"domains":[]}}'),
+            $this->json('{"services":[]}'),
+            $this->json('{"limit_services":false}'),
+            $this->json('[{"id":"service_1"}]'),
             $this->json('{}', 201),
             $this->json('{"data":[]}'),
             $this->json('{"data":{"id":"sub_1","attributes":{"state":"pending"}}}', 201),
@@ -377,11 +424,67 @@ final class FastlyTest extends TestCase
         $provider = new Fastly('token', 'service_1', client: $client);
         $this->assertNull($provider->issueCertificate('cert', 'example.com', null));
 
-        $this->assertSame('POST', $client->calls[1]['method']);
-        $this->assertSame('https://api.fastly.com/domain-management/v1/domains', $client->calls[1]['url']);
-        $this->assertSame(['fqdn' => 'example.com', 'service_id' => 'service_1'], $client->calls[1]['body']);
-        $this->assertSame('POST', $client->calls[3]['method']);
-        $this->assertSame('example.com', $client->calls[3]['body']['data']['relationships']['tls_domains']['data'][0]['id']);
+        $this->assertSame('POST', $client->calls[5]['method']);
+        $this->assertSame('https://api.fastly.com/domain-management/v1/domains', $client->calls[5]['url']);
+        $this->assertSame(['fqdn' => 'example.com', 'service_id' => 'service_1'], $client->calls[5]['body']);
+        $this->assertSame('POST', $client->calls[7]['method']);
+        $this->assertSame('example.com', $client->calls[7]['body']['data']['relationships']['tls_domains']['data'][0]['id']);
+    }
+
+    #[DataProvider('operations')]
+    public function testMissingDomainPreservesForeignClassicWildcard(bool $renew): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[]}'),
+            $this->json('{"active_version":{"number":3,"domains":[]}}'),
+            $this->json('{"services":[]}'),
+            $this->json('{"limit_services":false}'),
+            $this->json('[{"id":"service_1"},{"id":"other_service"}]'),
+            $this->json('{"active_version":{"number":7,"domains":[{"name":"*.example.com"}]}}'),
+        ]);
+        $provider = new Fastly('token', 'service_1', client: $client);
+
+        if ($renew) {
+            $this->assertFalse($provider->isRenewRequired('api.example.com', null));
+        } else {
+            $this->assertNull($provider->issueCertificate('cert', 'api.example.com', null));
+        }
+
+        $this->assertCount(6, $client->calls);
+        $this->assertSame(['GET'], array_values(array_unique(array_column($client->calls, 'method'))));
+        $this->assertSame('https://api.fastly.com/service/other_service/details', $client->calls[5]['url']);
+    }
+
+    #[DataProvider('operations')]
+    public function testMissingDomainPreservesOwnClassicRoute(bool $renew): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[]}'),
+            $this->json('{"active_version":{"number":3,"domains":[{"name":"example.com"}]}}'),
+        ]);
+        $provider = new Fastly('token', 'service_1', client: $client);
+
+        if ($renew) {
+            $this->assertFalse($provider->isRenewRequired('example.com', null));
+        } else {
+            $this->assertNull($provider->issueCertificate('cert', 'example.com', null));
+        }
+
+        $this->assertSame(['GET', 'GET'], array_column($client->calls, 'method'));
+    }
+
+    public function testRenewIsRequiredForMissingDomainWithoutClassicRoute(): void
+    {
+        $client = new TestClient([
+            $this->json('{"data":[]}'),
+            $this->json('{"active_version":{"number":3,"domains":[]}}'),
+            $this->json('{"services":[]}'),
+            $this->json('{"limit_services":false}'),
+            $this->json('[{"id":"service_1"}]'),
+        ]);
+
+        $this->assertTrue(new Fastly('token', 'service_1', client: $client)->isRenewRequired('example.com', null));
+        $this->assertCount(5, $client->calls);
     }
 
     public function testIssueReassignsVersionlessDomainFromAnotherService(): void
@@ -636,11 +739,13 @@ final class FastlyTest extends TestCase
 
         try {
             new Fastly('token', 'service_1', client: $client)->deleteCertificate('example.com');
-            $this->fail('Expected incomplete domain ownership to stop deletion.');
         } catch (\RuntimeException) {
             $this->assertCount(\count($responses), $client->calls);
             $this->assertSame(['GET'], array_values(array_unique(array_column($client->calls, 'method'))));
+            return;
         }
+
+        $this->fail('Expected incomplete domain ownership to stop deletion.');
     }
 
     /** @return iterable<string, array{list<array{string, int}>}> */
@@ -687,10 +792,12 @@ final class FastlyTest extends TestCase
 
         try {
             new Fastly('token', 'service_1', client: $client)->deleteCertificate('example.com');
-            $this->fail('Expected an unreadable domain lookup to stop deletion.');
         } catch (\RuntimeException) {
             $this->assertSame(['GET'], array_column($client->calls, 'method'));
+            return;
         }
+
+        $this->fail('Expected an unreadable domain lookup to stop deletion.');
     }
 
     /** @return iterable<string, array{string}> */

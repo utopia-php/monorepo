@@ -67,8 +67,12 @@ class FastlyTls implements Provider
             foreach ($details['instructions'] as $instruction) {
                 $message .= ' ' . $instruction;
             }
+            $options = [];
             foreach ($details['records'] as $record) {
-                $message .= ' Add a ' . $record['type'] . " record '" . $record['name'] . "' with value(s) '" . implode("', '", $record['values']) . "' in your DNS provider.";
+                $options[] = $record['type'] . " record '" . $record['name'] . "' with value(s) '" . implode("', '", $record['values']) . "'";
+            }
+            if ($options !== []) {
+                $message .= ' DNS validation records reported by Fastly: ' . implode('; ', $options) . '. Choose the validation method required by the provider instructions for each authorization; CNAME and A records at the same hostname are alternatives.';
             }
 
             throw new Certificate($message, $status, $details['records']);

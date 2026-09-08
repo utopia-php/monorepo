@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\Tests\Cdn\Certificates\Provider;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Utopia\Cdn\Certificates\Provider\FastlyTls;
 use Utopia\Cdn\Certificates\Status;
@@ -49,6 +50,60 @@ final class FastlyTlsTest extends TestCase
             $this->assertSame(Status::FAILED, $error->getStatus());
             $this->assertStringContainsString('DNS record is missing', $error->getMessage());
             $this->assertCount(1, $error->getDnsRecords());
+        }
+    }
+
+    #[DataProvider('failureStates')]
+    public function testFailureWithoutAuthorizationDetails(string $state, string $message): void
+    {
+        $body = ['data' => [['id' => 'sub_1', 'attributes' => ['state' => $state]]]];
+        $client = new TestClient([new Response(200, body: new Stream(json_encode($body, JSON_THROW_ON_ERROR)))]);
+
+        try {
+            new FastlyTls('token', 'config', client: $client)->getCertificateStatus('example.com', null);
+            $this->fail('Expected a certificate failure without authorization metadata.');
+        } catch (Certificate $error) {
+            $this->assertSame($state, $error->getStatus());
+            $this->assertSame([], $error->getDnsRecords());
+            $this->assertSame($message, $error->getMessage());
+        }
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function failureStates(): iterable
+    {
+        yield 'blocked' => [Status::BLOCKED, 'Certificate issuance is blocked.'];
+        yield 'failed' => [Status::FAILED, 'Certificate issuance failed.'];
+    }
+
+    public function testAuthorizationChallengesAreAlternativeValidationOptions(): void
+    {
+        $body = $this->blockedSubscription();
+        $body['included'][0]['attributes']['challenges'][] = [
+            'type' => 'managed-http-cname',
+            'record_name' => 'example.com',
+            'record_type' => 'CNAME',
+            'values' => ['j.sni.global.fastly.net'],
+        ];
+        $body['included'][0]['attributes']['challenges'][] = [
+            'type' => 'managed-http-a',
+            'record_name' => 'example.com',
+            'record_type' => 'A',
+            'values' => ['151.101.0.0', '151.101.64.0'],
+        ];
+        $client = new TestClient([new Response(200, body: new Stream(json_encode($body, JSON_THROW_ON_ERROR)))]);
+
+        try {
+            new FastlyTls('token', 'config', client: $client)->getCertificateStatus('example.com', null);
+            $this->fail('Expected DNS verification options.');
+        } catch (Certificate $error) {
+            $this->assertSame([
+                ['type' => 'CNAME', 'name' => '_acme-challenge.example.com', 'values' => ['token.fastly-validations.com']],
+                ['type' => 'CNAME', 'name' => 'example.com', 'values' => ['j.sni.global.fastly.net']],
+                ['type' => 'A', 'name' => 'example.com', 'values' => ['151.101.0.0', '151.101.64.0']],
+            ], $error->getDnsRecords());
+            $this->assertStringContainsString('Choose the validation method required by the provider instructions for each authorization', $error->getMessage());
+            $this->assertStringContainsString('CNAME and A records at the same hostname are alternatives', $error->getMessage());
         }
     }
 
@@ -252,19 +307,31 @@ final class FastlyTlsTest extends TestCase
         $this->assertSame('https://api.fastly.com/tls/subscriptions/sub_123?force=true', $client->calls[1]['url']);
     }
 
-    public function testDeletePreservesSharedSubscription(): void
+    /** @param list<string> $domains */
+    #[DataProvider('otherDomains')]
+    public function testDeletePreservesSubscriptionsForOtherDomains(array $domains): void
     {
         $body = $this->blockedSubscription();
-        $body['data'][0]['relationships']['tls_domains']['data'][] = ['type' => 'tls_domain', 'id' => 'other.com'];
+        $body['data'][0]['relationships']['tls_domains']['data'] = array_map(
+            static fn(string $domain): array => ['type' => 'tls_domain', 'id' => $domain],
+            $domains,
+        );
         $client = new TestClient([new Response(200, body: new Stream(json_encode($body, JSON_THROW_ON_ERROR)))]);
 
         try {
             new FastlyTls('token', 'config', client: $client)->deleteCertificate('example.com');
-            $this->fail('Expected shared subscription cleanup to stop.');
+            $this->fail('Expected cleanup to preserve other domains.');
         } catch (\RuntimeException $error) {
             $this->assertStringContainsString('exclusive ownership', $error->getMessage());
         }
         $this->assertCount(1, $client->calls);
+    }
+
+    /** @return iterable<string, array{list<string>}> */
+    public static function otherDomains(): iterable
+    {
+        yield 'shared subscription' => [['example.com', 'other.com']];
+        yield 'different domain' => [['other.com']];
     }
 
     public function testDeleteRequiresReadableSubscriptionDomains(): void
