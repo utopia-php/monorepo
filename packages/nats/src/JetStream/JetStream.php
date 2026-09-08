@@ -234,7 +234,7 @@ final class JetStream
      */
     public function publish(string $subject, string $data = '', ?Headers $headers = null, ?string $msgId = null, ?string $expectedLastMsgId = null, ?int $expectedLastSeq = null, ?int $expectedLastSubjectSeq = null, ?string $expectedStream = null, int|string|null $ttl = null, int $retryOnNoResponders = 0): PubAck
     {
-        $useHeaders = self::publishHeaders(
+        $useHeaders = $this->publishHeaders(
             $headers,
             $msgId,
             $expectedLastMsgId,
@@ -330,7 +330,7 @@ final class JetStream
                     $message['subject'],
                     $message['data'] ?? '',
                     $inbox . '.' . $index,
-                    self::publishHeaders(
+                    $this->publishHeaders(
                         $message['headers'] ?? null,
                         $message['msgId'] ?? null,
                         $message['expectedLastMsgId'] ?? null,
@@ -386,7 +386,7 @@ final class JetStream
      * Assemble the JetStream publish headers, so the single and batched publish paths
      * cannot drift on a header name or on how a value is written to the wire.
      */
-    private static function publishHeaders(
+    private function publishHeaders(
         ?Headers $headers,
         ?string $msgId,
         ?string $expectedLastMsgId,
