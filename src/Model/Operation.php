@@ -39,11 +39,12 @@ final readonly class Operation
      *
      * @return list<string>
      */
-    public function getAcceptedSecuritySchemeNames(): array
+    public function acceptedSecuritySchemeNames(): array
     {
         $names = [];
         foreach ($this->security as $requirement) {
             foreach (array_keys($requirement->schemes) as $name) {
+                $name = (string) $name;
                 if (! in_array($name, $names, true)) {
                     $names[] = $name;
                 }
@@ -61,9 +62,9 @@ final readonly class Operation
      *
      * @return list<string>
      */
-    public function getRequiredSecuritySchemeNames(): array
+    public function requiredSecuritySchemeNames(): array
     {
-        $names = array_keys($this->security[0]->schemes ?? []);
+        $names = array_map(static fn (string|int $name): string => (string) $name, array_keys($this->security[0]->schemes ?? []));
         foreach ($this->security as $requirement) {
             $names = array_values(array_intersect($names, array_keys($requirement->schemes)));
         }

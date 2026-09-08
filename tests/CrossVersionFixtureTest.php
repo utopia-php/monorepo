@@ -87,7 +87,12 @@ final class CrossVersionFixtureTest extends TestCase
         self::assertSame(['Project', 'Basic'], array_keys($specification->security[0]->schemes));
         self::assertSame(['Project'], array_keys($specification->security[1]->schemes));
         self::assertSame($specification->security, $get->security);
-        self::assertSame([], $specification->paths['/pets/{id}']->operation(HttpMethod::DELETE)?->security);
+        self::assertSame(['Project', 'Basic'], $get->acceptedSecuritySchemeNames());
+        self::assertSame(['Project'], $get->requiredSecuritySchemeNames());
+        $delete = $specification->paths['/pets/{id}']->operation(HttpMethod::DELETE);
+        self::assertSame([], $delete?->security);
+        self::assertSame([], $delete?->acceptedSecuritySchemeNames());
+        self::assertSame([], $delete?->requiredSecuritySchemeNames());
 
         self::assertSame(SecuritySchemeType::API_KEY, $specification->securitySchemes['Project']->type);
         self::assertSame('X-Project', $specification->securitySchemes['Project']->name);
