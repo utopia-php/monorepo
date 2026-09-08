@@ -158,22 +158,34 @@ class Router
         }
 
         $parts = array_values(array_filter(explode('/', $path), fn($segment) => $segment !== ''));
-        $length = \count($parts) - 1;
-        $filteredParams = array_filter(self::$params, fn($i) => $i <= $length);
 
-        foreach (self::combinations($filteredParams) as $sample) {
-            $sample = array_filter($sample, fn(int $i) => $i <= $length);
-            $template = implode(
-                '/',
-                array_replace(
-                    $parts,
-                    array_fill_keys($sample, self::PLACEHOLDER_TOKEN),
-                ),
-            );
+        /**
+         * A trailing slash leaves an empty last segment. Offer it to a route that
+         * expects a param there before dropping it, so `/blog/` reaches `/blog/:post`
+         * with an empty post instead of falling through to `/blog`.
+         */
+        $candidates = str_ends_with($path, '/') && $path !== '/'
+            ? [explode('/', ltrim($path, '/')), $parts]
+            : [$parts];
 
-            if (\array_key_exists($template, self::$routes[$method])) {
-                $route = self::$routes[$method][$template];
-                return new RouteMatch($route, $route->resolveParams($path, $template));
+        foreach ($candidates as $candidate) {
+            $length = \count($candidate) - 1;
+            $filteredParams = array_filter(self::$params, fn($i) => $i <= $length);
+
+            foreach (self::combinations($filteredParams) as $sample) {
+                $sample = array_filter($sample, fn(int $i) => $i <= $length);
+                $template = implode(
+                    '/',
+                    array_replace(
+                        $candidate,
+                        array_fill_keys($sample, self::PLACEHOLDER_TOKEN),
+                    ),
+                );
+
+                if (\array_key_exists($template, self::$routes[$method])) {
+                    $route = self::$routes[$method][$template];
+                    return new RouteMatch($route, $route->resolveParams($path, $template));
+                }
             }
         }
 
