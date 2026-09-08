@@ -66,13 +66,13 @@ class Fastly implements Provider
             return null;
         }
 
-        if ($domainInfo !== null) {
-            if ($existingServiceId === null) {
-                $domainId = $domainInfo['id'] ?? null;
-                if (!\is_string($domainId) || $domainId === '') {
-                    throw new \RuntimeException('Fastly domain response was missing its ID.');
-                }
+        if ($domainInfo !== null && $existingServiceId !== $this->serviceId) {
+            $domainId = $domainInfo['id'] ?? null;
+            if (!\is_string($domainId) || $domainId === '') {
+                throw new \RuntimeException('Fastly domain response was missing its ID.');
+            }
 
+            if ($existingServiceId === null) {
                 // Restore the orphan's service association before continuing issuance.
                 $result = $this->request(
                     'PATCH',
@@ -84,30 +84,23 @@ class Fastly implements Provider
                 return $this->tls->issueCertificate($certName, $domain, $domainType);
             }
 
-            if ($existingServiceId !== $this->serviceId) {
-                $domainId = $domainInfo['id'] ?? null;
-                if (!\is_string($domainId) || $domainId === '') {
-                    throw new \RuntimeException('Fastly domain response was missing its ID.');
-                }
+            // Finish the certificate lifecycle while ownership is still
+            // unchanged. A TLS failure must not move a live hostname.
+            $renewDate = $this->tls->issueCertificate($certName, $domain, $domainType);
+            $status = $this->tls->getCertificateStatus($domain, $domainType);
 
-                // Finish the certificate lifecycle while ownership is still
-                // unchanged. A TLS failure must not move a live hostname.
-                $renewDate = $this->tls->issueCertificate($certName, $domain, $domainType);
-                $status = $this->tls->getCertificateStatus($domain, $domainType);
-
-                if (!\in_array($status, [Status::ISSUED, Status::RENEWING], true)) {
-                    return $renewDate;
-                }
-
-                $result = $this->request(
-                    'PATCH',
-                    '/domain-management/v1/domains/' . rawurlencode($domainId),
-                    ['service_id' => $this->serviceId],
-                );
-                $this->assertSuccess('reassign Fastly domain', $result);
-
+            if (!\in_array($status, [Status::ISSUED, Status::RENEWING], true)) {
                 return $renewDate;
             }
+
+            $result = $this->request(
+                'PATCH',
+                '/domain-management/v1/domains/' . rawurlencode($domainId),
+                ['service_id' => $this->serviceId],
+            );
+            $this->assertSuccess('reassign Fastly domain', $result);
+
+            return $renewDate;
         }
 
         if ($domainInfo === null) {
@@ -189,7 +182,7 @@ class Fastly implements Provider
     private function findDomain(string $domain): ?array
     {
         $query = http_build_query(['fqdn' => $domain, 'fqdn_match' => 'exact', 'limit' => 100]);
-        $result = $this->request('GET', '/domain-management/v1/domains?' . $query, associative: false);
+        $result = $this->request('GET', '/domain-management/v1/domains?' . $query);
         $this->assertSuccess('fetch Fastly domains', $result);
 
         if (!$result['response'] instanceof \stdClass) {
@@ -267,13 +260,13 @@ class Fastly implements Provider
 
         // Service inventory is filtered by both token and user permissions. A
         // partial inventory cannot establish that no classic route owns a host.
-        $token = $this->request('GET', '/tokens/self', associative: false);
+        $token = $this->request('GET', '/tokens/self');
         $this->assertSuccess('fetch Fastly token permissions', $token);
         if (!$token['response'] instanceof \stdClass || ($token['response']->services ?? null) !== []) {
             throw new \RuntimeException('Managing an unlinked Fastly domain requires access to all services.');
         }
 
-        $user = $this->request('GET', '/current_user', associative: false);
+        $user = $this->request('GET', '/current_user');
         $this->assertSuccess('fetch Fastly user permissions', $user);
         if (!$user['response'] instanceof \stdClass || ($user['response']->limit_services ?? null) !== false) {
             throw new \RuntimeException('Managing an unlinked Fastly domain requires an unrestricted service inventory.');
@@ -283,7 +276,7 @@ class Fastly implements Provider
         $foundService = false;
         for ($page = 1; ; $page++) {
             $query = http_build_query(['page' => $page, 'per_page' => 20]);
-            $result = $this->request('GET', '/service?' . $query, associative: false);
+            $result = $this->request('GET', '/service?' . $query);
             $this->assertSuccess('fetch Fastly services', $result);
 
             $services = $result['response'];
@@ -322,7 +315,7 @@ class Fastly implements Provider
 
     private function hasClassicDomain(string $serviceId, string $domain): bool
     {
-        $result = $this->request('GET', '/service/' . rawurlencode($serviceId) . '/details', associative: false);
+        $result = $this->request('GET', '/service/' . rawurlencode($serviceId) . '/details');
         $this->assertSuccess('fetch Fastly service details', $result);
 
         if (!$result['response'] instanceof \stdClass || !property_exists($result['response'], 'active_version')) {
@@ -361,19 +354,19 @@ class Fastly implements Provider
         $result = $this->request('GET', '/service/' . rawurlencode($this->serviceId) . '/details');
         $this->assertSuccess('fetch Fastly service details', $result);
 
-        if (!\is_array($result['response'])) {
-            throw new \RuntimeException('Fastly service details response was not valid JSON.');
+        if (!$result['response'] instanceof \stdClass) {
+            throw new \RuntimeException('Fastly service details response was not a valid JSON object.');
         }
 
-        $activeVersion = $result['response']['active_version'] ?? null;
-        if (!\is_array($activeVersion)) {
+        $activeVersion = $result['response']->active_version ?? null;
+        if (!$activeVersion instanceof \stdClass) {
             throw new \RuntimeException('Fastly service details response was missing its active version.');
         }
 
-        $domains = $activeVersion['domains'] ?? [];
+        $domains = $activeVersion->domains ?? [];
         $containsDomain = \is_array($domains) && array_any(
             $domains,
-            static fn(mixed $candidate): bool => \is_array($candidate) && ($candidate['name'] ?? null) === $domain,
+            static fn(mixed $candidate): bool => $candidate instanceof \stdClass && ($candidate->name ?? null) === $domain,
         );
 
         if (!$containsDomain) {
@@ -383,7 +376,7 @@ class Fastly implements Provider
             return;
         }
 
-        $currentVersion = $activeVersion['number'] ?? null;
+        $currentVersion = $activeVersion->number ?? null;
         if (!\is_int($currentVersion)) {
             throw new \RuntimeException('Fastly active service version was missing its number.');
         }
@@ -392,10 +385,10 @@ class Fastly implements Provider
         $result = $this->request('PUT', $servicePath . $currentVersion . '/clone');
         $this->assertSuccess('clone Fastly service version', $result);
 
-        if (!\is_array($result['response']) || !\is_int($result['response']['number'] ?? null)) {
+        if (!$result['response'] instanceof \stdClass || !\is_int($result['response']->number ?? null)) {
             throw new \RuntimeException('Fastly cloned service version was missing its number.');
         }
-        $newVersion = $result['response']['number'];
+        $newVersion = $result['response']->number;
 
         $result = $this->request('DELETE', $servicePath . $newVersion . '/domain/' . rawurlencode($domain));
         $this->assertSuccess('remove classic Fastly domain', $result, [200]);
@@ -415,7 +408,7 @@ class Fastly implements Provider
             $result = $this->request('GET', $path);
             $this->assertSuccess('fetch Fastly service version', $result);
 
-            if (\is_array($result['response']) && ($result['response']['active'] ?? false) === true) {
+            if ($result['response'] instanceof \stdClass && ($result['response']->active ?? false) === true) {
                 return;
             }
 
@@ -431,7 +424,7 @@ class Fastly implements Provider
      * @param array<string, mixed>|null $body
      * @return array{statusCode:int,response:mixed,error:string|null}
      */
-    private function request(string $method, string $path, ?array $body = null, bool $associative = true): array
+    private function request(string $method, string $path, ?array $body = null): array
     {
         $factory = new RequestFactory();
         $request = $body === null
@@ -451,7 +444,7 @@ class Fastly implements Provider
         $contents = (string) $response->getBody();
 
         try {
-            $decoded = json_decode($contents, $associative, flags: JSON_THROW_ON_ERROR);
+            $decoded = json_decode($contents, flags: JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
             $decoded = $contents;
         }
@@ -476,12 +469,10 @@ class Fastly implements Provider
         $message = $result['error'];
         $response = $result['response'];
         if ($response instanceof \stdClass) {
-            $response = json_decode(json_encode($response, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
-        }
-        if (\is_array($response)) {
-            $message ??= $response['errors'][0]['detail']
-                ?? $response['errors'][0]['title']
-                ?? $response['msg']
+            $errors = (array) ($response->errors ?? []);
+            $message ??= $errors[0]->detail
+                ?? $errors[0]->title
+                ?? $response->msg
                 ?? null;
         }
 
