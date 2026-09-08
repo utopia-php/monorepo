@@ -605,7 +605,7 @@ final class NatsBrokerTest extends TestCase
         // an ack that threw left the entry behind -- and runPhases() does not
         // reject() after a commit failure, so nothing else ever cleared it. One
         // pinned JetStreamMessage per failed ack, for the life of the worker.
-        $this->broker->enqueue($this->queue, ['task' => 'a']);
+        $this->broker->publish($this->queue, ['task' => 'a']);
 
         $message = $this->broker->receive($this->queue, 2);
         $this->assertInstanceOf(Message::class, $message);
