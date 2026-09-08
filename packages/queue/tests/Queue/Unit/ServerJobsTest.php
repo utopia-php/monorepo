@@ -153,7 +153,7 @@ final class ServerJobsTest extends TestCase
             $refusal = $error;
         }
 
-        $this->assertNotNull($refusal, 'the concurrency must be refused');
+        $this->assertInstanceOf(\Exception::class, $refusal, 'the concurrency must be refused');
         $this->assertStringContainsString("job('v1-functions', 8)", $refusal->getMessage());
 
         // The refusal has to land before the loops start, not after one has been
