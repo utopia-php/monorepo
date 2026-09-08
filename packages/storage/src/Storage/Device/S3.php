@@ -747,6 +747,7 @@ class S3 extends Device
         $headers['host'] = $this->host;
         $headers['date'] = gmdate('D, d M Y H:i:s T');
         $headers['content-md5'] = $md5;
+        $headers['content-length'] = (string) $this->bodyLength($body);
 
         $amzHeaders = array_filter($amzHeaders, fn(string $value): bool => $value !== '');
         $amzHeaders['x-amz-date'] = gmdate('Ymd\THis\Z');
@@ -798,6 +799,30 @@ class S3 extends Device
             headers: $responseHeaders,
             body: $decode && $isXml ? $this->decodeXml($responseBody) : $responseBody,
         );
+    }
+
+    /**
+     * Length of the request body in bytes.
+     *
+     * Strict S3-compatible endpoints (for example Google Cloud Storage's XML
+     * API) reject requests without an explicit Content-Length with a 411, so
+     * every request must carry one. `StreamInterface::getSize()` may return
+     * null for a stream that is still seekable, in which case the size is
+     * measured by seeking to the end and back.
+     */
+    private function bodyLength(StreamInterface $body): int
+    {
+        $length = $body->getSize();
+        if ($length !== null) {
+            return $length;
+        }
+
+        $position = $body->tell();
+        $body->seek(0, SEEK_END);
+        $length = $body->tell();
+        $body->seek($position);
+
+        return $length;
     }
 
     /**

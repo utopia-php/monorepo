@@ -191,6 +191,136 @@ final class ScriptedClient implements Adapter
     }
 }
 
+/**
+ * PSR-18 + streaming client that records every outgoing request, so tests can
+ * assert on the headers the real S3::call() puts on the wire.
+ */
+class CapturingClient implements \Psr\Http\Client\ClientInterface, \Utopia\Psr18\StreamingClientInterface
+{
+    /**
+     * @var list<RequestInterface>
+     */
+    public array $requests = [];
+
+    public function sendRequest(RequestInterface $request): ResponseInterface
+    {
+        $this->requests[] = $request;
+
+        return $this->respond($request);
+    }
+
+    public function stream(RequestInterface $request, callable $sink): ResponseInterface
+    {
+        $this->requests[] = $request;
+
+        return $this->respond($request);
+    }
+
+    private function respond(RequestInterface $request): ResponseInterface
+    {
+        if ($request->getMethod() === 'HEAD') {
+            return new Response(404);
+        }
+        $response = new Response(200)->withHeader('ETag', '"etag-1"');
+        if ($request->getMethod() === 'POST' && str_contains($request->getUri()->getQuery(), 'uploads')) {
+            return $response
+                ->withHeader('content-type', 'application/xml')
+                ->withBody(new Stream('<?xml version="1.0" encoding="UTF-8"?><InitiateMultipartUploadResult><UploadId>upload-123</UploadId></InitiateMultipartUploadResult>'));
+        }
+
+        return $response;
+    }
+}
+
+/**
+ * Stream whose getSize() reports null, like the decorated streams produced by
+ * upload pipelines, while remaining seekable.
+ */
+class UnknownSizeStream implements StreamInterface
+{
+    private readonly Stream $inner;
+
+    public function __construct(string $content)
+    {
+        $this->inner = new Stream($content);
+    }
+
+    public function getSize(): ?int
+    {
+        return null;
+    }
+
+    public function __toString(): string
+    {
+        return $this->inner->__toString();
+    }
+
+    public function close(): void
+    {
+        $this->inner->close();
+    }
+
+    public function detach()
+    {
+        return $this->inner->detach();
+    }
+
+    public function tell(): int
+    {
+        return $this->inner->tell();
+    }
+
+    public function eof(): bool
+    {
+        return $this->inner->eof();
+    }
+
+    public function isSeekable(): bool
+    {
+        return $this->inner->isSeekable();
+    }
+
+    public function seek(int $offset, int $whence = SEEK_SET): void
+    {
+        $this->inner->seek($offset, $whence);
+    }
+
+    public function rewind(): void
+    {
+        $this->inner->rewind();
+    }
+
+    public function isWritable(): bool
+    {
+        return $this->inner->isWritable();
+    }
+
+    public function write(string $string): int
+    {
+        return $this->inner->write($string);
+    }
+
+    public function isReadable(): bool
+    {
+        return $this->inner->isReadable();
+    }
+
+    public function read(int $length): string
+    {
+        return $this->inner->read($length);
+    }
+
+    public function getContents(): string
+    {
+        return $this->inner->getContents();
+    }
+
+    public function getMetadata(?string $key = null): mixed
+    {
+        return $this->inner->getMetadata($key);
+    }
+}
+
 final class S3Test extends TestCase
 {
     private TestableS3 $s3;
@@ -580,5 +710,70 @@ final class S3Test extends TestCase
         $this->assertSame('root/a.txt', $list->files[0]->path);
         $this->assertSame(11, $list->files[0]->size);
         $this->assertNull($list->cursor);
+    }
+
+    public function testWriteSendsContentLength(): void
+    {
+        $client = new CapturingClient();
+        $s3 = new S3(
+            root: '/root',
+            accessKey: 'test-key',
+            secretKey: 'test-secret',
+            host: 'https://s3.example.com',
+            region: 'us-east-1',
+            client: $client,
+        );
+
+        $s3->write('file.txt', new Stream('hello world'), 'text/plain');
+
+        $this->assertCount(1, $client->requests);
+        $request = $client->requests[0];
+        $this->assertSame('11', $request->getHeaderLine('content-length'));
+        $this->assertStringContainsString('content-length', $request->getHeaderLine('authorization'));
+    }
+
+    public function testMultipartUploadSendsContentLengthForEveryRequest(): void
+    {
+        $client = new CapturingClient();
+        $s3 = new S3(
+            root: '/root',
+            accessKey: 'test-key',
+            secretKey: 'test-secret',
+            host: 'https://s3.example.com',
+            region: 'us-east-1',
+            client: $client,
+        );
+
+        $metadata = [];
+        $s3->upload(new Stream('aaaaaaaaaa'), 'file.bin', 'application/octet-stream', 1, 2, $metadata);
+        $s3->upload(new Stream('bbbbbb'), 'file.bin', 'application/octet-stream', 2, 2, $metadata);
+
+        // createMultipartUpload (POST, empty body), two uploadPart PUTs,
+        // exists() probe (HEAD), completeMultipartUpload (POST, XML body)
+        $this->assertCount(5, $client->requests);
+        $this->assertSame('0', $client->requests[0]->getHeaderLine('content-length'));
+        $this->assertSame('10', $client->requests[1]->getHeaderLine('content-length'));
+        $this->assertSame('6', $client->requests[2]->getHeaderLine('content-length'));
+        $this->assertSame('0', $client->requests[3]->getHeaderLine('content-length'));
+        $completeLength = (int) $client->requests[4]->getHeaderLine('content-length');
+        $this->assertGreaterThan(0, $completeLength);
+        $this->assertSame(\strlen((string) $client->requests[4]->getBody()), $completeLength);
+    }
+
+    public function testContentLengthIsMeasuredForSeekableStreamWithUnknownSize(): void
+    {
+        $client = new CapturingClient();
+        $s3 = new S3(
+            root: '/root',
+            accessKey: 'test-key',
+            secretKey: 'test-secret',
+            host: 'https://s3.example.com',
+            region: 'us-east-1',
+            client: $client,
+        );
+
+        $s3->write('file.txt', new UnknownSizeStream('hello world'), 'text/plain');
+
+        $this->assertSame('11', $client->requests[0]->getHeaderLine('content-length'));
     }
 }
