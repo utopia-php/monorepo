@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\OpenAPI\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Utopia\OpenAPI\Exception\CircularReference;
 use Utopia\OpenAPI\Exception\InvalidSpecification;
@@ -11,7 +12,9 @@ use Utopia\OpenAPI\Exception\ParseException;
 use Utopia\OpenAPI\Model\CompositeSchema;
 use Utopia\OpenAPI\Model\HttpMethod;
 use Utopia\OpenAPI\Model\ObjectSchema;
+use Utopia\OpenAPI\Model\Operation;
 use Utopia\OpenAPI\Model\ReferenceSchema;
+use Utopia\OpenAPI\Model\SecurityRequirement;
 use Utopia\OpenAPI\Model\StringSchema;
 use Utopia\OpenAPI\Parser;
 use Utopia\OpenAPI\Reference\LocalResolver;
@@ -19,6 +22,37 @@ use Utopia\OpenAPI\Version;
 
 final class ParserTest extends TestCase
 {
+    public static function securityAlternatives(): iterable
+    {
+        yield 'none' => [[], [], []];
+        yield 'anonymous' => [[[]], [], []];
+        yield 'single AND requirement' => [[['Project' => [], 'Session' => []]], ['Project', 'Session'], ['Project', 'Session']];
+        yield 'optional credential' => [[['Project' => []], ['Project' => [], 'Session' => []]], ['Project', 'Session'], ['Project']];
+        yield 'reversed alternatives' => [[['Session' => [], 'Project' => []], ['Project' => []]], ['Session', 'Project'], ['Project']];
+        yield 'disjoint alternatives' => [[['Key' => []], ['Session' => []]], ['Key', 'Session'], []];
+        yield 'anonymous last' => [[['Key' => []], []], ['Key'], []];
+        yield 'anonymous first' => [[[], ['Key' => []]], ['Key'], []];
+        yield 'duplicates' => [[['Project' => [], 'Key' => []], ['Project' => [], 'Key' => []]], ['Project', 'Key'], ['Project', 'Key']];
+        yield 'three alternatives' => [[['Project' => [], 'Key' => []], ['Project' => [], 'Session' => []], ['Project' => [], 'JWT' => []]], ['Project', 'Key', 'Session', 'JWT'], ['Project']];
+        yield 'distinct OAuth scopes' => [[['OAuth' => ['read']], ['OAuth' => ['write']]], ['OAuth'], ['OAuth']];
+        yield 'numeric name' => [[['123' => []]], ['123'], ['123']];
+        yield 'zero name' => [[['0' => []]], ['0'], ['0']];
+        yield 'mixed names and duplicates' => [[['123' => [], 'Key' => [], '0' => []], ['0' => [], '123' => [], 'Session' => []]], ['123', 'Key', '0', 'Session'], ['123', '0']];
+        yield 'distinct numeric-looking names' => [[['0' => [], '00' => []], ['00' => []]], ['0', '00'], ['00']];
+    }
+
+    #[DataProvider('securityAlternatives')]
+    public function test_security_scheme_names(array $alternatives, array $accepted, array $required): void
+    {
+        $security = array_map(static fn (array $schemes): SecurityRequirement => new SecurityRequirement($schemes), $alternatives);
+        $operation = new Operation(id: 'test', method: HttpMethod::GET, path: '/test', security: $security);
+
+        self::assertSame($accepted, $operation->acceptedSecuritySchemeNames());
+        self::assertSame($required, $operation->requiredSecuritySchemeNames());
+        self::assertSame($security, $operation->security);
+        self::assertSame($alternatives, array_map(static fn (SecurityRequirement $requirement): array => $requirement->schemes, $operation->security));
+    }
+
     public function test_parses_open_api31_into_canonical_model(): void
     {
         $document = [
