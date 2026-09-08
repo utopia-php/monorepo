@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Utopia\Tests\Client\Adapter\SwooleCoroutine;
 
 use Swoole\Coroutine;
+use Throwable;
 use Utopia\Client\Adapter;
 use Utopia\Client\Adapter\SwooleCoroutine\Client;
 use Utopia\Client\Exception\AdapterPreconditionException;
+use Utopia\Client\Exception\NetworkException;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
 use Utopia\Tests\Client\Adapter\AdapterContract;
+use Utopia\Tests\Server\Http;
 
 final class ClientTest extends AdapterContract
 {
@@ -27,6 +30,51 @@ final class ClientTest extends AdapterContract
     protected function runAdapter(callable $callback): void
     {
         Coroutine\run($callback);
+    }
+
+    public function testItReconnectsBeforePostingToAnAbruptlyClosedIdleTlsConnection(): void
+    {
+        $connections = Http::dropsFirstKeepAliveConnection(function (int $port): void {
+            $client = $this->createAdapter()->withConnectionReuse()->withSslVerification(false);
+            Coroutine\run(function () use ($client, $port): void {
+                for ($i = 0; $i < 4; $i++) {
+                    $body = 'event-' . $i;
+                    $request = new Request\Factory()->createRequest(Method::POST, 'https://127.0.0.1:' . $port . '/')
+                        ->withHeader('Content-Length', (string) \strlen($body))
+                        ->withBody(new Stream\Factory()->createStream($body));
+                    $response = $client->sendRequest($request);
+                    $this->assertSame(200, $response->getStatusCode());
+                    $this->assertSame($body, (string) $response->getBody());
+                    Coroutine::sleep(0.05);
+                }
+            });
+        }, tls: true);
+
+        $this->assertSame(2, $connections);
+    }
+
+    public function testItDoesNotReplayAPostWhenThePeerDropsItsResponse(): void
+    {
+        $thrown = null;
+        $connections = Http::dropsFirstKeepAliveConnection(function (int $port) use (&$thrown): void {
+            $client = $this->createAdapter()->withConnectionReuse()->withSslVerification(false);
+            Coroutine\run(function () use ($client, $port, &$thrown): void {
+                $factory = new Request\Factory();
+                $uri = 'https://127.0.0.1:' . $port . '/';
+                $this->assertSame(200, $client->sendRequest($factory->createRequest(Method::GET, $uri))->getStatusCode());
+                $request = $factory->createRequest(Method::POST, $uri)
+                    ->withHeader('Content-Length', '5')
+                    ->withBody(new Stream\Factory()->createStream('event'));
+                try {
+                    $client->sendRequest($request);
+                } catch (Throwable $throwable) {
+                    $thrown = $throwable;
+                }
+            });
+        }, tls: true, dropResponse: true);
+
+        $this->assertInstanceOf(NetworkException::class, $thrown);
+        $this->assertSame(1, $connections);
     }
 
     public function testItRequiresCoroutineContext(): void

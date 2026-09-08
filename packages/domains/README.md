@@ -133,7 +133,7 @@ $contact = new Contact(
     'Example Inc.',
 );
 
-$available = $registrar->available('example.com');
+$availability = $registrar->available(['example.com', 'example.net']);
 $orderId = $registrar->purchase('example.com', $contact, 1);
 $suggestions = $registrar->suggest(['example'], ['com', 'net'], 10);
 $details = $registrar->getDomain('example.com');
@@ -143,6 +143,35 @@ $registrar->updateDomain('example.com', new UpdateDetails(autoRenew: true));
 ```
 
 The registrar API also provides `tlds()`, `updateNameservers()`, `getPrice()`, `getAuthCode()`, `cancelPurchase()`, and `checkTransferStatus()`.
+
+### Price caching
+
+Pass a `Cache` wrapping any `utopia-php/cache` adapter to `Registrar` to cache prices per domain and period. The `ttl` argument of `getPrice()` controls how long a cached price is reused.
+
+```php
+use Utopia\Cache\Adapter\Redis;
+use Utopia\Cache\Cache as UtopiaCache;
+use Utopia\Domains\Cache;
+
+$cache = new Cache(new UtopiaCache(new Redis($redis)));
+$registrar = new Registrar($adapter, ['ns1.name.com', 'ns2.name.com'], $cache);
+
+$availability = $registrar->available($domains);
+$price = $registrar->getPrice($domains[0], ttl: 86400);
+```
+
+With Name.com, `available()` also caches the registration and renewal prices it receives, so pricing a batch of domains after checking their availability costs one registrar request per 50 domains instead of two per domain.
+
+## Testing
+
+```sh
+composer test       # unit tests
+composer test:e2e   # registrar tests; requires the registrar credentials below
+```
+
+The Name.com tests require `NAMECOM_USERNAME` and `NAMECOM_TOKEN`. The OpenSRS
+tests require `OPENSRS_USERNAME` and `OPENSRS_KEY`. The end-to-end suite skips
+an adapter when its credentials are unavailable.
 
 ## License
 

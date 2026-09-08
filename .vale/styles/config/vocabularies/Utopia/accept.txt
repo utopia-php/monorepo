@@ -36,6 +36,7 @@ Bcrypt
 binlog
 BlackBerry
 bool
+cgroup(?:s)?
 CI
 cicd
 ClaudeBot
@@ -121,8 +122,10 @@ Mailgun
 Mailjet
 Mailpit
 Matomo(?:'s)?
+MaxMind
 mbstring
 memoized
+MMDB
 MVC
 namespace(?:s)?
 nameservers?

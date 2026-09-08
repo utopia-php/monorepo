@@ -474,6 +474,17 @@ class Client implements Adapter
         $key = $uri->getHost() . ':' . $this->port($request) . ':' . ($secure ? 's' : 'p');
 
         if ($this->connection instanceof SwooleClient && $this->connectionKey === $key) {
+            $socket = $this->connection->socket ?? null;
+            if ($secure && $socket instanceof Coroutine\Socket) {
+                // SSL_peek can fail with errno=0 after an abrupt TLS EOF. Swoole's
+                // liveness check treats that as alive. Close before sending any body;
+                // a healthy idle socket instead reports a would-block error.
+                $peek = $socket->peek(1);
+                if ($peek === '' || ($peek === false && $socket->errCode === 0)) {
+                    $this->connection->close();
+                }
+            }
+
             return $this->connection;
         }
 

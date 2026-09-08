@@ -32,18 +32,23 @@ final class Consumer
         $timeout ??= 5.0;
         $requestSubject = "{$this->apiPrefix}.CONSUMER.MSG.NEXT.{$this->stream}.{$this->getName()}";
 
-        // Expire the server's pull request just before the client stops waiting.
-        // On an identical deadline a message the server dispatches at the
-        // boundary is dropped here while the server has already counted the
-        // delivery, burning an attempt against maxDeliver for nothing.
-        $serverExpiry = $timeout - min(self::FETCH_EXPIRY_MARGIN, $timeout * 0.1);
-
-        $request = [
-            'batch' => $batch,
-            'expires' => StreamConfig::secondsToNanos($serverExpiry),
-        ];
+        $request = ['batch' => $batch];
         if ($noWait) {
+            // No 'expires' alongside it. A pull request that carries an expiry
+            // waits the whole window and then answers 408 Request Timeout, so
+            // no_wait does nothing at all; sent on its own it comes back 404 No
+            // Messages immediately, which is the only reason to ask for it. A
+            // caller polling an empty consumer therefore paid the full timeout
+            // per call -- 0.25s of poll is a ceiling of four calls a second.
             $request['no_wait'] = true;
+        } else {
+            // Expire the server's pull request just before the client stops
+            // waiting. On an identical deadline a message the server dispatches
+            // at the boundary is dropped here while the server has already
+            // counted the delivery, burning an attempt against maxDeliver for
+            // nothing.
+            $serverExpiry = $timeout - min(self::FETCH_EXPIRY_MARGIN, $timeout * 0.1);
+            $request['expires'] = StreamConfig::secondsToNanos($serverExpiry);
         }
         if ($maxBytes !== null) {
             $request['max_bytes'] = $maxBytes;
@@ -92,18 +97,28 @@ final class Consumer
                 break;
             }
 
-            // Check for status messages (408 = Request Timeout, 404 = No Messages, 409 = Leadership Change)
             if ($msg->headers instanceof \Utopia\NATS\Headers) {
                 $status = $msg->headers->getStatus();
-                if (\in_array($status, ['408', '404', '409'], true)) {
-                    break;
-                }
-                // 100 = flow control / idle heartbeat: keep-alive, not data.
+
+                // 100 = flow control / idle heartbeat: keep-alive, not data, and
+                // the only status that means "carry on waiting".
                 if ($status === '100') {
                     if ($msg->replyTo !== null && $msg->replyTo !== '') {
                         $this->conn->publish($msg->replyTo, '');
                     }
                     continue;
+                }
+
+                // Every other status ends this pull request. Naming the expected
+                // codes (404/408/409) and falling through on the rest handed the
+                // unnamed ones back as data: a 503 No Responders -- which the
+                // server sends while a consumer is still being created or a raft
+                // leader is moving -- became a message with an empty body, and a
+                // caller that json_decode()s the payload got null and died on it.
+                // A status frame carries no payload whatever its number, so it can
+                // never be a message.
+                if ($status !== '') {
+                    break;
                 }
             }
 

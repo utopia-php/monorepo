@@ -24,6 +24,11 @@ final class TcpTransport implements Transport
             $errstr,
             $timeout,
             STREAM_CLIENT_CONNECT,
+            // Nagle off. Every request-reply here writes the inbox SUB and then
+            // the request PUB before reading, and Nagle holds that second write
+            // until the peer's delayed-ACK timer fires -- around 40ms per
+            // exchange, on loopback as readily as over a network.
+            stream_context_create(['socket' => ['tcp_nodelay' => true]]),
         );
 
         if ($stream === false) {
