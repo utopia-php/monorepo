@@ -98,16 +98,23 @@ Each queue is a WorkQueue-retention stream (a message is removed once acknowledg
 
 ### Concurrency
 
-`Broker\Nats` serialises its own use of the connection behind a lock, the shape `Connection\Locking` already gives `Broker\Redis`. One NATS connection is one socket behind one shared read pump, and without that lock the consume loop parked inside a fetch while a handler coroutine acknowledged an earlier message on the same socket — an overlap Swoole refuses outright, ending the worker on the first one:
+`Broker\Nats` is wired the way `Broker\Redis` is: a connection dedicated to the blocking receive, plus a second, lock-guarded connection carrying the commands. One NATS connection is one socket behind one shared read pump, and driving it from two coroutines does not degrade — Swoole ends the worker on the first overlap:
 
 ```
 Swoole\Error: Socket#5 has already been bound to another coroutine#2,
 reading of the same socket in coroutine#3 at the same time is not allowed
 ```
 
-So `job('…', N)` above one is safe on NATS: handlers run concurrently while their socket traffic takes turns. The lock is held across the whole of `receive()`, so an acknowledgment or an extension raised while the loop is mid-fetch waits behind it. That wait is bounded by the receive timeout the adapter passes (2s) plus the priority poll, and it is only paid on a queue with nothing to hand out — a fetch that has a message returns at once. Keep `ackWait` an order of magnitude above that bound; the 30s default is.
+| Connection | Carries | Driven by |
+|---|---|---|
+| receive | fetch, provisioning, the dead-letter advisory, publishing | the consume loop |
+| commands | `commit()`, `reject()`, `extend()` | the handler coroutines |
 
-The lock covers this broker only. Still pass a Closure factory rather than a live connection when the worker forks or reconnects per worker, and do not hand the same connection to anything outside the broker.
+A JetStream acknowledgment is a message published to the delivery's reply subject, so it does not have to leave on the connection that fetched the message. Rebinding it moves the whole per-message ack path off the receive socket, so an ack raised while the loop is parked in a fetch is a round trip rather than a wait. Each connection has one lock and the two are never nested, so they cannot deadlock.
+
+So `job('…', N)` above one is safe on NATS, and handlers scale without the socket becoming the serialisation point. The commands connection is opened lazily on the first acknowledgment, so a publisher-only broker never pays for a socket it will not use — and a broker built from a live connection rather than a Closure factory serves both roles from that one socket, sharing one lock.
+
+Still pass a Closure factory rather than a live connection when the worker forks or reconnects per worker, and do not hand the same connection to anything outside the broker.
 
 `Consumer\Exclusive` stays for consumers built outside this package that drive one socket without serialising it. `Server::start()` refuses a job registered above one coroutine on a consumer carrying that marker, because it would crash exactly as above; scale one of those with replicas rather than coroutines.
 

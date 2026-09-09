@@ -780,6 +780,79 @@ final class NatsBrokerTest extends TestCase
     }
 
     /**
+     * The point of the two-connection split: an ack must not wait for a parked fetch.
+     *
+     * The consume loop holds the receive connection for the whole receive timeout, so
+     * on a single shared socket a handler acknowledging in that window either crashed
+     * the worker (before any lock) or queued behind the fetch for its full duration.
+     * Acks ride the commands connection instead, so this is a round trip rather than a
+     * wait: the threshold is well under the 3s fetch it runs against, and generous
+     * enough not to turn CI scheduling noise into a failure.
+     */
+    public function testAnAckDoesNotWaitForAParkedFetch(): void
+    {
+        $url = getenv('NATS_URL') ?: 'nats://127.0.0.1:14225';
+        $broker = new Nats(fn(): Connection => Connection::connect($url), maxDeliver: 3);
+        $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
+
+        $ackSeconds = null;
+        $error = null;
+
+        \Swoole\Coroutine\run(function () use ($broker, $queue, &$ackSeconds, &$error): void {
+            $broker->publish($queue, ['task' => 'first']);
+
+            // Take the only message, so the fetch below has nothing to return and
+            // parks for its whole timeout.
+            $message = $broker->receive($queue, 2);
+            if (!$message instanceof Message) {
+                $error ??= new \RuntimeException('the published message was not delivered');
+
+                return;
+            }
+
+            $wg = new \Swoole\Coroutine\WaitGroup();
+
+            $wg->add();
+            \Swoole\Coroutine::create(function () use ($broker, $queue, $wg, &$error): void {
+                try {
+                    $broker->receive($queue, 3);
+                } catch (\Throwable $e) {
+                    $error ??= $e;
+                }
+                $wg->done();
+            });
+
+            $wg->add();
+            \Swoole\Coroutine::create(function () use ($broker, $queue, $message, $wg, &$ackSeconds, &$error): void {
+                \Swoole\Coroutine::sleep(0.3); // let the fetch above park first
+
+                $started = microtime(true);
+                try {
+                    $broker->commit($queue, $message);
+                } catch (\Throwable $e) {
+                    $error ??= $e;
+                }
+                $ackSeconds = microtime(true) - $started;
+
+                $wg->done();
+            });
+
+            $wg->wait();
+        });
+
+        $this->assertNotInstanceOf(\Throwable::class, $error, 'the ack collided with the fetch: ' . ($error?->getMessage() ?? ''));
+        $this->assertNotNull($ackSeconds, 'the ack never ran');
+        $this->assertLessThan(
+            1.0,
+            $ackSeconds,
+            'the ack waited for the parked fetch, so it is still sharing the receive connection',
+        );
+        $this->assertSame(0, $broker->getQueueSize($queue), 'the ack must have landed');
+
+        $broker->close();
+    }
+
+    /**
      * The overlap that used to end the worker, driven through the real consume loop.
      *
      * Above one coroutine the loop is parked in a fetch on the connection while the
