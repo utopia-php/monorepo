@@ -7,6 +7,7 @@ namespace Tests\E2E\Adapter;
 use PHPUnit\Framework\TestCase;
 use Utopia\NATS\Connection;
 use Utopia\NATS\JetStream\StorageType;
+use Utopia\Queue\Adapter\Swoole;
 use Utopia\Queue\Broker\Nats;
 use Utopia\Queue\Message;
 use Utopia\Queue\Queue;
@@ -775,6 +776,70 @@ final class NatsBrokerTest extends TestCase
 
         $broker->commit($queue, $message);
         $this->assertSame(0, $broker->getQueueSize($queue));
+        $broker->close();
+    }
+
+    /**
+     * The overlap that used to end the worker, driven through the real consume loop.
+     *
+     * Above one coroutine the loop is parked in a fetch on the connection while the
+     * handlers that are still running acknowledge earlier messages on that same
+     * socket, and Swoole refuses it outright -- "Socket#N has already been bound to
+     * another coroutine". One coroutine drained the batch; two died on the first
+     * message. The connection lock serialises the two, so the batch drains with the
+     * handlers genuinely overlapping.
+     */
+    public function testConcurrentHandlersDrainTheQueueOnOneConnection(): void
+    {
+        $url = getenv('NATS_URL') ?: 'nats://127.0.0.1:14225';
+        $broker = new Nats(fn(): Connection => Connection::connect($url), maxDeliver: 3);
+        $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
+
+        $total = 15;
+        $cap = 3;
+
+        $handled = 0;
+        $active = 0;
+        $overlap = 0;
+        $failure = null;
+
+        \Swoole\Coroutine\run(function () use ($broker, $queue, $total, $cap, &$handled, &$active, &$overlap, &$failure): void {
+            for ($n = 0; $n < $total; $n++) {
+                $broker->publish($queue, ['n' => $n]);
+            }
+
+            $adapter = new Swoole($broker, 1, $queue->namespace);
+
+            $adapter->consume(
+                function () use ($adapter, $total, &$handled, &$active, &$overlap): void {
+                    $overlap = max($overlap, ++$active);
+
+                    // Stay in the handler long enough that the loop is back in a
+                    // fetch when this commits: that is the interleaving that used
+                    // to take the worker down.
+                    \Swoole\Coroutine::sleep(0.1);
+                    --$active;
+
+                    if (++$handled === $total) {
+                        $adapter->stop();
+                    }
+                },
+                fn(): null => null,
+                function (?Message $message, \Throwable $error) use (&$failure): void {
+                    $failure ??= $error;
+                },
+                [
+                    ['queue' => $queue, 'maxCoroutines' => $cap],
+                ],
+            );
+        });
+
+        $this->assertNotInstanceOf(\Throwable::class, $failure, 'the consume loop failed: ' . ($failure?->getMessage() ?? ''));
+        $this->assertSame($total, $handled, 'every message must be handled');
+        $this->assertGreaterThan(1, $overlap, 'the handlers must have actually overlapped');
+        $this->assertLessThanOrEqual($cap, $overlap, 'concurrency stays bounded by maxCoroutines');
+        $this->assertSame(0, $broker->getQueueSize($queue), 'every message must be acknowledged');
+
         $broker->close();
     }
 }

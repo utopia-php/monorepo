@@ -7,6 +7,7 @@ namespace Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use Utopia\NATS\Connection;
 use Utopia\Queue\Broker\Nats;
+use Utopia\Queue\Consumer\Exclusive;
 
 /**
  * Constructor validation for the JetStream knob coupling. The Closure source is
@@ -66,5 +67,16 @@ final class NatsBrokerConfigTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         new Nats($this->neverConnect(), duplicateWindow: -1.0);
+    }
+
+    /**
+     * Server::start() refuses any concurrency above one on a consumer carrying
+     * Consumer\Exclusive. This broker serialises its own connection behind a lock
+     * instead of claiming the socket exclusively, so it must not carry the marker --
+     * carrying it would refuse every job('...', N) above one all over again.
+     */
+    public function testBrokerDoesNotClaimAnExclusiveTransport(): void
+    {
+        $this->assertNotInstanceOf(Exclusive::class, new Nats($this->neverConnect()));
     }
 }

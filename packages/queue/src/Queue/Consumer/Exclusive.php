@@ -5,21 +5,24 @@ declare(strict_types=1);
 namespace Utopia\Queue\Consumer;
 
 /**
- * Marks a consumer whose transport may only be driven by one coroutine at a time.
+ * Marks a consumer that drives one transport and does NOT serialise access to it.
  *
- * A NATS connection is one socket with one shared read pump. The receive loop parks
- * inside a read on that socket while the coroutines processing earlier messages
- * commit, reject or extend on the same socket, and Swoole refuses the overlap
- * outright:
+ * One socket with one shared read pump can only be read by one coroutine at a time.
+ * A receive loop parks inside a read on it while the coroutines processing earlier
+ * messages commit, reject or extend on the same socket, and Swoole refuses the
+ * overlap outright:
  *
  *     Swoole\Error: Socket#5 has already been bound to another coroutine#2,
  *     reading of the same socket in coroutine#3 at the same time is not allowed
  *
  * The worker dies on the first overlap. Server::start() reads this marker to refuse
- * the configuration up front instead, so a concurrency setting that a Redis worker
- * carries safely does not reach production as a crash loop on NATS.
+ * the configuration up front instead, so a concurrency setting a serialising worker
+ * carries safely does not reach production as a crash loop.
  *
- * Redis does not carry the marker: Connection\Locking serialises concurrent
- * coroutines onto a shared connection, so its consumers stay safe above one.
+ * No broker in this package carries the marker; it is here for consumers built
+ * outside it. The two shipped ones serialise instead, and so keep their caps:
+ * Broker\Redis through Connection\Locking, Broker\Nats through a lock of its own.
+ * Serialising is the better answer where the transport allows it — a marked consumer
+ * can only be scaled with replicas.
  */
 interface Exclusive {}

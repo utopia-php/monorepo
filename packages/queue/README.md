@@ -83,8 +83,8 @@ use Utopia\NATS\Connection;
 use Utopia\Queue\Broker\Nats;
 use Utopia\Queue\Queue;
 
-// Pass a Closure so each forked worker / pooled lease resolves its own connection —
-// a NATS connection is single-owner and must not be shared across coroutines.
+// Pass a Closure so each forked worker / pooled lease resolves its own connection:
+// a socket cannot survive a fork, and a pooled lease needs one of its own.
 $broker = new Nats(
     fn (): Connection => Connection::connect('nats://127.0.0.1:4222'),
     ackWait: 30.0,   // redelivery window if a worker dies before commit()
@@ -96,16 +96,20 @@ $broker->publish(new Queue('my-queue'), ['type' => 'test_number', 'value' => 123
 
 Each queue is a WorkQueue-retention stream (a message is removed once acknowledged) with a companion dead stream. `commit()` acknowledges a message, `reject()` schedules redelivery until `maxDeliver` and then dead-letters, `retry()` re-drives the dead stream onto the queue, and `getQueueSize()` reports pending (consumer `num_pending`) or failed (dead stream) counts. `reap()` is a no-op — redelivery after `ackWait` reclaims jobs stranded by a dead worker. Requires [`utopia-php/nats`](https://github.com/utopia-php/nats).
 
-> A NATS connection is single-owner. Run one message at a time per connection (`job('…', 1)`) or lease one connection per coroutine via `Broker\Pool` / `Utopia\Pools`.
+### Concurrency
 
-`Broker\Nats` carries `Consumer\Exclusive` to say so. `Server::start()` refuses a job registered above one coroutine on a consumer with that marker, because the receive loop parks inside a read on the socket while the handlers still running commit on it, and Swoole ends the worker on the first overlap:
+`Broker\Nats` serialises its own use of the connection behind a lock, the shape `Connection\Locking` already gives `Broker\Redis`. One NATS connection is one socket behind one shared read pump, and without that lock the consume loop parked inside a fetch while a handler coroutine acknowledged an earlier message on the same socket — an overlap Swoole refuses outright, ending the worker on the first one:
 
 ```
 Swoole\Error: Socket#5 has already been bound to another coroutine#2,
 reading of the same socket in coroutine#3 at the same time is not allowed
 ```
 
-Scale an exclusive consumer with replicas rather than coroutines. Consumers without the marker, `Broker\Redis` among them, keep their concurrency: `Connection\Locking` serialises the coroutines that share one connection.
+So `job('…', N)` above one is safe on NATS: handlers run concurrently while their socket traffic takes turns. The lock is held across the whole of `receive()`, so an acknowledgment or an extension raised while the loop is mid-fetch waits behind it. That wait is bounded by the receive timeout the adapter passes (2s) plus the priority poll, and it is only paid on a queue with nothing to hand out — a fetch that has a message returns at once. Keep `ackWait` an order of magnitude above that bound; the 30s default is.
+
+The lock covers this broker only. Still pass a Closure factory rather than a live connection when the worker forks or reconnects per worker, and do not hand the same connection to anything outside the broker.
+
+`Consumer\Exclusive` stays for consumers built outside this package that drive one socket without serialising it. `Server::start()` refuses a job registered above one coroutine on a consumer carrying that marker, because it would crash exactly as above; scale one of those with replicas rather than coroutines.
 
 ## Background publishing
 
