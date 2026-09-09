@@ -63,6 +63,8 @@ graph TD
     dns --> telemetry
     dns --> validators
     dns --> domains
+    domains --> client
+    domains --> psr7
     domains --> validators
     domains --> cache
     fastly --> client
