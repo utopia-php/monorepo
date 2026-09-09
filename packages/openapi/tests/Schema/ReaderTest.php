@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Utopia\OpenAPI\Tests\Schema;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Utopia\OpenAPI\Exception\InvalidSpecification;
 use Utopia\OpenAPI\Model\AnySchema;
@@ -61,9 +62,32 @@ final class ReaderTest extends TestCase
         self::assertSame([], $this->reader(Version::V3_0)->read(['type' => 'string', 'const' => 'pets'], '#/x')->enum);
     }
 
-    public function testAnExplicitEnumWinsOverConst(): void
+    public function testConstIntersectsAnExplicitEnum(): void
     {
-        self::assertSame(['a', 'b'], $this->reader(Version::V3_1)->read(['type' => 'string', 'const' => 'c', 'enum' => ['a', 'b']], '#/x')->enum);
+        $reader = $this->reader(Version::V3_1);
+        self::assertInstanceOf(NeverSchema::class, $reader->read(['const' => 'c', 'enum' => ['a', 'b']], '#/x'));
+        self::assertSame(['b'], $reader->read(['const' => 'b', 'enum' => ['a', 'b']], '#/x')->enum);
+        self::assertSame([2.0], $reader->read(['const' => 2.0, 'enum' => [2]], '#/x')->enum);
+        self::assertInstanceOf(NeverSchema::class, $reader->read(['const' => false, 'enum' => [0]], '#/x'));
+        self::assertInstanceOf(NeverSchema::class, $reader->read(['const' => '2', 'enum' => [2]], '#/x'));
+        self::assertInstanceOf(NeverSchema::class, $reader->read(['const' => null, 'enum' => []], '#/x'));
+        self::assertSame([null], $reader->read(['const' => null, 'enum' => [null]], '#/x')->enum);
+        self::assertSame(['a', 'b'], $this->reader(Version::V3_0)->read(['const' => 'c', 'enum' => ['a', 'b']], '#/x')->enum);
+
+        $annotated = $reader->read([
+            'const' => ['a' => 1], 'enum' => [['a' => 1]],
+            'title' => 'Entry', 'description' => 'An entry.',
+            'default' => ['a' => 1], 'example' => ['a' => 1],
+            'deprecated' => true, 'readOnly' => true,
+            'x-origin' => 'fixture',
+        ], '#/x');
+        self::assertSame('Entry', $annotated->title);
+        self::assertSame('An entry.', $annotated->description);
+        self::assertSame(['a' => 1], $annotated->default);
+        self::assertSame(['a' => 1], $annotated->example);
+        self::assertTrue($annotated->deprecated);
+        self::assertTrue($annotated->readOnly);
+        self::assertSame(['x-origin' => 'fixture'], $annotated->extensions);
     }
 
     public function testNullabilityIsReadFromTheNullableKeyword(): void
@@ -358,7 +382,6 @@ final class ReaderTest extends TestCase
         ], '#/x');
 
         self::assertInstanceOf(CompositeSchema::class, $schema);
-        self::assertInstanceOf(AnySchema::class, $schema->schemas[0]);
         $enum = $schema->stringEnum();
         self::assertInstanceOf(StringSchema::class, $enum);
         self::assertSame(['user.created', 'user.updated'], $enum->enum);
@@ -617,5 +640,187 @@ final class ReaderTest extends TestCase
             'type' => 'object',
             'properties' => ['inner' => ['type' => 'array', 'items' => ['type' => 'widget']]],
         ], '#/x');
+    }
+
+    /** @return array<string, mixed> */
+    private static function branch(string $name, array $conditions): array
+    {
+        return ['allOf' => [
+            ['$ref' => '#/components/schemas/' . $name],
+            [
+                'type' => 'object',
+                'required' => array_keys($conditions),
+                'properties' => array_map(static fn(mixed $value): array => ['enum' => [$value]], $conditions),
+            ],
+        ]];
+    }
+
+    public function testCompoundReferencesPreserveIdentityConditionsAndOverlaps(): void
+    {
+        foreach (['oneOf', 'anyOf'] as $composition) {
+            $schema = $this->reader(Version::V3_0)->read([$composition => [
+                self::branch('Text', ['kind' => 'text']),
+                self::branch('Email', ['kind' => 'text', 'format' => 'email']),
+            ]], '#/result');
+
+            self::assertInstanceOf(CompositeSchema::class, $schema);
+            self::assertSame([
+                ['reference' => '#/components/schemas/Text', 'conditions' => [
+                    ['propertyName' => 'kind', 'value' => 'text'],
+                ]],
+                ['reference' => '#/components/schemas/Email', 'conditions' => [
+                    ['propertyName' => 'kind', 'value' => 'text'],
+                    ['propertyName' => 'format', 'value' => 'email'],
+                ]],
+            ], $schema->conditionalReferences());
+            self::assertNull($schema->discriminator);
+        }
+    }
+
+    public function testNestedConditionsPreserveLiteralsAndIgnoreExtensions(): void
+    {
+        $properties = [
+            '123' => ['type' => 'string', 'enum' => ['2']],
+            'enabled' => ['type' => 'boolean', 'enum' => [false]],
+            'version' => ['type' => 'integer', 'enum' => [2]],
+            'whole' => ['type' => 'integer', 'enum' => [2.0]],
+            'count' => ['type' => 'number', 'enum' => [2]],
+            'ratio' => ['type' => 'number', 'enum' => [1.5]],
+            'constant' => ['type' => 'boolean', 'const' => true],
+        ];
+        $conditions = ['123' => '2', 'enabled' => false, 'version' => 2, 'whole' => 2.0, 'count' => 2, 'ratio' => 1.5, 'constant' => true];
+        $branch = self::branch('Entry', $conditions);
+        $branch['allOf'][1]['properties'] = $properties;
+        $schema = $this->reader(Version::V3_1)->read([
+            'anyOf' => [['allOf' => [$branch]]],
+            'discriminator' => ['propertyName' => 'legacy', 'x-mapping' => ['wrong' => ['legacy' => 'wrong']]],
+        ], '#/result');
+
+        self::assertInstanceOf(CompositeSchema::class, $schema);
+        self::assertSame([['reference' => '#/components/schemas/Entry', 'conditions' => [
+            ['propertyName' => '123', 'value' => '2'],
+            ['propertyName' => 'enabled', 'value' => false],
+            ['propertyName' => 'version', 'value' => 2],
+            ['propertyName' => 'whole', 'value' => 2.0],
+            ['propertyName' => 'count', 'value' => 2],
+            ['propertyName' => 'ratio', 'value' => 1.5],
+            ['propertyName' => 'constant', 'value' => true],
+        ]]], $schema->conditionalReferences());
+        self::assertSame(['wrong' => ['legacy' => 'wrong']], $schema->discriminator?->extensions['x-mapping']);
+    }
+
+    public function testConditionalReferencesRespectConstAndEnumTogether(): void
+    {
+        foreach (['entry', 'other'] as $constant) {
+            $branch = self::branch('Entry', ['kind' => 'entry']);
+            $branch['allOf'][1]['properties']['kind']['const'] = $constant;
+            $schema = $this->reader(Version::V3_1)->read(['anyOf' => [self::branch('Other', ['kind' => 'other']), $branch]], '#/result');
+            self::assertInstanceOf(CompositeSchema::class, $schema);
+            self::assertSame($constant === 'entry' ? [
+                ['reference' => '#/components/schemas/Other', 'conditions' => [
+                    ['propertyName' => 'kind', 'value' => 'other'],
+                ]],
+                ['reference' => '#/components/schemas/Entry', 'conditions' => [
+                    ['propertyName' => 'kind', 'value' => 'entry'],
+                ]],
+            ] : [], $schema->conditionalReferences());
+        }
+    }
+
+    public function testNumericNamesRemainStringsWhenConditionsAreSerialized(): void
+    {
+        $branch = self::branch('Entry', ['0' => false]);
+        $branch['allOf'][1]['properties'] = (object) $branch['allOf'][1]['properties'];
+        $branch['allOf'][0]['$ref'] = '123';
+        $schema = $this->reader(Version::V3_0)->read(['anyOf' => [$branch]], '#/result');
+        self::assertInstanceOf(CompositeSchema::class, $schema);
+        self::assertSame(
+            '[{"reference":"123","conditions":[{"propertyName":"0","value":false}]}]',
+            json_encode($schema->conditionalReferences(), JSON_THROW_ON_ERROR),
+        );
+    }
+
+    public function testUntypedConstantConstraintsAreNotExposedAsLiteralConditions(): void
+    {
+        foreach ([
+            ['const' => 5, 'minimum' => 10],
+            ['const' => 'entry', 'minLength' => 10],
+            ['const' => 'entry', 'pattern' => '^other$'],
+        ] as $property) {
+            $branch = self::branch('Entry', ['kind' => 'entry']);
+            $branch['allOf'][1]['properties']['kind'] = $property;
+            $schema = $this->reader(Version::V3_1)->read(['anyOf' => [$branch]], '#/result');
+            self::assertInstanceOf(CompositeSchema::class, $schema);
+            self::assertSame([], $schema->conditionalReferences());
+        }
+    }
+
+    #[DataProvider('unsupportedSchemas')]
+    public function testUnsupportedUnionsDoNotReturnPartialCases(array $raw): void
+    {
+        $schema = $this->reader(Version::V3_0)->read($raw, '#/result');
+
+        self::assertInstanceOf(CompositeSchema::class, $schema);
+        self::assertSame([], $schema->conditionalReferences());
+    }
+
+    public static function unsupportedSchemas(): iterable
+    {
+        $valid = self::branch('Entry', ['kind' => 'entry']);
+        yield 'allOf is not a union' => [$valid];
+        yield 'plain refs have no conditions' => [['oneOf' => [['$ref' => '#/components/schemas/Entry']]]];
+        yield 'mixed supported and unsupported members' => [['anyOf' => [$valid, ['type' => 'object']]]];
+        yield 'repeated model identity' => [['anyOf' => [$valid, self::branch('Entry', ['kind' => 'other'])]]];
+        yield 'nullable union' => [['anyOf' => [$valid], 'nullable' => true]];
+        yield 'negated union' => [['anyOf' => [$valid], 'not' => ['type' => 'object']]];
+        yield 'constrained union' => [['anyOf' => [$valid], 'enum' => [['kind' => 'entry']]]];
+        yield 'missing reference' => [['anyOf' => [$valid['allOf'][1]]]];
+        $branch = $valid;
+        $branch['allOf'][] = ['$ref' => '#/components/schemas/Other'];
+        yield 'multiple identities' => [['anyOf' => [$branch]]];
+        $branch = $valid;
+        $branch['allOf'][] = self::branch('Other', ['kind' => 'other'])['allOf'][1];
+        yield 'conflicting conditions' => [['anyOf' => [$branch]]];
+        foreach ([
+            'optional condition' => ['required' => []],
+            'required property without enum' => ['required' => ['kind', 'missing']],
+            'closed constraint object' => ['additionalProperties' => false],
+        ] as $name => $override) {
+            $branch = $valid;
+            $branch['allOf'][1] = array_replace($branch['allOf'][1], $override);
+            yield $name => [['anyOf' => [$branch]]];
+        }
+        $branch = $valid;
+        $branch['allOf'][1]['properties']['kind']['nullable'] = true;
+        yield 'nullable condition' => [['anyOf' => [$branch]]];
+        foreach ([[], ['entry', 'other'], [null], [[]]] as $index => $enum) {
+            $branch = $valid;
+            $branch['allOf'][1]['properties']['kind']['enum'] = $enum;
+            yield 'non scalar singleton ' . $index => [['anyOf' => [$branch]]];
+        }
+        $branch = ['anyOf' => $valid['allOf']];
+        yield 'nested anyOf is not a conjunction' => [['anyOf' => [$branch]]];
+        yield 'empty conjunction' => [['anyOf' => [['allOf' => []]]]];
+        foreach ([
+            ['type' => 'integer', 'enum' => ['entry']],
+            ['type' => 'string', 'enum' => [2]],
+            ['type' => 'boolean', 'enum' => [0]],
+            ['type' => 'number', 'enum' => ['2']],
+            ['type' => 'integer', 'enum' => [1.5]],
+            ['type' => 'integer', 'enum' => [2], 'minimum' => 3],
+            ['type' => 'number', 'enum' => [2], 'maximum' => 1],
+            ['type' => 'number', 'enum' => [2], 'multipleOf' => 3],
+            ['type' => 'string', 'enum' => ['entry'], 'maxLength' => 2],
+            ['type' => 'string', 'enum' => ['entry'], 'minLength' => 10],
+            ['type' => 'string', 'enum' => ['entry'], 'pattern' => '^other$'],
+            ['type' => 'string', 'enum' => ['entry'], 'format' => 'email'],
+            ['enum' => [5], 'minimum' => 10],
+            ['enum' => ['entry'], 'minLength' => 10],
+            ['enum' => ['entry'], 'pattern' => '^other$'],
+        ] as $index => $property) {
+            $branch = $valid;
+            $branch['allOf'][1]['properties']['kind'] = $property;
+            yield 'unsupported scalar constraint ' . $index => [['anyOf' => [self::branch('Other', ['kind' => 'other']), $branch]]];
+        }
     }
 }

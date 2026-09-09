@@ -207,6 +207,41 @@ true.
 enum branches are not treated as string enums. Mixed `const` and object, numeric
 `const`, or multi-value enum branches throw `InvalidSpecification`.
 
+### Conditional references
+
+`CompositeSchema::conditionalReferences()` returns references with required scalar
+literals in `oneOf`/`anyOf` branches composed through `allOf` (including nested
+`allOf` and OpenAPI 3.1 `const`):
+
+```yaml
+anyOf:
+  - allOf:
+      - $ref: '#/components/schemas/Email'
+      - type: object
+        required: [type, format]
+        properties:
+          type: {enum: [string]}
+          format: {enum: [email]}
+```
+
+The result is a list of references with a list of conditions for each:
+
+```json
+[{"reference":"#/components/schemas/Email","conditions":[
+  {"propertyName":"type","value":"string"},
+  {"propertyName":"format","value":"email"}
+]}]
+```
+
+Property names and references are values, not array keys, so numeric strings such
+as `"0"` remain strings when iterated or encoded as JSON.
+
+Scalar types, unresolved references, and the schema tree are preserved. Unsupported
+members, optional/nullable conditions, extra scalar constraints, conflicting
+literals (including `const`/`enum`), or repeated references return `[]` for the
+whole union. These are selection hints, not validation or exclusivity guarantees;
+callers choose a selection policy. Vendor extensions and discriminators are unchanged.
+
 ### Parameters and request bodies
 
 Path-level parameters are inherited by operations. An operation-level parameter with the same case-sensitive `name` and `in` value replaces the inherited parameter.
