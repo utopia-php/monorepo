@@ -17,7 +17,9 @@ $server = new WebSocket\Server($adapter);
 
 /** @var array<int,bool> $connections */
 $connections = [];
-$floods = 0;
+/** @var array<int,list<string>> $batches */
+$batches = [];
+$batchesSent = 0;
 
 $server
     ->onWorkerStart(function (int $workerId): void {
@@ -30,19 +32,24 @@ $server
         $connections[$connection] = true;
         echo 'connected ', $connection, PHP_EOL;
     })
-    ->onClose(function (int $connection) use (&$connections): void {
-        unset($connections[$connection]);
+    ->onClose(function (int $connection) use (&$connections, &$batches): void {
+        unset($connections[$connection], $batches[$connection]);
         echo 'disconnected ', $connection, PHP_EOL;
     })
-    ->onMessage(function (int $connection, string $message) use ($server, &$connections, &$floods): void {
-        echo $message, PHP_EOL;
+    ->onMessage(function (int $connection, string $message) use ($server, &$connections, &$batches, &$batchesSent): void {
+        [$command, $payload] = explode(':', $message, 2) + [1 => ''];
 
-        switch ($message) {
-            case 'flood':
-                for ($i = 0; $i < 300; $i++) {
-                    $server->send([$connection], str_pad(sprintf('%06d:', $i), 65536, 'x'));
+        switch ($command) {
+            case 'buffer':
+                $batches[$connection][] = $payload;
+                break;
+            case 'flush':
+                $batch = $batches[$connection] ?? [];
+                unset($batches[$connection]);
+                foreach ($batch as $payload) {
+                    $server->send([$connection], $payload);
                 }
-                $floods++;
+                $batchesSent++;
                 break;
             case 'ping':
                 $server->send([$connection], 'pong');
@@ -59,7 +66,7 @@ $server
                 break;
         }
     })
-    ->onRequest(function (Request $request, Response $response) use (&$connections, &$floods): void {
+    ->onRequest(function (Request $request, Response $response) use (&$connections, &$batchesSent): void {
         echo 'HTTP request received: ', $request->server['request_uri'], PHP_EOL;
 
         if ($request->server['request_uri'] === '/health') {
@@ -73,7 +80,7 @@ $server
                 'server' => 'Swoole WebSocket',
                 'connections' => count($connections),
                 'memory_used' => memory_get_usage(),
-                'floods' => $floods,
+                'batches_sent' => $batchesSent,
                 'timestamp' => time(),
             ]));
         } else {

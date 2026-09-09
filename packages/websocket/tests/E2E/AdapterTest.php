@@ -53,14 +53,13 @@ final class AdapterTest extends TestCase
             try {
                 $client->connect();
                 $baseline = $this->getInfo($http);
-                $client->send('flood');
-                $this->waitForFlood($http, $baseline['floods'] + 1);
+                $messages = $this->createMessages();
+                $this->sendBatch($client, $messages);
+                $this->waitForBatch($http, $baseline['batches_sent'] + 1);
 
                 // Resume reading before the send timeout. Every frame must arrive.
-                for ($i = 0; $i < 300; $i++) {
-                    $frame = $client->receive();
-                    $this->assertSame(65536, \strlen($frame));
-                    $this->assertSame(\sprintf('%06d:', $i), substr($frame, 0, 7));
+                foreach ($messages as $message) {
+                    $this->assertSame($message, $client->receive());
                 }
                 $client->send('ping');
                 $this->assertSame('pong', $client->receive());
@@ -83,9 +82,8 @@ final class AdapterTest extends TestCase
             try {
                 $healthy->connect();
                 $baseline = $this->getInfo($http);
-                $request = NativeServer::pack('flood', WEBSOCKET_OPCODE_TEXT, SWOOLE_WEBSOCKET_FLAG_FIN | SWOOLE_WEBSOCKET_FLAG_MASK);
-                $this->assertSame(\strlen($request), $slow->sendAll($request));
-                $this->waitForFlood($http, $baseline['floods'] + 1);
+                $this->sendBatch($slow, $this->createMessages());
+                $this->waitForBatch($http, $baseline['batches_sent'] + 1);
 
                 if ($closePeer) {
                     // Close with unread frames and connect another client before
@@ -137,6 +135,38 @@ final class AdapterTest extends TestCase
         });
     }
 
+    /** @return list<string> */
+    private function createMessages(): array
+    {
+        $messages = [];
+        for ($i = 0; $i < 300; $i++) {
+            $messages[] = $i . ':' . str_repeat('x', 65536);
+        }
+
+        return $messages;
+    }
+
+    /** @param list<string> $messages */
+    private function sendBatch(Client|Socket $client, array $messages): void
+    {
+        foreach ($messages as $message) {
+            $this->sendMessage($client, 'buffer:' . $message);
+        }
+        $this->sendMessage($client, 'flush');
+    }
+
+    private function sendMessage(Client|Socket $client, string $message): void
+    {
+        if ($client instanceof Client) {
+            $client->send($message);
+
+            return;
+        }
+
+        $frame = NativeServer::pack($message, WEBSOCKET_OPCODE_TEXT, SWOOLE_WEBSOCKET_FLAG_FIN | SWOOLE_WEBSOCKET_FLAG_MASK);
+        $this->assertSame(\strlen($frame), $client->sendAll($frame));
+    }
+
     private function connectSlowClient(): Socket
     {
         $socket = new Socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
@@ -158,19 +188,19 @@ final class AdapterTest extends TestCase
         return $socket;
     }
 
-    private function waitForFlood(HttpClient $http, int $expected): void
+    private function waitForBatch(HttpClient $http, int $expected): void
     {
         $deadline = microtime(true) + 2;
         do {
             Coroutine::sleep(0.01);
             $info = $this->getInfo($http);
-        } while ($info['floods'] < $expected && microtime(true) < $deadline);
+        } while ($info['batches_sent'] < $expected && microtime(true) < $deadline);
 
-        $this->assertSame($expected, $info['floods'], 'The fixture must finish submitting the burst');
+        $this->assertSame($expected, $info['batches_sent'], 'The fixture must finish submitting the burst');
     }
 
     /**
-     * @return array{memory_used: int, floods: int}
+     * @return array{memory_used: int, batches_sent: int}
      */
     private function getInfo(HttpClient $http): array
     {
