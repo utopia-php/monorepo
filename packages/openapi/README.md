@@ -232,8 +232,11 @@ keep their types. References remain unresolved and the composition tree stays
 unchanged.
 
 The method returns an empty array for unsupported members, optional conditions,
-conditions with `nullable: true`, conflicting conditions, or repeated references. It does not read
-vendor extensions or replace the standard discriminator.
+conditions with `nullable: true`, conflicting conditions, or repeated references.
+Literal values must match their declared scalar type. Conditions with additional
+scalar constraints, such as bounds, patterns, lengths, or formats, are unsupported.
+OpenAPI 3.1 scalar `const` and `enum` constraints are intersected; a contradiction
+produces no mapping. It does not read vendor extensions or replace the standard discriminator.
 
 These conditions are selection hints, not a schema validator. Referenced models
 can impose other constraints, and `anyOf` branches can overlap. The caller must

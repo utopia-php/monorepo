@@ -48,6 +48,25 @@ final readonly class Reader
         }
 
         $data = Value::object($raw, $location);
+        if ($this->dialect->constKeyword && \array_key_exists('const', $data) && isset($data['enum'])) {
+            $constant = $data['const'];
+            $enum = Value::list($data['enum'], "{$location}/enum");
+            if (! \is_scalar($constant) && $constant !== null) {
+                $constraint = ['const' => $constant];
+                unset($data['const']);
+
+                return new CompositeSchema(Composition::ALL_OF, [
+                    $this->read($data, $location),
+                    $this->read($constraint, $location),
+                ], location: $location);
+            }
+            $matches = array_filter($enum, static fn(mixed $value): bool => $value === $constant
+                || ((\is_int($value) || \is_float($value)) && (\is_int($constant) || \is_float($constant)) && $value == $constant));
+            if ($matches === []) {
+                return new NeverSchema(...$this->common($data));
+            }
+            $data['enum'] = [$constant];
+        }
         $common = $this->common($data);
 
         if (isset($data['$ref'])) {

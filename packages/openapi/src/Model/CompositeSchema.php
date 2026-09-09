@@ -150,7 +150,7 @@ final readonly class CompositeSchema extends Schema
                 }
                 foreach ($schema->properties as $name => $property) {
                     if (
-                        ! \in_array($name, $schema->required, true)
+                        ! \in_array((string) $name, $schema->required, true)
                         || $property->nullable
                         || ! ($property instanceof AnySchema || $property instanceof StringSchema || $property instanceof IntegerSchema || $property instanceof NumberSchema || $property instanceof BooleanSchema)
                         || \count($property->enum) !== 1
@@ -159,6 +159,9 @@ final readonly class CompositeSchema extends Schema
                         return [];
                     }
                     $value = $property->enum[0];
+                    if (! self::isSupportedLiteral($property, $value)) {
+                        return [];
+                    }
                     if (\array_key_exists($name, $conditions) && $conditions[$name] !== $value) {
                         return [];
                     }
@@ -172,6 +175,28 @@ final readonly class CompositeSchema extends Schema
         }
 
         return $cases;
+    }
+
+    private static function isSupportedLiteral(Schema $schema, bool|int|float|string $value): bool
+    {
+        if ($schema instanceof StringSchema) {
+            return \is_string($value) && ! self::isConstrainedString($schema);
+        }
+        if ($schema instanceof IntegerSchema || $schema instanceof NumberSchema) {
+            return (\is_int($value) || (\is_float($value) && is_finite($value)
+                    && ($schema instanceof NumberSchema || floor($value) === $value)))
+                && $schema->minimum === null
+                && $schema->maximum === null
+                && ! $schema->exclusiveMinimum
+                && ! $schema->exclusiveMaximum
+                && $schema->multipleOf === null
+                && $schema->format === null;
+        }
+        if ($schema instanceof BooleanSchema) {
+            return \is_bool($value) && $schema->format === null;
+        }
+
+        return $schema instanceof AnySchema && $schema->format === null;
     }
 
     /**
