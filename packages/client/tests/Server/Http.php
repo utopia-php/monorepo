@@ -53,11 +53,13 @@ final class Http
      * With $dropResponse, read the second request completely and close without
      * answering it, so tests can detect an unsafe replay after a send.
      *
-     * @param callable(int): void $test receives the listening port
+     * @param callable(int, string): void $test receives the listening port and TLS certificate path
+     * @param list<string>|null $receivedRequests receives the HTTP request headers observed by the server
+     * @param-out list<string> $receivedRequests
      *
      * @return int connections the server accepted
      */
-    public static function dropsFirstKeepAliveConnection(callable $test, bool $tls = false, bool $dropResponse = false): int
+    public static function dropsFirstKeepAliveConnection(callable $test, bool $tls = false, bool $dropResponse = false, string $peerName = '127.0.0.1', ?array &$receivedRequests = null): int
     {
         $readyFile = tempnam(sys_get_temp_dir(), 'utopia-drop-ready-');
         $countFile = tempnam(sys_get_temp_dir(), 'utopia-drop-count-');
@@ -76,7 +78,7 @@ final class Http
                 throw new RuntimeException('Unable to create the TLS fixture key.');
             }
 
-            $csr = openssl_csr_new(['commonName' => '127.0.0.1'], $key);
+            $csr = openssl_csr_new(['commonName' => $peerName], $key);
             if (!$csr instanceof \OpenSSLCertificateSigningRequest || !$key instanceof \OpenSSLAsymmetricKey) {
                 throw new RuntimeException('Unable to create the TLS fixture CSR.');
             }
@@ -112,13 +114,14 @@ final class Http
             }
             file_put_contents($readyFile, 'ready');
             $connections = 0;
+            $receivedRequests = [];
             while (true) {
                 $connection = @stream_socket_accept($server, 30);
                 if (!is_resource($connection)) {
                     continue;
                 }
                 $connections++;
-                file_put_contents($countFile, (string) $connections);
+                file_put_contents($countFile, json_encode(['connections' => $connections, 'requests' => $receivedRequests]));
                 $dropAfterResponse = ($connections === 1);
                 while (true) {
                     $request = '';
@@ -141,6 +144,8 @@ final class Http
                         $body .= $chunk;
                     }
                     $requests++;
+                    $receivedRequests[] = $request;
+                    file_put_contents($countFile, json_encode(['connections' => $connections, 'requests' => $receivedRequests]));
                     if ($dropAfterResponse && $dropResponse && $requests === 2) {
                         stream_socket_shutdown($connection, STREAM_SHUT_RDWR);
                         break;
@@ -171,10 +176,13 @@ final class Http
         self::waitForReadyFile($readyFile);
 
         try {
-            $test($port);
+            $test($port, $certificateFile);
         } finally {
             self::stop($server);
-            $count = is_file($countFile) ? (int) file_get_contents($countFile) : 0;
+            /** @var array{connections: int, requests: list<string>} $observed */
+            $observed = json_decode((string) file_get_contents($countFile), true) ?: ['connections' => 0, 'requests' => []];
+            $count = $observed['connections'];
+            $receivedRequests = $observed['requests'];
             @unlink($countFile);
             if ($certificateFile !== '') {
                 @unlink($certificateFile);

@@ -32,7 +32,11 @@ $client = $client
     ->withMinTlsVersion(Tls::V1_2);                                 // refuse anything older than TLS 1.2
 ```
 
-Peer verification is on by default. `withSslVerification(false)` disables certificate verification entirely — it is insecure and intended only for local development against self-signed servers. To trust a self-signed certificate *while keeping verification on*, point `withCustomCA()` at it instead.
+Certificate-chain and hostname verification are on by default. `withSslVerification(false)` disables certificate verification entirely — it is insecure and intended only for local development against self-signed servers. To trust a self-signed certificate *while keeping verification on*, point `withCustomCA()` at it instead.
+
+The Swoole adapter derives `ssl_host_name` from each HTTPS request's URI, including redirect hops and reused clients. Neither a custom `Host` header nor a native `ssl_host_name` option overrides the certificate identity being checked.
+
+The Swoole adapter rejects verified HTTPS requests to IP-literal URIs with `TlsException` before sending the request. Swoole's native hostname checker does not correctly distinguish DNS names from IP address certificate identities. Use a matching DNS hostname or the cURL adapter for verified IP endpoints; do not disable verification to work around this limitation.
 
 ```php
 <?php

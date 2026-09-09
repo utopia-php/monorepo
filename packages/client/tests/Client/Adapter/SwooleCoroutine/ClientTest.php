@@ -10,6 +10,7 @@ use Utopia\Client\Adapter;
 use Utopia\Client\Adapter\SwooleCoroutine\Client;
 use Utopia\Client\Exception\AdapterPreconditionException;
 use Utopia\Client\Exception\NetworkException;
+use Utopia\Client\Exception\TlsException;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Response;
@@ -29,7 +30,17 @@ final class ClientTest extends AdapterContract
 
     protected function runAdapter(callable $callback): void
     {
-        Coroutine\run($callback);
+        $failure = null;
+        Coroutine\run(static function () use ($callback, &$failure): void {
+            try {
+                $callback();
+            } catch (Throwable $throwable) {
+                $failure = $throwable;
+            }
+        });
+        if ($failure instanceof Throwable) {
+            throw $failure;
+        }
     }
 
     public function testItReconnectsBeforePostingToAnAbruptlyClosedIdleTlsConnection(): void
@@ -75,6 +86,57 @@ final class ClientTest extends AdapterContract
 
         $this->assertInstanceOf(NetworkException::class, $thrown);
         $this->assertSame(1, $connections);
+    }
+
+    public function testItRejectsATrustedCertificateForAnotherHostname(): void
+    {
+        Http::dropsFirstKeepAliveConnection(function (int $port, string $certificate): void {
+            $client = $this->createAdapter(['ssl_host_name' => 'localhost'])->withCustomCA($certificate)->withConnectionReuse();
+            $this->runAdapter(function () use ($client, $port): void {
+                $factory = new Request\Factory();
+                $matching = $factory->createRequest(Method::GET, 'https://localhost:' . $port . '/');
+                $this->assertSame('ok', (string) $client->sendRequest($matching)->getBody());
+
+                $request = $factory->createRequest(Method::GET, 'https://localhost.:' . $port . '/private')
+                    ->withHeader('Host', 'localhost');
+                $thrown = null;
+                try {
+                    $client->sendRequest($request);
+                } catch (Throwable $throwable) {
+                    $thrown = $throwable;
+                }
+
+                $this->assertInstanceOf(TlsException::class, $thrown);
+                $this->assertSame('ok', (string) $client->sendRequest($matching)->getBody());
+            });
+        }, tls: true, peerName: 'localhost', receivedRequests: $requests);
+
+        $this->assertCount(2, $requests);
+        foreach ($requests as $request) {
+            $this->assertStringStartsWith('GET / HTTP/1.1', $request);
+        }
+    }
+
+    public function testItRejectsVerifiedIpLiterals(): void
+    {
+        Http::dropsFirstKeepAliveConnection(function (int $port): void {
+            $client = $this->createAdapter()->withSslVerification();
+            $this->runAdapter(function () use ($client, $port): void {
+                foreach (['127.0.0.1', '[::1]'] as $host) {
+                    $request = new Request\Factory()->createRequest(Method::GET, 'https://' . $host . ':' . $port . '/');
+                    $thrown = null;
+                    try {
+                        $client->sendRequest($request);
+                    } catch (Throwable $throwable) {
+                        $thrown = $throwable;
+                    }
+
+                    $this->assertInstanceOf(TlsException::class, $thrown);
+                }
+            });
+        }, tls: true, receivedRequests: $requests);
+
+        $this->assertSame([], $requests);
     }
 
     public function testItRequiresCoroutineContext(): void
