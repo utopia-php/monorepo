@@ -103,9 +103,9 @@ function pct(array $samples, float $q): float
         return 0.0;
     }
     sort($samples);
-    $rank = (int) ceil($q * \count($samples)) - 1;
+    $rank = (int) ceil($q * count($samples)) - 1;
 
-    return $samples[max(0, min($rank, \count($samples) - 1))] / 1000;
+    return $samples[max(0, min($rank, count($samples) - 1))] / 1000;
 }
 
 /** @return array{drain: float, p50: float, p95: float, max: float, received: int} */
