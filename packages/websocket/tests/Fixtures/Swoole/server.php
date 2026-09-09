@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
 
+use Swoole\Coroutine;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 use Utopia\WebSocket;
@@ -47,6 +48,16 @@ $server
             case 'disconnect':
                 $server->send([$connection], 'disconnect');
                 $server->close($connection, 1000);
+                break;
+            case 'flood':
+                // Below Swoole's old 8MB cap, but enough to fill the socket and
+                // the adapter's 512KB output buffer when the client stops reading.
+                $payload = str_repeat('x', 65536);
+                for ($i = 0; $i < 100 && isset($connections[$connection]); $i++) {
+                    $server->send([$connection], $payload);
+                    // Let the reactor drain IPC so this exercises socket pressure.
+                    Coroutine::sleep(0.002);
+                }
                 break;
         }
     })
