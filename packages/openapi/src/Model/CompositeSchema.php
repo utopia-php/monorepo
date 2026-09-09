@@ -88,6 +88,93 @@ final readonly class CompositeSchema extends Schema
     }
 
     /**
+     * Return required literal conditions on referenced union members.
+     *
+     * Recognizes oneOf/anyOf members composed with allOf from one reference
+     * and object properties with required scalar singleton enums. Nested
+     * allOf is supported; references are not resolved. Returns no cases for
+     * unsupported members, conflicting conditions, or repeated references.
+     *
+     * These are selection hints, not validation results: the referenced model
+     * may impose other constraints, and anyOf members may overlap. Consumers
+     * must choose their own selection policy without assuming exclusivity.
+     *
+     * @return array<string, array<string, bool|int|float|string>>
+     */
+    public function conditionalReferences(): array
+    {
+        if (
+            ! \in_array($this->composition, [Composition::ONE_OF, Composition::ANY_OF], true)
+            || $this->not !== null
+            || $this->nullable
+            || $this->enum !== []
+        ) {
+            return [];
+        }
+
+        $cases = [];
+        foreach ($this->schemas as $branch) {
+            $reference = null;
+            $conditions = [];
+            $pending = [$branch];
+            while ($pending !== []) {
+                $schema = array_pop($pending);
+                if ($schema instanceof ReferenceSchema) {
+                    if ($reference !== null) {
+                        return [];
+                    }
+                    $reference = $schema->reference;
+
+                    continue;
+                }
+                if ($schema->nullable || $schema->enum !== []) {
+                    return [];
+                }
+                if ($schema instanceof self) {
+                    if ($schema->composition !== Composition::ALL_OF || $schema->not !== null || $schema->schemas === []) {
+                        return [];
+                    }
+                    array_push($pending, ...array_reverse($schema->schemas));
+
+                    continue;
+                }
+                if (
+                    ! $schema instanceof ObjectSchema
+                    || $schema->properties === []
+                    || $schema->additionalProperties !== null
+                    || $schema->minProperties !== null
+                    || $schema->maxProperties !== null
+                    || array_diff($schema->required, array_keys($schema->properties)) !== []
+                ) {
+                    return [];
+                }
+                foreach ($schema->properties as $name => $property) {
+                    if (
+                        ! \in_array($name, $schema->required, true)
+                        || $property->nullable
+                        || ! ($property instanceof AnySchema || $property instanceof StringSchema || $property instanceof IntegerSchema || $property instanceof NumberSchema || $property instanceof BooleanSchema)
+                        || \count($property->enum) !== 1
+                        || ! \is_scalar($property->enum[0])
+                    ) {
+                        return [];
+                    }
+                    $value = $property->enum[0];
+                    if (\array_key_exists($name, $conditions) && $conditions[$name] !== $value) {
+                        return [];
+                    }
+                    $conditions[$name] = $value;
+                }
+            }
+            if ($reference === null || $conditions === [] || \array_key_exists($reference, $cases)) {
+                return [];
+            }
+            $cases[$reference] = $conditions;
+        }
+
+        return $cases;
+    }
+
+    /**
      * Return the documented values from an open string enum.
      *
      * An open string enum uses anyOf to combine documented string values with

@@ -207,6 +207,38 @@ true.
 enum branches are not treated as string enums. Mixed `const` and object, numeric
 `const`, or multi-value enum branches throw `InvalidSpecification`.
 
+### Conditional references
+
+A union can constrain a referenced model without adding a named schema:
+
+```yaml
+anyOf:
+  - allOf:
+      - $ref: '#/components/schemas/Email'
+      - type: object
+        required: [type, format]
+        properties:
+          type:
+            enum: [string]
+          format:
+            enum: [email]
+```
+
+`CompositeSchema::conditionalReferences()` returns the required literal
+conditions keyed by reference. It supports `oneOf` and `anyOf` members made
+of one reference and required scalar singleton enums through `allOf`, including
+nested `allOf`. OpenAPI 3.1 `const` values also work. Boolean and numeric values
+keep their types. References remain unresolved and the composition tree stays
+unchanged.
+
+The method returns an empty array for unsupported members, optional conditions,
+conditions with `nullable: true`, conflicting conditions, or repeated references. It does not read
+vendor extensions or replace the standard discriminator.
+
+These conditions are selection hints, not a schema validator. Referenced models
+can impose other constraints, and `anyOf` branches can overlap. The caller must
+choose a selection policy; neither branch priority nor exclusivity is inferred.
+
 ### Parameters and request bodies
 
 Path-level parameters are inherited by operations. An operation-level parameter with the same case-sensitive `name` and `in` value replaces the inherited parameter.
