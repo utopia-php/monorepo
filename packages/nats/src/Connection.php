@@ -516,6 +516,11 @@ final class Connection
         return $this->serverInfo;
     }
 
+    public function getOptions(): ConnectionOptions
+    {
+        return $this->options;
+    }
+
     public function getStatus(): string
     {
         return $this->status;

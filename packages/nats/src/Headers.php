@@ -93,11 +93,15 @@ final class Headers implements \IteratorAggregate, \Countable
     public static function fromWire(string $raw): self
     {
         $headers = new self();
-        $lines = explode("\r\n", $raw);
 
-        if ($lines === []) {
+        // explode() never returns an empty array -- on '' it returns [''] -- so
+        // testing the result could not reject an empty block, and one fell through
+        // to the version check below and was reported as an invalid version.
+        if ($raw === '') {
             throw new ProtocolException('Empty header block');
         }
+
+        $lines = explode("\r\n", $raw);
 
         // Parse status line: "NATS/1.0" or "NATS/1.0 503" or "NATS/1.0 503 No Responders"
         $statusLine = array_shift($lines);

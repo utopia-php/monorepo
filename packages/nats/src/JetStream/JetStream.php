@@ -6,9 +6,13 @@ namespace Utopia\NATS\JetStream;
 
 use Utopia\NATS\Connection;
 use Utopia\NATS\Exception\JetStreamException;
+use Utopia\NATS\Exception\NatsException;
+use Utopia\NATS\Exception\TimeoutException;
 use Utopia\NATS\Headers;
+use Utopia\NATS\Inbox;
 use Utopia\NATS\KeyValue\KeyValue;
 use Utopia\NATS\KeyValue\KeyValueConfig;
+use Utopia\NATS\Message;
 
 final class JetStream
 {
@@ -230,6 +234,167 @@ final class JetStream
      */
     public function publish(string $subject, string $data = '', ?Headers $headers = null, ?string $msgId = null, ?string $expectedLastMsgId = null, ?int $expectedLastSeq = null, ?int $expectedLastSubjectSeq = null, ?string $expectedStream = null, int|string|null $ttl = null, int $retryOnNoResponders = 0): PubAck
     {
+        $useHeaders = $this->publishHeaders(
+            $headers,
+            $msgId,
+            $expectedLastMsgId,
+            $expectedLastSeq,
+            $expectedLastSubjectSeq,
+            $expectedStream,
+            $ttl,
+        );
+
+        $attempt = 0;
+        while (true) {
+            try {
+                $response = $this->conn->request($subject, $data, headers: $useHeaders);
+                break;
+            } catch (\Utopia\NATS\Exception\NatsException $e) {
+                if ($attempt >= $retryOnNoResponders || $e->getMessage() !== 'No responders for request') {
+                    throw $e;
+                }
+                $attempt++;
+                usleep(50_000 * $attempt);
+            }
+        }
+
+        $responseData = json_decode($response->data, true, 512, JSON_THROW_ON_ERROR);
+        self::checkError($responseData);
+
+        return PubAck::fromArray($responseData);
+    }
+
+    /**
+     * Publish many messages and collect an acknowledgment for each.
+     *
+     * publish() pays a round trip per message: it writes one PUB, then blocks on the
+     * reply before writing the next, so a batch of N messages costs N round trips.
+     * This writes a window of PUBs first and reads their acknowledgments afterwards,
+     * which costs one round trip per window. Each message still carries its own reply
+     * subject and still gets its own acknowledgment, so per-message deduplication and
+     * per-message errors behave exactly as they do on the single publish.
+     *
+     * @param list<array{subject: string, data?: string, headers?: Headers, msgId?: string, expectedLastMsgId?: string, expectedLastSeq?: int, expectedLastSubjectSeq?: int, expectedStream?: string, ttl?: int|string}> $messages
+     * @param float|null $timeout Deadline for one window's acknowledgments, in seconds.
+     *                            Defaults to the connection's request timeout.
+     * @param int $window How many messages may be in flight before their acknowledgments
+     *                    are collected. This bounds the reply burst the server sends back
+     *                    and keeps it under the subscription's pending limit.
+     * @return list<PubAck> One entry per message, in the order the messages were given.
+     */
+    public function publishMany(array $messages, ?float $timeout = null, int $window = 256): array
+    {
+        if ($messages === []) {
+            return [];
+        }
+
+        if ($window < 1) {
+            throw new \InvalidArgumentException("Publish window must be at least 1, got {$window}");
+        }
+
+        $acks = [];
+
+        // Preserved keys carry the caller's index through the windows, so an
+        // acknowledgment can be placed back where its message came from.
+        foreach (array_chunk($messages, $window, true) as $chunk) {
+            foreach ($this->publishWindow($chunk, $timeout) as $index => $ack) {
+                $acks[$index] = $ack;
+            }
+        }
+
+        ksort($acks);
+
+        return array_values($acks);
+    }
+
+    /**
+     * Write one window of PUBs, then read back an acknowledgment for every one of them.
+     *
+     * @param array<int, array<string, mixed>> $chunk keyed by the caller's message index
+     * @return array<int, PubAck> keyed by the same index
+     */
+    private function publishWindow(array $chunk, ?float $timeout): array
+    {
+        $options = $this->conn->getOptions();
+
+        // Every message replies to its own subject beneath a shared prefix. The server
+        // acknowledges in whatever order it durably stores the messages, so the trailing
+        // token is what ties an acknowledgment back to the message that asked for it.
+        $inbox = Inbox::create($options->inboxPrefix);
+        $sub = $this->conn->subscribe($inbox . '.*');
+
+        try {
+            foreach ($chunk as $index => $message) {
+                /** @var array{subject: string, data?: string, headers?: Headers, msgId?: string, expectedLastMsgId?: string, expectedLastSeq?: int, expectedLastSubjectSeq?: int, expectedStream?: string, ttl?: int|string} $message */
+                $this->conn->publish(
+                    $message['subject'],
+                    $message['data'] ?? '',
+                    $inbox . '.' . $index,
+                    $this->publishHeaders(
+                        $message['headers'] ?? null,
+                        $message['msgId'] ?? null,
+                        $message['expectedLastMsgId'] ?? null,
+                        $message['expectedLastSeq'] ?? null,
+                        $message['expectedLastSubjectSeq'] ?? null,
+                        $message['expectedStream'] ?? null,
+                        $message['ttl'] ?? null,
+                    ),
+                );
+            }
+
+            $deadline = microtime(true) + ($timeout ?? $options->requestTimeout);
+            $acks = [];
+
+            while (\count($acks) < \count($chunk)) {
+                $remaining = $deadline - microtime(true);
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $reply = $sub->nextMessage($remaining);
+                if (!$reply instanceof Message) {
+                    break;
+                }
+
+                // 503 with no body: JetStream is not answering on this account at all,
+                // which is the same condition publish() surfaces as "No responders".
+                if ($reply->headers instanceof Headers && $reply->headers->getStatus() === '503') {
+                    throw new NatsException('No responders for request');
+                }
+
+                $responseData = json_decode($reply->data, true, 512, JSON_THROW_ON_ERROR);
+                self::checkError($responseData);
+
+                $acks[(int) substr($reply->subject, (int) strrpos($reply->subject, '.') + 1)] = PubAck::fromArray($responseData);
+            }
+
+            if (\count($acks) < \count($chunk)) {
+                throw new TimeoutException(\sprintf(
+                    'Timed out waiting for JetStream publish acknowledgments: received %d of %d',
+                    \count($acks),
+                    \count($chunk),
+                ));
+            }
+
+            return $acks;
+        } finally {
+            $this->conn->unsubscribe($sub);
+        }
+    }
+
+    /**
+     * Assemble the JetStream publish headers, so the single and batched publish paths
+     * cannot drift on a header name or on how a value is written to the wire.
+     */
+    private function publishHeaders(
+        ?Headers $headers,
+        ?string $msgId,
+        ?string $expectedLastMsgId,
+        ?int $expectedLastSeq,
+        ?int $expectedLastSubjectSeq,
+        ?string $expectedStream,
+        int|string|null $ttl,
+    ): ?Headers {
         $headers ??= new Headers();
 
         if ($msgId !== null) {
@@ -251,26 +416,7 @@ final class JetStream
             $headers->set('Nats-TTL', \is_int($ttl) ? "{$ttl}s" : $ttl);
         }
 
-        $useHeaders = \count($headers) > 0 ? $headers : null;
-
-        $attempt = 0;
-        while (true) {
-            try {
-                $response = $this->conn->request($subject, $data, headers: $useHeaders);
-                break;
-            } catch (\Utopia\NATS\Exception\NatsException $e) {
-                if ($attempt >= $retryOnNoResponders || $e->getMessage() !== 'No responders for request') {
-                    throw $e;
-                }
-                $attempt++;
-                usleep(50_000 * $attempt);
-            }
-        }
-
-        $responseData = json_decode($response->data, true, 512, JSON_THROW_ON_ERROR);
-        self::checkError($responseData);
-
-        return PubAck::fromArray($responseData);
+        return \count($headers) > 0 ? $headers : null;
     }
 
     // --- Key-Value ---

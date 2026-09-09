@@ -175,6 +175,28 @@ $ack = $js->publish('orders.new', '{"id": 1}', msgId: 'order-1');
 $ack = $js->publish('orders.new', $data, expectedLastSeq: 42);
 ```
 
+### Publishing a batch
+
+`publish()` waits for each acknowledgment before it sends the next message, so a
+batch of `N` messages costs `N` round trips. `publishMany()` writes a window of
+messages first and reads their acknowledgments afterwards, which costs one round
+trip per window. Each message keeps its own acknowledgment, so deduplication and
+per-message errors work the same way.
+
+```php
+$acks = $js->publishMany([
+    ['subject' => 'orders.new', 'data' => '{"id": 1}', 'msgId' => 'order-1'],
+    ['subject' => 'orders.new', 'data' => '{"id": 2}', 'msgId' => 'order-2'],
+]);
+
+// The acknowledgments come back in the order the messages were given.
+echo "Seq: {$acks[0]->sequence}\n";
+```
+
+The `window` argument sets how many messages stay in flight before their
+acknowledgments are collected. A message the server rejects throws, as it does on
+`publish()`.
+
 ### Consumers
 
 ```php
