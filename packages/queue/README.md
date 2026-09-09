@@ -110,7 +110,7 @@ reading of the same socket in coroutine#3 at the same time is not allowed
 | receive | fetch, provisioning, the dead-letter advisory, publishing | the consume loop |
 | commands | `commit()`, `reject()`, `extend()` | the handler coroutines |
 
-A JetStream acknowledgment is a message published to the delivery's reply subject, so it does not have to leave on the connection that fetched the message. Rebinding it moves the whole per-message ack path off the receive socket, so an ack raised while the loop is parked in a fetch is a round trip rather than a wait. Each connection has one lock and the two are never nested, so they cannot deadlock.
+A JetStream acknowledgment is a message published to the delivery's reply subject, so it does not have to leave on the connection that fetched the message. Rebinding it moves the whole per-message acknowledgment path off the receive socket, so an acknowledgment raised while the loop is parked in a fetch is a round trip rather than a wait. Each connection has one lock and the two are never nested, so they cannot deadlock.
 
 So `job('…', N)` above one is safe on NATS, and handlers scale without the socket becoming the serialisation point. The commands connection is opened lazily on the first acknowledgment, so a publisher-only broker never pays for a socket it will not use — and a broker built from a live connection rather than a Closure factory serves both roles from that one socket, sharing one lock.
 

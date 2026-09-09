@@ -793,7 +793,10 @@ class Nats implements Synchronous, Consumer
         // The commands tick takes its own lock because an ack may be in flight on it;
         // acquired after the receive work, never inside it.
         if ($this->commandsConnection instanceof NatsConnection && $this->commandsConnection !== $this->connection) {
-            $this->command(fn() => $this->commandsConnection?->tick());
+            // Bound to a local: the closure must tick the connection this check passed
+            // on, not whatever the property holds by the time the lock is granted.
+            $commands = $this->commandsConnection;
+            $this->command(fn() => $commands->tick());
         }
 
         if ($this->controlConnection instanceof NatsConnection && $this->controlConnection !== $this->connection) {
