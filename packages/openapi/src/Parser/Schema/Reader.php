@@ -58,7 +58,7 @@ final readonly class Reader
                 return new CompositeSchema(Composition::ALL_OF, [
                     $this->read($data, $location),
                     $this->read($constraint, $location),
-                ], location: $location);
+                ], null, $this->discriminator($data), ...$this->common($data), location: $location);
             }
             $matches = array_filter($enum, static fn(mixed $value): bool => $value === $constant
                 || ((\is_int($value) || \is_float($value)) && (\is_int($constant) || \is_float($constant)) && $value == $constant));
@@ -115,6 +115,17 @@ final readonly class Reader
         }
         if (\array_key_exists('not', $data)) {
             return new CompositeSchema(null, [], $this->read($data['not'], "{$location}/not"), $this->discriminator($data), ...$common, location: $location);
+        }
+
+        // A scalar singleton already fixes the instance type. Preserve that
+        // type's constraints instead of dropping them into an AnySchema.
+        if ($type === null && \count($common['enum']) === 1) {
+            $type = match (true) {
+                \is_string($common['enum'][0]) => 'string',
+                \is_int($common['enum'][0]), \is_float($common['enum'][0]) => 'number',
+                \is_bool($common['enum'][0]) => 'boolean',
+                default => null,
+            };
         }
 
         if ($type === null) {

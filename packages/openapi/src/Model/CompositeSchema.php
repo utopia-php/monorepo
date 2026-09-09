@@ -99,7 +99,10 @@ final readonly class CompositeSchema extends Schema
      * may impose other constraints, and anyOf members may overlap. Consumers
      * must choose their own selection policy without assuming exclusivity.
      *
-     * @return array<string, array<string, bool|int|float|string>>
+     * Names and references are stored as values so PHP cannot coerce numeric
+     * strings into integer array keys.
+     *
+     * @return list<array{reference: string, conditions: list<array{propertyName: string, value: bool|int|float|string}>}>
      */
     public function conditionalReferences(): array
     {
@@ -113,6 +116,7 @@ final readonly class CompositeSchema extends Schema
         }
 
         $cases = [];
+        $references = [];
         foreach ($this->schemas as $branch) {
             $reference = null;
             $conditions = [];
@@ -168,10 +172,15 @@ final readonly class CompositeSchema extends Schema
                     $conditions[$name] = $value;
                 }
             }
-            if ($reference === null || $conditions === [] || \array_key_exists($reference, $cases)) {
+            if ($reference === null || $conditions === [] || \in_array($reference, $references, true)) {
                 return [];
             }
-            $cases[$reference] = $conditions;
+            $references[] = $reference;
+            $literals = [];
+            foreach ($conditions as $name => $value) {
+                $literals[] = ['propertyName' => (string) $name, 'value' => $value];
+            }
+            $cases[] = ['reference' => $reference, 'conditions' => $literals];
         }
 
         return $cases;

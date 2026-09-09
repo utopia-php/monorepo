@@ -74,11 +74,20 @@ final class ReaderTest extends TestCase
         self::assertSame([null], $reader->read(['const' => null, 'enum' => [null]], '#/x')->enum);
         self::assertSame(['a', 'b'], $this->reader(Version::V3_0)->read(['const' => 'c', 'enum' => ['a', 'b']], '#/x')->enum);
 
-        $compound = $reader->read(['const' => ['a' => 1], 'enum' => [['a' => 1]]], '#/x');
-        self::assertInstanceOf(CompositeSchema::class, $compound);
-        self::assertSame(Composition::ALL_OF, $compound->composition);
-        self::assertSame([['a' => 1]], $compound->schemas[0]->enum);
-        self::assertSame([['a' => 1]], $compound->schemas[1]->enum);
+        $annotated = $reader->read([
+            'const' => ['a' => 1], 'enum' => [['a' => 1]],
+            'title' => 'Entry', 'description' => 'An entry.',
+            'default' => ['a' => 1], 'example' => ['a' => 1],
+            'deprecated' => true, 'readOnly' => true,
+            'x-origin' => 'fixture',
+        ], '#/x');
+        self::assertSame('Entry', $annotated->title);
+        self::assertSame('An entry.', $annotated->description);
+        self::assertSame(['a' => 1], $annotated->default);
+        self::assertSame(['a' => 1], $annotated->example);
+        self::assertTrue($annotated->deprecated);
+        self::assertTrue($annotated->readOnly);
+        self::assertSame(['x-origin' => 'fixture'], $annotated->extensions);
     }
 
     public function testNullabilityIsReadFromTheNullableKeyword(): void
@@ -373,7 +382,6 @@ final class ReaderTest extends TestCase
         ], '#/x');
 
         self::assertInstanceOf(CompositeSchema::class, $schema);
-        self::assertInstanceOf(AnySchema::class, $schema->schemas[0]);
         $enum = $schema->stringEnum();
         self::assertInstanceOf(StringSchema::class, $enum);
         self::assertSame(['user.created', 'user.updated'], $enum->enum);
@@ -657,14 +665,15 @@ final class ReaderTest extends TestCase
 
             self::assertInstanceOf(CompositeSchema::class, $schema);
             self::assertSame([
-                '#/components/schemas/Text' => ['kind' => 'text'],
-                '#/components/schemas/Email' => ['kind' => 'text', 'format' => 'email'],
+                ['reference' => '#/components/schemas/Text', 'conditions' => [
+                    ['propertyName' => 'kind', 'value' => 'text'],
+                ]],
+                ['reference' => '#/components/schemas/Email', 'conditions' => [
+                    ['propertyName' => 'kind', 'value' => 'text'],
+                    ['propertyName' => 'format', 'value' => 'email'],
+                ]],
             ], $schema->conditionalReferences());
             self::assertNull($schema->discriminator);
-            self::assertCount(2, $schema->schemas);
-            self::assertInstanceOf(CompositeSchema::class, $schema->schemas[0]);
-            self::assertSame(Composition::ALL_OF, $schema->schemas[0]->composition);
-            self::assertInstanceOf(ReferenceSchema::class, $schema->schemas[0]->schemas[0]);
         }
     }
 
@@ -688,7 +697,15 @@ final class ReaderTest extends TestCase
         ], '#/result');
 
         self::assertInstanceOf(CompositeSchema::class, $schema);
-        self::assertSame(['#/components/schemas/Entry' => $conditions], $schema->conditionalReferences());
+        self::assertSame([['reference' => '#/components/schemas/Entry', 'conditions' => [
+            ['propertyName' => '123', 'value' => '2'],
+            ['propertyName' => 'enabled', 'value' => false],
+            ['propertyName' => 'version', 'value' => 2],
+            ['propertyName' => 'whole', 'value' => 2.0],
+            ['propertyName' => 'count', 'value' => 2],
+            ['propertyName' => 'ratio', 'value' => 1.5],
+            ['propertyName' => 'constant', 'value' => true],
+        ]]], $schema->conditionalReferences());
         self::assertSame(['wrong' => ['legacy' => 'wrong']], $schema->discriminator?->extensions['x-mapping']);
     }
 
@@ -700,9 +717,41 @@ final class ReaderTest extends TestCase
             $schema = $this->reader(Version::V3_1)->read(['anyOf' => [self::branch('Other', ['kind' => 'other']), $branch]], '#/result');
             self::assertInstanceOf(CompositeSchema::class, $schema);
             self::assertSame($constant === 'entry' ? [
-                '#/components/schemas/Other' => ['kind' => 'other'],
-                '#/components/schemas/Entry' => ['kind' => 'entry'],
+                ['reference' => '#/components/schemas/Other', 'conditions' => [
+                    ['propertyName' => 'kind', 'value' => 'other'],
+                ]],
+                ['reference' => '#/components/schemas/Entry', 'conditions' => [
+                    ['propertyName' => 'kind', 'value' => 'entry'],
+                ]],
             ] : [], $schema->conditionalReferences());
+        }
+    }
+
+    public function testNumericNamesRemainStringsWhenConditionsAreSerialized(): void
+    {
+        $branch = self::branch('Entry', ['0' => false]);
+        $branch['allOf'][1]['properties'] = (object) $branch['allOf'][1]['properties'];
+        $branch['allOf'][0]['$ref'] = '123';
+        $schema = $this->reader(Version::V3_0)->read(['anyOf' => [$branch]], '#/result');
+        self::assertInstanceOf(CompositeSchema::class, $schema);
+        self::assertSame(
+            '[{"reference":"123","conditions":[{"propertyName":"0","value":false}]}]',
+            json_encode($schema->conditionalReferences(), JSON_THROW_ON_ERROR),
+        );
+    }
+
+    public function testUntypedConstantConstraintsAreNotExposedAsLiteralConditions(): void
+    {
+        foreach ([
+            ['const' => 5, 'minimum' => 10],
+            ['const' => 'entry', 'minLength' => 10],
+            ['const' => 'entry', 'pattern' => '^other$'],
+        ] as $property) {
+            $branch = self::branch('Entry', ['kind' => 'entry']);
+            $branch['allOf'][1]['properties']['kind'] = $property;
+            $schema = $this->reader(Version::V3_1)->read(['anyOf' => [$branch]], '#/result');
+            self::assertInstanceOf(CompositeSchema::class, $schema);
+            self::assertSame([], $schema->conditionalReferences());
         }
     }
 
@@ -765,6 +814,9 @@ final class ReaderTest extends TestCase
             ['type' => 'string', 'enum' => ['entry'], 'minLength' => 10],
             ['type' => 'string', 'enum' => ['entry'], 'pattern' => '^other$'],
             ['type' => 'string', 'enum' => ['entry'], 'format' => 'email'],
+            ['enum' => [5], 'minimum' => 10],
+            ['enum' => ['entry'], 'minLength' => 10],
+            ['enum' => ['entry'], 'pattern' => '^other$'],
         ] as $index => $property) {
             $branch = $valid;
             $branch['allOf'][1]['properties']['kind'] = $property;

@@ -209,7 +209,7 @@ enum branches are not treated as string enums. Mixed `const` and object, numeric
 
 ### Conditional references
 
-`CompositeSchema::conditionalReferences()` maps references to required scalar
+`CompositeSchema::conditionalReferences()` returns references with required scalar
 literals in `oneOf`/`anyOf` branches composed through `allOf` (including nested
 `allOf` and OpenAPI 3.1 `const`):
 
@@ -223,6 +223,18 @@ anyOf:
           type: {enum: [string]}
           format: {enum: [email]}
 ```
+
+The result is a list of references with a list of conditions for each:
+
+```json
+[{"reference":"#/components/schemas/Email","conditions":[
+  {"propertyName":"type","value":"string"},
+  {"propertyName":"format","value":"email"}
+]}]
+```
+
+Property names and references are values, not array keys, so numeric strings such
+as `"0"` remain strings when iterated or encoded as JSON.
 
 Scalar types, unresolved references, and the schema tree are preserved. Unsupported
 members, optional/nullable conditions, extra scalar constraints, conflicting
