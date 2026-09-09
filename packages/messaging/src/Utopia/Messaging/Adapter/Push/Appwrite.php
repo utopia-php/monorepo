@@ -131,7 +131,6 @@ class Appwrite extends PushAdapter
                     topic: $topic,
                     packetId: $packetId,
                     qos: 1,
-                    userProperties: ['subId' => (string) $packetId],
                 ));
 
                 $suback = $this->readPacket($socket);

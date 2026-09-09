@@ -243,7 +243,7 @@ class MQTT
     /**
      * Encode a SUBSCRIBE packet for a single topic filter (subscriber role).
      *
-     * @param array<string, string> $userProperties Extra User Properties (e.g. a subId the broker keys on).
+     * @param array<string, string> $userProperties Extra User Properties.
      */
     public static function encodeSubscribe(string $topic, int $packetId, int $qos = 0, array $userProperties = []): string
     {
