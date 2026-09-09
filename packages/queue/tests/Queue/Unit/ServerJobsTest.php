@@ -179,6 +179,11 @@ final class ServerJobsTest extends TestCase
      * the socket exclusively, so the guard must not fire for it: the cap a NATS job
      * is registered with has to reach the consume loop intact. The factory throws if
      * it is called, because the guard runs before any connection is opened.
+     *
+     * This is also what guards the marker itself. Asserting the broker does not
+     * implement Consumer\Exclusive is a tautology PHPStan reads straight off the
+     * class declaration; refusing the cap is the consequence worth pinning, and it
+     * fails here the moment the marker comes back.
      */
     public function testStartKeepsConcurrencyOnTheNatsBroker(): void
     {
