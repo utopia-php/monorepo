@@ -51,6 +51,8 @@ class Client implements Adapter
 
     private const string SETTING_SSL_VERIFY_PEER = 'ssl_verify_peer';
 
+    private const string SETTING_SSL_HOST_NAME = 'ssl_host_name';
+
     private const string SETTING_SSL_CAFILE = 'ssl_cafile';
 
     private const string SETTING_SSL_CERT_FILE = 'ssl_cert_file';
@@ -82,6 +84,7 @@ class Client implements Adapter
         $this->settings += [
             self::SETTING_CONNECT_TIMEOUT => self::DEFAULT_CONNECT_TIMEOUT,
             self::SETTING_TIMEOUT => self::DEFAULT_TIMEOUT,
+            self::SETTING_SSL_VERIFY_PEER => true,
         ];
 
         $this->responseBuilder = new ResponseBuilder($responseFactory, $streamFactory);
@@ -265,6 +268,20 @@ class Client implements Adapter
 
         // Authoritative over any keep_alive passed in $settings.
         $settings[self::SETTING_KEEP_ALIVE] = $this->reuseConnections;
+
+        if ($uri->getScheme() === 'https') {
+            // Swoole's inferred SNI name does not enable hostname verification.
+            // Bind the explicit verification name to this hop's URI, not a Host
+            // header, a native option, or the previous pooled connection's origin.
+            $settings[self::SETTING_SSL_HOST_NAME] = $uri->getHost();
+
+            // Swoole checks with X509_check_host, not X509_check_ip. It can
+            // accept a numeric DNS SAN as an IP identity, so fail before sending
+            // rather than weaken verification or misvalidate an IP endpoint.
+            if ($settings[self::SETTING_SSL_VERIFY_PEER] && filter_var(trim($uri->getHost(), '[]'), FILTER_VALIDATE_IP) !== false) {
+                throw new TlsException($request, 'Verified HTTPS requests to IP literals are not supported by the Swoole adapter; use a DNS hostname or the cURL adapter.');
+            }
+        }
 
         $suppressedBody = null;
 
