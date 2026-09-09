@@ -53,11 +53,10 @@ $server->start();
 
 The Swoole adapter allows sends to wait for a full output buffer to drain, with a five-second timeout for each wait. This prevents pending sends from waiting indefinitely after a client disconnects, including the failure described in [Swoole issue #6196](https://github.com/swoole/swoole-src/issues/6196).
 
-Configure the timeout before starting the server:
+Configure the timeout in the constructor:
 
 ```php
-$adapter = new WebSocket\Adapter\Swoole();
-$adapter->setSendTimeout(2.0); // Seconds; must be finite and greater than zero.
+$adapter = new WebSocket\Adapter\Swoole(sendTimeout: 2.0); // Seconds; must be finite and greater than zero.
 ```
 
 When a push fails, including on timeout, the adapter resets the connection and discards queued output. Clients must reconnect and refresh application state to recover missed events. Brief stalls can recover if the buffer drains before the timeout.

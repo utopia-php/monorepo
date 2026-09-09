@@ -9,9 +9,8 @@ use Swoole\Http\Request;
 use Swoole\Http\Response;
 use Utopia\WebSocket;
 
-$adapter = new WebSocket\Adapter\Swoole('127.0.0.1', 18081);
+$adapter = new WebSocket\Adapter\Swoole('127.0.0.1', 18081, sendTimeout: 1.0);
 $adapter->setWorkerNumber(1); // Important for tests
-$adapter->setSendTimeout(1.0);
 // Fill the buffer quickly without allocating production-sized backlogs.
 $adapter->getNative()->ports[0]->set(['socket_buffer_size' => 65536]);
 

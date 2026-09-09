@@ -19,15 +19,25 @@ class Swoole extends Adapter
 
     protected int $port;
 
-    public function __construct(string $host = '0.0.0.0', int $port = 80)
-    {
+    /**
+     * @param float $sendTimeout Positive finite seconds for each wait on a full output buffer.
+     */
+    public function __construct(
+        string $host = '0.0.0.0',
+        int $port = 80,
+        float $sendTimeout = self::DEFAULT_SEND_TIMEOUT,
+    ) {
+        if (!is_finite($sendTimeout) || $sendTimeout <= 0) {
+            throw new \InvalidArgumentException('Send timeout must be a finite positive number of seconds');
+        }
+
         parent::__construct($host, $port);
 
         $this->server = new Server($this->host, $this->port);
 
         // Set maximum connections to Swoole's limit of 1 Million
         $this->config['max_connection'] = 1_000_000;
-        $this->config['send_timeout'] = self::DEFAULT_SEND_TIMEOUT;
+        $this->config['send_timeout'] = $sendTimeout;
     }
 
     public function start(): void
@@ -158,20 +168,6 @@ class Swoole extends Adapter
     public function setWorkerNumber(int $num): self
     {
         $this->config['worker_num'] = $num;
-
-        return $this;
-    }
-
-    /**
-     * Sets the timeout in seconds for each wait on a full output buffer.
-     */
-    public function setSendTimeout(float $seconds): self
-    {
-        if (!is_finite($seconds) || $seconds <= 0) {
-            throw new \InvalidArgumentException('Send timeout must be a finite positive number of seconds');
-        }
-
-        $this->config['send_timeout'] = $seconds;
 
         return $this;
     }
