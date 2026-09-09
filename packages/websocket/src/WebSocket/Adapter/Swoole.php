@@ -11,6 +11,8 @@ use Utopia\WebSocket\Adapter;
 
 class Swoole extends Adapter
 {
+    public const DEFAULT_SEND_TIMEOUT = 5.0;
+
     protected Server $server;
 
     protected string $host;
@@ -25,6 +27,7 @@ class Swoole extends Adapter
 
         // Set maximum connections to Swoole's limit of 1 Million
         $this->config['max_connection'] = 1_000_000;
+        $this->config['send_timeout'] = self::DEFAULT_SEND_TIMEOUT;
     }
 
     public function start(): void
@@ -47,13 +50,19 @@ class Swoole extends Adapter
 
         foreach ($connections as $connection) {
             go(function () use ($connection, $message, $flags): void {
-                if ($this->server->exist($connection) && $this->server->isEstablished($connection)) {
-                    $this->server->push(
+                if ($this->server->isEstablished($connection)) {
+                    $pushed = $this->server->push(
                         $connection,
                         $message,
                         SWOOLE_WEBSOCKET_OPCODE_TEXT,
                         $flags,
                     );
+
+                    if (!$pushed && $this->server->exist($connection)) {
+                        // Discard queued output: a graceful close would keep
+                        // waiting for the same client to drain its buffer.
+                        $this->server->close($connection, true);
+                    }
                 } else {
                     $this->server->close($connection);
                 }
@@ -149,6 +158,20 @@ class Swoole extends Adapter
     public function setWorkerNumber(int $num): self
     {
         $this->config['worker_num'] = $num;
+
+        return $this;
+    }
+
+    /**
+     * Sets the timeout in seconds for each wait on a full output buffer.
+     */
+    public function setSendTimeout(float $seconds): self
+    {
+        if (!is_finite($seconds) || $seconds <= 0) {
+            throw new \InvalidArgumentException('Send timeout must be a finite positive number of seconds');
+        }
+
+        $this->config['send_timeout'] = $seconds;
 
         return $this;
     }
