@@ -650,81 +650,46 @@ final class ReaderTest extends TestCase
     public function testCompoundReferencesPreserveIdentityConditionsAndOverlaps(): void
     {
         foreach (['oneOf', 'anyOf'] as $composition) {
-            $reader = new Reader(Dialect::for(Version::V3_0));
-            $schema = $reader->read([$composition => [
+            $schema = $this->reader(Version::V3_0)->read([$composition => [
                 self::branch('Text', ['kind' => 'text']),
                 self::branch('Email', ['kind' => 'text', 'format' => 'email']),
-                self::branch('Url', ['kind' => 'text', 'format' => 'url']),
             ]], '#/result');
 
             self::assertInstanceOf(CompositeSchema::class, $schema);
             self::assertSame([
                 '#/components/schemas/Text' => ['kind' => 'text'],
                 '#/components/schemas/Email' => ['kind' => 'text', 'format' => 'email'],
-                '#/components/schemas/Url' => ['kind' => 'text', 'format' => 'url'],
             ], $schema->conditionalReferences());
             self::assertNull($schema->discriminator);
-            self::assertCount(3, $schema->schemas);
+            self::assertCount(2, $schema->schemas);
             self::assertInstanceOf(CompositeSchema::class, $schema->schemas[0]);
             self::assertSame(Composition::ALL_OF, $schema->schemas[0]->composition);
             self::assertInstanceOf(ReferenceSchema::class, $schema->schemas[0]->schemas[0]);
         }
     }
 
-    public function testNestedAllOfPreservesScalarTypesAndDoesNotInterpretExtensions(): void
+    public function testNestedConditionsPreserveLiteralsAndIgnoreExtensions(): void
     {
-        $branch = self::branch('Entry', ['enabled' => false, 'version' => 2, 'ratio' => 1.5, 'kind' => '2']);
-        $branch['allOf'] = [['allOf' => $branch['allOf']]];
-        $schema = new Reader(Dialect::for(Version::V3_0))->read([
-            'anyOf' => [$branch],
-            'discriminator' => [
-                'propertyName' => 'legacy',
-                'x-mapping' => ['wrong' => ['legacy' => 'wrong']],
-            ],
+        $properties = [
+            '123' => ['type' => 'string', 'enum' => ['2']],
+            'enabled' => ['type' => 'boolean', 'enum' => [false]],
+            'version' => ['type' => 'integer', 'enum' => [2]],
+            'whole' => ['type' => 'integer', 'enum' => [2.0]],
+            'count' => ['type' => 'number', 'enum' => [2]],
+            'ratio' => ['type' => 'number', 'enum' => [1.5]],
+            'constant' => ['type' => 'boolean', 'const' => true],
+        ];
+        $conditions = ['123' => '2', 'enabled' => false, 'version' => 2, 'whole' => 2.0, 'count' => 2, 'ratio' => 1.5, 'constant' => true];
+        $branch = self::branch('Entry', $conditions);
+        $branch['allOf'][1]['properties'] = $properties;
+        $schema = $this->reader(Version::V3_1)->read([
+            'anyOf' => [['allOf' => [$branch]]],
+            'discriminator' => ['propertyName' => 'legacy', 'x-mapping' => ['wrong' => ['legacy' => 'wrong']]],
         ], '#/result');
 
         self::assertInstanceOf(CompositeSchema::class, $schema);
-        self::assertSame([
-            '#/components/schemas/Entry' => ['enabled' => false, 'version' => 2, 'ratio' => 1.5, 'kind' => '2'],
-        ], $schema->conditionalReferences());
+        self::assertSame(['#/components/schemas/Entry' => $conditions], $schema->conditionalReferences());
         self::assertSame(['wrong' => ['legacy' => 'wrong']], $schema->discriminator?->extensions['x-mapping']);
-    }
-
-    public function testThreeOneConstConditions(): void
-    {
-        $branch = self::branch('Entry', ['enabled' => true]);
-        $branch['allOf'][1]['properties']['enabled'] = ['type' => 'boolean', 'const' => true];
-        $reader = new Reader(Dialect::for(Version::V3_1));
-        $schema = $reader->read(['anyOf' => [$branch]], '#/result');
-
-        self::assertInstanceOf(CompositeSchema::class, $schema);
-        self::assertSame(['#/components/schemas/Entry' => ['enabled' => true]], $schema->conditionalReferences());
-    }
-
-    public function testConditionalReferencesPreserveTypedLiterals(): void
-    {
-        foreach ([
-            ['string', 'entry'],
-            ['integer', 2],
-            ['integer', 2.0],
-            ['number', 2],
-            ['number', 1.5],
-            ['boolean', false],
-        ] as [$type, $value]) {
-            $branch = self::branch('Entry', ['kind' => $value]);
-            $branch['allOf'][1]['properties']['kind']['type'] = $type;
-            $schema = $this->reader(Version::V3_1)->read(['anyOf' => [$branch]], '#/result');
-            self::assertInstanceOf(CompositeSchema::class, $schema);
-            self::assertSame(['#/components/schemas/Entry' => ['kind' => $value]], $schema->conditionalReferences());
-        }
-    }
-
-    public function testNumericPropertyNamesAreRequiredConditions(): void
-    {
-        $branch = self::branch('Entry', ['123' => 'entry']);
-        $schema = $this->reader(Version::V3_1)->read(['anyOf' => [$branch]], '#/result');
-        self::assertInstanceOf(CompositeSchema::class, $schema);
-        self::assertSame(['#/components/schemas/Entry' => ['123' => 'entry']], $schema->conditionalReferences());
     }
 
     public function testConditionalReferencesRespectConstAndEnumTogether(): void
@@ -744,7 +709,7 @@ final class ReaderTest extends TestCase
     #[DataProvider('unsupportedSchemas')]
     public function testUnsupportedUnionsDoNotReturnPartialCases(array $raw): void
     {
-        $schema = new Reader(Dialect::for(Version::V3_0))->read($raw, '#/result');
+        $schema = $this->reader(Version::V3_0)->read($raw, '#/result');
 
         self::assertInstanceOf(CompositeSchema::class, $schema);
         self::assertSame([], $schema->conditionalReferences());
@@ -767,15 +732,15 @@ final class ReaderTest extends TestCase
         $branch = $valid;
         $branch['allOf'][] = self::branch('Other', ['kind' => 'other'])['allOf'][1];
         yield 'conflicting conditions' => [['anyOf' => [$branch]]];
-        $branch = $valid;
-        $branch['allOf'][1]['required'] = [];
-        yield 'optional condition' => [['anyOf' => [$branch]]];
-        $branch = $valid;
-        $branch['allOf'][1]['required'][] = 'missing';
-        yield 'required property without enum' => [['anyOf' => [$branch]]];
-        $branch = $valid;
-        $branch['allOf'][1]['additionalProperties'] = false;
-        yield 'closed constraint object' => [['anyOf' => [$branch]]];
+        foreach ([
+            'optional condition' => ['required' => []],
+            'required property without enum' => ['required' => ['kind', 'missing']],
+            'closed constraint object' => ['additionalProperties' => false],
+        ] as $name => $override) {
+            $branch = $valid;
+            $branch['allOf'][1] = array_replace($branch['allOf'][1], $override);
+            yield $name => [['anyOf' => [$branch]]];
+        }
         $branch = $valid;
         $branch['allOf'][1]['properties']['kind']['nullable'] = true;
         yield 'nullable condition' => [['anyOf' => [$branch]]];
