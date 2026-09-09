@@ -26,7 +26,7 @@ class AuthorizationDetails
     public function __construct(mixed $value)
     {
         $entries = [];
-        if (\is_array($value)) {
+        if (\is_array($value) && array_is_list($value)) {
             foreach ($value as $entry) {
                 if (\is_array($entry)) {
                     $entries[] = $entry;
@@ -57,6 +57,9 @@ class AuthorizationDetails
 
             $values = $entry[$field] ?? [];
             if (!\is_array($values)) {
+                continue;
+            }
+            if (!array_is_list($values)) {
                 continue;
             }
 

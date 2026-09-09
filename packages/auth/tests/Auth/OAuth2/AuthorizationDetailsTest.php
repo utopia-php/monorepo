@@ -33,6 +33,13 @@ final class AuthorizationDetailsTest extends TestCase
 
         yield 'null input' => [null, 'project', 'p1', 'identifiers', null, false];
         yield 'scalar input' => ['nonsense', 'project', 'p1', 'identifiers', null, false];
+
+        // A JSON object decodes to an associative PHP array; it is not a list of
+        // entries, and a field that is a map is not a list of values. Neither
+        // may grant, at either level.
+        yield 'associative entry collection ignored' => [['named' => ['type' => 'project', 'identifiers' => ['p1']]], 'project', 'p1', 'identifiers', null, false];
+        yield 'associative field ignored' => [[['type' => 'project', 'identifiers' => ['alias' => 'p1']]], 'project', 'p1', 'identifiers', null, false];
+
         yield 'malformed entries ignored, valid entry honored' => [
             ['scalar', ['type' => 'project', 'identifiers' => 'not-a-list'], ['type' => 'project'], ['type' => 'project', 'identifiers' => ['p1']]],
             'project', 'p1', 'identifiers', null, true,
