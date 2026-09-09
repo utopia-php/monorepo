@@ -10,6 +10,8 @@ use Swoole\Coroutine\Http\Client as HttpClient;
 
 use function Swoole\Coroutine\run;
 
+use Swoole\Coroutine\Socket;
+use Swoole\WebSocket\Server as NativeServer;
 use Utopia\WebSocket\Client;
 
 final class AdapterTest extends TestCase
@@ -52,7 +54,7 @@ final class AdapterTest extends TestCase
                 $client->connect();
                 $baseline = $this->getInfo($http);
                 $client->send('flood');
-                $this->waitForPendingSends($http, $baseline['coroutines']);
+                $this->waitForFlood($http, $baseline['floods'] + 1);
 
                 // Resume reading before the send timeout. Every frame must arrive.
                 for ($i = 0; $i < 300; $i++) {
@@ -72,59 +74,103 @@ final class AdapterTest extends TestCase
     private function testPendingSends(bool $closePeer): void
     {
         run(function () use ($closePeer): void {
-            $slow = $this->getWebsocket('127.0.0.1', 18081);
+            $slow = $this->connectSlowClient();
             $healthy = $this->getWebsocket('127.0.0.1', 18081);
+            $replacement = null;
             $http = new HttpClient('127.0.0.1', 18081);
             $http->set(['timeout' => 2]);
 
             try {
-                $slow->connect();
                 $healthy->connect();
                 $baseline = $this->getInfo($http);
-                $slow->send('flood');
-                $this->waitForPendingSends($http, $baseline['coroutines']);
+                $request = NativeServer::pack('flood', WEBSOCKET_OPCODE_TEXT, SWOOLE_WEBSOCKET_FLAG_FIN | SWOOLE_WEBSOCKET_FLAG_MASK);
+                $this->assertSame(\strlen($request), $slow->sendAll($request));
+                $this->waitForFlood($http, $baseline['floods'] + 1);
 
                 if ($closePeer) {
-                    // Close the TCP socket with unread frames, as in the upstream repro.
+                    // Close with unread frames and connect another client before
+                    // the old sends time out. Its session must stay usable.
                     $slow->close();
+                    $replacement = $this->getWebsocket('127.0.0.1', 18081);
+                    $replacement->connect();
+                    $replacement->send('ping');
+                    $this->assertSame('pong', $replacement->receive());
+                } else {
+                    // Probe for a transport error without draining the output. A
+                    // graceful close keeps the socket alive behind queued frames.
+                    $ping = NativeServer::pack('ping', WEBSOCKET_OPCODE_TEXT, SWOOLE_WEBSOCKET_FLAG_FIN | SWOOLE_WEBSOCKET_FLAG_MASK);
+                    $deadline = microtime(true) + 6;
+                    do {
+                        Coroutine::sleep(0.05);
+                        if ($slow->sendAll($ping, 0.2) === false) {
+                            $socketError = $slow->errCode;
+                            break;
+                        }
+                        $socketError = $slow->getOption(SOL_SOCKET, SO_ERROR);
+                    } while ($socketError === 0 && microtime(true) < $deadline);
+                    $this->assertContains($socketError, [SOCKET_ECONNRESET, SOCKET_EPIPE], 'The stalled peer must observe disconnection');
                 }
 
+                // The regression is retained payload memory, not a particular
+                // coroutine count. Allow 8 MiB for runtime/bookkeeping variation;
+                // the burst contains roughly 19 MiB of distinct payloads alone.
+                $budget = $baseline['memory_used'] + 8 * 1024 * 1024;
                 $deadline = microtime(true) + 6;
                 do {
                     Coroutine::sleep(0.05);
                     $info = $this->getInfo($http);
-                } while (($info['connections'] !== 1 || $info['native_connections'] !== 2
-                    || $info['coroutines'] !== $baseline['coroutines']) && microtime(true) < $deadline);
+                } while ($info['memory_used'] > $budget && microtime(true) < $deadline);
+                $this->assertLessThanOrEqual($budget, $info['memory_used'], 'Disconnected clients must release retained payloads');
 
-                $this->assertSame(1, $info['connections'], 'The stalled client must be disconnected');
-                // The native server also counts this HTTP request. Checking it catches
-                // graceful closes that run onClose but retain the undrained socket.
-                $this->assertSame(2, $info['native_connections'], 'The stalled socket must be released');
-                $this->assertSame($baseline['coroutines'], $info['coroutines'], 'Pending sends must finish');
                 $healthy->send('ping');
                 $this->assertSame('pong', $healthy->receive());
+                if ($replacement instanceof \Utopia\WebSocket\Client) {
+                    $replacement->send('ping');
+                    $this->assertSame('pong', $replacement->receive());
+                }
             } finally {
                 $slow->close();
                 $healthy->close();
+                $replacement?->close();
                 $http->close();
             }
         });
     }
 
-    private function waitForPendingSends(HttpClient $http, int $baseline): void
+    private function connectSlowClient(): Socket
+    {
+        $socket = new Socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+        $this->assertTrue($socket->setOption(SOL_SOCKET, SO_RCVBUF, 1024));
+        $this->assertTrue($socket->connect('127.0.0.1', 18081, 2));
+        $request = "GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\n"
+            . "Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            . "Sec-WebSocket-Version: 13\r\n\r\n";
+        $this->assertSame(\strlen($request), $socket->sendAll($request));
+        $headers = '';
+        while (!str_contains($headers, "\r\n\r\n")) {
+            $chunk = $socket->recv(4096, 2);
+            $this->assertNotFalse($chunk);
+            $this->assertNotSame('', $chunk);
+            $headers .= $chunk;
+        }
+        $this->assertStringContainsString('101 Switching Protocols', $headers);
+
+        return $socket;
+    }
+
+    private function waitForFlood(HttpClient $http, int $expected): void
     {
         $deadline = microtime(true) + 2;
         do {
             Coroutine::sleep(0.01);
             $info = $this->getInfo($http);
-        } while ((!$info['flood_complete'] || $info['coroutines'] <= $baseline + 10) && microtime(true) < $deadline);
+        } while ($info['floods'] < $expected && microtime(true) < $deadline);
 
-        $this->assertTrue($info['flood_complete']);
-        $this->assertGreaterThan($baseline + 10, $info['coroutines'], 'The test must exercise suspended sends');
+        $this->assertSame($expected, $info['floods'], 'The fixture must finish submitting the burst');
     }
 
     /**
-     * @return array{connections: int, native_connections: int, coroutines: int, flood_complete: bool}
+     * @return array{memory_used: int, floods: int}
      */
     private function getInfo(HttpClient $http): array
     {

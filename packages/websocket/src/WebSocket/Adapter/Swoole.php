@@ -58,23 +58,25 @@ class Swoole extends Adapter
             $flags |= SWOOLE_WEBSOCKET_FLAG_COMPRESS;
         }
 
-        foreach ($connections as $connection) {
-            go(function () use ($connection, $message, $flags): void {
-                if ($this->server->isEstablished($connection)) {
+        foreach ($connections as $sessionId) {
+            go(function () use ($sessionId, $message, $flags): void {
+                if ($this->server->isEstablished($sessionId)) {
                     $pushed = $this->server->push(
-                        $connection,
+                        $sessionId,
                         $message,
                         SWOOLE_WEBSOCKET_OPCODE_TEXT,
                         $flags,
                     );
 
-                    if (!$pushed && $this->server->exist($connection)) {
+                    // push() can yield. Swoole verifies the session ID here,
+                    // even if another client has reused the underlying socket fd.
+                    if (!$pushed && $this->server->exist($sessionId)) {
                         // Discard queued output: a graceful close would keep
                         // waiting for the same client to drain its buffer.
-                        $this->server->close($connection, true);
+                        $this->server->close($sessionId, true);
                     }
                 } else {
-                    $this->server->close($connection);
+                    $this->server->close($sessionId);
                 }
             });
         }
