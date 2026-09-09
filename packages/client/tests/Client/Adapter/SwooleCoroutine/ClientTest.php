@@ -10,6 +10,7 @@ use Utopia\Client\Adapter;
 use Utopia\Client\Adapter\SwooleCoroutine\Client;
 use Utopia\Client\Exception\AdapterPreconditionException;
 use Utopia\Client\Exception\NetworkException;
+use Utopia\Client\Exception\TlsException;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Request;
 use Utopia\Psr7\Response;
@@ -75,6 +76,45 @@ final class ClientTest extends AdapterContract
 
         $this->assertInstanceOf(NetworkException::class, $thrown);
         $this->assertSame(1, $connections);
+    }
+
+    public function testItRejectsATrustedCertificateForAnotherHostname(): void
+    {
+        Http::dropsFirstKeepAliveConnection(function (int $port, string $certificate): void {
+            $client = $this->createAdapter(['ssl_host_name' => '127.0.0.1'])->withCustomCA($certificate)->withSslVerification();
+            Coroutine\run(function () use ($client, $port): void {
+                $request = new Request\Factory()->createRequest(Method::GET, 'https://localhost:' . $port . '/')
+                    ->withHeader('Host', '127.0.0.1');
+                $thrown = null;
+                try {
+                    $client->sendRequest($request);
+                } catch (Throwable $throwable) {
+                    $thrown = $throwable;
+                }
+                $this->assertInstanceOf(TlsException::class, $thrown);
+            });
+        }, tls: true);
+    }
+
+    public function testItRejectsVerifiedIpLiterals(): void
+    {
+        $connections = Http::dropsFirstKeepAliveConnection(function (int $port): void {
+            $client = $this->createAdapter()->withSslVerification();
+            Coroutine\run(function () use ($client, $port): void {
+                foreach (['127.0.0.1', '[::1]'] as $host) {
+                    $request = new Request\Factory()->createRequest(Method::GET, 'https://' . $host . ':' . $port . '/');
+                    $thrown = null;
+                    try {
+                        $client->sendRequest($request);
+                    } catch (Throwable $throwable) {
+                        $thrown = $throwable;
+                    }
+                    $this->assertInstanceOf(TlsException::class, $thrown);
+                }
+            });
+        }, tls: true);
+
+        $this->assertSame(0, $connections);
     }
 
     public function testItRequiresCoroutineContext(): void

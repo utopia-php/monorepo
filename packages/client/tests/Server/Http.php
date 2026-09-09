@@ -53,7 +53,7 @@ final class Http
      * With $dropResponse, read the second request completely and close without
      * answering it, so tests can detect an unsafe replay after a send.
      *
-     * @param callable(int): void $test receives the listening port
+     * @param callable(int, string): void $test receives the listening port and TLS certificate path
      *
      * @return int connections the server accepted
      */
@@ -171,7 +171,7 @@ final class Http
         self::waitForReadyFile($readyFile);
 
         try {
-            $test($port);
+            $test($port, $certificateFile);
         } finally {
             self::stop($server);
             $count = is_file($countFile) ? (int) file_get_contents($countFile) : 0;
