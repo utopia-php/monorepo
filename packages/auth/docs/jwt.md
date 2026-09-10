@@ -14,6 +14,49 @@ The two signing families are `Asymmetric` (RS256, RSA keypair) and `Symmetric`
 (HS256, shared secret). For OAuth2 and OpenID Connect token examples, see
 [OAuth2 and OpenID Connect](oauth2.md).
 
+## Issuing application tokens
+
+Use `Issuers\Symmetric\Jwt` for application-defined tokens such as signed
+login state or session cookies. It issues HS256 tokens with a `JWT` type,
+without requiring OAuth2 access-token, refresh-token, or OpenID Connect claims.
+
+```php
+<?php
+
+use Utopia\Auth\Issuers\Symmetric\Jwt;
+use Utopia\Auth\Verifiers\Symmetric;
+
+// Generate once and persist server-side, not once per request.
+$secret = Jwt::generateSecret();
+$issuer = 'https://example.com';
+$tokens = new Jwt($secret, $issuer);
+
+$jwt = $tokens->issue(
+    audience: 'preview', // A string or an array of recipient strings.
+    duration: 600,
+    claims: ['purpose' => 'state', 'nonce' => 'browser-nonce-hash'],
+);
+
+$claims = (new Symmetric($secret, issuer: $issuer, audience: 'preview', type: 'JWT'))
+    ->verify($jwt);
+
+// Application policy is separate from JWT verification.
+if (($claims['purpose'] ?? null) !== 'state') {
+    throw new \RuntimeException('Unexpected token purpose');
+}
+```
+
+The issuer sets `iss`, `aud`, `iat`, and `exp`; values in `claims` cannot
+override them. `duration` must be a positive number of seconds. Other claims,
+including `sub`, `jti`, and `nbf`, are optional and supplied by the caller.
+The inherited `keyId` constructor argument adds a `kid` header when needed.
+
+These tokens are signed, not encrypted: their contents remain readable.
+Applications must validate custom claims, browser nonce values, and resource bindings
+before granting access. A valid signature does not establish current membership
+or make a token single-use; those checks remain application responsibilities.
+Use the [OAuth2 and OpenID Connect issuers](oauth2.md) for protocol tokens.
+
 ## Verifying tokens
 
 Verify a token minted by one of the issuers (or any compliant JWS). The
