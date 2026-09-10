@@ -34,7 +34,7 @@
  * publishes the backlog and releases them together.
  *
  * Elapsed is one clock for the fleet: from that release to the last message any child
- * handled. Both ends matter. A per-child clock omits the stagger between their starts
+ * finished acknowledging. Both ends matter. A per-child clock omits the stagger between their starts
  * and credits the difference to the process axis, inflating it. Running to child *exit*
  * instead over-corrects, because a child stops on a quiet queue and its wait for that
  * verdict is not drain -- it deflated a single-process cell by 1.7x, where no stagger
@@ -110,7 +110,15 @@ final class Timed implements Consumer
     /** @var list<float> microseconds per acknowledgment */
     public array $commits = [];
 
-    public array $errors = [];
+    /**
+     * When the last acknowledgment landed, as an absolute timestamp.
+     *
+     * The fleet clock ends here rather than when the last handler returned. The
+     * adapter commits after the callback, so a handler-side timestamp leaves the final
+     * acknowledgment outside the measured window -- which quietly favours whichever
+     * broker acknowledges more slowly.
+     */
+    public float $lastCommittedAt = 0.0;
 
     public function __construct(private readonly Consumer $inner) {}
 
@@ -124,6 +132,7 @@ final class Timed implements Consumer
         $started = hrtime(true);
         $this->inner->commit($queue, $message);
         $this->commits[] = (hrtime(true) - $started) / 1000;
+        $this->lastCommittedAt = microtime(true);
     }
 
     public function reject(Queue $queue, Message $message): void
@@ -229,9 +238,8 @@ function consume(array $args): array
 
     $handled = 0;
     $error = null;
-    $lastSeen = 0.0;
 
-    Coroutine\run(function () use ($client, $queue, $slots, $share, $sleep, $iters, $gate, &$handled, &$error, &$lastSeen): void {
+    Coroutine\run(function () use ($client, $queue, $slots, $share, $sleep, $iters, $gate, &$handled, &$error): void {
         // Provision on this process's own connections, before the gate opens, so the
         // measured window contains draining and nothing else.
         try {
@@ -273,11 +281,10 @@ function consume(array $args): array
         });
 
         $adapter->consume(
-            function () use ($adapter, $share, $sleep, $iters, &$handled, &$idle, &$lastSeen): void {
+            function () use ($adapter, $share, $sleep, $iters, &$handled, &$idle): void {
                 work($sleep, $iters);
 
-                $lastSeen = microtime(true);
-                $idle = $lastSeen;
+                $idle = microtime(true);
                 if (++$handled >= $share) {
                     $adapter->stop();
                 }
@@ -297,7 +304,7 @@ function consume(array $args): array
 
     return [
         'received' => $handled,
-        'lastSeen' => $lastSeen,
+        'lastSeen' => $client->lastCommittedAt,
         'commits' => $client->commits,
         'error' => $error,
     ];
@@ -332,8 +339,31 @@ function measure(string $name, array $args): array
         }
     }
 
-    $gate = sys_get_temp_dir() . '/utopia-queue-bench-' . getmypid() . '-' . $name;
+    // Unique per call, not per process: every repeat in this parent would otherwise
+    // share a gate, so a stale .ready file from a failed repeat can open the next
+    // repeat's gate before its children are ready.
+    $gate = sys_get_temp_dir() . '/utopia-queue-bench-' . $name . '-' . bin2hex(random_bytes(6));
     $handles = [];
+
+    // Every exit path goes through here. A child left running would drain the next
+    // repeat's backlog, and a gate file left behind would release it early. Takes the
+    // handles as an argument rather than capturing them by reference, which keeps it
+    // honest about what it closes -- and analysable, since a by-ref capture reads as
+    // the empty array it was defined next to.
+    $teardown = static function (array $open) use ($gate): void {
+        foreach ($open as $handle) {
+            $status = proc_get_status($handle['process']);
+            if ($status['running']) {
+                proc_terminate($handle['process']);
+            }
+            fclose($handle['stdout']);
+            proc_close($handle['process']);
+        }
+
+        foreach (glob($gate . '*') ?: [] as $file) {
+            @unlink($file);
+        }
+    };
 
     for ($p = 0; $p < $processes; $p++) {
         $command = [PHP_BINARY, __FILE__, '--role=consume', '--backend=' . $name, '--share=' . $total, '--gate=' . $gate];
@@ -344,6 +374,8 @@ function measure(string $name, array $args): array
         $pipes = [];
         $process = proc_open($command, [1 => ['pipe', 'w'], 2 => STDERR], $pipes);
         if (!is_resource($process)) {
+            $teardown($handles);
+
             return $fail('spawn failed');
         }
 
@@ -361,9 +393,7 @@ function measure(string $name, array $args): array
     $deadline = microtime(true) + 150.0;
     while (count(glob($gate . '.ready.*') ?: []) < $processes) {
         if (microtime(true) > $deadline) {
-            foreach ($handles as $handle) {
-                proc_terminate($handle['process']);
-            }
+            $teardown($handles);
 
             return $fail('children never reported ready');
         }
@@ -385,8 +415,6 @@ function measure(string $name, array $args): array
 
     foreach ($handles as $handle) {
         $raw = stream_get_contents($handle['stdout']);
-        fclose($handle['stdout']);
-        proc_close($handle['process']);
 
         $child = json_decode((string) $raw, true);
         if (!is_array($child)) {
@@ -409,9 +437,7 @@ function measure(string $name, array $args): array
         $error ??= $child['error'];
     }
 
-    foreach (glob($gate . '*') ?: [] as $file) {
-        @unlink($file);
-    }
+    $teardown($handles);
 
     // One clock for the fleet: the release to the last message anyone handled.
     $elapsed = $lastSeen - $started;
