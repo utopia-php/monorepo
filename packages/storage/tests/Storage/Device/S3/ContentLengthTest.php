@@ -40,18 +40,6 @@ final class CapturingClient implements ClientInterface, StreamingClientInterface
 }
 
 /**
- * Exposes the protected multipart helper without overriding call(), so the real
- * request-building path (and its Content-Length header) runs.
- */
-final class ContentLengthS3 extends S3
-{
-    public function callCreateMultipartUpload(string $path, string $contentType): string
-    {
-        return $this->createMultipartUpload($path, $contentType);
-    }
-}
-
-/**
  * Regression coverage for the HTTP 411 fix: every S3 request must carry an
  * explicit Content-Length so the transport never falls back to chunked
  * transfer encoding (which GCS and other S3-compatible services reject).
@@ -59,12 +47,12 @@ final class ContentLengthS3 extends S3
 final class ContentLengthTest extends TestCase
 {
     /**
-     * @return array{ContentLengthS3, CapturingClient}
+     * @return array{S3, CapturingClient}
      */
     private function device(ResponseInterface $response): array
     {
         $client = new CapturingClient($response);
-        $device = new ContentLengthS3(
+        $device = new S3(
             root: 'bucket-root',
             accessKey: 'access-key',
             secretKey: 'secret-key',
@@ -91,15 +79,18 @@ final class ContentLengthTest extends TestCase
         );
     }
 
-    /** An empty-body POST (createMultipartUpload) must send Content-Length: 0. */
+    /** An empty-body POST (multipart initiation) must send Content-Length: 0. */
     public function testEmptyBodyMultipartPostSendsZeroContentLength(): void
     {
         $xml = '<?xml version="1.0" encoding="UTF-8"?><InitiateMultipartUploadResult><UploadId>test-upload-id</UploadId></InitiateMultipartUploadResult>';
         [$device, $client] = $this->device(new Response(200, body: new Stream($xml)));
 
-        $uploadId = $device->callCreateMultipartUpload('file.txt', 'text/plain');
+        // A multi-chunk prepare() initiates a multipart upload, whose POST
+        // carries no body — this is the empty-body request GCS rejected with 411.
+        $metadata = [];
+        $device->prepare('file.txt', 'text/plain', 2, $metadata);
 
-        $this->assertSame('test-upload-id', $uploadId);
+        $this->assertSame('test-upload-id', $metadata['uploadId'] ?? null);
         $this->assertInstanceOf(RequestInterface::class, $client->lastRequest);
         $this->assertSame('0', $client->lastRequest->getHeaderLine('content-length'));
     }
