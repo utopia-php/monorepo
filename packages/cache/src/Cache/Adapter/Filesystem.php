@@ -22,8 +22,9 @@ class Filesystem implements Adapter
     public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
         if (\is_array($hash)) {
+            $fields = $hash === [] ? $this->list($key) : $hash;
             $result = [];
-            foreach ($hash as $field) {
+            foreach ($fields as $field) {
                 $value = $this->load($key, $ttl, $field);
                 if ($value !== false) {
                     $result[$field] = $value;
