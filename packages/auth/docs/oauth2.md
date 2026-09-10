@@ -167,9 +167,9 @@ an issued token asserts only what the subject can reach now. The resolver gets
 an entry's `type` and the field's values and returns the allowed subset; `null`
 leaves an entry of a type it does not govern untouched, an empty result drops
 the entry. The result can only narrow the grant: a value the entry did not list
-is discarded, unless the entry lists `$wildcard`, in which case the resolver's
-result is taken as its expansion, as with `grants()`. `toArray()` yields the
-entries for the `authorization_details` claim.
+is discarded, unless the entry lists `$wildcard`, in which case the result from
+the resolver is taken as its expansion, as with `grants()`. `toArray()` yields
+the entries for the `authorization_details` claim.
 
 ```php
 <?php
