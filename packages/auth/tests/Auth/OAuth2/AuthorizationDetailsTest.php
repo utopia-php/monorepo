@@ -114,4 +114,21 @@ final class AuthorizationDetailsTest extends TestCase
         $this->assertTrue($details->grants('project', 'p2', 'identifiers'));
         $this->assertFalse($restricted->grants('project', 'p2', 'identifiers'));
     }
+
+    public function testRestrictCannotWidenTheGrant(): void
+    {
+        $details = new AuthorizationDetails([['type' => 'project', 'identifiers' => ['p2', 'p1']]]);
+
+        $restricted = $details->restrict('identifiers', fn(): array => ['p1', 'p3', 'p2']);
+
+        $this->assertSame([['type' => 'project', 'identifiers' => ['p2', 'p1']]], $restricted->toArray());
+        $this->assertFalse($restricted->grants('project', 'p3', 'identifiers'));
+    }
+
+    public function testRestrictDropsEntryWhenResolverReturnsOnlyUngrantedValues(): void
+    {
+        $details = new AuthorizationDetails([['type' => 'project', 'identifiers' => ['p1']]]);
+
+        $this->assertSame([], $details->restrict('identifiers', fn(): array => ['p2'])->toArray());
+    }
 }

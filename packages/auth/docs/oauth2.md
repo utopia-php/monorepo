@@ -166,7 +166,9 @@ $details->grants('organization', 't1', 'identifiers');                     // tr
 an issued token asserts only what the subject can reach now. The resolver gets
 an entry's `type` and the field's values and returns the allowed subset; `null`
 leaves an entry of a type it does not govern untouched, an empty result drops
-the entry. `toArray()` yields the entries for the `authorization_details` claim.
+the entry. The result can only narrow the grant: a value the entry did not list
+is discarded. `toArray()` yields the entries for the `authorization_details`
+claim.
 
 ```php
 <?php

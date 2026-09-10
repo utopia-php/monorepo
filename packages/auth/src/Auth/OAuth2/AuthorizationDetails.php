@@ -78,7 +78,9 @@ class AuthorizationDetails
 
     /**
      * Narrow $field of every entry to the values $resolver allows for its type.
-     * A null result leaves the entry untouched; an empty result drops it.
+     * A null result leaves the entry untouched; an empty result drops it. The
+     * result only ever narrows: a value the entry did not already list is
+     * discarded, so a resolver cannot widen the original grant.
      *
      * @param callable(string $type, list<string> $values): ?array<mixed> $resolver
      */
@@ -103,7 +105,7 @@ class AuthorizationDetails
                 continue;
             }
 
-            $allowed = array_values(array_filter($allowed, \is_string(...)));
+            $allowed = array_values(array_intersect($values, array_filter($allowed, \is_string(...))));
             if ($allowed === []) {
                 continue;
             }
