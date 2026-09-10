@@ -91,10 +91,15 @@ class Redis extends Leasable implements Adapter, Retryable
 
     /**
      * @param  int  $ttl time in seconds
-     * @param  string  $hash optional
+     * @param  string|string[]  $hash a single field, or a list of fields to batch
+     * @return mixed single value, false, or array<string, mixed> for a field list
      */
-    public function load(string $key, int $ttl, string $hash = ''): mixed
+    public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
+        if (\is_array($hash)) {
+            return $this->loadFields($key, $hash, $ttl);
+        }
+
         if ($hash === '' || $hash === '0') {
             $hash = $key;
         }
@@ -113,11 +118,49 @@ class Redis extends Leasable implements Adapter, Retryable
     }
 
     /**
+     * HMGET for an explicit field list, HGETALL when $fields is empty. One
+     * command either way, so it is multiplexing-safe and retries via execute().
+     *
+     * @param  string[]  $fields
+     * @param  int  $ttl time in seconds
+     * @return array<string, mixed>
+     */
+    private function loadFields(string $key, array $fields, int $ttl): array
+    {
+        $now = time();
+
+        /** @var array<string, mixed>|false $raw */
+        $raw = $fields === []
+            ? $this->execute(fn(): \Redis|array|false => $this->redis->hGetAll($key))
+            : $this->execute(fn(): \Redis|array|false => $this->redis->hMget($key, $fields));
+
+        if (! \is_array($raw)) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($raw as $field => $value) {
+            // Missing HMGET fields come back as false; reserved fields never surface.
+            if (! \is_string($value) || $this->isReserved((string) $field)) {
+                continue;
+            }
+
+            $decoded = Envelope::decode($value, $ttl, $now);
+            if ($decoded !== false) {
+                $result[(string) $field] = $decoded;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * @param  array<int|string, mixed>|string  $data
      * @param  string  $hash optional
+     * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string $hash = ''): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         if ($key === '' || $key === '0' || empty($data)) {
             return false;
@@ -134,6 +177,10 @@ class Redis extends Leasable implements Adapter, Retryable
         try {
             $value = Envelope::encode($data, time());
             $this->execute(fn(): \Redis|int|false => $this->redis->hSet($key, $hash, $value));
+
+            if ($ttl > 0) {
+                $this->execute(fn(): \Redis|bool => $this->redis->expire($key, $ttl));
+            }
 
             return $data;
         } catch (Throwable) {

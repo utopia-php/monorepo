@@ -16,10 +16,23 @@ class Filesystem implements Adapter
 
     /**
      * @param  int  $ttl time in seconds
-     * @param  string  $hash optional
+     * @param  string|string[]  $hash a single field, or a list of fields to batch
+     * @return mixed single value, false, or array<string, mixed> for a field list
      */
-    public function load(string $key, int $ttl, string $hash = ''): mixed
+    public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
+        if (\is_array($hash)) {
+            $result = [];
+            foreach ($hash as $field) {
+                $value = $this->load($key, $ttl, $field);
+                if ($value !== false) {
+                    $result[$field] = $value;
+                }
+            }
+
+            return $result;
+        }
+
         $file = $this->getPath($key);
 
         if (file_exists($file) && (filemtime($file) + $ttl > time())) { // Cache is valid
@@ -36,10 +49,11 @@ class Filesystem implements Adapter
     /**
      * @param  array<int|string, mixed>|string  $data
      * @param  string  $hash optional
+     * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      * @throws Exception
      */
-    public function save(string $key, array|string $data, string $hash = ''): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         if (empty($data)) {
             return false;

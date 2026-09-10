@@ -9,19 +9,22 @@ use Utopia\Cache\Adapter;
 class None implements Adapter
 {
     /**
-     * @param  string  $hash optional
+     * @param  int  $ttl time in seconds
+     * @param  string|string[]  $hash a single field, or a list of fields to batch
+     * @return mixed false, or an empty array<string, mixed> for a field list
      */
-    public function load(string $key, int $ttl, string $hash = ''): mixed
+    public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
-        return false;
+        return \is_array($hash) ? [] : false;
     }
 
     /**
      * @param  array<int|string, mixed>|string  $data
      * @param  string  $hash optional
+     * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string $hash = ''): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         return false;
     }

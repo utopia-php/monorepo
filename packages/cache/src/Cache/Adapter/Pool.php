@@ -34,12 +34,12 @@ class Pool implements Adapter, Leasable
         return $this->pool->use(fn(Adapter $adapter) => $adapter->{$method}(...$args));
     }
 
-    public function load(string $key, int $ttl, string $hash = ''): mixed
+    public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
         return $this->delegate(__FUNCTION__, \func_get_args());
     }
 
-    public function save(string $key, array|string $data, string $hash = ''): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         /**
          * @var bool|string|array<mixed> $result

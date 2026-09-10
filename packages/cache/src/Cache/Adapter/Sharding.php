@@ -44,9 +44,10 @@ class Sharding implements Adapter, Leasable
 
     /**
      * @param  int  $ttl time in seconds
-     * @param  string  $hash optional
+     * @param  string|string[]  $hash a single field, or a list of fields to batch
+     * @return mixed single value, false, or array<string, mixed> for a field list
      */
-    public function load(string $key, int $ttl, string $hash = ''): mixed
+    public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
         return $this->getAdapter($key)->load($key, $ttl, $hash);
     }
@@ -54,11 +55,12 @@ class Sharding implements Adapter, Leasable
     /**
      * @param  array<int|string, mixed>|string  $data
      * @param  string  $hash optional
+     * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string $hash = ''): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
-        return $this->getAdapter($key)->save($key, $data, $hash);
+        return $this->getAdapter($key)->save($key, $data, $hash, $ttl);
     }
 
     public function getGeneration(string $key): string

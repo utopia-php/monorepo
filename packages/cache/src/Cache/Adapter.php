@@ -7,17 +7,29 @@ namespace Utopia\Cache;
 interface Adapter
 {
     /**
+     * Load one field, or several at once. A string $hash loads a single field
+     * and returns its value (or false). An array of field names loads them in
+     * one call and returns a field => value map with missing/expired fields
+     * omitted; an empty array loads every field. Adapters without native
+     * multi-field support fall back to one read per field.
+     *
      * @param  int  $ttl time in seconds
-     * @param  string  $hash optional
+     * @param  string|string[]  $hash a single field, or a list of fields to batch
+     * @return mixed single value, false, or array<string, mixed> for a field list
      */
-    public function load(string $key, int $ttl, string $hash = ''): mixed;
+    public function load(string $key, int $ttl, string|array $hash = ''): mixed;
 
     /**
+     * Save $data under $hash. When $ttl > 0 the entry is also given a key-level
+     * expiry (adapters that support it arm it; others ignore it and keep their
+     * timestamp TTL). $ttl = 0 preserves the prior behaviour.
+     *
      * @param  string|array<int|string, mixed>  $data
      * @param  string  $hash optional
+     * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string $hash = ''): bool|string|array;
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array;
 
     /**
      * @param  string  $hash optional

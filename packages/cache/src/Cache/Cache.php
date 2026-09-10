@@ -74,15 +74,20 @@ class Cache
     }
 
     /**
-     * Load cached data. return false in no valid cache.
+     * Load cached data. Returns false when there is no valid cache. With an array
+     * of field names, loads them in one call and returns a field => value map
+     * (missing/expired fields omitted); an empty array loads every field.
      *
      * @param  int  $ttl time in seconds
-     * @param  string  $hash optional
+     * @param  string|string[]  $hash a single field, or a list of fields to batch
+     * @return mixed single value, false, or array<string, mixed> for a field list
      */
-    public function load(string $key, int $ttl, string $hash = ''): mixed
+    public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
         $key = $this->caseSensitive ? $key : strtolower($key);
-        $hash = $this->caseSensitive ? $hash : strtolower($hash);
+        $hash = $this->caseSensitive
+            ? $hash
+            : (\is_array($hash) ? array_map('strtolower', $hash) : strtolower($hash));
 
         $start = microtime(true);
         $result = $this->adapter->load($key, $ttl, $hash);
@@ -103,18 +108,23 @@ class Cache
     /**
      * Save data to cache. Returns data on success of false on failure.
      *
+     * When $ttl > 0 the entry is also given a key-level expiry (adapters that
+     * support it arm it; others keep their timestamp TTL and ignore it). $ttl = 0
+     * preserves the prior behaviour and leaves any expiry untouched.
+     *
      * @param  string|array<int|string, mixed>  $data
      * @param  string  $hash optional
+     * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, mixed $data, string $hash = ''): bool|string|array
+    public function save(string $key, mixed $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         $key = $this->caseSensitive ? $key : strtolower($key);
         $hash = $this->caseSensitive ? $hash : strtolower($hash);
         $start = microtime(true);
 
         try {
-            return $this->adapter->save($key, $data, $hash);
+            return $this->adapter->save($key, $data, $hash, $ttl);
         } finally {
             $duration = microtime(true) - $start;
             $this->getOperationDuration()->record($duration, [

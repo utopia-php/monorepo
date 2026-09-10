@@ -113,8 +113,20 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
         $this->shutdown();
     }
 
-    public function load(string $key, int $ttl, string $hash = ''): mixed
+    public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
+        if (\is_array($hash)) {
+            $result = [];
+            foreach ($hash as $field) {
+                $value = $this->load($key, $ttl, $field);
+                if ($value !== false) {
+                    $result[$field] = $value;
+                }
+            }
+
+            return $result;
+        }
+
         if ($hash === '' || $hash === '0') {
             $hash = $key;
         }
@@ -132,7 +144,7 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
         return Envelope::decode($value, $ttl, time());
     }
 
-    public function save(string $key, array|string $data, string $hash = ''): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         if ($key === '' || $key === '0' || empty($data)) {
             return false;
