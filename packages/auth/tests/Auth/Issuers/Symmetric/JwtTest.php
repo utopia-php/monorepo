@@ -11,7 +11,7 @@ use Utopia\Auth\Verifiers\Symmetric;
 
 final class JwtTest extends TestCase
 {
-    /** @param string|array<string> $audience */
+    /** @param string|list<string> $audience */
     #[TestWith(['preview'])]
     #[TestWith([['preview', 'other']])]
     public function testRoundTripPreservesCustomClaimsAndProtectsRegisteredClaims(string|array $audience): void
@@ -38,6 +38,25 @@ final class JwtTest extends TestCase
         $this->assertGreaterThanOrEqual($before, $claims['iat']);
         $this->assertLessThanOrEqual($after, $claims['iat']);
         $this->assertSame($claims['iat'] + 600, $claims['exp']);
+    }
+
+    /** @param string|array<mixed> $audience */
+    #[TestWith([''])]
+    #[TestWith([[]])]
+    #[TestWith([['']])]
+    #[TestWith([['preview', '']])]
+    #[TestWith([['recipient' => 'preview']])]
+    #[TestWith([[1 => 'preview']])]
+    #[TestWith([['preview', 123]])]
+    #[TestWith([[null]])]
+    #[TestWith([[false]])]
+    #[TestWith([[['preview']]])]
+    public function testRejectsInvalidAudience(string|array $audience): void
+    {
+        $issuer = new Jwt(Jwt::generateSecret(), 'https://example.com');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $issuer->issue($audience, 600);
     }
 
     #[TestWith([0])]

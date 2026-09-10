@@ -25,7 +25,7 @@ use Utopia\Auth\Issuers\Symmetric\Jwt;
 // Generate once and persist server-side.
 $secret = Jwt::generateSecret();
 $jwt = (new Jwt($secret, 'https://example.com'))->issue(
-    audience: 'preview', // A string or an array of recipients.
+    audience: 'preview', // A non-empty string or list of non-empty strings.
     duration: 600,
     claims: ['purpose' => 'state'],
 );

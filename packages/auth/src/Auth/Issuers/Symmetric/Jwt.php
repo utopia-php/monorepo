@@ -23,11 +23,11 @@ class Jwt extends Symmetric
     /**
      * Build a signed JWT with an issuer, audience and bounded lifetime.
      *
-     * @param  string|array<string>  $audience  The "aud" claim (the intended recipients).
+     * @param  string|array<mixed>  $audience  Validated as a non-empty recipient or non-empty list of non-empty strings ("aud").
      * @param  int  $duration  Positive lifetime in seconds (used for "exp").
      * @param  array<string, mixed>  $claims  Application claims; cannot override "iss", "aud", "iat" or "exp".
      *
-     * @throws \InvalidArgumentException When the duration is not positive.
+     * @throws \InvalidArgumentException When the audience is invalid or the duration is not positive.
      * @throws \JsonException When claims cannot be JSON-encoded.
      * @throws \Exception When signing fails.
      */
@@ -35,6 +35,16 @@ class Jwt extends Symmetric
     {
         if ($duration < 1) {
             throw new \InvalidArgumentException('Token duration must be greater than zero');
+        }
+
+        $recipients = \is_array($audience) ? $audience : [$audience];
+        if ($recipients === [] || !array_is_list($recipients)) {
+            throw new \InvalidArgumentException('Token audience must be a non-empty list of recipients');
+        }
+        foreach ($recipients as $recipient) {
+            if (!\is_string($recipient) || $recipient === '') {
+                throw new \InvalidArgumentException('Token audience recipients must be non-empty strings');
+            }
         }
 
         $now = time();
