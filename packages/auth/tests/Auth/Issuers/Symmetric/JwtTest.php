@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Utopia\Tests\Auth\Issuers\Symmetric;
+
+use PHPUnit\Framework\Attributes\TestWith;
+use PHPUnit\Framework\TestCase;
+use Utopia\Auth\Issuers\Symmetric\Jwt;
+use Utopia\Auth\Verifiers\Symmetric;
+
+final class JwtTest extends TestCase
+{
+    /** @param string|array<string> $audience */
+    #[TestWith(['preview'])]
+    #[TestWith([['preview', 'other']])]
+    public function testRoundTripPreservesCustomClaimsAndProtectsRegisteredClaims(string|array $audience): void
+    {
+        $secret = Jwt::generateSecret();
+        $issuer = new Jwt($secret, 'https://example.com');
+        $before = time();
+        $token = $issuer->issue($audience, 600, [
+            'purpose' => 'state',
+            'iss' => 'https://wrong.example.com',
+            'aud' => 'wrong',
+            'iat' => 0,
+            'exp' => 0,
+        ]);
+        $after = time();
+
+        $claims = (new Symmetric($secret, issuer: 'https://example.com', audience: 'preview', type: 'JWT'))
+            ->verify($token);
+
+        $this->assertSame('https://example.com', $claims['iss']);
+        $this->assertSame($audience, $claims['aud']);
+        $this->assertSame('state', $claims['purpose']);
+        $this->assertIsInt($claims['iat']);
+        $this->assertGreaterThanOrEqual($before, $claims['iat']);
+        $this->assertLessThanOrEqual($after, $claims['iat']);
+        $this->assertSame($claims['iat'] + 600, $claims['exp']);
+    }
+
+    #[TestWith([0])]
+    #[TestWith([-1])]
+    public function testRejectsNonPositiveDuration(int $duration): void
+    {
+        $issuer = new Jwt(Jwt::generateSecret(), 'https://example.com');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $issuer->issue('preview', $duration);
+    }
+}
