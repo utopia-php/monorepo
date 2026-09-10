@@ -162,6 +162,23 @@ $details->grants('project', 'read', AuthorizationDetail::Actions->value);  // tr
 $details->grants('organization', 't1', 'identifiers');                     // true
 ```
 
+`restrict()` narrows a field of every entry to the values a resolver allows, so
+an issued token asserts only what the subject can reach now. The resolver gets
+an entry's `type` and the field's values and returns the allowed subset; `null`
+leaves an entry of a type it does not govern untouched, an empty result drops
+the entry. `toArray()` yields the entries for the `authorization_details` claim.
+
+```php
+<?php
+
+$issued = $granted->restrict('identifiers', fn (string $type, array $values): ?array => match ($type) {
+    'organization' => $memberships->intersect($values),
+    default => null,
+});
+
+$issued->toArray();
+```
+
 ## OAuth2 redirect URI matching (RFC 8252)
 
 `RedirectUris` wraps a client's registered redirect URIs and matches a
