@@ -978,9 +978,7 @@ class GitLab extends Git
 
     public function generateCloneCommand(string $owner, string $repositoryName, string $version, string $versionType, string $directory, string $rootDirectory): string
     {
-        if (\in_array($rootDirectory, ['', '0', '/'], true)) {
-            $rootDirectory = '*';
-        }
+        $rootDirectory = $this->sparseCheckoutPattern($rootDirectory);
 
         $ownerPath = $this->getOwnerPath($owner);
 

@@ -1189,9 +1189,7 @@ class GitHub extends Git
      */
     public function generateCloneCommand(string $owner, string $repositoryName, string $version, string $versionType, string $directory, string $rootDirectory): string
     {
-        if ($rootDirectory === '' || $rootDirectory === '0') {
-            $rootDirectory = '*';
-        }
+        $rootDirectory = $this->sparseCheckoutPattern($rootDirectory);
 
         // URL encode the components for the clone URL
         $owner = urlencode($owner);

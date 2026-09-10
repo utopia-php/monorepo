@@ -306,6 +306,20 @@ abstract class Git extends Adapter
     }
 
     /**
+     * Resolve a root directory to the sparse-checkout pattern that selects it.
+     *
+     * Git matches these gitignore-style, so a './' prefix looks for a directory
+     * literally named '.' and checks out an empty tree. The root sentinels -
+     * '', '.', './', '/' - select the whole tree instead.
+     */
+    protected function sparseCheckoutPattern(string $rootDirectory): string
+    {
+        $rootDirectory = $this->normalizeRepositoryPath($rootDirectory);
+
+        return $rootDirectory === '' ? '*' : $rootDirectory;
+    }
+
+    /**
      * Filter ref names by a shell glob pattern (e.g. 'v1.*', 'v?.0.0').
      * An empty pattern returns every name unchanged.
      *
