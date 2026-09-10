@@ -108,7 +108,7 @@ reading of the same socket in coroutine#3 at the same time is not allowed
 | Connection | Carries | Driven by |
 |---|---|---|
 | receive | fetch, provisioning, the dead-letter advisory, publishing | the consume loop |
-| commands | `commit()`, `reject()`, `extend()` | the handler coroutines |
+| commands | `commit()`, `reject()`, `extend()`, `getQueueSize()` | the handler and telemetry coroutines |
 
 A JetStream acknowledgment is a message published to the delivery's reply subject, so it does not have to leave on the connection that fetched the message. Rebinding it moves the whole per-message acknowledgment path off the receive socket, so an acknowledgment raised while the loop is parked in a fetch is a round trip rather than a wait. Each connection has one lock and the two are never nested, so they cannot deadlock.
 

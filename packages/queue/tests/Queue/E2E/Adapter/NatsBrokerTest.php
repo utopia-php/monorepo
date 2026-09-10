@@ -321,8 +321,9 @@ final class NatsBrokerTest extends TestCase
     public function testGetQueueSizeIsSafeDuringConcurrentReceive(): void
     {
         $url = getenv('NATS_URL') ?: 'nats://127.0.0.1:14225';
-        // Closure factory: each broker owns its consume connection AND opens a distinct
-        // control connection — the isolation getQueueSize relies on under coroutines.
+        // Closure factory: the broker opens a receive connection for the consume loop
+        // and a lock-guarded commands connection, which is what carries the depth read
+        // safely while the loop is mid-fetch.
         $broker = new Nats(fn(): Connection => Connection::connect($url), ackWait: 2.0, maxDeliver: 3);
         $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
 
@@ -796,9 +797,14 @@ final class NatsBrokerTest extends TestCase
         $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
 
         $ackSeconds = null;
+        $depth = null;
         $error = null;
 
-        \Swoole\Coroutine\run(function () use ($broker, $queue, &$ackSeconds, &$error): void {
+        // Every call on this broker stays inside the coroutine context, including the
+        // depth read: the commands connection is opened by the first acknowledgment, so
+        // reading it after Coroutine\run() has returned would touch a socket whose
+        // coroutine no longer exists.
+        \Swoole\Coroutine\run(function () use ($broker, $queue, &$ackSeconds, &$depth, &$error): void {
             $broker->publish($queue, ['task' => 'first']);
 
             // Take the only message, so the fetch below has nothing to return and
@@ -838,7 +844,11 @@ final class NatsBrokerTest extends TestCase
             });
 
             $wg->wait();
+
+            $depth = $broker->getQueueSize($queue);
         });
+
+        $broker->close();
 
         $this->assertNotInstanceOf(\Throwable::class, $error, 'the ack collided with the fetch: ' . ($error?->getMessage() ?? ''));
         $this->assertNotNull($ackSeconds, 'the ack never ran');
@@ -847,9 +857,7 @@ final class NatsBrokerTest extends TestCase
             $ackSeconds,
             'the ack waited for the parked fetch, so it is still sharing the receive connection',
         );
-        $this->assertSame(0, $broker->getQueueSize($queue), 'the ack must have landed');
-
-        $broker->close();
+        $this->assertSame(0, $depth, 'the ack must have landed');
     }
 
     /**
@@ -874,9 +882,12 @@ final class NatsBrokerTest extends TestCase
         $handled = 0;
         $active = 0;
         $overlap = 0;
+        $depth = null;
         $failure = null;
 
-        \Swoole\Coroutine\run(function () use ($broker, $queue, $total, $cap, &$handled, &$active, &$overlap, &$failure): void {
+        // Depth is read inside the coroutine for the same reason as the test above: the
+        // commands connection belongs to the coroutine that first acknowledged on it.
+        \Swoole\Coroutine\run(function () use ($broker, $queue, $total, $cap, &$handled, &$active, &$overlap, &$depth, &$failure): void {
             for ($n = 0; $n < $total; $n++) {
                 $broker->publish($queue, ['n' => $n]);
             }
@@ -905,14 +916,16 @@ final class NatsBrokerTest extends TestCase
                     ['queue' => $queue, 'maxCoroutines' => $cap],
                 ],
             );
+
+            $depth = $broker->getQueueSize($queue);
         });
+
+        $broker->close();
 
         $this->assertNotInstanceOf(\Throwable::class, $failure, 'the consume loop failed: ' . ($failure?->getMessage() ?? ''));
         $this->assertSame($total, $handled, 'every message must be handled');
         $this->assertGreaterThan(1, $overlap, 'the handlers must have actually overlapped');
         $this->assertLessThanOrEqual($cap, $overlap, 'concurrency stays bounded by maxCoroutines');
-        $this->assertSame(0, $broker->getQueueSize($queue), 'every message must be acknowledged');
-
-        $broker->close();
+        $this->assertSame(0, $depth, 'every message must be acknowledged');
     }
 }

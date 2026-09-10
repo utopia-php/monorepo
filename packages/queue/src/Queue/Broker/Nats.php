@@ -47,14 +47,14 @@ use Utopia\Queue\Queue;
  * So the broker is wired the way Broker\Redis is: a connection dedicated to the
  * blocking receive, and a second, lock-guarded connection carrying the commands.
  *
- *   receive connection  — fetch, provisioning, the dead-letter advisory. Driven by the
- *     consume loop, behind {@see self::synchronize()}. The fetch parks here for the
- *     whole receive timeout, and nothing on the hot path waits for it.
- *   commands connection — commit, reject, extend. Driven by the handler coroutines,
- *     behind {@see self::command()}. A JetStream ack is just a message published to
- *     the delivery's reply subject, so it does not have to leave on the connection
- *     that fetched it; rebinding it (see onCommands()) is what moves the per-message
- *     ack path off the receive socket entirely.
+ *   receive connection  — fetch, provisioning, the dead-letter advisory, publishing.
+ *     Driven by the consume loop, behind {@see self::synchronize()}. The fetch parks
+ *     here for the whole receive timeout, and nothing on the hot path waits for it.
+ *   commands connection — commit, reject, extend, getQueueSize. Driven by the handler
+ *     and telemetry coroutines, behind {@see self::command()}. A JetStream ack is just
+ *     a message published to the delivery's reply subject, so it does not have to
+ *     leave on the connection that fetched it; rebinding it (see onCommands()) is what
+ *     moves the per-message ack path off the receive socket entirely.
  *
  * The two locks are never nested, so they cannot deadlock, and each connection has
  * exactly one lock — a broker built from a live Connection serves both roles from one
@@ -138,16 +138,8 @@ class Nats implements Synchronous, Consumer
      */
     private readonly Lock $commandsLock;
 
-    // A second connection reserved for passive management reads (getQueueSize). Those
-    // run from the telemetry/health coroutine, NOT the consume coroutine, and a NATS
-    // socket cannot be read by two coroutines at once — Swoole aborts the process with
-    // "Socket#N has already been bound to another coroutine". Keeping these reads off the
-    // consume connection is the fix; see controlConnection().
-    private ?NatsConnection $controlConnection = null;
-    private ?JetStream $controlJs = null;
-
-    /** @var array<string, array<string, NatsConsumer>> control-connection consumer handles, [stream][durable] */
-    private array $controlConsumers = [];
+    /** @var array<string, array<string, NatsConsumer>> commands-connection consumer handles, [stream][durable] */
+    private array $commandsConsumers = [];
 
     /**
      * A NATS Connection is one socket behind one shared read pump, so it cannot be
@@ -319,32 +311,9 @@ class Nats implements Synchronous, Consumer
         return new JetStreamMessage($this->commandsConnection(), $jsMessage->message);
     }
 
-    /**
-     * The connection for passive management reads (getQueueSize), separate from the
-     * consume connection so a telemetry/health coroutine never reads the same socket
-     * the consume loop is blocked on. Requires the Closure factory to open a second
-     * connection; a broker built from a live Connection (publisher-only use, where no
-     * concurrent consume loop exists) falls back to the single connection.
-     */
-    private function controlConnection(): NatsConnection
+    private function commandsConsumer(string $stream, string $durable): NatsConsumer
     {
-        if ($this->controlConnection instanceof NatsConnection) {
-            return $this->controlConnection;
-        }
-
-        return $this->controlConnection = $this->source instanceof \Closure
-            ? ($this->source)()
-            : $this->connection();
-    }
-
-    private function controlJs(): JetStream
-    {
-        return $this->controlJs ??= $this->controlConnection()->jetStream();
-    }
-
-    private function controlConsumer(string $stream, string $durable): NatsConsumer
-    {
-        return $this->controlConsumers[$stream][$durable] ??= $this->controlJs()->getConsumer($stream, $durable);
+        return $this->commandsConsumers[$stream][$durable] ??= $this->commandsJs()->getConsumer($stream, $durable);
     }
 
     public function publish(Queue $queue, array $payload, bool $priority = false): bool
@@ -615,9 +584,7 @@ class Nats implements Synchronous, Consumer
         $this->js = null;
         $this->commandsConnection = null;
         $this->commandsJs = null;
-        $this->controlConnection = null;
-        $this->controlJs = null;
-        $this->controlConsumers = [];
+        $this->commandsConsumers = [];
         $this->consumers = [];
         $this->advisories = [];
         $this->provisioned = [];
@@ -746,29 +713,39 @@ class Nats implements Synchronous, Consumer
     }
 
     /**
-     * Queue depth, read on the control connection so it is safe to call from a
-     * telemetry/health coroutine while another coroutine is in receive() on this same
-     * broker. It is a passive observer: it does NOT provision (ensure()) or drain dead
-     * letters — the consume loop owns those — and reports 0 for a queue whose streams
-     * do not exist yet, matching Broker\Redis's empty-list semantics.
+     * Queue depth, read on the commands connection under its lock, so it is safe to
+     * call from a telemetry or health coroutine while another coroutine is in receive()
+     * on this same broker.
+     *
+     * This used to need a third connection of its own, because nothing serialised the
+     * socket and a depth read from the telemetry coroutine could land on top of the
+     * consume loop's fetch. The commands connection already carries traffic from
+     * arbitrary coroutines behind a lock, which is the same guarantee for one fewer
+     * socket -- and the guarantee is now enforced rather than documented.
+     *
+     * Still a passive observer: it does NOT provision (ensure()) or drain dead letters
+     * -- the consume loop owns those -- and reports 0 for a queue whose streams do not
+     * exist yet, matching Broker\Redis's empty-list semantics.
      */
     public function getQueueSize(Queue $queue, bool $failedJobs = false): int
     {
         $stream = $this->workStream($queue);
 
-        try {
-            if ($failedJobs) {
-                return $this->controlJs()->getStreamInfo($this->deadStream($queue))->state->messages;
-            }
+        return $this->command(function () use ($queue, $stream, $failedJobs): int {
+            try {
+                if ($failedJobs) {
+                    return $this->commandsJs()->getStreamInfo($this->deadStream($queue))->state->messages;
+                }
 
-            return $this->controlConsumer($stream, self::CONSUMER_NORMAL)->info(true)->numPending
-                + $this->controlConsumer($stream, self::CONSUMER_PRIORITY)->info(true)->numPending;
-        } catch (JetStreamException $e) {
-            if ($e->apiError?->code === 404) {
-                return 0; // stream/consumer not provisioned yet — nothing enqueued
+                return $this->commandsConsumer($stream, self::CONSUMER_NORMAL)->info(true)->numPending
+                    + $this->commandsConsumer($stream, self::CONSUMER_PRIORITY)->info(true)->numPending;
+            } catch (JetStreamException $e) {
+                if ($e->apiError?->code === 404) {
+                    return 0; // stream/consumer not provisioned yet — nothing enqueued
+                }
+                throw $e;
             }
-            throw $e;
-        }
+        });
     }
 
     /**
@@ -779,28 +756,26 @@ class Nats implements Synchronous, Consumer
      * in a publisher pool between publishes is reaped on a timer nobody is
      * watching, and the next publish writes into a dead socket.
      *
-     * Named tick() rather than maintain() on purpose: this reads the socket, so
-     * the caller must hold the broker exclusively. {@see Pool::maintain()} is
-     * what a running worker calls, because it sweeps only idle resources and so
-     * cannot collide with a consume loop. Do not call this on a broker whose
-     * receive loop is running.
+     * Named tick() rather than maintain() on purpose: this reads the socket, where
+     * {@see Pool::maintain()} sweeps only idle resources. Each connection is ticked
+     * under its own lock, so unlike the pre-split version this is safe to call while a
+     * consume loop is running -- the receive tick simply waits for the fetch in front
+     * of it.
      */
     public function tick(): void
     {
-        $this->connection?->tick();
-
-        // Each only when it is a distinct socket; a publisher-only broker reuses one.
-        // The commands tick takes its own lock because an ack may be in flight on it;
-        // acquired after the receive work, never inside it.
-        if ($this->commandsConnection instanceof NatsConnection && $this->commandsConnection !== $this->connection) {
+        if ($this->connection instanceof NatsConnection) {
             // Bound to a local: the closure must tick the connection this check passed
             // on, not whatever the property holds by the time the lock is granted.
-            $commands = $this->commandsConnection;
-            $this->command(fn() => $commands->tick());
+            $receive = $this->connection;
+            $this->synchronize(fn() => $receive->tick());
         }
 
-        if ($this->controlConnection instanceof NatsConnection && $this->controlConnection !== $this->connection) {
-            $this->controlConnection->tick();
+        // Only when it is a distinct socket; a publisher-only broker reuses one, and
+        // ticking it twice under two locks would be the one call that deadlocks.
+        if ($this->commandsConnection instanceof NatsConnection && $this->commandsConnection !== $this->connection) {
+            $commands = $this->commandsConnection;
+            $this->command(fn() => $commands->tick());
         }
     }
 
@@ -808,15 +783,11 @@ class Nats implements Synchronous, Consumer
     {
         $this->connection?->close();
 
-        // Each only when it is a distinct socket; a publisher-only broker reuses one.
+        // Only when it is a distinct socket; a publisher-only broker reuses one.
         // Deliberately off both locks: shutdown must not depend on acquiring a lock a
         // hung caller might still be holding.
         if ($this->commandsConnection instanceof NatsConnection && $this->commandsConnection !== $this->connection) {
             $this->commandsConnection->close();
-        }
-
-        if ($this->controlConnection instanceof NatsConnection && $this->controlConnection !== $this->connection) {
-            $this->controlConnection->close();
         }
     }
 
