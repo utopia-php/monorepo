@@ -14,6 +14,28 @@ The two signing families are `Asymmetric` (RS256, RSA keypair) and `Symmetric`
 (HS256, shared secret). For OAuth2 and OpenID Connect token examples, see
 [OAuth2 and OpenID Connect](oauth2.md).
 
+## Issuing application tokens
+
+Use `Issuers\Symmetric\Jwt` for HS256 application tokens such as login state
+or session cookies, without an OAuth2 token profile.
+
+```php
+use Utopia\Auth\Issuers\Symmetric\Jwt;
+
+// Generate once and persist server-side.
+$secret = Jwt::generateSecret();
+$jwt = (new Jwt($secret, 'https://example.com'))->issue(
+    audience: 'preview', // A non-empty string or list of non-empty strings.
+    duration: 600,
+    claims: ['purpose' => 'state'],
+);
+```
+
+The issuer controls `iss`, `aud`, `iat`, and `exp`; custom claims cannot
+override them. `duration` must be positive. Tokens are signed, not encrypted.
+After [verification](#verifying-tokens), applications must check custom claims
+and enforce browser binding, authorization, and replay protection as needed.
+
 ## Verifying tokens
 
 Verify a token minted by one of the issuers (or any compliant JWS). The
