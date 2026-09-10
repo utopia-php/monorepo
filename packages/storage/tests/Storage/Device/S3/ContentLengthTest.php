@@ -21,9 +21,7 @@ final class CapturingClient implements ClientInterface, StreamingClientInterface
 {
     public ?RequestInterface $lastRequest = null;
 
-    public function __construct(private readonly ResponseInterface $response)
-    {
-    }
+    public function __construct(private readonly ResponseInterface $response) {}
 
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
@@ -86,7 +84,7 @@ final class ContentLengthTest extends TestCase
         $payload = 'hello world'; // 11 bytes
         $device->write('file.txt', new Stream($payload), 'text/plain');
 
-        $this->assertNotNull($client->lastRequest);
+        $this->assertInstanceOf(RequestInterface::class, $client->lastRequest);
         $this->assertSame(
             (string) \strlen($payload),
             $client->lastRequest->getHeaderLine('content-length'),
@@ -102,7 +100,7 @@ final class ContentLengthTest extends TestCase
         $uploadId = $device->callCreateMultipartUpload('file.txt', 'text/plain');
 
         $this->assertSame('test-upload-id', $uploadId);
-        $this->assertNotNull($client->lastRequest);
+        $this->assertInstanceOf(RequestInterface::class, $client->lastRequest);
         $this->assertSame('0', $client->lastRequest->getHeaderLine('content-length'));
     }
 }
