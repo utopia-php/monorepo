@@ -74,8 +74,11 @@ const DEFAULTS = [
 ];
 
 $args = DEFAULTS;
-foreach (array_slice($argv, 1) as $arg) {
-    if (preg_match('/^--([^=]+)=(.*)$/', $arg, $m) === 1 && array_key_exists($m[1], DEFAULTS)) {
+
+// $_SERVER['argv'], not $argv: the latter needs register_argc_argv, which a CLI ini is
+// not obliged to set -- and PHPStan is right to refuse to assume it.
+foreach (array_slice($_SERVER['argv'] ?? [], 1) as $arg) {
+    if (preg_match('/^--([^=]+)=(.*)$/', (string) $arg, $m) === 1 && array_key_exists($m[1], DEFAULTS)) {
         $args[$m[1]] = $m[2];
         continue;
     }
