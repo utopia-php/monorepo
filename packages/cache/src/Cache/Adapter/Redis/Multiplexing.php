@@ -116,16 +116,7 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
     public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
         if (\is_array($hash)) {
-            $fields = $hash === [] ? $this->list($key) : $hash;
-            $result = [];
-            foreach ($fields as $field) {
-                $value = $this->load($key, $ttl, $field);
-                if ($value !== false) {
-                    $result[$field] = $value;
-                }
-            }
-
-            return $result;
+            return $this->loadFields($key, $hash, $ttl);
         }
 
         if ($hash === '' || $hash === '0') {
@@ -143,6 +134,58 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
         }
 
         return Envelope::decode($value, $ttl, time());
+    }
+
+    /**
+     * HMGET for an explicit field list, HGETALL when $fields is empty. Both come
+     * back as one RESP array reply from the multiplexed reader.
+     *
+     * @param  string[]  $fields
+     * @param  int  $ttl time in seconds
+     * @return array<string, mixed>
+     */
+    private function loadFields(string $key, array $fields, int $ttl): array
+    {
+        $now = time();
+        $pairs = [];
+
+        if ($fields === []) {
+            $flat = $this->command(['HGETALL', $key]);
+            if (! \is_array($flat)) {
+                return [];
+            }
+            // HGETALL returns a flat [field, value, field, value, …] reply.
+            $count = \count($flat);
+            for ($i = 0; $i + 1 < $count; $i += 2) {
+                $pairs[(string) $flat[$i]] = $flat[$i + 1];
+            }
+        } else {
+            $values = $this->command(['HMGET', $key, ...$fields]);
+            if (! \is_array($values)) {
+                return [];
+            }
+            // HMGET returns values positional to the requested fields (null when absent).
+            foreach (array_values($fields) as $i => $field) {
+                $pairs[$field] = $values[$i] ?? null;
+            }
+        }
+
+        $result = [];
+        foreach ($pairs as $field => $value) {
+            if (! \is_string($value)) {
+                continue;
+            }
+            if ($this->isReserved((string) $field)) {
+                continue;
+            }
+
+            $decoded = Envelope::decode($value, $ttl, $now);
+            if ($decoded !== false) {
+                $result[(string) $field] = $decoded;
+            }
+        }
+
+        return $result;
     }
 
     public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array

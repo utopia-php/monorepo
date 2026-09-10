@@ -48,16 +48,7 @@ class RedisCluster implements Adapter, Retryable
     public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
         if (\is_array($hash)) {
-            $fields = $hash === [] ? $this->list($key) : $hash;
-            $result = [];
-            foreach ($fields as $field) {
-                $value = $this->load($key, $ttl, $field);
-                if ($value !== false) {
-                    $result[$field] = $value;
-                }
-            }
-
-            return $result;
+            return $this->loadFields($key, $hash, $ttl);
         }
 
         if ($hash === '' || $hash === '0') {
@@ -84,6 +75,44 @@ class RedisCluster implements Adapter, Retryable
         }
 
         return false;
+    }
+
+    /**
+     * HMGET for an explicit field list, HGETALL when $fields is empty.
+     *
+     * @param  string[]  $fields
+     * @param  int  $ttl time in seconds
+     * @return array<string, mixed>
+     */
+    private function loadFields(string $key, array $fields, int $ttl): array
+    {
+        $now = time();
+
+        /** @var array<string, mixed> $raw */
+        $raw = (array) ($fields === []
+            ? $this->execute(fn(): array => $this->redis->hGetAll($key))
+            : $this->execute(fn(): array => $this->redis->hMget($key, $fields)));
+
+        $result = [];
+        foreach ($raw as $field => $value) {
+            if (! \is_string($value)) {
+                continue;
+            }
+
+            $cache = Json::decode($value);
+            if (! \is_array($cache)) {
+                continue;
+            }
+            if (! isset($cache['time'], $cache['data'])) {
+                continue;
+            }
+
+            if ($cache['time'] + $ttl > $now) {
+                $result[(string) $field] = $cache['data'];
+            }
+        }
+
+        return $result;
     }
 
     /**
