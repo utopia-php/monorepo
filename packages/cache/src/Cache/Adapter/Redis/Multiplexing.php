@@ -202,14 +202,18 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
             return false;
         }
 
-        $value = Envelope::encode($data, time());
-        $this->command(['HSET', $key, $hash, $value]);
+        try {
+            $value = Envelope::encode($data, time());
+            $this->command(['HSET', $key, $hash, $value]);
 
-        if ($ttl > 0) {
-            $this->command(['EXPIRE', $key, (string) $ttl]);
+            if ($ttl > 0) {
+                $this->command(['EXPIRE', $key, (string) $ttl]);
+            }
+
+            return $data;
+        } catch (Throwable) {
+            return false;
         }
-
-        return $data;
     }
 
     public function touch(string $key, string $hash = ''): bool
