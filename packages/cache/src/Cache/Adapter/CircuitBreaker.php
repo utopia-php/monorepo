@@ -31,7 +31,9 @@ class CircuitBreaker implements Adapter, Feature\Leasable, Feature\Telemetry
 
     public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
-        return $this->delegate(__FUNCTION__, \func_get_args(), false);
+        // A batch (array) load must degrade to an empty map, not false, so callers
+        // can still iterate the result while the circuit is open.
+        return $this->delegate(__FUNCTION__, \func_get_args(), \is_array($hash) ? [] : false);
     }
 
     public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
