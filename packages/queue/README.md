@@ -132,9 +132,9 @@ Still pass a Closure factory rather than a live connection when the worker forks
 
 | handler | 1 process x 1 coroutine | 1 x 4 (coroutines) | 4 x 1 (processes) |
 |---|---|---|---|
-| waits 25ms (`io`) | 35 msg/s | **141** (4.0x) | 138 (3.9x) |
-| hashes (`cpu`) | 62 msg/s | 69 (**1.1x**) | **234** (3.8x) |
-| both (`mixed`) | 45 msg/s | 96 (2.1x) | 191 (4.2x) |
+| waits 25ms (`io`) | 35 msg/s | **143** (4.0x) | 140 (4.0x) |
+| hashes (`cpu`) | 72 msg/s | 72 (**1.0x**) | **266** (3.7x) |
+| both (`mixed`) | 46 msg/s | 98 (2.1x) | 190 (4.1x) |
 
 A handler that waits is absorbed by coroutines, because the wait yields. A handler that computes is not: PHP runs one coroutine at a time, so raising the cap buys nothing and only processes help. Most jobs are somewhere between, and scale partially on both.
 

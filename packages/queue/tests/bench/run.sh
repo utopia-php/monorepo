@@ -39,11 +39,17 @@ reachable() { # host port
 NATS_HOST=$(php -r 'echo parse_url($argv[1], PHP_URL_HOST) ?: "127.0.0.1";' "$NATS_URL")
 NATS_PORT=$(php -r 'echo parse_url($argv[1], PHP_URL_PORT) ?: 4222;' "$NATS_URL")
 
+# Its own Compose project, never the default one. Tearing the default project down
+# would take with it whatever the developer already had up -- redis-cluster and its
+# volumes included -- which is not this script's to delete. A separate project can only
+# remove what this script created, and cannot start at all if the ports are already
+# taken, which is exactly the case where we should not be starting anything.
+PROJECT="utopia-queue-bench-$$"
 COMPOSE_STARTED=
 if ! reachable "$REDIS_HOST" "$REDIS_PORT" || ! reachable "$NATS_HOST" "$NATS_PORT"; then
     if command -v docker > /dev/null 2>&1 && docker info > /dev/null 2>&1; then
-        echo "starting compose services (redis, nats)" >&2
-        docker compose up -d --wait redis nats >&2
+        echo "starting compose services (redis, nats) in project $PROJECT" >&2
+        docker compose -p "$PROJECT" up -d --wait redis nats >&2
         COMPOSE_STARTED=1
     else
         echo "queue bench skipped: needs Redis on ${REDIS_HOST}:${REDIS_PORT} and NATS on ${NATS_HOST}:${NATS_PORT}, and Docker is unavailable to start them" >&2
@@ -51,16 +57,23 @@ if ! reachable "$REDIS_HOST" "$REDIS_PORT" || ! reachable "$NATS_HOST" "$NATS_PO
     fi
 fi
 # shellcheck disable=SC2064
-[ -n "$COMPOSE_STARTED" ] && trap "docker compose down -v --remove-orphans > /dev/null 2>&1 || true" EXIT
+[ -n "$COMPOSE_STARTED" ] && trap "docker compose -p '$PROJECT' down -v --remove-orphans > /dev/null 2>&1 || true" EXIT
 
 rows=""
+failed=0
 bench() { # workload processes coroutines sleep_ms cpu_iters
     local name=$1 procs=$2 coros=$3 sleep=$4 iters=$5
-    local out
+    local out status
+    # Infrastructure availability was decided above, so a non-zero exit from here is a
+    # benchmark that did not produce a usable sample. Recorded, not swallowed: a green
+    # `composer bench` that measured nothing is worse than a red one.
+    set +e
     out=$(php tests/bench/consume.php \
         --backend=both --processes="$procs" --coroutines="$coros" \
         --sleep-ms="$sleep" --cpu-iters="$iters" --stagger="$STAGGER" \
-        --messages="$MESSAGES" --repeat="$REPEAT" 2>&1) || true
+        --messages="$MESSAGES" --repeat="$REPEAT" 2>&1)
+    status=$?
+    set -e
 
     local redis nats
     redis=$(echo "$out" | awk '$1=="redis"{print $2}')
@@ -68,6 +81,10 @@ bench() { # workload processes coroutines sleep_ms cpu_iters
     rows+="| $name | ${procs}p x ${coros}c | ${redis:-n/a} | ${nats:-n/a} |
 "
     echo "  $name ${procs}p x ${coros}c -> redis ${redis:-n/a}, nats ${nats:-n/a}" >&2
+    if [ "$status" -ne 0 ]; then
+        failed=1
+        echo "$out" >&2
+    fi
 }
 
 # workload: name sleep_ms cpu_iters
@@ -104,4 +121,6 @@ echo "$table"
 [ -n "${GITHUB_STEP_SUMMARY:-}" ] && printf '%s\n\n' "$section" >> "$GITHUB_STEP_SUMMARY"
 [ -n "${BENCH_REPORT:-}" ] && printf '%s\n\n' "$section" >> "$BENCH_REPORT"
 
-exit 0
+# The table is still published on failure -- the rows that did work are worth having --
+# but the run reports that some cell produced nothing.
+exit "$failed"

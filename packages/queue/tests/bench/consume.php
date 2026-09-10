@@ -3,16 +3,18 @@
 /**
  * Consume-side benchmark: what the broker costs a worker, across workload shapes.
  *
- * Runs Broker\Redis and Broker\Nats over the same backlog through the same loop shape
- * Adapter\Swoole runs -- one receive loop per process, a slot channel capped at
- * --coroutines, the commit inside the per-message coroutine.
+ * Drives Broker\Redis and Broker\Nats through Adapter\Swoole::consume() -- the loop a
+ * worker actually runs -- rather than a local imitation of it, so a refactor of the
+ * adapter changes these numbers instead of silently diverging from them. Timing that
+ * the adapter gives no hook for comes from a decorator around the consumer (see
+ * Timed), which is a wrapper rather than a copy.
  *
  * Two concurrency axes, because they are not interchangeable:
  *
  *   --processes    separate consumer processes, each with its own connections. This is
  *                  what replicas buy. Spawned rather than forked: forking a process
- *                  with an initialised Swoole runtime is not something to rely on for a
- *                  measurement.
+ *                  with an initialised Swoole runtime is not something to rely on for
+ *                  a measurement.
  *   --coroutines   handler coroutines inside one process, sharing its connections. This
  *                  is what _APP_WORKER_MAX_COROUTINES sets on a deployed worker.
  *
@@ -24,17 +26,29 @@
  *                  time, so this yields nothing and coroutines cannot absorb it --
  *                  only processes can.
  *
- * A handler that is purely one or the other is the interesting case at both ends; the
- * mixed shape is what most real jobs are. See tests/bench/run.sh for the sweep.
+ * The children are started staggered but measured together. Every consumer provisions
+ * on its first receive(), and starting several at once turns that into a storm --
+ * measured at four processes against an already-warm single-replica stream, a child
+ * intermittently spent ~124s inside its first receive() while its siblings drained in
+ * 1.3s. So each child provisions on its own, reports ready, and blocks; the parent
+ * publishes the backlog and releases them together.
  *
- * Needs live Redis and NATS, so it is driven by run.sh rather than being run directly:
+ * Elapsed is one clock for the fleet: from that release to the last message any child
+ * handled. Both ends matter. A per-child clock omits the stagger between their starts
+ * and credits the difference to the process axis, inflating it. Running to child *exit*
+ * instead over-corrects, because a child stops on a quiet queue and its wait for that
+ * verdict is not drain -- it deflated a single-process cell by 1.7x, where no stagger
+ * exists at all. The window between the release and the last handled message is the
+ * only one that is neither.
+ *
+ * Needs live Redis and NATS, so it is driven by run.sh rather than run directly:
  *
  *   REDIS_HOST=127.0.0.1 REDIS_PORT=16379 NATS_URL=nats://127.0.0.1:14225 \
  *     php tests/bench/consume.php --backend=nats --processes=4 --coroutines=8
  *
  * Absolute rates are host-bound and mean nothing across machines; compare cells within
- * one run. Drain moves double digits between identical runs, so --repeat and read the
- * median.
+ * one run. Drain moves double digits between identical runs, so use --repeat and read
+ * the median. BENCH_DEBUG=1 prints what each child reported.
  */
 
 declare(strict_types=1);
@@ -42,13 +56,13 @@ declare(strict_types=1);
 require __DIR__ . '/../../vendor/autoload.php';
 
 use Swoole\Coroutine;
-use Swoole\Coroutine\Channel;
-use Swoole\Coroutine\WaitGroup;
-use Utopia\NATS\Connection as NatsConnection;
+use Utopia\Queue\Adapter\Swoole as SwooleAdapter;
 use Utopia\Queue\Broker\Nats as NatsBroker;
 use Utopia\Queue\Broker\Redis as RedisBroker;
 use Utopia\Queue\Connection\Locking;
 use Utopia\Queue\Connection\Redis as RedisConnection;
+use Utopia\Queue\Consumer;
+use Utopia\Queue\Message;
 use Utopia\Queue\Queue;
 
 const DEFAULTS = [
@@ -60,17 +74,14 @@ const DEFAULTS = [
     'repeat' => '3',
     'sleep-ms' => '0',
     'cpu-iters' => '0',
-    // Milliseconds between child starts. Every consumer provisions on its first
-    // receive(), and starting several at once turns that into a storm: measured at four
-    // processes against an already-warm R1 stream, a child intermittently spent ~124s
-    // inside its first receive() -- the provisioning retry ladder in Broker\Nats::ensure()
-    // -- while its siblings drained in 1.3s. Spacing the starts sidesteps it. Zero
-    // reproduces the storm, which is what benchmarks/nats-provisioning.php is for.
-    'stagger' => '0',
     'label' => '',
+    // Milliseconds between child starts, so provisioning does not storm. It costs the
+    // measurement nothing: the clocks start together regardless. See the header.
+    'stagger' => '300',
     // Internal, set on the children this script spawns.
     'role' => '',
     'share' => '0',
+    'gate' => '',
 ];
 
 $args = DEFAULTS;
@@ -84,6 +95,62 @@ foreach (array_slice($_SERVER['argv'] ?? [], 1) as $arg) {
     }
     fwrite(STDERR, "unknown option {$arg}\n");
     exit(2);
+}
+
+/**
+ * A consumer that times its own acknowledgments, and nothing else.
+ *
+ * The adapter owns when a commit happens and offers no hook for how long it took, so
+ * the number is taken here instead of by reimplementing the loop. Everything else is
+ * pass-through, extend() included, so the adapter's ack extension still reaches the
+ * broker rather than being silently disabled by the wrapper.
+ */
+final class Timed implements Consumer
+{
+    /** @var list<float> microseconds per acknowledgment */
+    public array $commits = [];
+
+    public array $errors = [];
+
+    public function __construct(private readonly Consumer $inner) {}
+
+    public function receive(Queue $queue, int $timeout): ?Message
+    {
+        return $this->inner->receive($queue, $timeout);
+    }
+
+    public function commit(Queue $queue, Message $message): void
+    {
+        $started = hrtime(true);
+        $this->inner->commit($queue, $message);
+        $this->commits[] = (hrtime(true) - $started) / 1000;
+    }
+
+    public function reject(Queue $queue, Message $message): void
+    {
+        $this->inner->reject($queue, $message);
+    }
+
+    public function close(): void
+    {
+        $this->inner->close();
+    }
+
+    public function extend(Queue $queue, Message $message): void
+    {
+        if (is_callable([$this->inner, 'extend'])) {
+            $this->inner->extend($queue, $message);
+        }
+    }
+
+    public function extendInterval(): float
+    {
+        if (is_callable([$this->inner, 'extendInterval'])) {
+            return (float) $this->inner->extendInterval();
+        }
+
+        return 0.0;
+    }
 }
 
 function broker(string $name): RedisBroker|NatsBroker
@@ -102,7 +169,7 @@ function broker(string $name): RedisBroker|NatsBroker
 
     $url = getenv('NATS_URL') ?: 'nats://127.0.0.1:14225';
 
-    return new NatsBroker(fn(): NatsConnection => NatsConnection::connect($url));
+    return new NatsBroker(fn(): \Utopia\NATS\Connection => \Utopia\NATS\Connection::connect($url));
 }
 
 function queueFor(string $name): Queue
@@ -144,105 +211,101 @@ function pct(array $samples, float $q): float
 }
 
 /**
- * One consumer process: drain up to its share, then report.
+ * One consumer process: provision, wait at the gate, then drain up to its share.
  *
- * @return array{received: int, wall: float, commits: list<float>, error: ?string}
+ * @return array{received: int, lastSeen: float, commits: list<float>, error: ?string}
  */
 function consume(array $args): array
 {
-    $client = broker($args['backend']);
+    $inner = broker($args['backend']);
+    $client = new Timed($inner);
     $queue = queueFor($args['backend']);
 
     $slots = max(1, (int) $args['coroutines']);
     $share = (int) $args['share'];
     $sleep = ((float) $args['sleep-ms']) / 1000;
     $iters = (int) $args['cpu-iters'];
+    $gate = (string) $args['gate'];
 
-    $out = ['received' => 0, 'wall' => 0.0, 'commits' => [], 'error' => null];
+    $handled = 0;
+    $error = null;
+    $lastSeen = 0.0;
 
-    Coroutine\run(function () use ($client, $queue, $slots, $share, $sleep, $iters, &$out): void {
-        $channel = new Channel($slots);
-        $group = new WaitGroup();
-        $commits = [];
-        $received = 0;
-        $idle = 0;
-        $idleElapsed = 0.0;
-        $error = null;
+    Coroutine\run(function () use ($client, $queue, $slots, $share, $sleep, $iters, $gate, &$handled, &$error, &$lastSeen): void {
+        // Provision on this process's own connections, before the gate opens, so the
+        // measured window contains draining and nothing else.
+        try {
+            $client->receive($queue, 1);
+        } catch (Throwable $e) {
+            $error = 'provision: ' . $e->getMessage();
 
-        $started = microtime(true);
-
-        while ($received < $share && $idle < 3) {
-            // Reserved before the receive, as the adapter does: a message taken with no
-            // slot to run it would sit captive in this loop instead of in the broker.
-            $channel->push(true);
-
-            $t0 = hrtime(true);
-            try {
-                $message = $client->receive($queue, 1);
-            } catch (Throwable $e) {
-                $error ??= 'receive: ' . $e->getMessage();
-                $channel->pop();
-                break;
-            }
-            $t1 = hrtime(true);
-
-            if (!$message instanceof \Utopia\Queue\Message) {
-                $channel->pop();
-                $idle++;
-                $idleElapsed += ($t1 - $t0) / 1_000_000_000;
-                continue;
-            }
-
-            $idle = 0;
-            $received++;
-
-            $group->add();
-            Coroutine::create(function () use ($client, $queue, $message, $channel, $group, $sleep, $iters, &$commits, &$error): void {
-                // Slot and wait group released in finally: skipping either on a throw
-                // blocks the receive loop on a slot that never comes back and leaves
-                // wait() hanging, so a failed run would present as a hung one.
-                try {
-                    work($sleep, $iters);
-
-                    // Clock starts after the handler, so this is the acknowledgment
-                    // round trip and not the workload.
-                    $c0 = hrtime(true);
-                    $client->commit($queue, $message);
-                    $commits[] = (hrtime(true) - $c0) / 1000;
-                } catch (Throwable $e) {
-                    $error ??= 'commit: ' . $e->getMessage();
-                } finally {
-                    $channel->pop();
-                    $group->done();
-                }
-            });
+            return;
         }
 
-        // Outstanding acknowledgments have to land before the clock stops, or the rate
-        // counts messages this process had not finished acknowledging.
-        $group->wait();
+        // Ready, and then wait to be released with everyone else.
+        touch($gate . '.ready.' . getmypid());
+        $deadline = microtime(true) + 120.0;
+        while (!file_exists($gate . '.go')) {
+            if (microtime(true) > $deadline) {
+                $error = 'gate never opened';
 
-        // Idle receives are the stop condition, not work; leaving them in understates
-        // the rate.
-        $out = [
-            'received' => $received,
-            'wall' => max(0.0, microtime(true) - $started - $idleElapsed),
-            'commits' => $commits,
-            'error' => $error,
-        ];
+                return;
+            }
+            usleep(2000);
+        }
+
+        $adapter = new SwooleAdapter($client, 1, $queue->namespace);
+
+        // No per-child quota: children race for one pre-filled backlog, exactly as
+        // replicas of a worker do, and the parent knows the total. $share is only a
+        // ceiling so a runaway cannot spin forever.
+        //
+        // The queue is full when the gate opens, so it goes quiet only once it is
+        // empty. Waiting on that is how a child knows it is done -- and it is why the
+        // clock ends at the last handled message rather than here.
+        $idle = microtime(true);
+        Coroutine::create(function () use ($adapter, $share, &$handled, &$idle): void {
+            while ($handled < $share && microtime(true) - $idle < 2.0) {
+                Coroutine::sleep(0.1);
+            }
+
+            $adapter->stop();
+        });
+
+        $adapter->consume(
+            function () use ($adapter, $share, $sleep, $iters, &$handled, &$idle, &$lastSeen): void {
+                work($sleep, $iters);
+
+                $lastSeen = microtime(true);
+                $idle = $lastSeen;
+                if (++$handled >= $share) {
+                    $adapter->stop();
+                }
+            },
+            static fn(): null => null,
+            function (?Message $message, Throwable $failure) use ($adapter, &$error): void {
+                $error ??= 'handler: ' . $failure->getMessage();
+                $adapter->stop();
+            },
+            [
+                ['queue' => $queue, 'maxCoroutines' => $slots],
+            ],
+        );
+
+        $client->close();
     });
 
-    $client->close();
-
-    return $out;
+    return [
+        'received' => $handled,
+        'lastSeen' => $lastSeen,
+        'commits' => $client->commits,
+        'error' => $error,
+    ];
 }
 
 /**
- * Publish the backlog, spawn the consumer processes, and aggregate what they report.
- *
- * Every child is started before any is read, so they drain concurrently rather than in
- * sequence. Drain is total received over the longest child's wall clock: the run is not
- * finished until the slowest one is.
+ * Provision, drain anything left over, publish the backlog, release the children
+ * together, and aggregate what they report.
  *
  * @return array{drain: float, p50: float, p95: float, received: int, error: ?string}
  */
@@ -254,12 +317,57 @@ function measure(string $name, array $args): array
     $processes = max(1, (int) $args['processes']);
     $stagger = max(0, (int) $args['stagger']);
     $filler = str_repeat('x', (int) $args['payload']);
+    $fail = static fn(string $why): array => ['drain' => 0.0, 'p50' => 0.0, 'p95' => 0.0, 'received' => 0, 'error' => $why];
 
-    // Provision, and drain the provisioning message, before the clock matters.
+    // Provision, then drain whatever a previous or interrupted run left behind. These
+    // queues are durable and reused, so without this a sample can consume the last
+    // run's messages -- a different payload, at a different count -- stop early on its
+    // own tally, and leave its own behind for the next one.
     $client->publish($queue, ['warmup' => true, 'filler' => $filler]);
-    $warm = $client->receive($queue, 5);
-    if ($warm instanceof \Utopia\Queue\Message) {
-        $client->commit($queue, $warm);
+    $leftover = 0;
+    while (($stale = $client->receive($queue, 1)) instanceof \Utopia\Queue\Message) {
+        $client->commit($queue, $stale);
+        if (++$leftover > $total * 10) {
+            return $fail('queue would not drain before the run');
+        }
+    }
+
+    $gate = sys_get_temp_dir() . '/utopia-queue-bench-' . getmypid() . '-' . $name;
+    $handles = [];
+
+    for ($p = 0; $p < $processes; $p++) {
+        $command = [PHP_BINARY, __FILE__, '--role=consume', '--backend=' . $name, '--share=' . $total, '--gate=' . $gate];
+        foreach (['coroutines', 'messages', 'payload', 'sleep-ms', 'cpu-iters'] as $key) {
+            $command[] = '--' . $key . '=' . $args[$key];
+        }
+
+        $pipes = [];
+        $process = proc_open($command, [1 => ['pipe', 'w'], 2 => STDERR], $pipes);
+        if (!is_resource($process)) {
+            return $fail('spawn failed');
+        }
+
+        $handles[] = ['process' => $process, 'stdout' => $pipes[1]];
+
+        // Staggered so their provisioning does not collide. Costs the measurement
+        // nothing: the clock starts at the gate, below.
+        if ($stagger > 0 && $p < $processes - 1) {
+            usleep($stagger * 1000);
+        }
+    }
+
+    // Every child provisioned and waiting is the point at which publishing is safe and
+    // the clock is meaningful.
+    $deadline = microtime(true) + 150.0;
+    while (count(glob($gate . '.ready.*') ?: []) < $processes) {
+        if (microtime(true) > $deadline) {
+            foreach ($handles as $handle) {
+                proc_terminate($handle['process']);
+            }
+
+            return $fail('children never reported ready');
+        }
+        usleep(2000);
     }
 
     for ($i = 0; $i < $total; $i++) {
@@ -267,30 +375,11 @@ function measure(string $name, array $args): array
     }
     $client->close();
 
-    $share = (int) ceil($total / $processes);
-    $handles = [];
-
-    for ($p = 0; $p < $processes; $p++) {
-        $command = [PHP_BINARY, __FILE__, '--role=consume', '--backend=' . $name, '--share=' . $share];
-        foreach (['coroutines', 'messages', 'payload', 'sleep-ms', 'cpu-iters'] as $key) {  // not stagger: parent-only
-            $command[] = '--' . $key . '=' . $args[$key];
-        }
-
-        $pipes = [];
-        $process = proc_open($command, [1 => ['pipe', 'w'], 2 => STDERR], $pipes);
-        if (!is_resource($process)) {
-            return ['drain' => 0.0, 'p50' => 0.0, 'p95' => 0.0, 'received' => 0, 'error' => 'spawn failed'];
-        }
-
-        $handles[] = ['process' => $process, 'stdout' => $pipes[1]];
-
-        if ($stagger > 0 && $p < $processes - 1) {
-            usleep($stagger * 1000);
-        }
-    }
+    $started = microtime(true);
+    touch($gate . '.go');
 
     $received = 0;
-    $walls = [];
+    $lastSeen = 0.0;
     $commits = [];
     $error = null;
 
@@ -307,42 +396,28 @@ function measure(string $name, array $args): array
 
         if (getenv('BENCH_DEBUG')) {
             fwrite(STDERR, sprintf(
-                "    child: received=%d wall=%.3fs error=%s\n",
+                "    child: received=%d drained=%.3fs error=%s\n",
                 (int) $child['received'],
-                (float) $child['wall'],
+                ((float) $child['lastSeen']) - $started,
                 $child['error'] ?? '-',
             ));
         }
 
         $received += (int) $child['received'];
-        $walls[] = (float) $child['wall'];
+        $lastSeen = max($lastSeen, (float) $child['lastSeen']);
         $commits = array_merge($commits, array_map(floatval(...), $child['commits']));
         $error ??= $child['error'];
     }
 
-    // Drain is total received over the longest child's clock: the run is not finished
-    // until the slowest one is.
-    $wall = $walls === [] ? 0.0 : max($walls);
-
-    // A child whose clock dwarfs its siblings' did not drain slowly, it stalled -- and
-    // averaging that into a median reports a broker three orders of magnitude slower
-    // than it is. Rejected as a sample rather than published as a number.
-    //
-    // Compared against the fastest child rather than the median: when two of four
-    // stall, the median is itself a stalled value and a median-based test waves the
-    // run through. Children share one queue and an equal share, so in a healthy run
-    // every clock is within a hair of every other. The absolute floor keeps ordinary
-    // spread on a fast run from tripping it.
-    $working = array_values(array_filter($walls, static fn(float $w): bool => $w > 0.0));
-    sort($working);
-    $fastest = $working === [] ? 0.0 : $working[0];
-    if ($fastest > 0.0 && $wall > max($fastest * 3, $fastest + 5.0)) {
-        $error ??= sprintf('child stalled: slowest %.2fs against fastest %.2fs', $wall, $fastest);
-        $received = 0;
+    foreach (glob($gate . '*') ?: [] as $file) {
+        @unlink($file);
     }
 
+    // One clock for the fleet: the release to the last message anyone handled.
+    $elapsed = $lastSeen - $started;
+
     return [
-        'drain' => $wall > 0 ? $received / $wall : 0.0,
+        'drain' => $elapsed > 0 ? $received / $elapsed : 0.0,
         'p50' => pct($commits, 0.50),
         'p95' => pct($commits, 0.95),
         'received' => $received,
@@ -359,6 +434,7 @@ if ($args['role'] === 'consume') {
 $backends = $args['backend'] === 'both' ? ['redis', 'nats'] : [$args['backend']];
 $repeat = max(1, (int) $args['repeat']);
 $total = (int) $args['messages'];
+$exit = 0;
 
 printf(
     "%s%d messages, %dB payload, %s x %s (processes x coroutines), sleep=%sms cpu=%s iters, median of %d\n\n",
@@ -375,39 +451,34 @@ printf("%-7s %12s %11s %11s\n", 'backend', 'drain msg/s', 'ack p50', 'ack p95');
 printf("%-7s %12s %11s %11s\n", '-------', '------------', '-----------', '-----------');
 
 foreach ($backends as $name) {
-    // Only runs that drained everything are eligible for the median: a partial run
-    // reports a rate over a fraction of the workload, and averaging that in reads as a
-    // slower broker rather than as an aborted sample.
+    // A sample counts only if it drained the whole backlog with nothing going wrong. A
+    // partial run reports a rate over a fraction of the workload, and a run with a
+    // failed acknowledgment has left work stranded or pending redelivery -- either way
+    // its rate and its latencies describe something other than the broker working.
     $complete = [];
-    $dropped = [];
-    $errors = [];
+    $rejected = [];
 
     for ($r = 0; $r < $repeat; $r++) {
         $sample = measure($name, $args);
 
         if ($sample['error'] !== null) {
-            $errors[] = $sample['error'];
+            $rejected[] = $sample['error'];
+            continue;
         }
 
         if ($sample['received'] < $total) {
-            $dropped[] = $sample['received'];
-
+            $rejected[] = sprintf('drained %d of %d', $sample['received'], $total);
             continue;
         }
 
         $complete[] = $sample;
     }
 
-    $note = '';
-    if ($dropped !== []) {
-        $note .= sprintf('   (!! %d/%d incomplete: %s of %d)', count($dropped), $repeat, implode(', ', $dropped), $total);
-    }
-    if ($errors !== []) {
-        $note .= '   (!! ' . $errors[0] . ')';
-    }
+    $note = $rejected === [] ? '' : sprintf('   (!! %d/%d rejected: %s)', count($rejected), $repeat, $rejected[0]);
 
     if ($complete === []) {
         printf("%-7s %12s %11s %11s%s\n", $name, 'n/a', 'n/a', 'n/a', $note);
+        $exit = 1;
 
         continue;
     }
@@ -428,3 +499,6 @@ foreach ($backends as $name) {
         $note,
     );
 }
+
+// A cell that produced no usable sample is a failed benchmark, not a blank row.
+exit($exit);
