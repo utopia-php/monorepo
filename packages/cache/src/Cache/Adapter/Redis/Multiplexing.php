@@ -162,6 +162,10 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
         $value = Envelope::encode($data, time());
         $this->command(['HSET', $key, $hash, $value]);
 
+        if ($ttl > 0) {
+            $this->command(['EXPIRE', $key, (string) $ttl]);
+        }
+
         return $data;
     }
 

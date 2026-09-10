@@ -114,6 +114,10 @@ class RedisCluster implements Adapter, Retryable
         try {
             $this->execute(fn(): int => $this->redis->hSet($key, $hash, $value));
 
+            if ($ttl > 0) {
+                $this->execute(fn(): bool => $this->redis->expire($key, $ttl));
+            }
+
             return $data;
         } catch (Throwable) {
             return false;
