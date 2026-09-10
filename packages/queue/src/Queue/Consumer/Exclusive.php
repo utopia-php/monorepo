@@ -20,9 +20,10 @@ namespace Utopia\Queue\Consumer;
  * carries safely does not reach production as a crash loop.
  *
  * No broker in this package carries the marker; it is here for consumers built
- * outside it. The two shipped ones serialise instead, and so keep their caps:
- * Broker\Redis through Connection\Locking, Broker\Nats through a lock of its own.
- * Serialising is the better answer where the transport allows it — a marked consumer
- * can only be scaled with replicas.
+ * outside it. The two shipped ones keep their caps by splitting the blocking receive
+ * off the commands and locking the commands: Broker\Redis is handed the two
+ * connections and wraps one in Connection\Locking, Broker\Nats resolves its own and
+ * holds a lock per connection. Doing that is the better answer wherever the transport
+ * allows it — a marked consumer can only be scaled with replicas.
  */
 interface Exclusive {}

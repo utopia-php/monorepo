@@ -112,7 +112,17 @@ reading of the same socket in coroutine#3 at the same time is not allowed
 
 A JetStream acknowledgment is a message published to the delivery's reply subject, so it does not have to leave on the connection that fetched the message. Rebinding it moves the whole per-message acknowledgment path off the receive socket, so an acknowledgment raised while the loop is parked in a fetch is a round trip rather than a wait. Each connection has one lock and the two are never nested, so they cannot deadlock.
 
-So `job('…', N)` above one is safe on NATS, and handlers scale without the socket becoming the serialisation point. The commands connection is opened lazily on the first acknowledgment, so a publisher-only broker never pays for a socket it will not use — and a broker built from a live connection rather than a Closure factory serves both roles from that one socket, sharing one lock.
+So `job('…', N)` above one is safe on NATS, and handlers scale without the socket becoming the serialisation point. Drain rate over 1 → 8 coroutines, measured with `benchmarks/coroutines.php` against a NATS 2.12 cluster and Redis on one host, median of five runs:
+
+| coroutines | `Broker\Redis` | `Broker\Nats` |
+|---|---|---|
+| 1 | 1,468 | 2,087 |
+| 2 | 2,389 | 2,856 |
+| 8 | 2,499 | 2,831 |
+
+Rates are host-bound and only meaningful against each other. The shape is the point: both scale, where a single shared socket is flat regardless of the cap, because a fetch-then-ack cost that cannot overlap is fixed per message.
+
+The commands connection is opened lazily on the first acknowledgment, so a publisher-only broker never pays for a socket it will not use — and a broker built from a live connection rather than a Closure factory serves both roles from that one socket, sharing one lock.
 
 Still pass a Closure factory rather than a live connection when the worker forks or reconnects per worker, and do not hand the same connection to anything outside the broker.
 
