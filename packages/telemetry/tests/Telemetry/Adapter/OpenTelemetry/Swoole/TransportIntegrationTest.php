@@ -7,10 +7,13 @@ namespace Tests\Telemetry\Adapter\OpenTelemetry\Swoole;
 use OpenTelemetry\Contrib\Otlp\ContentTypes;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
+use Swoole\Coroutine;
 
 use function Swoole\Coroutine\go;
 use function Swoole\Coroutine\run;
 
+use Swoole\Coroutine\Server as TcpServer;
+use Swoole\Coroutine\Server\Connection;
 use Utopia\Telemetry\Adapter\OpenTelemetry\Transport\Swoole;
 use Utopia\Telemetry\Exception;
 
@@ -41,6 +44,43 @@ final class TransportIntegrationTest extends TestCase
             $this->assertEquals((string) \strlen($testPayload), $request['headers']['content-length']);
 
             $transport->shutdown();
+        });
+    }
+
+    public function testRetriesOnceWhenThePooledConnectionIsResetMidRequest(): void
+    {
+        run(function (): void {
+            $received = [];
+            $server = new TcpServer('127.0.0.1', 19418);
+            $server->handle(function (Connection $connection) use (&$received): void {
+                $socket = $connection->exportSocket();
+                while (\is_string($request = $socket->recv(65536, 1.0)) && $request !== '') {
+                    $received[] = $request;
+                    if (\count($received) === 2) {
+                        $socket->setOption(SOL_SOCKET, SO_LINGER, ['l_onoff' => 1, 'l_linger' => 0]);
+                        $socket->close();
+
+                        return;
+                    }
+                    $socket->send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK");
+                }
+            });
+            go(fn(): bool => $server->start());
+            Coroutine::sleep(0.05);
+
+            $transport = new Swoole('http://127.0.0.1:19418/v1/metrics');
+
+            try {
+                $this->assertSame('OK', $transport->send('first')->await());
+                $this->assertSame('OK', $transport->send('second')->await());
+            } finally {
+                $transport->shutdown();
+                $server->shutdown();
+            }
+
+            $this->assertCount(3, $received);
+            $this->assertStringEndsWith('second', $received[1]);
+            $this->assertStringEndsWith('second', $received[2]);
         });
     }
 
