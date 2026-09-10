@@ -128,6 +128,16 @@ Still pass a Closure factory rather than a live connection when the worker forks
 
 `Consumer\Exclusive` stays for consumers built outside this package that drive one socket without serialising it. `Server::start()` refuses a job registered above one coroutine on a consumer carrying that marker, because it would crash exactly as above; scale one of those with replicas rather than coroutines.
 
+The marker is readable by callers too, which matters when concurrency comes from configuration rather than code — there, a refusal at `start()` is a worker that will not boot:
+
+```php
+if ($coroutines > 1 && $consumer instanceof Consumer\Exclusive) {
+    $coroutines = 1; // and log why
+}
+```
+
+Clamping on the marker rather than on a transport name or a version also means the cap starts applying by itself once the consumer stops carrying it.
+
 ## Background publishing
 
 `Broker\Background` wraps a synchronous publisher with a bounded in-process buffer. `enqueue()` hands work to reader coroutines, applying back pressure when the buffer is full; `publish()` bypasses the buffer and remains synchronous. Call `shutdown()` to drain accepted messages before the process exits.

@@ -25,5 +25,17 @@ namespace Utopia\Queue\Consumer;
  * connections and wraps one in Connection\Locking, Broker\Nats resolves its own and
  * holds a lock per connection. Doing that is the better answer wherever the transport
  * allows it — a marked consumer can only be scaled with replicas.
+ *
+ * The marker is a public contract, not only an input to Server::start(), and a caller
+ * that would rather degrade than be refused can read it directly:
+ *
+ *     if ($coroutines > 1 && $consumer instanceof Exclusive) {
+ *         $coroutines = 1;  // and say so
+ *     }
+ *
+ * That is worth knowing for a deployment whose concurrency comes from configuration
+ * rather than from code, where a refusal at start() is a worker that will not boot.
+ * Clamping on the marker also survives the consumer later dropping it — the cap starts
+ * applying on the upgrade, with nothing to change at the call site.
  */
 interface Exclusive {}
