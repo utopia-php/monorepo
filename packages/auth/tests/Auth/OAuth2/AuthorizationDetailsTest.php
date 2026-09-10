@@ -125,6 +125,19 @@ final class AuthorizationDetailsTest extends TestCase
         $this->assertFalse($restricted->grants('project', 'p3', 'identifiers'));
     }
 
+    public function testRestrictExpandsAWildcardFromTheResolver(): void
+    {
+        $details = new AuthorizationDetails([
+            ['type' => 'project', 'identifiers' => ['*']],
+            ['type' => 'organization', 'identifiers' => ['o1']],
+        ]);
+
+        $restricted = $details->restrict('identifiers', fn(): array => ['x1', 'x2'], '*');
+
+        // The wildcard entry takes the resolver's expansion; the explicit entry still cannot widen.
+        $this->assertSame([['type' => 'project', 'identifiers' => ['x1', 'x2']]], $restricted->toArray());
+    }
+
     public function testRestrictDropsEntryWhenResolverReturnsOnlyUngrantedValues(): void
     {
         $details = new AuthorizationDetails([['type' => 'project', 'identifiers' => ['p1']]]);
