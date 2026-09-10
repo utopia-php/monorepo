@@ -87,7 +87,7 @@ class Cache
         $key = $this->caseSensitive ? $key : strtolower($key);
         $hash = $this->caseSensitive
             ? $hash
-            : (\is_array($hash) ? array_map('strtolower', $hash) : strtolower($hash));
+            : (\is_array($hash) ? array_map(strtolower(...), $hash) : strtolower($hash));
 
         $start = microtime(true);
         $result = $this->adapter->load($key, $ttl, $hash);

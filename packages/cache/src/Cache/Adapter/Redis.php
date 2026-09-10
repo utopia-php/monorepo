@@ -141,7 +141,10 @@ class Redis extends Leasable implements Adapter, Retryable
         $result = [];
         foreach ($raw as $field => $value) {
             // Missing HMGET fields come back as false; reserved fields never surface.
-            if (! \is_string($value) || $this->isReserved((string) $field)) {
+            if (! \is_string($value)) {
+                continue;
+            }
+            if ($this->isReserved((string) $field)) {
                 continue;
             }
 
