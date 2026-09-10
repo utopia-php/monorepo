@@ -33,6 +33,70 @@ final class RedisTest extends Base
         $this->assertSame(3, self::$cache->getSize());
     }
 
+    public function testLoadFieldsBatch(): void
+    {
+        $redis = new Redis();
+        $redis->connect(Services::HOST, Services::REDIS_PORT);
+        $cache = new Cache(new RedisAdapter($redis));
+        $cache->setCaseSensitivity(true);
+
+        $key = 'test:batch:' . uniqid();
+        $cache->save($key, ['sequence' => 5], 'topicA');
+        $cache->save($key, ['sequence' => 9], 'topicB');
+        $cache->save($key, ['sequence' => 1], 'topicC');
+
+        // HMGET a subset: present fields returned, missing omitted.
+        $this->assertSame([
+            'topicA' => ['sequence' => 5],
+            'topicC' => ['sequence' => 1],
+        ], $cache->load($key, 3600, ['topicA', 'topicC', 'missing']));
+
+        // Empty field list -> HGETALL every field.
+        $this->assertEqualsCanonicalizing([
+            'topicA' => ['sequence' => 5],
+            'topicB' => ['sequence' => 9],
+            'topicC' => ['sequence' => 1],
+        ], $cache->load($key, 3600, []));
+
+        // A single-field read still returns the scalar value.
+        $this->assertSame(['sequence' => 9], $cache->load($key, 3600, 'topicB'));
+    }
+
+    public function testLoadFieldsExcludesExpired(): void
+    {
+        $redis = new Redis();
+        $redis->connect(Services::HOST, Services::REDIS_PORT);
+        $cache = new Cache(new RedisAdapter($redis));
+        $cache->setCaseSensitivity(true);
+
+        $key = 'test:batch:ttl:' . uniqid();
+        $cache->save($key, 'fresh', 'topicA');
+
+        // ttl 0 makes the envelope already stale, so the field drops out.
+        $this->assertSame([], $cache->load($key, 0, ['topicA']));
+        $this->assertSame(['topicA' => 'fresh'], $cache->load($key, 3600, ['topicA']));
+    }
+
+    public function testSaveWithTtlArmsKeyExpiry(): void
+    {
+        $redis = new Redis();
+        $redis->connect(Services::HOST, Services::REDIS_PORT);
+        $cache = new Cache(new RedisAdapter($redis));
+        $cache->setCaseSensitivity(true);
+
+        $key = 'test:expire:' . uniqid();
+
+        // No ttl: the key persists with no expiry.
+        $cache->save($key, 'a', 'topicA');
+        $this->assertSame(-1, $redis->ttl($key));
+
+        // ttl > 0 arms a key-level expiry covering the whole hash.
+        $cache->save($key, 'b', 'topicB', 120);
+        $ttl = $redis->ttl($key);
+        $this->assertGreaterThan(0, $ttl);
+        $this->assertLessThanOrEqual(120, $ttl);
+    }
+
     #[Depends('testGetSize')]
     public function testCacheReconnect(): void
     {
