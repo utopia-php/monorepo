@@ -352,11 +352,37 @@ function measure(string $name, array $args): array
     // the empty array it was defined next to.
     $teardown = static function (array $open) use ($gate): void {
         foreach ($open as $handle) {
+            // The pipe goes first: a child blocked writing a result nobody read gets
+            // EPIPE and exits on its own, which is most of them.
+            fclose($handle['stdout']);
+
+            // Then SIGTERM, then a bounded wait, then SIGKILL. proc_close() reaps, and
+            // reaping blocks until the child is actually gone -- so a child wedged in a
+            // socket read against an unhealthy broker would hang the very path that
+            // exists to report "children never reported ready".
+            // Re-read into a variable each time rather than calling in the condition:
+            // the call has a different answer every time and static analysis is right
+            // to treat two identical calls as one value unless told otherwise.
             $status = proc_get_status($handle['process']);
             if ($status['running']) {
                 proc_terminate($handle['process']);
+
+                $deadline = microtime(true) + 2.0;
+                while (microtime(true) < $deadline) {
+                    $status = proc_get_status($handle['process']);
+                    if (!$status['running']) {
+                        break;
+                    }
+                    usleep(20000);
+                }
+
+                // 9 rather than SIGKILL: the constant comes from ext-pcntl, which this
+                // benchmark does not otherwise need.
+                if ($status['running']) {
+                    proc_terminate($handle['process'], 9);
+                }
             }
-            fclose($handle['stdout']);
+
             proc_close($handle['process']);
         }
 
