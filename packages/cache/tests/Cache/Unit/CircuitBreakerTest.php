@@ -109,12 +109,12 @@ final class CircuitBreakerTest extends TestCase
 
 class FailingAdapter implements Adapter
 {
-    public function load(string $key, int $ttl, string $hash = ''): mixed
+    public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
         throw new RuntimeException('Cache failed.');
     }
 
-    public function save(string $key, array|string $data, string $hash = ''): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         throw new RuntimeException('Cache failed.');
     }
@@ -159,7 +159,7 @@ class CountingFailingAdapter extends FailingAdapter
 {
     public int $loads = 0;
 
-    public function load(string $key, int $ttl, string $hash = ''): mixed
+    public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
         $this->loads++;
 
