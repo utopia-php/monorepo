@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Utopia\Queue\Broker;
 
-use Utopia\Lock\Lock;
 use Utopia\Lock\Mutex;
 use Utopia\NATS\Connection as NatsConnection;
 use Utopia\NATS\Exception\JetStreamException;
@@ -129,6 +128,20 @@ class Nats implements Synchronous, Consumer
     private ?JetStream $commandsJs = null;
 
     /**
+     * Guards the receive connection: fetch, provisioning and publishing.
+     *
+     * Deliberately a Mutex and not the Lock interface. The invariant is "one coroutine
+     * at a time on this process's socket", which is inherently in-process -- a
+     * distributed lock would guard nothing -- and the interface's acquire timeout is
+     * not honoured consistently across its implementations: Mutex reads a negative
+     * timeout as "wait forever" as the interface documents, while File and Distributed
+     * treat any non-positive timeout as one immediate attempt. Accepting either would
+     * turn contention into a Contention exception instead of serialising the socket,
+     * which is the inverse of the guarantee, so the type rules them out.
+     */
+    private readonly Mutex $lock;
+
+    /**
      * Guards the commands connection.
      *
      * A broker built from a live Connection has one socket serving both roles, so it
@@ -136,7 +149,10 @@ class Nats implements Synchronous, Consumer
      * it, which is the crash this whole design exists to stop. Resolved once, at
      * construction, because the source's shape is known there.
      */
-    private readonly Lock $commandsLock;
+    private readonly Mutex $commandsLock;
+
+    /** @var list<\Throwable> failures owed to $onError, handed over off the lock */
+    private array $deferred = [];
 
     /** @var array<string, array<string, NatsConsumer>> commands-connection consumer handles, [stream][durable] */
     private array $commandsConsumers = [];
@@ -183,17 +199,9 @@ class Nats implements Synchronous, Consumer
      *        a failure it cannot raise, because it happens outside any caller's
      *        call — currently the dead-lettering of a message that exhausted
      *        maxDeliver while no handler held it. Omitted, those failures go
-     *        nowhere, which is how a lost dead letter becomes invisible.
-     * @param Lock $lock Serialises the receive connection — fetch, provisioning and
-     *        publishing. The commands connection gets a lock of its own, unless the
-     *        source is a live Connection, in which case one socket serves both roles
-     *        and this lock covers both. The default in-process mutex is what makes a
-     *        concurrency above one safe; pass one in only to observe or test it.
-     *        Unlike Broker\Redis — handed its connections, leaving the wrapping to
-     *        the caller — this broker resolves its own from $source, so it owns
-     *        their locking too. The $messageId and $onError closures are called
-     *        while the lock is held, so neither may call back into this broker:
-     *        the lock is a channel of one and would wait for itself.
+     *        nowhere, which is how a lost dead letter becomes invisible. Called on
+     *        the way out of receive(), after the broker has released its locks, so a
+     *        reporter is free to use this broker.
      */
     public function __construct(
         private readonly NatsConnection|\Closure $source,
@@ -206,8 +214,10 @@ class Nats implements Synchronous, Consumer
         private readonly float $duplicateWindow = 120.0,
         private readonly ?\Closure $messageId = null,
         private readonly ?\Closure $onError = null,
-        private readonly Lock $lock = new Mutex(),
     ) {
+        $this->lock = new Mutex();
+
+        // One socket serving both roles means one lock; see $commandsLock.
         $this->commandsLock = $this->source instanceof \Closure ? new Mutex() : $this->lock;
 
         if ($this->backoff !== null) {
@@ -318,11 +328,16 @@ class Nats implements Synchronous, Consumer
 
     public function publish(Queue $queue, array $payload, bool $priority = false): bool
     {
-        return $this->synchronize(function () use ($queue, $payload, $priority): bool {
-            $this->ensure($queue);
+        // Enveloped before the lock is taken. envelope() runs the caller's $messageId
+        // closure, and the lock is a channel of one acquired with no timeout, so a
+        // closure that reached back into the broker would wait for a lock its own call
+        // is holding and hang the worker for good. Nothing here needs the socket.
+        $subject = $priority ? $this->prioritySubject($queue) : $this->workSubject($queue);
+        $envelope = $this->envelope($queue, $payload);
 
-            $subject = $priority ? $this->prioritySubject($queue) : $this->workSubject($queue);
-            $this->publishEnvelope($subject, $this->envelope($queue, $payload));
+        return $this->synchronize(function () use ($queue, $subject, $envelope): bool {
+            $this->ensure($queue);
+            $this->publishEnvelope($subject, $envelope);
 
             return true;
         });
@@ -334,28 +349,29 @@ class Nats implements Synchronous, Consumer
             return true;
         }
 
-        return $this->synchronize(function () use ($queue, $payloads, $priority): bool {
+        // Enveloped before the lock, for the reason publish() gives.
+        $subject = $priority ? $this->prioritySubject($queue) : $this->workSubject($queue);
+
+        $messages = [];
+        foreach ($payloads as $payload) {
+            $envelope = $this->envelope($queue, $payload);
+            /** @var string $id */
+            $id = $envelope['pid'];
+
+            $messages[] = [
+                'subject' => $subject,
+                'data' => (string) json_encode($envelope),
+                'msgId' => $id,
+            ];
+        }
+
+        return $this->synchronize(function () use ($queue, $messages): bool {
             $this->ensure($queue);
 
             // One round trip per window rather than one per payload: the whole batch is
             // written before any acknowledgment is read. Each payload still carries its
             // own message id, so deduplication works exactly as it does on the single
             // enqueue, and a payload the server rejects still throws.
-            $subject = $priority ? $this->prioritySubject($queue) : $this->workSubject($queue);
-
-            $messages = [];
-            foreach ($payloads as $payload) {
-                $envelope = $this->envelope($queue, $payload);
-                /** @var string $id */
-                $id = $envelope['pid'];
-
-                $messages[] = [
-                    'subject' => $subject,
-                    'data' => (string) json_encode($envelope),
-                    'msgId' => $id,
-                ];
-            }
-
             foreach ($this->js()->publishMany($messages) as $ack) {
                 // Not discarded, for the same reason publishEnvelope() counts it: a
                 // duplicate acknowledgment is the only signal that deduplication did
@@ -403,10 +419,13 @@ class Nats implements Synchronous, Consumer
     }
 
     /**
-     * Hand a failure to the caller's reporter, if it gave one.
+     * Owe a failure to the caller's reporter, if it gave one.
      *
-     * Never throws: a reporting hook that fails must not escalate into the
-     * failure it was called to describe.
+     * Buffered rather than called here. The only caller is drainDeadLetters(), which
+     * runs under the receive lock, and the reporter is the caller's code: one that
+     * publishes a notification -- onto this very broker, plausibly -- would wait on a
+     * lock its own call stack is holding. {@see self::flushReports()} hands these over
+     * once receive() has let go.
      */
     private function report(\Throwable $error): void
     {
@@ -414,9 +433,33 @@ class Nats implements Synchronous, Consumer
             return;
         }
 
-        try {
-            ($this->onError)($error);
-        } catch (\Throwable) {
+        $this->deferred[] = $error;
+    }
+
+    /**
+     * Hand over everything report() owes, off the lock.
+     *
+     * Never throws: a reporting hook that fails must not escalate into the failure it
+     * was called to describe.
+     */
+    private function flushReports(): void
+    {
+        if ($this->deferred === [] || !$this->onError instanceof \Closure) {
+            $this->deferred = [];
+
+            return;
+        }
+
+        // Taken and cleared first, so a reporter that re-enters receive() cannot see
+        // the same failure twice.
+        $owed = $this->deferred;
+        $this->deferred = [];
+
+        foreach ($owed as $error) {
+            try {
+                ($this->onError)($error);
+            } catch (\Throwable) {
+            }
         }
     }
 
@@ -480,7 +523,12 @@ class Nats implements Synchronous, Consumer
 
     public function receive(Queue $queue, int $timeout): ?Message
     {
-        return $this->synchronize(fn(): ?Message => $this->pull($queue, $timeout));
+        try {
+            return $this->synchronize(fn(): ?Message => $this->pull($queue, $timeout));
+        } finally {
+            // Off the lock, and on the way out however pull() ended.
+            $this->flushReports();
+        }
     }
 
     /**

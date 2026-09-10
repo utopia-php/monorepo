@@ -108,16 +108,17 @@ function pct(array $samples, float $q): float
     return $samples[max(0, min($rank, count($samples) - 1))] / 1000;
 }
 
-/** @return array{drain: float, p50: float, p95: float, max: float, received: int} */
+/** @return array{drain: float, p50: float, p95: float, max: float, received: int, error: ?string} */
 function measure(string $name, int $slots, int $total, int $payload, float $work, float $rate): array
 {
     $client = broker($name);
     $queue = queueFor($name);
 
-    $out = ['drain' => 0.0, 'p50' => 0.0, 'p95' => 0.0, 'max' => 0.0, 'received' => 0];
+    $out = ['drain' => 0.0, 'p50' => 0.0, 'p95' => 0.0, 'max' => 0.0, 'received' => 0, 'error' => null];
     $filler = str_repeat('x', $payload);
+    $failure = null;
 
-    Coroutine\run(function () use ($client, $queue, $slots, $total, $filler, $work, $rate, &$out): void {
+    Coroutine\run(function () use ($client, $queue, $slots, $total, $filler, $work, $rate, &$out, &$failure): void {
         // Provision the stream / consumers before the clock starts, so first-touch
         // provisioning is not charged to the drain.
         $client->publish($queue, ['warmup' => true, 'filler' => $filler]);
@@ -139,22 +140,31 @@ function measure(string $name, int $slots, int $total, int $payload, float $work
 
         $started = microtime(true);
         $producer = new WaitGroup();
+        $producing = $rate > 0;
 
         if ($rate > 0) {
             // A second broker for the producer: publishing down the consumer's own
             // receive connection would be the very contention under measurement.
             $producer->add();
-            Coroutine::create(function () use ($queue, $total, $filler, $rate, $producer): void {
-                $sender = broker($queue->name === 'bench_redis' ? 'redis' : 'nats');
-                $gap = 1.0 / $rate;
+            Coroutine::create(function () use ($queue, $total, $filler, $rate, $producer, &$producing, &$failure): void {
+                // done() and the flag both in finally: a throw here used to leave the
+                // consumer waiting on a producer that had already given up.
+                try {
+                    $sender = broker($queue->name === 'bench_redis' ? 'redis' : 'nats');
+                    $gap = 1.0 / $rate;
 
-                for ($i = 0; $i < $total; $i++) {
-                    $sender->publish($queue, ['n' => $i, 'filler' => $filler]);
-                    Coroutine::sleep($gap);
+                    for ($i = 0; $i < $total; $i++) {
+                        $sender->publish($queue, ['n' => $i, 'filler' => $filler]);
+                        Coroutine::sleep($gap);
+                    }
+
+                    $sender->close();
+                } catch (\Throwable $e) {
+                    $failure ??= 'publish: ' . $e->getMessage();
+                } finally {
+                    $producing = false;
+                    $producer->done();
                 }
-
-                $sender->close();
-                $producer->done();
             });
         }
 
@@ -170,8 +180,16 @@ function measure(string $name, int $slots, int $total, int $payload, float $work
 
             if ($message === null) {
                 $channel->pop();
-                $idle++;
                 $idleElapsed += ($t1 - $t0) / 1_000_000_000;
+
+                // An empty receive only counts towards giving up once the producer has
+                // finished. In steady mode the queue is empty most of the time by
+                // design, so counting these would abandon the run mid-stream and report
+                // a rate over a fraction of the messages.
+                if (!$producing) {
+                    $idle++;
+                }
+
                 continue;
             }
 
@@ -179,17 +197,25 @@ function measure(string $name, int $slots, int $total, int $payload, float $work
             $received++;
 
             $group->add();
-            Coroutine::create(function () use ($client, $queue, $message, $channel, $group, $work, &$commits): void {
-                if ($work > 0) {
-                    Coroutine::sleep($work);
+            Coroutine::create(function () use ($client, $queue, $message, $channel, $group, $work, &$commits, &$failure): void {
+                // The slot and the wait group are released in finally. A commit that
+                // threw used to skip both, so the receive loop blocked on a slot that
+                // never came back and group->wait() never returned -- a failed run that
+                // looked like a hung one.
+                try {
+                    if ($work > 0) {
+                        Coroutine::sleep($work);
+                    }
+
+                    $c0 = hrtime(true);
+                    $client->commit($queue, $message);
+                    $commits[] = (hrtime(true) - $c0) / 1000;
+                } catch (\Throwable $e) {
+                    $failure ??= 'commit: ' . $e->getMessage();
+                } finally {
+                    $channel->pop();
+                    $group->done();
                 }
-
-                $c0 = hrtime(true);
-                $client->commit($queue, $message);
-                $commits[] = (hrtime(true) - $c0) / 1000;
-
-                $channel->pop();
-                $group->done();
             });
         }
 
@@ -209,6 +235,7 @@ function measure(string $name, int $slots, int $total, int $payload, float $work
             'p95' => pct($commits, 0.95),
             'max' => pct($commits, 1.0),
             'received' => $received,
+            'error' => $failure,
         ];
     });
 
@@ -239,38 +266,59 @@ printf("%-7s %5s %12s %11s %11s %11s\n", '-------', '-----', '------------', '--
 
 foreach ($backends as $name) {
     foreach ($levels as $slots) {
-        $drains = [];
-        $p50s = [];
-        $p95s = [];
-        $maxes = [];
-        $short = null;
+        // Only runs that drained everything are eligible for the median. A partial run
+        // reports a rate over a fraction of the workload, and averaging that in reads
+        // as a slower broker rather than as an aborted sample.
+        $complete = [];
+        $dropped = [];
+        $errors = [];
 
         for ($r = 0; $r < $repeat; $r++) {
             $sample = measure($name, $slots, $total, $payload, $work, $rate);
-            $drains[] = $sample['drain'];
-            $p50s[] = $sample['p50'];
-            $p95s[] = $sample['p95'];
-            $maxes[] = $sample['max'];
-            if ($sample['received'] < $total) {
-                $short = $sample['received'];
+
+            if ($sample['error'] !== null) {
+                $errors[] = $sample['error'];
             }
+
+            if ($sample['received'] < $total) {
+                $dropped[] = $sample['received'];
+
+                continue;
+            }
+
+            $complete[] = $sample;
         }
 
-        foreach ([&$drains, &$p50s, &$p95s, &$maxes] as &$series) {
-            sort($series);
+        $note = '';
+        if ($dropped !== []) {
+            $note .= sprintf('   (!! %d/%d runs incomplete: drained %s of %d)', count($dropped), $repeat, implode(', ', $dropped), $total);
         }
-        unset($series);
-        $mid = intdiv($repeat, 2);
+        if ($errors !== []) {
+            $note .= '   (!! ' . $errors[0] . ')';
+        }
+
+        if ($complete === []) {
+            printf("%-7s %5d %12s %11s %11s %11s%s\n", $name, $slots, 'n/a', 'n/a', 'n/a', 'n/a', $note);
+
+            continue;
+        }
+
+        $pick = static function (string $key) use ($complete): float {
+            $series = array_map(static fn(array $s): float => $s[$key], $complete);
+            sort($series);
+
+            return $series[intdiv(count($series), 2)];
+        };
 
         printf(
             "%-7s %5d %12.0f %9.2fms %9.2fms %9.2fms%s\n",
             $name,
             $slots,
-            $drains[$mid],
-            $p50s[$mid],
-            $p95s[$mid],
-            $maxes[$mid],
-            $short === null ? '' : "   (!! drained {$short}/{$total})",
+            $pick('drain'),
+            $pick('p50'),
+            $pick('p95'),
+            $pick('max'),
+            $note,
         );
     }
 }

@@ -797,6 +797,7 @@ final class NatsBrokerTest extends TestCase
         $queue = new Queue('t_' . substr(md5(uniqid('', true)), 0, 8));
 
         $ackSeconds = null;
+        $fetchSeconds = null;
         $depth = null;
         $error = null;
 
@@ -804,7 +805,7 @@ final class NatsBrokerTest extends TestCase
         // depth read: the commands connection is opened by the first acknowledgment, so
         // reading it after Coroutine\run() has returned would touch a socket whose
         // coroutine no longer exists.
-        \Swoole\Coroutine\run(function () use ($broker, $queue, &$ackSeconds, &$depth, &$error): void {
+        \Swoole\Coroutine\run(function () use ($broker, $queue, &$ackSeconds, &$fetchSeconds, &$depth, &$error): void {
             $broker->publish($queue, ['task' => 'first']);
 
             // Take the only message, so the fetch below has nothing to return and
@@ -819,12 +820,14 @@ final class NatsBrokerTest extends TestCase
             $wg = new \Swoole\Coroutine\WaitGroup();
 
             $wg->add();
-            \Swoole\Coroutine::create(function () use ($broker, $queue, $wg, &$error): void {
+            \Swoole\Coroutine::create(function () use ($broker, $queue, $wg, &$fetchSeconds, &$error): void {
+                $started = microtime(true);
                 try {
                     $broker->receive($queue, 3);
                 } catch (\Throwable $e) {
                     $error ??= $e;
                 }
+                $fetchSeconds = microtime(true) - $started;
                 $wg->done();
             });
 
@@ -851,6 +854,17 @@ final class NatsBrokerTest extends TestCase
         $broker->close();
 
         $this->assertNotInstanceOf(\Throwable::class, $error, 'the ack collided with the fetch: ' . ($error?->getMessage() ?? ''));
+
+        // Without this the test could pass for the wrong reason: an ack that happened to
+        // run before the fetch parked was never contended, so its latency proves nothing.
+        // The queue is empty, so a fetch that really parked returns only on its timeout.
+        $this->assertNotNull($fetchSeconds, 'the fetch never ran');
+        $this->assertGreaterThan(
+            2.0,
+            $fetchSeconds,
+            'the fetch returned early, so the ack was never raised against a parked one',
+        );
+
         $this->assertNotNull($ackSeconds, 'the ack never ran');
         $this->assertLessThan(
             1.0,
@@ -884,15 +898,28 @@ final class NatsBrokerTest extends TestCase
         $overlap = 0;
         $depth = null;
         $failure = null;
+        $timedOut = false;
 
         // Depth is read inside the coroutine for the same reason as the test above: the
         // commands connection belongs to the coroutine that first acknowledged on it.
-        \Swoole\Coroutine\run(function () use ($broker, $queue, $total, $cap, &$handled, &$active, &$overlap, &$depth, &$failure): void {
+        \Swoole\Coroutine\run(function () use ($broker, $queue, $total, $cap, &$handled, &$active, &$overlap, &$depth, &$failure, &$timedOut): void {
             for ($n = 0; $n < $total; $n++) {
                 $broker->publish($queue, ['n' => $n]);
             }
 
             $adapter = new Swoole($broker, 1, $queue->namespace);
+
+            // The loop only stops itself once every message is handled, and neither a
+            // receive failure nor a handler failure ends it. The regression under test
+            // is a dead worker, and an unreachable server looks the same from in here,
+            // so both need a way out or this waits forever instead of reporting.
+            $finished = new \Swoole\Coroutine\Channel(1);
+            \Swoole\Coroutine::create(function () use ($adapter, $finished, &$timedOut): void {
+                if ($finished->pop(30.0) === false) {
+                    $timedOut = true;
+                    $adapter->stop();
+                }
+            });
 
             $adapter->consume(
                 function () use ($adapter, $total, &$handled, &$active, &$overlap): void {
@@ -909,13 +936,16 @@ final class NatsBrokerTest extends TestCase
                     }
                 },
                 fn(): null => null,
-                function (?Message $message, \Throwable $error) use (&$failure): void {
+                function (?Message $message, \Throwable $error) use ($adapter, &$failure): void {
                     $failure ??= $error;
+                    $adapter->stop();
                 },
                 [
                     ['queue' => $queue, 'maxCoroutines' => $cap],
                 ],
             );
+
+            $finished->push(true);
 
             $depth = $broker->getQueueSize($queue);
         });
@@ -923,6 +953,7 @@ final class NatsBrokerTest extends TestCase
         $broker->close();
 
         $this->assertNotInstanceOf(\Throwable::class, $failure, 'the consume loop failed: ' . ($failure?->getMessage() ?? ''));
+        $this->assertFalse($timedOut, 'the consume loop had to be stopped by the watchdog');
         $this->assertSame($total, $handled, 'every message must be handled');
         $this->assertGreaterThan(1, $overlap, 'the handlers must have actually overlapped');
         $this->assertLessThanOrEqual($cap, $overlap, 'concurrency stays bounded by maxCoroutines');
