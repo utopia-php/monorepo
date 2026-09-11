@@ -73,7 +73,7 @@ final class LoadResultsTelemetryTest extends TestCase
         $captured = [];
 
         $adapter = new class extends Memory {
-            public function load(string $key, int $ttl, string|array $hash = ''): mixed
+            public function load(string $key, int $ttl, string $hash = ''): mixed
             {
                 return null;
             }
