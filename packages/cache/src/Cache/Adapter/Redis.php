@@ -158,15 +158,19 @@ class Redis extends Leasable implements Adapter, Retryable
     }
 
     /**
-     * @param  array<int|string, mixed>|string  $data
-     * @param  string  $hash optional
+     * @param  array<int|string, mixed>|string  $data a value, or a field => value map for a field list
+     * @param  string|string[]  $hash a single field, or a list of fields to batch-write
      * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
     {
         if ($key === '' || $key === '0' || empty($data)) {
             return false;
+        }
+
+        if (\is_array($hash)) {
+            return \is_array($data) ? $this->saveFields($key, $data, $hash, $ttl) : false;
         }
 
         if ($hash === '' || $hash === '0') {
@@ -180,6 +184,48 @@ class Redis extends Leasable implements Adapter, Retryable
         try {
             $value = Envelope::encode($data, time());
             $this->execute(fn(): \Redis|int|false => $this->redis->hSet($key, $hash, $value));
+
+            if ($ttl > 0) {
+                $this->execute(fn(): \Redis|bool => $this->redis->expire($key, $ttl));
+            }
+
+            return $data;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * HMSET the requested fields in one round trip, then one EXPIRE. $fields
+     * selects which entries of $data to write (all of them when empty).
+     *
+     * @param  array<int|string, mixed>  $data field => value
+     * @param  string[]  $fields
+     * @param  int  $ttl time in seconds
+     * @return array<int|string, mixed>|false
+     */
+    private function saveFields(string $key, array $data, array $fields, int $ttl): array|false
+    {
+        $fields = $fields === [] ? array_keys($data) : $fields;
+
+        $map = [];
+        foreach ($fields as $field) {
+            $field = (string) $field;
+            if (! \array_key_exists($field, $data)) {
+                continue;
+            }
+            if ($this->isReserved($field)) {
+                continue;
+            }
+            $map[$field] = Envelope::encode($data[$field], time());
+        }
+
+        if ($map === []) {
+            return false;
+        }
+
+        try {
+            $this->execute(fn(): \Redis|bool => $this->redis->hMSet($key, $map));
 
             if ($ttl > 0) {
                 $this->execute(fn(): \Redis|bool => $this->redis->expire($key, $ttl));

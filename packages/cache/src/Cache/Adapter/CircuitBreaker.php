@@ -36,7 +36,7 @@ class CircuitBreaker implements Adapter, Feature\Leasable, Feature\Telemetry
         return $this->delegate(__FUNCTION__, \func_get_args(), \is_array($hash) ? [] : false);
     }
 
-    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
     {
         /** @var bool|string|array<int|string, mixed> $result */
         $result = $this->delegate(__FUNCTION__, \func_get_args(), false);

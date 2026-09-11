@@ -108,19 +108,32 @@ class Cache
     /**
      * Save data to cache. Returns data on success of false on failure.
      *
-     * When $ttl > 0 the entry is also given a key-level expiry (adapters that
-     * support it arm it; others keep their timestamp TTL and ignore it). $ttl = 0
-     * preserves the prior behaviour and leaves any expiry untouched.
+     * A string $hash writes $data to one field. An array $hash switches to batch
+     * mode: $data is a field => value map written in one call (an empty $hash
+     * writes every pair, a non-empty $hash writes only those fields). When
+     * $ttl > 0 the key is also given a key-level expiry (adapters that support it
+     * arm it; others keep their timestamp TTL and ignore it). $ttl = 0 preserves
+     * the prior behaviour and leaves any expiry untouched.
      *
-     * @param  string|array<int|string, mixed>  $data
-     * @param  string  $hash optional
+     * @param  string|array<int|string, mixed>  $data a value, or a field => value map for a field list
+     * @param  string|string[]  $hash a single field, or a list of fields to batch-write
      * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, mixed $data, string $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, mixed $data, string|array $hash = '', int $ttl = 0): bool|string|array
     {
         $key = $this->caseSensitive ? $key : strtolower($key);
-        $hash = $this->caseSensitive ? $hash : strtolower($hash);
+        if (\is_array($hash)) {
+            if (! $this->caseSensitive) {
+                $hash = array_map(strtolower(...), $hash);
+                // In batch mode the $data keys are the field names.
+                if (\is_array($data)) {
+                    $data = array_change_key_case($data, CASE_LOWER);
+                }
+            }
+        } else {
+            $hash = $this->caseSensitive ? $hash : strtolower($hash);
+        }
         $start = microtime(true);
 
         try {

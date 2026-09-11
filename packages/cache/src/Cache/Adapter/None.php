@@ -24,7 +24,7 @@ class None implements Adapter
      * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
     {
         return false;
     }

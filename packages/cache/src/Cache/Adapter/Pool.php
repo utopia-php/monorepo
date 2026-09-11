@@ -39,7 +39,7 @@ class Pool implements Adapter, Leasable
         return $this->delegate(__FUNCTION__, \func_get_args());
     }
 
-    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
     {
         /**
          * @var bool|string|array<mixed> $result

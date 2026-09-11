@@ -121,10 +121,14 @@ class RedisCluster implements Adapter, Retryable
      * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
     {
         if ($key === '' || $key === '0' || empty($data)) {
             return false;
+        }
+
+        if (\is_array($hash)) {
+            return \is_array($data) ? $this->saveFields($key, $data, $hash, $ttl) : false;
         }
 
         if ($hash === '' || $hash === '0') {
@@ -142,6 +146,53 @@ class RedisCluster implements Adapter, Retryable
 
         try {
             $this->execute(fn(): int => $this->redis->hSet($key, $hash, $value));
+
+            if ($ttl > 0) {
+                $this->execute(fn(): bool => $this->redis->expire($key, $ttl));
+            }
+
+            return $data;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * HMSET the requested fields in one round trip, then one EXPIRE. $fields
+     * selects which entries of $data to write (all of them when empty).
+     *
+     * @param  array<int|string, mixed>  $data field => value
+     * @param  string[]  $fields
+     * @param  int  $ttl time in seconds
+     * @return array<int|string, mixed>|false
+     */
+    private function saveFields(string $key, array $data, array $fields, int $ttl): array|false
+    {
+        $fields = $fields === [] ? array_keys($data) : $fields;
+
+        $map = [];
+        foreach ($fields as $field) {
+            $field = (string) $field;
+            if (! \array_key_exists($field, $data)) {
+                continue;
+            }
+
+            try {
+                $map[$field] = json_encode([
+                    'time' => time(),
+                    'data' => $data[$field],
+                ], flags: JSON_THROW_ON_ERROR);
+            } catch (Throwable) {
+                return false;
+            }
+        }
+
+        if ($map === []) {
+            return false;
+        }
+
+        try {
+            $this->execute(fn(): bool => $this->redis->hMSet($key, $map));
 
             if ($ttl > 0) {
                 $this->execute(fn(): bool => $this->redis->expire($key, $ttl));

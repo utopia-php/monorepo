@@ -54,10 +54,26 @@ class Filesystem implements Adapter
      * @return bool|string|array<int|string, mixed>
      * @throws Exception
      */
-    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
     {
         if (empty($data)) {
             return false;
+        }
+
+        if (\is_array($hash)) {
+            if (! \is_array($data)) {
+                return false;
+            }
+            $fields = $hash === [] ? array_keys($data) : $hash;
+            $ok = false;
+            foreach ($fields as $field) {
+                $field = (string) $field;
+                if (\array_key_exists($field, $data) && $this->save($key, $data[$field], $field, $ttl) !== false) {
+                    $ok = true;
+                }
+            }
+
+            return $ok ? $data : false;
         }
 
         $file = $this->getPath($key);

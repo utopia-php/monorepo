@@ -20,16 +20,21 @@ interface Adapter
     public function load(string $key, int $ttl, string|array $hash = ''): mixed;
 
     /**
-     * Save $data under $hash. When $ttl > 0 the entry is also given a key-level
-     * expiry (adapters that support it arm it; others ignore it and keep their
-     * timestamp TTL). $ttl = 0 preserves the prior behaviour.
+     * Save under a single field, or several at once. A string $hash writes $data
+     * to that one field. An array $hash switches to batch mode: $data is a
+     * field => value map written in one call — an empty $hash writes every pair,
+     * a non-empty $hash writes only those fields (values taken from $data).
+     * When $ttl > 0 the key is also given a key-level expiry (adapters that
+     * support it arm it; others ignore it and keep their timestamp TTL).
+     * $ttl = 0 preserves the prior behaviour. Adapters without native multi-field
+     * support fall back to one write per field.
      *
-     * @param  string|array<int|string, mixed>  $data
-     * @param  string  $hash optional
+     * @param  string|array<int|string, mixed>  $data a value, or a field => value map for a field list
+     * @param  string|string[]  $hash a single field, or a list of fields to batch-write
      * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array;
+    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array;
 
     /**
      * @param  string  $hash optional

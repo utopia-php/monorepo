@@ -58,7 +58,7 @@ class Sharding implements Adapter, Leasable
      * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
     {
         return $this->getAdapter($key)->save($key, $data, $hash, $ttl);
     }

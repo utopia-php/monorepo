@@ -188,10 +188,14 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
         return $result;
     }
 
-    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
     {
         if ($key === '' || $key === '0' || empty($data)) {
             return false;
+        }
+
+        if (\is_array($hash)) {
+            return \is_array($data) ? $this->saveFields($key, $data, $hash, $ttl) : false;
         }
 
         if ($hash === '' || $hash === '0') {
@@ -205,6 +209,49 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
         try {
             $value = Envelope::encode($data, time());
             $this->command(['HSET', $key, $hash, $value]);
+
+            if ($ttl > 0) {
+                $this->command(['EXPIRE', $key, (string) $ttl]);
+            }
+
+            return $data;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * One variadic HSET for all requested fields, then one EXPIRE. $fields
+     * selects which entries of $data to write (all of them when empty).
+     *
+     * @param  array<int|string, mixed>  $data field => value
+     * @param  string[]  $fields
+     * @param  int  $ttl time in seconds
+     * @return array<int|string, mixed>|false
+     */
+    private function saveFields(string $key, array $data, array $fields, int $ttl): array|false
+    {
+        $fields = $fields === [] ? array_keys($data) : $fields;
+
+        $args = ['HSET', $key];
+        foreach ($fields as $field) {
+            $field = (string) $field;
+            if (! \array_key_exists($field, $data)) {
+                continue;
+            }
+            if ($this->isReserved($field)) {
+                continue;
+            }
+            $args[] = $field;
+            $args[] = Envelope::encode($data[$field], time());
+        }
+
+        if (\count($args) <= 2) {
+            return false;
+        }
+
+        try {
+            $this->command($args);
 
             if ($ttl > 0) {
                 $this->command(['EXPIRE', $key, (string) $ttl]);
