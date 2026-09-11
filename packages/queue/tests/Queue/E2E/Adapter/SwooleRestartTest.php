@@ -112,14 +112,18 @@ final class SwooleRestartTest extends TestCase
 
     public static function stopSignals(): \Iterator
     {
-        yield 'SIGTERM' => [SIGTERM];
-        yield 'SIGINT' => [SIGINT];
+        // One queue per worker takes the single-queue loop, two the
+        // multi-queue one; both must drain the same way.
+        foreach ([1, 2] as $queues) {
+            yield "SIGTERM, {$queues} queue(s)" => [SIGTERM, $queues];
+            yield "SIGINT, {$queues} queue(s)" => [SIGINT, $queues];
+        }
     }
 
     #[DataProvider('stopSignals')]
-    public function testShutdownDrainsJobWithoutRestartingWorkers(int $signal): void
+    public function testShutdownDrainsJobWithoutRestartingWorkers(int $signal, int $queues): void
     {
-        $this->start(3);
+        $this->start(3, $queues);
         $ready = $this->waitFor('ready', 3);
         $this->events = [];
         $this->publish(0, 'slow');
@@ -140,12 +144,12 @@ final class SwooleRestartTest extends TestCase
         }
     }
 
-    private function start(int $workers): void
+    private function start(int $workers, int $queues = 1): void
     {
         $this->namespace = 'restart-' . bin2hex(random_bytes(8));
         $this->log = tempnam(sys_get_temp_dir(), 'queue-restart-');
         $this->process = proc_open(
-            [PHP_BINARY, '-d', 'display_errors=0', '-d', 'log_errors=1', '-d', 'error_log=/dev/stderr', __DIR__ . '/../../servers/Swoole/restart.php', $this->namespace, (string) $workers],
+            [PHP_BINARY, '-d', 'display_errors=0', '-d', 'log_errors=1', '-d', 'error_log=/dev/stderr', __DIR__ . '/../../servers/Swoole/restart.php', $this->namespace, (string) $workers, (string) $queues],
             [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', $this->log, 'a']],
             $pipes,
         );
@@ -162,10 +166,9 @@ final class SwooleRestartTest extends TestCase
 
     private function queued(int $worker): int
     {
-        $redis = new \Redis();
-        $redis->connect('127.0.0.1', 16379);
+        $broker = new Redis(new Connection('127.0.0.1', 16379), new Connection('127.0.0.1', 16379));
 
-        return (int) $redis->lLen($this->namespace . '.queue.worker-' . $worker);
+        return $broker->getQueueSize(new Queue('worker-' . $worker, $this->namespace));
     }
 
     private function waitFor(string $event, int $count): array
