@@ -36,16 +36,10 @@ class Hazelcast implements Adapter, Retryable
 
     /**
      * @param  int  $ttl time in seconds
-     * @param  string|string[]  $hash a single field, or a list of fields to batch
-     * @return mixed single value, false, or array<string, mixed> for a field list
+     * @param  string  $hash optional
      */
-    public function load(string $key, int $ttl, string|array $hash = ''): mixed
+    public function load(string $key, int $ttl, string $hash = ''): mixed
     {
-        // No per-field storage: multi-field (hash) reads are not supported here.
-        if (\is_array($hash)) {
-            return [];
-        }
-
         $cache = $this->execute(fn(): mixed => $this->memcached->get($key));
         if (\is_string($cache)) {
             $cache = Json::decode($cache);
@@ -68,14 +62,9 @@ class Hazelcast implements Adapter, Retryable
      * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         if ($key === '' || $key === '0' || empty($data)) {
-            return false;
-        }
-
-        // No per-field storage: multi-field (hash) writes are not supported here.
-        if (\is_array($hash)) {
             return false;
         }
 

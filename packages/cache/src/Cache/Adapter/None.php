@@ -10,12 +10,11 @@ class None implements Adapter
 {
     /**
      * @param  int  $ttl time in seconds
-     * @param  string|string[]  $hash a single field, or a list of fields to batch
-     * @return mixed false, or an empty array<string, mixed> for a field list
+     * @param  string  $hash optional
      */
-    public function load(string $key, int $ttl, string|array $hash = ''): mixed
+    public function load(string $key, int $ttl, string $hash = ''): mixed
     {
-        return \is_array($hash) ? [] : false;
+        return false;
     }
 
     /**
@@ -24,7 +23,7 @@ class None implements Adapter
      * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         return false;
     }

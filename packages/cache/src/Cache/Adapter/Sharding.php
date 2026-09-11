@@ -3,9 +3,10 @@
 namespace Utopia\Cache\Adapter;
 
 use Utopia\Cache\Adapter;
+use Utopia\Cache\Feature\Batchable;
 use Utopia\Cache\Feature\Leasable;
 
-class Sharding implements Adapter, Leasable
+class Sharding implements Adapter, Batchable, Leasable
 {
     /**
      * @var Adapter[]
@@ -44,10 +45,9 @@ class Sharding implements Adapter, Leasable
 
     /**
      * @param  int  $ttl time in seconds
-     * @param  string|string[]  $hash a single field, or a list of fields to batch
-     * @return mixed single value, false, or array<string, mixed> for a field list
+     * @param  string  $hash optional
      */
-    public function load(string $key, int $ttl, string|array $hash = ''): mixed
+    public function load(string $key, int $ttl, string $hash = ''): mixed
     {
         return $this->getAdapter($key)->load($key, $ttl, $hash);
     }
@@ -58,9 +58,33 @@ class Sharding implements Adapter, Leasable
      * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         return $this->getAdapter($key)->save($key, $data, $hash, $ttl);
+    }
+
+    /**
+     * @param  string[]  $fields
+     * @param  int  $ttl time in seconds
+     * @return array<string, mixed>
+     */
+    public function loadMany(string $key, array $fields, int $ttl): array
+    {
+        $adapter = $this->getAdapter($key);
+
+        return $adapter instanceof Batchable ? $adapter->loadMany($key, $fields, $ttl) : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data field => value
+     * @param  int  $ttl time in seconds
+     * @return array<string, mixed>|false
+     */
+    public function saveMany(string $key, array $data, int $ttl = 0): array|false
+    {
+        $adapter = $this->getAdapter($key);
+
+        return $adapter instanceof Batchable ? $adapter->saveMany($key, $data, $ttl) : false;
     }
 
     public function getGeneration(string $key): string

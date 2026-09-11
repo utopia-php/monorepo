@@ -9,9 +9,10 @@ use Utopia\Cache\Adapter;
 use Utopia\Cache\Adapter\Redis\Envelope;
 use Utopia\Cache\Adapter\Redis\Leasable;
 use Utopia\Cache\Adapter\Redis\NoScript;
+use Utopia\Cache\Feature\Batchable;
 use Utopia\Cache\Feature\Retryable;
 
-class Redis extends Leasable implements Adapter, Retryable
+class Redis extends Leasable implements Adapter, Batchable, Retryable
 {
     protected Client $redis;
 
@@ -91,15 +92,10 @@ class Redis extends Leasable implements Adapter, Retryable
 
     /**
      * @param  int  $ttl time in seconds
-     * @param  string|string[]  $hash a single field, or a list of fields to batch
-     * @return mixed single value, false, or array<string, mixed> for a field list
+     * @param  string  $hash optional
      */
-    public function load(string $key, int $ttl, string|array $hash = ''): mixed
+    public function load(string $key, int $ttl, string $hash = ''): mixed
     {
-        if (\is_array($hash)) {
-            return $this->loadFields($key, $hash, $ttl);
-        }
-
         if ($hash === '' || $hash === '0') {
             $hash = $key;
         }
@@ -125,7 +121,7 @@ class Redis extends Leasable implements Adapter, Retryable
      * @param  int  $ttl time in seconds
      * @return array<string, mixed>
      */
-    private function loadFields(string $key, array $fields, int $ttl): array
+    public function loadMany(string $key, array $fields, int $ttl): array
     {
         $now = time();
 
@@ -158,19 +154,15 @@ class Redis extends Leasable implements Adapter, Retryable
     }
 
     /**
-     * @param  array<int|string, mixed>|string  $data a value, or a field => value map for a field list
-     * @param  string|string[]  $hash a single field, or a list of fields to batch-write
+     * @param  array<int|string, mixed>|string  $data
+     * @param  string  $hash optional
      * @param  int  $ttl time in seconds
      * @return bool|string|array<int|string, mixed>
      */
-    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         if ($key === '' || $key === '0' || empty($data)) {
             return false;
-        }
-
-        if (\is_array($hash)) {
-            return \is_array($data) ? $this->saveFields($key, $data, $hash, $ttl) : false;
         }
 
         if ($hash === '' || $hash === '0') {
@@ -196,28 +188,21 @@ class Redis extends Leasable implements Adapter, Retryable
     }
 
     /**
-     * HMSET the requested fields in one round trip, then one EXPIRE. $fields
-     * selects which entries of $data to write (all of them when empty).
+     * HMSET every field => value pair of $data in one round trip, then one EXPIRE.
      *
-     * @param  array<int|string, mixed>  $data field => value
-     * @param  string[]  $fields
+     * @param  array<string, mixed>  $data field => value
      * @param  int  $ttl time in seconds
-     * @return array<int|string, mixed>|false
+     * @return array<string, mixed>|false
      */
-    private function saveFields(string $key, array $data, array $fields, int $ttl): array|false
+    public function saveMany(string $key, array $data, int $ttl = 0): array|false
     {
-        $fields = $fields === [] ? array_keys($data) : $fields;
-
         $map = [];
-        foreach ($fields as $field) {
+        foreach ($data as $field => $value) {
             $field = (string) $field;
-            if (! \array_key_exists($field, $data)) {
-                continue;
-            }
             if ($this->isReserved($field)) {
                 continue;
             }
-            $map[$field] = Envelope::encode($data[$field], time());
+            $map[$field] = Envelope::encode($value, time());
         }
 
         if ($map === []) {

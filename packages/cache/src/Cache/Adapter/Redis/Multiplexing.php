@@ -8,6 +8,7 @@ use Swoole\Coroutine\Channel;
 use Swoole\Coroutine\Lock;
 use Throwable;
 use Utopia\Cache\Adapter;
+use Utopia\Cache\Feature\Batchable;
 use Utopia\Cache\Feature\Telemetry as TelemetryFeature;
 use Utopia\Telemetry\Adapter as Telemetry;
 use Utopia\Telemetry\Adapter\None as NoTelemetry;
@@ -23,7 +24,7 @@ use Utopia\Telemetry\UpDownCounter;
  * single reader coroutine parses inbound frames and dispatches each one to
  * the next pending Channel, exploiting Redis's guarantee of in-order replies.
  */
-class Multiplexing extends Leasable implements Adapter, TelemetryFeature
+class Multiplexing extends Leasable implements Adapter, Batchable, TelemetryFeature
 {
     private ?ConnectionContext $connection = null;
 
@@ -113,12 +114,8 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
         $this->shutdown();
     }
 
-    public function load(string $key, int $ttl, string|array $hash = ''): mixed
+    public function load(string $key, int $ttl, string $hash = ''): mixed
     {
-        if (\is_array($hash)) {
-            return $this->loadFields($key, $hash, $ttl);
-        }
-
         if ($hash === '' || $hash === '0') {
             $hash = $key;
         }
@@ -144,7 +141,7 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
      * @param  int  $ttl time in seconds
      * @return array<string, mixed>
      */
-    private function loadFields(string $key, array $fields, int $ttl): array
+    public function loadMany(string $key, array $fields, int $ttl): array
     {
         $now = time();
         $pairs = [];
@@ -188,14 +185,10 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
         return $result;
     }
 
-    public function save(string $key, array|string $data, string|array $hash = '', int $ttl = 0): bool|string|array
+    public function save(string $key, array|string $data, string $hash = '', int $ttl = 0): bool|string|array
     {
         if ($key === '' || $key === '0' || empty($data)) {
             return false;
-        }
-
-        if (\is_array($hash)) {
-            return \is_array($data) ? $this->saveFields($key, $data, $hash, $ttl) : false;
         }
 
         if ($hash === '' || $hash === '0') {
@@ -221,29 +214,22 @@ class Multiplexing extends Leasable implements Adapter, TelemetryFeature
     }
 
     /**
-     * One variadic HSET for all requested fields, then one EXPIRE. $fields
-     * selects which entries of $data to write (all of them when empty).
+     * One variadic HSET for every field => value pair of $data, then one EXPIRE.
      *
-     * @param  array<int|string, mixed>  $data field => value
-     * @param  string[]  $fields
+     * @param  array<string, mixed>  $data field => value
      * @param  int  $ttl time in seconds
-     * @return array<int|string, mixed>|false
+     * @return array<string, mixed>|false
      */
-    private function saveFields(string $key, array $data, array $fields, int $ttl): array|false
+    public function saveMany(string $key, array $data, int $ttl = 0): array|false
     {
-        $fields = $fields === [] ? array_keys($data) : $fields;
-
         $args = ['HSET', $key];
-        foreach ($fields as $field) {
+        foreach ($data as $field => $value) {
             $field = (string) $field;
-            if (! \array_key_exists($field, $data)) {
-                continue;
-            }
             if ($this->isReserved($field)) {
                 continue;
             }
             $args[] = $field;
-            $args[] = Envelope::encode($data[$field], time());
+            $args[] = Envelope::encode($value, time());
         }
 
         if (\count($args) <= 2) {
