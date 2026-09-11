@@ -891,7 +891,10 @@ class Origin extends Git
      */
     public function generateCloneCommand(string $owner, string $repositoryName, string $version, string $versionType, string $directory, string $rootDirectory): string
     {
-        $rootDirectory = $this->sparseCheckoutPattern($rootDirectory);
+        $rootDirectory = $this->normalizeRepositoryPath($rootDirectory);
+        if ($rootDirectory === '') {
+            $rootDirectory = '*';
+        }
 
         $cloneUrl = $this->authenticatedCloneUrl($owner, $repositoryName);
 
