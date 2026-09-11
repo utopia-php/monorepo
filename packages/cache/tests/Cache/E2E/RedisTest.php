@@ -62,6 +62,39 @@ final class RedisTest extends Base
         $this->assertSame(['sequence' => 9], $cache->load($key, 3600, 'topicB'));
     }
 
+    public function testSaveFieldsBatch(): void
+    {
+        $redis = new Redis();
+        $redis->connect(Services::HOST, Services::REDIS_PORT);
+        $cache = new Cache(new RedisAdapter($redis));
+        $cache->setCaseSensitivity(true);
+
+        $key = 'test:batchsave:' . uniqid();
+
+        // One HMSET writes every field of the map; ttl arms the whole-key expiry.
+        $written = $cache->save($key, [
+            'topicA' => ['sequence' => 5],
+            'topicB' => ['sequence' => 9],
+            'topicC' => ['sequence' => 1],
+        ], [], 300);
+
+        $this->assertSame(['topicA' => ['sequence' => 5], 'topicB' => ['sequence' => 9], 'topicC' => ['sequence' => 1]], $written);
+        $this->assertEqualsCanonicalizing([
+            'topicA' => ['sequence' => 5],
+            'topicB' => ['sequence' => 9],
+            'topicC' => ['sequence' => 1],
+        ], $cache->load($key, 3600, []));
+
+        $ttl = $redis->ttl($key);
+        $this->assertGreaterThan(0, $ttl);
+        $this->assertLessThanOrEqual(300, $ttl);
+
+        // A non-empty field list writes only those fields of the map.
+        $cache->save($key, ['topicA' => ['sequence' => 50], 'topicZ' => ['sequence' => 7]], ['topicA']);
+        $this->assertSame(['sequence' => 50], $cache->load($key, 3600, 'topicA'));
+        $this->assertSame([], $cache->load($key, 3600, ['topicZ'])); // topicZ was filtered out
+    }
+
     public function testLoadFieldsExcludesExpired(): void
     {
         $redis = new Redis();
