@@ -20,6 +20,7 @@ final class RedisConnectionRecoveryTest extends TestCase
     private string $redisHost;
     private int $redisPort;
     private int $proxyPort;
+    private string $controlFile;
 
     /** @var resource|null */
     private $proxy;
@@ -30,6 +31,7 @@ final class RedisConnectionRecoveryTest extends TestCase
         $this->redisHost = parse_url($url, PHP_URL_HOST) ?: '127.0.0.1';
         $this->redisPort = parse_url($url, PHP_URL_PORT) ?: 16379;
         $this->proxyPort = $this->freePort();
+        $this->controlFile = sys_get_temp_dir() . '/queue-proxy-' . $this->proxyPort;
 
         $this->startProxy();
     }
@@ -37,6 +39,7 @@ final class RedisConnectionRecoveryTest extends TestCase
     protected function tearDown(): void
     {
         $this->stopProxy();
+        @unlink($this->controlFile);
     }
 
     public function testCommandsRecoverOnceTheServerIsBack(): void
@@ -63,32 +66,41 @@ final class RedisConnectionRecoveryTest extends TestCase
         $connection->remove($key);
     }
 
-    public function testPushIsNotReplayedWhenItsOutcomeIsUnknown(): void
+    public function testPushIsNotReplayedWhenItsReplyIsLost(): void
     {
-        $connection = new Redis('127.0.0.1', $this->proxyPort);
+        // A read timeout, or a client whose reply never comes waits forever.
+        $connection = new Redis('127.0.0.1', $this->proxyPort, readTimeout: 1);
         $queue = 'tests.recovery.queue.' . uniqid();
 
         $this->assertTrue($connection->leftPush($queue, 'one'));
 
-        $this->stopProxy();
+        $this->loseNextReply();
 
         try {
             $connection->leftPush($queue, 'two');
-            $this->fail('a push with the server gone must fail');
+            $this->fail('a push whose reply was lost must fail');
         } catch (\RedisException) {
         }
 
-        $this->startProxy();
-
-        $this->assertSame(1, $connection->listSize($queue), 'a push that failed must not be replayed on recovery');
+        $this->assertSame(2, $connection->listSize($queue), 'the server ran the push once; a recovery must not run it again');
 
         $connection->remove($queue);
+    }
+
+    /**
+     * Make the proxy forward the next client chunk and then close the client
+     * socket before the reply: the server executes the command, the client
+     * cannot know that it did.
+     */
+    private function loseNextReply(): void
+    {
+        touch($this->controlFile);
     }
 
     private function startProxy(): void
     {
         $script = __DIR__ . '/../../servers/Proxy/proxy.php';
-        $command = [PHP_BINARY, $script, (string) $this->proxyPort, $this->redisHost, (string) $this->redisPort];
+        $command = [PHP_BINARY, $script, (string) $this->proxyPort, $this->redisHost, (string) $this->redisPort, $this->controlFile];
         $this->proxy = proc_open($command, [], $pipes);
 
         $this->assertIsResource($this->proxy, 'proxy must start');

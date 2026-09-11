@@ -3,17 +3,22 @@
 /**
  * Plain TCP proxy for tests that need a server to vanish and come back.
  *
- *   php proxy.php <listen-port> <target-host> <target-port>
+ *   php proxy.php <listen-port> <target-host> <target-port> [<control-file>]
  *
  * Every accepted client gets its own upstream socket; bytes are forwarded
  * both ways until either side closes. Killing this process closes every
  * client socket at once and leaves the port refusing connections, which is
  * what a broker failover looks like from a worker.
+ *
+ * While the control file exists, the next chunk a client sends is forwarded
+ * upstream and then both sockets are closed before any reply comes back: the
+ * server ran the command, the client never learns whether it did. The file
+ * is removed once used.
  */
 
 declare(strict_types=1);
 
-[, $listenPort, $targetHost, $targetPort] = $_SERVER['argv'] + [null, null, null, null];
+[, $listenPort, $targetHost, $targetPort, $controlFile] = $_SERVER['argv'] + [null, null, null, null, null];
 
 $server = stream_socket_server("tcp://127.0.0.1:{$listenPort}", $errno, $errstr);
 if ($server === false) {
@@ -23,6 +28,9 @@ if ($server === false) {
 
 /** @var array<int, resource> $peers socket id => the socket on the other side */
 $peers = [];
+
+/** @var array<int, true> $clients socket ids of accepted clients */
+$clients = [];
 
 while (true) {
     $read = [$server, ...array_map(fn(int $id) => $peers[$id], array_keys($peers))];
@@ -47,6 +55,7 @@ while (true) {
 
             $peers[(int) $client] = $upstream;
             $peers[(int) $upstream] = $client;
+            $clients[(int) $client] = true;
             continue;
         }
 
@@ -54,7 +63,7 @@ while (true) {
         $data = fread($socket, 65536);
 
         if ($data === false || $data === '' || $other === null) {
-            unset($peers[(int) $socket]);
+            unset($peers[(int) $socket], $clients[(int) $socket]);
             if ($other !== null) {
                 unset($peers[(int) $other]);
                 fclose($other);
@@ -64,5 +73,24 @@ while (true) {
         }
 
         fwrite($other, $data);
+        // Client -> upstream chunk delivered; if asked to, now lose the reply.
+        if ($controlFile === null) {
+            continue;
+        }
+        if (!isset($clients[(int) $socket])) {
+            continue;
+        }
+
+        clearstatcache(true, $controlFile);
+        if (!is_file($controlFile)) {
+            continue;
+        }
+
+        unlink($controlFile);
+        fflush($other);
+        usleep(50_000);
+        unset($peers[(int) $socket], $peers[(int) $other], $clients[(int) $socket]);
+        fclose($other);
+        fclose($socket);
     }
 }
