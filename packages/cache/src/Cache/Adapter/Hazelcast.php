@@ -41,17 +41,9 @@ class Hazelcast implements Adapter, Retryable
      */
     public function load(string $key, int $ttl, string|array $hash = ''): mixed
     {
+        // No per-field storage: multi-field (hash) reads are not supported here.
         if (\is_array($hash)) {
-            $fields = $hash === [] ? $this->list($key) : $hash;
-            $result = [];
-            foreach ($fields as $field) {
-                $value = $this->load($key, $ttl, $field);
-                if ($value !== false) {
-                    $result[$field] = $value;
-                }
-            }
-
-            return $result;
+            return [];
         }
 
         $cache = $this->execute(fn(): mixed => $this->memcached->get($key));
@@ -82,20 +74,9 @@ class Hazelcast implements Adapter, Retryable
             return false;
         }
 
+        // No per-field storage: multi-field (hash) writes are not supported here.
         if (\is_array($hash)) {
-            if (! \is_array($data)) {
-                return false;
-            }
-            $fields = $hash === [] ? array_keys($data) : $hash;
-            $ok = false;
-            foreach ($fields as $field) {
-                $field = (string) $field;
-                if (\array_key_exists($field, $data) && $this->save($key, $data[$field], $field, $ttl) !== false) {
-                    $ok = true;
-                }
-            }
-
-            return $ok ? $data : false;
+            return false;
         }
 
         $cache = [
