@@ -118,12 +118,12 @@ class Redis implements Connection
 
     public function listRemove(string $queue, string $key): bool
     {
-        return (bool) $this->call(fn(\Redis $redis): int|\Redis|false => $redis->lRem($queue, $key, 1));
+        return (bool) $this->call(fn(\Redis $redis): int|\Redis|false => $redis->lRem($queue, $key, 1), idempotent: true);
     }
 
     public function remove(string $key): bool
     {
-        return (bool) $this->call(fn(\Redis $redis): int|\Redis|false => $redis->del($key));
+        return (bool) $this->call(fn(\Redis $redis): int|\Redis|false => $redis->del($key), idempotent: true);
     }
 
     public function setArray(string $key, array $value, int $ttl = 0): bool
@@ -134,19 +134,19 @@ class Redis implements Connection
     public function set(string $key, string $value, int $ttl = 0): bool
     {
         if ($ttl > 0) {
-            return $this->call(fn(\Redis $redis): bool|\Redis => $redis->setex($key, $ttl, $value));
+            return $this->call(fn(\Redis $redis): bool|\Redis => $redis->setex($key, $ttl, $value), idempotent: true);
         }
-        return $this->call(fn(\Redis $redis): \Redis|string|bool => $redis->set($key, $value));
+        return $this->call(fn(\Redis $redis): \Redis|string|bool => $redis->set($key, $value), idempotent: true);
     }
 
     public function get(string $key): array|string|null
     {
-        return $this->call(fn(\Redis $redis): mixed => $redis->get($key));
+        return $this->call(fn(\Redis $redis): mixed => $redis->get($key), idempotent: true);
     }
 
     public function listSize(string $key): int
     {
-        return $this->call(fn(\Redis $redis): int|\Redis|false => $redis->lLen($key));
+        return $this->call(fn(\Redis $redis): int|\Redis|false => $redis->lLen($key), idempotent: true);
     }
 
     public function increment(string $key): int
@@ -164,7 +164,7 @@ class Redis implements Connection
         $start = $offset;
         $end = $start + $total - 1;
 
-        return $this->call(fn(\Redis $redis): array|\Redis|false => $redis->lRange($key, $start, $end));
+        return $this->call(fn(\Redis $redis): array|\Redis|false => $redis->lRange($key, $start, $end), idempotent: true);
     }
 
     public function ping(): bool
@@ -189,20 +189,9 @@ class Redis implements Connection
     }
 
     /**
-     * phpredis errors that mean the socket is gone rather than the command
-     * being wrong. Anything else (WRONGTYPE, OOM, ...) is the caller's to see.
-     */
-    private const array TRANSPORT_ERRORS = [
-        'went away',
-        'Connection lost',
-        'Connection closed',
-        'Connection refused',
-        'read error on connection',
-    ];
-
-    /**
-     * Run a command on the cached client, once more on a fresh one if the
-     * socket has gone.
+     * Run a command on the cached client. When phpredis reports the socket
+     * is gone, drop the client so the next command opens a fresh one, and
+     * for a command that is safe to repeat run it again right away.
      *
      * phpredis reconnects a dropped socket by itself, but when the peer stays
      * away past its retry budget it parks the client in a failed state for
@@ -210,11 +199,15 @@ class Redis implements Connection
      * through a broker failover longer than those retries would otherwise fail
      * every ack until the process restarts.
      *
+     * Commands whose execution the server may already have applied (pops,
+     * pushes, counters) are never replayed: the caller sees the error and the
+     * broker's own retry path decides.
+     *
      * @template T
      * @param callable(\Redis): T $command
      * @return T
      */
-    protected function call(callable $command): mixed
+    protected function call(callable $command, bool $idempotent = false): mixed
     {
         try {
             return $command($this->getRedis());
@@ -225,13 +218,24 @@ class Redis implements Connection
 
             $this->close();
 
+            if (!$idempotent) {
+                throw $e;
+            }
+
             return $command($this->getRedis());
         }
     }
 
+    /**
+     * phpredis errors that mean the socket is gone rather than the command
+     * being wrong. Anything else (WRONGTYPE, OOM, ...) is the caller's to see.
+     */
     private function isTransportError(\RedisException $e): bool
     {
-        return array_any(self::TRANSPORT_ERRORS, fn($needle): bool => str_contains($e->getMessage(), (string) $needle));
+        return (bool) preg_match(
+            '/went away|Connection (lost|closed|refused)|read error on connection/',
+            $e->getMessage(),
+        );
     }
 
     protected function getRedis(): \Redis
