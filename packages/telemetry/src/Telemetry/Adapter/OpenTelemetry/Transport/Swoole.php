@@ -114,10 +114,7 @@ class Swoole implements TransportInterface
         try {
             $statusCode = $this->post($client, $headers, $payload);
 
-            // Swoole reconnects a pooled socket the collector closed while idle,
-            // but not one it dropped with the request in flight (ECONNRESET).
-            // One fresh attempt tells that apart from a dead collector.
-            if ($statusCode < 0 && $reused) {
+            if ($reused && $this->isRetryable($statusCode)) {
                 $client->close();
                 $client = $this->connect();
                 $statusCode = $this->post($client, $headers, $payload);
@@ -151,6 +148,25 @@ class Swoole implements TransportInterface
         } finally {
             $this->putClient($client, $forceClose);
         }
+    }
+
+    /**
+     * Whether a request that failed on a pooled connection can be sent again.
+     *
+     * Swoole reconnects a pooled socket the collector closed while idle, but not
+     * one it dropped with the request in flight. Both statuses below mean the
+     * socket died before any answer, so the export never landed and a fresh
+     * connection can carry it. A timeout is deliberately not retryable: the
+     * collector may have accepted the export and still be working on it, so
+     * sending it again would duplicate it and wait out a second timeout.
+     */
+    private function isRetryable(int $statusCode): bool
+    {
+        return match ($statusCode) {
+            SWOOLE_HTTP_CLIENT_ESTATUS_SERVER_RESET,
+            SWOOLE_HTTP_CLIENT_ESTATUS_SEND_FAILED => true,
+            default => false,
+        };
     }
 
     /**
