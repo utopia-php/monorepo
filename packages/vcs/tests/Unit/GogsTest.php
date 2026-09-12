@@ -17,6 +17,9 @@ final class GogsTest extends GiteaBase
 
     protected function createAdapter(): Gogs
     {
-        return new Gogs(new Cache(new None()));
+        $adapter = new Gogs(new Cache(new None()));
+        $adapter->setEndpoint('http://gitea:3000');
+
+        return $adapter;
     }
 }
