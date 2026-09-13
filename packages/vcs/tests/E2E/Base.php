@@ -19,7 +19,9 @@ abstract class Base extends TestCase
     protected static string $defaultBranch = 'main';
 
     /**
-     * Username of an account that exists on the instance under test.
+     * Handle of an account that exists on the instance under test. Where the
+     * provider resolves an owner from a repository, it is also the account the
+     * token belongs to, which getOwnerName() reports when given no repository.
      */
     protected static string $existingUser = 'root';
 
@@ -48,8 +50,8 @@ abstract class Base extends TestCase
 
     /**
      * Actions the provider may report for a newly opened pull request. Gitea
-     * follows the opened event with a synchronized one for the head it just
-     * pushed, and the catcher only keeps the last delivery.
+     * and GitLab may follow the opened event with a synchronize one for the
+     * head just pushed, and the catcher only keeps the last delivery.
      *
      * @var array<string>
      */
@@ -74,15 +76,9 @@ abstract class Base extends TestCase
     protected static bool $supportsInstallationRepository = true;
 
     /**
-     * Exception the provider raises for a repository id that does not exist.
-     *
-     * @var class-string<\Throwable>
-     */
-    protected static string $repositoryNotFoundException = RepositoryNotFound::class;
-
-    /**
-     * Parts of the contract a provider may not offer at all. Each one skips the
-     * tests that need it, instead of every adapter overriding them to say so.
+     * Parts of the contract a provider may not offer at all. Where the adapter
+     * documents a refusal, the test asserts it; the rest skip what they cannot
+     * reach.
      */
     protected static bool $supportsPullRequestCreation = true;
 
@@ -94,9 +90,20 @@ abstract class Base extends TestCase
 
     protected static bool $supportsTags = true;
 
-    protected static bool $supportsUserLookup = true;
+    /**
+     * Whether getUser() takes a handle. Bitbucket looks accounts up by UUID or
+     * Atlassian account id, so a handle resolves nothing there.
+     */
+    protected static bool $resolvesUsersByHandle = true;
 
     protected static bool $supportsRepositoryLanguages = true;
+
+    /**
+     * Whether the provider works out the languages a repository holds. Bitbucket
+     * reports the single language a repository was labelled with instead, so it
+     * answers the call without ever describing the files.
+     */
+    protected static bool $detectsRepositoryLanguages = true;
 
     protected static bool $supportsWebhookDelivery = true;
 
@@ -118,15 +125,10 @@ abstract class Base extends TestCase
     protected static bool $computesLanguagesAsynchronously = false;
 
     /**
-     * Host the provider serves commit author avatars from.
+     * Fragment of the URL the provider serves commit author avatars from: a
+     * host, or a path where the provider serves them itself.
      */
     protected static string $avatarDomain = '';
-
-    /**
-     * Whether a repository is gone as soon as delete returns. GitLab schedules
-     * it instead.
-     */
-    protected static bool $deletesRepositoriesSynchronously = true;
 
     /**
      * Whether a new repository starts with no commits. The Gogs adapter creates
@@ -136,7 +138,7 @@ abstract class Base extends TestCase
 
     /**
      * Whether the provider links the commit author back to an account. GitLab
-     * reports neither, Gitea an avatar but no profile url.
+     * reports neither; Gitea an avatar but no profile url, which Forgejo adds.
      */
     protected static bool $reportsCommitAuthorAvatar = true;
 
@@ -205,7 +207,7 @@ abstract class Base extends TestCase
     }
 
     /**
-     * Owner of a repository, as GitHub and Gitea report it. GitLab overrides this.
+     * Owner of a repository, as GitHub and Gitea report it. GitLab and Bitbucket override this.
      *
      * @param array<string, mixed> $repository
      */
@@ -266,10 +268,14 @@ abstract class Base extends TestCase
     {
         if (static::$reportsCommitAuthorAvatar) {
             $this->assertNotEmpty($commit['commitAuthorAvatar']);
+        } else {
+            $this->assertSame('', $commit['commitAuthorAvatar']);
         }
 
         if (static::$reportsCommitAuthorUrl) {
             $this->assertNotEmpty($commit['commitAuthorUrl']);
+        } else {
+            $this->assertSame('', $commit['commitAuthorUrl']);
         }
     }
 
@@ -278,6 +284,20 @@ abstract class Base extends TestCase
         if (!$supported) {
             $this->markTestSkipped(static::class . ' does not support ' . $capability);
         }
+    }
+
+    /**
+     * A provider that does not offer a capability still has to say so. Where
+     * the adapter documents a refusal, assert it rather than skipping, so
+     * declaring a capability unsupported narrows a test instead of dropping it.
+     * The wording is what tells a refusal from a failed call: the repository
+     * the call names never exists, so a 404 must not pass for one.
+     */
+    protected function assertRefused(callable $call): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessageMatches('/^\w+\(\) is not supported by /');
+        $call();
     }
 
     protected function assertEventually(callable $probe, int $timeoutMs = 15000, int $waitMs = 500): void
@@ -471,7 +491,7 @@ abstract class Base extends TestCase
         }
     }
 
-    public function testGetDeletedRepositoryFails(): void
+    public function testGetNonExistingRepositoryFails(): void
     {
         $this->expectException(RepositoryNotFound::class);
         $this->vcsAdapter->getRepository(static::$owner, 'non-existing-repository-' . uniqid());
@@ -479,7 +499,7 @@ abstract class Base extends TestCase
 
     public function testGetRepositoryWithNonExistingOwner(): void
     {
-        $this->expectException(Exception::class);
+        $this->expectException(RepositoryNotFound::class);
         $this->vcsAdapter->getRepository('non-existing-owner-' . uniqid(), 'non-existing-repo');
     }
 
@@ -532,7 +552,7 @@ abstract class Base extends TestCase
 
     public function testGetRepositoryNameWithInvalidId(): void
     {
-        $this->expectException(Exception::class);
+        $this->expectException(RepositoryNotFound::class);
         $this->vcsAdapter->getRepositoryName('99999999');
     }
 
@@ -600,7 +620,7 @@ abstract class Base extends TestCase
             $this->assertIsString($result['sha']);
             $this->assertArrayHasKey('size', $result);
             $this->assertSame($fileContent, $result['content']);
-            $this->assertGreaterThan(0, $result['size']);
+            $this->assertSame(\strlen($fileContent), $result['size']);
         } finally {
             $this->discardRepositories($repositoryName);
         }
@@ -685,7 +705,11 @@ abstract class Base extends TestCase
 
     public function testListRepositoryLanguages(): void
     {
-        $this->skipUnlessSupported(static::$supportsRepositoryLanguages, 'repository languages');
+        if (!static::$supportsRepositoryLanguages) {
+            $this->assertRefused(fn(): array => $this->vcsAdapter->listRepositoryLanguages(static::$owner, 'unsupported-languages-' . uniqid()));
+
+            return;
+        }
 
         $repositoryName = 'test-list-repository-languages-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
@@ -693,6 +717,13 @@ abstract class Base extends TestCase
         try {
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'main.php', '<?php echo "test";');
             $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'script.js', 'console.log("test");');
+
+            if (!static::$detectsRepositoryLanguages) {
+                // Nothing labelled the repository, and the files are never inspected
+                $this->assertSame([], $this->vcsAdapter->listRepositoryLanguages(static::$owner, $repositoryName));
+
+                return;
+            }
 
             $languages = [];
             try {
@@ -718,6 +749,8 @@ abstract class Base extends TestCase
     {
         $this->skipUnlessSupported(static::$supportsRepositoryLanguages, 'repository languages');
 
+        // A repository with nothing in it has no languages to report, whether or
+        // not the provider works them out from the files
         $repositoryName = 'test-list-repository-languages-empty-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
 
@@ -756,15 +789,14 @@ abstract class Base extends TestCase
 
     public function testListBranchesEmptyRepository(): void
     {
-        $this->skipUnlessSupported(static::$createsEmptyRepositories, 'repositories without an initial commit');
-
         $repositoryName = 'test-list-branches-empty-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
 
         try {
-            $branches = $this->vcsAdapter->listBranches(static::$owner, $repositoryName);
-
-            $this->assertEmpty($branches);
+            $this->assertSame(
+                static::$createsEmptyRepositories ? [] : [static::$defaultBranch],
+                $this->vcsAdapter->listBranches(static::$owner, $repositoryName),
+            );
         } finally {
             $this->discardRepositories($repositoryName);
         }
@@ -908,7 +940,16 @@ abstract class Base extends TestCase
 
     public function testUpdateCommitStatus(): void
     {
-        $this->skipUnlessSupported(static::$supportsCommitStatuses, 'commit statuses');
+        if (!static::$supportsCommitStatuses) {
+            $this->assertRefused(fn() => $this->vcsAdapter->updateCommitStatus(
+                'unsupported-commit-statuses-' . uniqid(),
+                'abc123',
+                static::$owner,
+                'success',
+            ));
+
+            return;
+        }
 
         $repositoryName = 'test-update-commit-status-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
@@ -1056,23 +1097,11 @@ abstract class Base extends TestCase
 
     public function testGetOwnerNameWithoutRepositoryId(): void
     {
-        $this->skipUnlessSupported(static::$resolvesOwnerFromRepositoryId, 'resolving an owner from a repository id');
+        $expected = static::$resolvesOwnerFromRepositoryId ? static::$existingUser : $this->ownerPath();
 
-        $this->assertSame(static::$existingUser, $this->vcsAdapter->getOwnerName(''));
-    }
-
-    public function testGetOwnerNameWithZeroRepositoryId(): void
-    {
-        $this->skipUnlessSupported(static::$resolvesOwnerFromRepositoryId, 'resolving an owner from a repository id');
-
-        $this->assertSame(static::$existingUser, $this->vcsAdapter->getOwnerName('', 0));
-    }
-
-    public function testGetOwnerNameWithNullRepositoryId(): void
-    {
-        $this->skipUnlessSupported(static::$resolvesOwnerFromRepositoryId, 'resolving an owner from a repository id');
-
-        $this->assertSame(static::$existingUser, $this->vcsAdapter->getOwnerName(''));
+        // No id at all and a zero id both mean "no repository"
+        $this->assertSame($expected, $this->vcsAdapter->getOwnerName(static::$installationId));
+        $this->assertSame($expected, $this->vcsAdapter->getOwnerName(static::$installationId, 0));
     }
 
     public function testGetOwnerName(): void
@@ -1095,44 +1124,46 @@ abstract class Base extends TestCase
 
     public function testCreateRepositoryWithInvalidName(): void
     {
-        $this->skipUnlessSupported(static::$rejectsInvalidRepositoryNames, 'rejecting invalid repository names');
+        $uniq = uniqid();
+        $invalidName = 'invalid name with spaces ' . $uniq;
+
+        if (!static::$rejectsInvalidRepositoryNames) {
+            // GitHub replaces the spaces with hyphens rather than refusing the name
+            $normalizedName = 'invalid-name-with-spaces-' . $uniq;
+            $created = $this->vcsAdapter->createRepository(static::$owner, $invalidName, false);
+
+            try {
+                $this->assertSame($normalizedName, $created['name']);
+                $this->assertSame($normalizedName, $this->vcsAdapter->getRepository(static::$owner, $normalizedName)['name']);
+            } finally {
+                $this->discardRepositories($normalizedName);
+            }
+
+            return;
+        }
 
         $this->expectException(Exception::class);
-        $this->vcsAdapter->createRepository(static::$owner, 'invalid name with spaces', false);
+        $this->vcsAdapter->createRepository(static::$owner, $invalidName, false);
     }
 
     public function testGenerateCloneCommandWithTag(): void
     {
-        $this->skipUnlessSupported(static::$supportsTags, 'creating tags');
+        // The command is built, never run, so the tag does not have to exist
+        $command = $this->vcsAdapter->generateCloneCommand(
+            static::$owner,
+            'test-clone-tag-' . uniqid(),
+            'v1.0.0',
+            Git::CLONE_TYPE_TAG,
+            '/tmp/test-clone-tag-' . uniqid(),
+            '/',
+        );
 
-        $repositoryName = 'test-clone-tag-' . uniqid();
-        $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
-        $directory = '/tmp/test-clone-tag-' . uniqid();
-
-        try {
-            $this->vcsAdapter->createFile(static::$owner, $repositoryName, 'README.md', '# Test Tag');
-            $commitHash = $this->getLatestCommitEventually($repositoryName)['commitHash'];
-
-            $this->vcsAdapter->createTag(static::$owner, $repositoryName, 'v1.0.0', $commitHash, 'Release v1.0.0');
-
-            $command = $this->vcsAdapter->generateCloneCommand(
-                static::$owner,
-                $repositoryName,
-                'v1.0.0',
-                Git::CLONE_TYPE_TAG,
-                $directory,
-                '/',
-            );
-
-            $this->assertStringContainsString('git init', $command);
-            $this->assertStringContainsString('git remote add origin', $command);
-            $this->assertStringContainsString('git config core.sparseCheckout true', $command);
-            $this->assertStringContainsString('refs/tags', $command);
-            $this->assertStringContainsString('v1.0.0', $command);
-            $this->assertStringContainsString('git checkout FETCH_HEAD', $command);
-        } finally {
-            $this->discardRepositories($repositoryName);
-        }
+        $this->assertStringContainsString('git init', $command);
+        $this->assertStringContainsString('git remote add origin', $command);
+        $this->assertStringContainsString('git config core.sparseCheckout true', $command);
+        $this->assertStringContainsString('refs/tags', $command);
+        $this->assertStringContainsString('v1.0.0', $command);
+        $this->assertStringContainsString('git checkout FETCH_HEAD', $command);
     }
 
     public function testSearchRepositoriesMatchesName(): void
@@ -1190,7 +1221,17 @@ abstract class Base extends TestCase
 
     public function testGetPullRequest(): void
     {
-        $this->skipUnlessSupported(static::$supportsPullRequestCreation, 'creating pull requests');
+        if (!static::$supportsPullRequestCreation) {
+            $this->assertRefused(fn(): array => $this->vcsAdapter->createPullRequest(
+                static::$owner,
+                'unsupported-pull-requests-' . uniqid(),
+                'Test PR',
+                'feature-branch',
+                static::$defaultBranch,
+            ));
+
+            return;
+        }
 
         $repositoryName = 'test-get-pull-request-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
@@ -1264,7 +1305,15 @@ abstract class Base extends TestCase
 
     public function testGetPullRequestWithInvalidNumber(): void
     {
-        $this->skipUnlessSupported(static::$supportsPullRequestLookup, 'looking up pull requests');
+        if (!static::$supportsPullRequestLookup) {
+            $this->assertRefused(fn(): array => $this->vcsAdapter->getPullRequest(
+                static::$owner,
+                'unsupported-pull-request-lookup-' . uniqid(),
+                99999,
+            ));
+
+            return;
+        }
 
         $repositoryName = 'test-get-pull-request-invalid-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
@@ -1453,21 +1502,19 @@ abstract class Base extends TestCase
 
     public function testGetUser(): void
     {
-        $this->skipUnlessSupported(static::$supportsUserLookup, 'looking up users');
+        $this->skipUnlessSupported(static::$resolvesUsersByHandle, 'resolving users by handle');
 
         $result = $this->vcsAdapter->getUser(static::$existingUser);
 
         $this->assertArrayHasKey('id', $result);
         $this->assertNotEmpty($result['id']);
-        // GitLab reports the handle as 'username', Gitea and its forks as 'login'
+        // GitLab reports the handle as 'username', the others as 'login'
         $this->assertArrayHasKey(static::$userHandleField, $result);
         $this->assertSame(static::$existingUser, $result[static::$userHandleField]);
     }
 
     public function testGetUserWithInvalidUsername(): void
     {
-        $this->skipUnlessSupported(static::$supportsUserLookup, 'looking up users');
-
         $this->expectException(Exception::class);
         $this->vcsAdapter->getUser('non-existent-user-' . uniqid());
     }
@@ -1542,7 +1589,9 @@ abstract class Base extends TestCase
 
     public function testGetRepositoryPresignedUrlWithInvalidFormat(): void
     {
+        // The repository never exists, so only the format check may throw
         $this->expectException(Exception::class);
+        $this->expectExceptionMessageMatches('/^Invalid archive format/');
         $this->vcsAdapter->getRepositoryPresignedUrl(static::$owner, 'some-repo', static::$defaultBranch, 'invalid');
     }
 
@@ -1554,8 +1603,7 @@ abstract class Base extends TestCase
     public function testGetInstallationRepository(): void
     {
         if (!static::$supportsInstallationRepository) {
-            $this->expectException(Exception::class);
-            $this->vcsAdapter->getInstallationRepository('any-repo-name');
+            $this->assertRefused(fn(): array => $this->vcsAdapter->getInstallationRepository('any-repo-name'));
 
             return;
         }
@@ -1586,7 +1634,7 @@ abstract class Base extends TestCase
             return;
         }
 
-        $this->expectException(static::$repositoryNotFoundException);
+        $this->expectException(RepositoryNotFound::class);
         $this->vcsAdapter->getOwnerName('', 999999999);
     }
 
@@ -1696,7 +1744,16 @@ abstract class Base extends TestCase
 
     public function testCreateTag(): void
     {
-        $this->skipUnlessSupported(static::$supportsTags, 'creating tags');
+        if (!static::$supportsTags) {
+            $this->assertRefused(fn(): array => $this->vcsAdapter->createTag(
+                static::$owner,
+                'unsupported-tags-' . uniqid(),
+                'v1.0.0',
+                'abc123',
+            ));
+
+            return;
+        }
 
         $repositoryName = 'test-create-tag-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
@@ -1745,14 +1802,13 @@ abstract class Base extends TestCase
 
     public function testListTagsCommitlessRepository(): void
     {
-        $this->skipUnlessSupported(static::$createsEmptyRepositories, 'repositories without an initial commit');
-
         $repositoryName = 'test-list-tags-commitless-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
 
         try {
-            // No commits at all, which some providers answer differently from
-            // a repository that simply has no tags
+            // A repository with no commits, which some providers answer
+            // differently from one that has commits but no tags; the initial
+            // commit Gogs starts with carries none either
             $this->assertSame([], $this->vcsAdapter->listTags(static::$owner, $repositoryName));
         } finally {
             $this->discardRepositories($repositoryName);
@@ -1761,7 +1817,15 @@ abstract class Base extends TestCase
 
     public function testGetCommitStatuses(): void
     {
-        $this->skipUnlessSupported(static::$supportsCommitStatusLookup, 'reading commit statuses');
+        if (!static::$supportsCommitStatusLookup) {
+            $this->assertRefused(fn(): array => $this->vcsAdapter->getCommitStatuses(
+                static::$owner,
+                'unsupported-commit-status-lookup-' . uniqid(),
+                'abc123',
+            ));
+
+            return;
+        }
 
         $repositoryName = 'test-get-commit-statuses-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
@@ -1806,7 +1870,16 @@ abstract class Base extends TestCase
 
     public function testCreateCheckRun(): void
     {
-        $this->skipUnlessSupported(static::$supportsCheckRuns, 'check runs');
+        if (!static::$supportsCheckRuns) {
+            $this->assertRefused(fn(): array => $this->vcsAdapter->createCheckRun(
+                owner: static::$owner,
+                repositoryName: 'unsupported-check-runs-' . uniqid(),
+                headSha: 'abc123',
+                name: 'ci/build',
+            ));
+
+            return;
+        }
 
         $repositoryName = 'test-create-check-run-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
@@ -1845,7 +1918,7 @@ abstract class Base extends TestCase
             $this->assertNotEmpty($fetched['url']);
             $this->assertNotEmpty($fetched['html_url']);
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
     public function testCreateCheckRunWithInvalidRepository(): void
@@ -1871,7 +1944,7 @@ abstract class Base extends TestCase
             $this->expectException(\Exception::class);
             $this->vcsAdapter->getCheckRun(static::$owner, $repositoryName, '999999999');
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
     public function testCreateTwoCheckRunsOnSameCommit(): void
@@ -1911,7 +1984,7 @@ abstract class Base extends TestCase
             $this->assertEquals('ci/build', $first['name']);
             $this->assertEquals('ci/build', $second['name']);
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
     public function testCreateCheckRunsWithSameNameOnDifferentCommits(): void
@@ -1954,7 +2027,7 @@ abstract class Base extends TestCase
             $this->assertEquals('ci/build', $first['name']);
             $this->assertEquals('ci/build', $second['name']);
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
     public function testCreateCheckRunCompleted(): void
@@ -1992,7 +2065,7 @@ abstract class Base extends TestCase
             $this->assertEquals('Build passed', $checkRun['output']['title']);
             $this->assertEquals('All checks passed successfully.', $checkRun['output']['summary']);
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
     public function testUpdateCheckRun(): void
@@ -2034,7 +2107,7 @@ abstract class Base extends TestCase
             $this->assertEquals('completed', $updated['status']);
             $this->assertEquals('neutral', $updated['conclusion']);
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
     public function testUpdateCheckRunWithInvalidRepository(): void
@@ -2065,7 +2138,7 @@ abstract class Base extends TestCase
                 conclusion: 'success',
             );
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
     public function testUpdateCheckRunWithMissingConclusion(): void
@@ -2097,13 +2170,17 @@ abstract class Base extends TestCase
                 status: 'completed',
             );
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
 
     public function testListNamespaces(): void
     {
-        $this->skipUnlessSupported(static::$supportsNamespaceListing, 'listing namespaces');
+        if (!static::$supportsNamespaceListing) {
+            $this->assertRefused(fn(): array => $this->vcsAdapter->listNamespaces(1, 20));
+
+            return;
+        }
 
         $result = $this->vcsAdapter->listNamespaces(1, 20);
 
@@ -2156,7 +2233,7 @@ abstract class Base extends TestCase
             $this->assertEquals(array_column($empty, 'name'), array_column($dotSlash, 'name'));
             $this->assertEquals(array_column($empty, 'name'), array_column($repeatedDotSlash, 'name'));
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
     public function testGetRepositoryContentRootSentinelPrefix(): void
@@ -2174,7 +2251,7 @@ abstract class Base extends TestCase
             $this->assertEquals($direct['content'], $prefixed['content']);
             $this->assertEquals($direct['content'], $repeatedPrefix['content']);
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
     public function testListRepositoryContentsMalformedNestedPath(): void
@@ -2193,7 +2270,7 @@ abstract class Base extends TestCase
             $this->assertEquals(array_column($clean, 'name'), array_column($embeddedDot, 'name'));
             $this->assertEquals(array_column($clean, 'name'), array_column($doubleSlash, 'name'));
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
 
@@ -2232,8 +2309,6 @@ abstract class Base extends TestCase
 
     public function testGetCommitAuthorAvatar(): void
     {
-        $this->skipUnlessSupported(static::$reportsCommitAuthorAvatar, 'commit author avatars');
-
         $repositoryName = 'test-get-commit-avatar-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
 
@@ -2243,16 +2318,21 @@ abstract class Base extends TestCase
 
             $commit = $this->vcsAdapter->getCommit(static::$owner, $repositoryName, $commitHash);
 
+            if (!static::$reportsCommitAuthorAvatar) {
+                $this->assertSame('', $commit['commitAuthorAvatar']);
+
+                return;
+            }
+
             $this->assertNotEmpty($commit['commitAuthorAvatar']);
             $this->assertStringContainsString(static::$avatarDomain, (string) $commit['commitAuthorAvatar']);
         } finally {
-            $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
+
     public function testGetRepositoryAfterDeleteFails(): void
     {
-        $this->skipUnlessSupported(static::$deletesRepositoriesSynchronously, 'deleting a repository straight away');
-
         $repositoryName = 'test-get-deleted-repository-' . uniqid();
         $this->vcsAdapter->createRepository(static::$owner, $repositoryName, false);
         $this->vcsAdapter->deleteRepository(static::$owner, $repositoryName);
