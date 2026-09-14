@@ -279,7 +279,7 @@ class GitHub extends Git
         $repositories = [];
 
         // When no search query is provided, delegate pagination to the GitHub API.
-        if ($search === '' || $search === '0') {
+        if ($search === '') {
             $response = $this->call(self::METHOD_GET, $url, ['Authorization' => "Bearer $this->accessToken"], [
                 'page' => $page,
                 'per_page' => $per_page,

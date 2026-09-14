@@ -106,7 +106,7 @@ class Gogs extends Gitea
     #[\Override]
     public function searchRepositories(string $owner, int $page, int $per_page, string $search = ''): array
     {
-        if ($search !== '' && $search !== '0') {
+        if ($search !== '') {
             return parent::searchRepositories($owner, $page, $per_page, $search);
         }
 

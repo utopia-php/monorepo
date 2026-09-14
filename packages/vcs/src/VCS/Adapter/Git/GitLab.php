@@ -279,7 +279,7 @@ class GitLab extends Git
 
         // Try group first, fall back to user namespace
         $url = "/groups/{$ownerPath}/projects?page={$page}&per_page={$per_page}";
-        if ($search !== '' && $search !== '0') {
+        if ($search !== '') {
             $url .= '&search=' . urlencode($search);
         }
 
@@ -294,7 +294,7 @@ class GitLab extends Git
         if ($statusCode === 404) {
             $filterByNamespace = true;
             $url = "/projects?membership=true&page={$page}&per_page={$per_page}";
-            if ($search !== '' && $search !== '0') {
+            if ($search !== '') {
                 $url .= '&search=' . urlencode($search);
             }
             $response = $this->call(self::METHOD_GET, $url, ['Authorization' => 'Bearer ' . $this->accessToken]);
