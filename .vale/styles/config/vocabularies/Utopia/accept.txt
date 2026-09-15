@@ -220,6 +220,7 @@ worktree(?:s)?
 webOS
 WebView
 Wget
+WhatsApp
 YAML
 Yandex
 zstd
