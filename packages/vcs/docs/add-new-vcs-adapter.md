@@ -20,9 +20,12 @@ Below are outlined the most useful files for adding a new VCS adapter:
 │       │    └── Git.php # Parent class for Git-based adapters
 │       └── Adapter.php # Parent class for individual adapters
 └── tests
-    └── VCS
-        ├── Adapter/ # Where tests of your new adapter go!
-        └── Base.php # Parent class that holds all tests
+    ├── Unit # Payload parsing, on a bare host
+    │    ├── Base.php # Parent class that holds the webhook contract
+    │    └── <Adapter>Test.php # Where the offline tests of your new adapter go!
+    └── E2E # Calls against a running provider
+         ├── Base.php # Parent class that holds all the rest
+         └── <Adapter>Test.php # Where the live tests of your new adapter go!
 ```
 ### Extend the adapter 💻
 
@@ -95,7 +98,13 @@ rather than `getEvent()` — the latter reports only the first event of a batch.
 
 ### Testing the adapter 🛠️
 
-The suite runs in two tiers. Put the webhook payload fixtures and the parsing assertions your adapter answers offline in `tests/Unit/<Adapter>Test.php`, and the calls against a running provider in `tests/E2E/<Adapter>Test.php`. A provider you can self-host joins `docker-compose.yml` as an official image on an offset host port, with a bootstrap that mints an access token into `tests/.tokens`; see the [README](/README.md#tests) for how to run both tiers.
+The suite runs in two tiers, and every adapter runs the same tests in each. Each `Base` holds them and each adapter's class declares how its provider differs, so a new adapter is written as declarations rather than as tests of its own:
+
+1. Extend `Utopia\Tests\Unit\Base` in `tests/Unit/<Adapter>Test.php` and implement its hooks: `createAdapter()` builds the adapter against no provider, `signWebhookPayload()` signs a payload the way the provider does, and `pushPayload()` and `pullRequestPayload()` build webhook payloads shaped the way the provider sends them. Declare `$pullRequestActions` where the provider names its pull request actions differently from GitHub, whose names are the shared vocabulary.
+2. Extend `Utopia\Tests\E2E\Base` in `tests/E2E/<Adapter>Test.php` and implement `setupAdapter()` and `anonymousCloneUrl()`. Declare the parts of the contract the provider lacks by overriding the capability flags, such as `$supportsTags` or `$supportsCheckRuns`. The first shared test for each capability then asserts that the adapter refuses with `X() is not supported by <name>`; the tests that need the capability to act on skip.
+3. Keep behaviour only this provider has in the adapter's own test class. Anything two providers share belongs in `Base`, behind a declared flag or hook.
+
+A provider you can self-host joins `docker-compose.yml` as an official image on an offset host port, with a bootstrap that mints an access token into `tests/.tokens`; see the [README](/README.md#tests) for how to run both tiers.
 
 ### Tips and tricks 💡
 

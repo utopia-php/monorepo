@@ -14,7 +14,7 @@ abstract class GiteaBase extends Base
     protected static string $userHandleField = 'login';
 
     /** @var array<string> */
-    protected static array $pullRequestOpenedActions = ['opened', 'synchronized'];
+    protected static array $pullRequestOpenedActions = ['opened', 'synchronize'];
 
     protected static string $presignedTarballFragment = '.tar.gz?token=';
     protected static string $presignedZipballFragment = '.zip?token=';
