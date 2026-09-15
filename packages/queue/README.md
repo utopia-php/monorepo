@@ -94,11 +94,36 @@ $broker = new Nats(
 $broker->publish(new Queue('my-queue'), ['type' => 'test_number', 'value' => 123]);
 ```
 
-Each queue is a WorkQueue-retention stream (a message is removed once acknowledged) with a companion dead stream. `commit()` acknowledges a message, `reject()` schedules redelivery until `maxDeliver` and then dead-letters, `retry()` re-drives the dead stream onto the queue, and `getQueueSize()` reports pending (consumer `num_pending`) or failed (dead stream) counts. `reap()` is a no-op — redelivery after `ackWait` reclaims jobs stranded by a dead worker. Requires [`utopia-php/nats`](https://github.com/utopia-php/nats).
+Each queue is a WorkQueue-retention stream (a message is removed once acknowledged) with a companion dead stream. `commit()` acknowledges a message, `reject()` schedules redelivery until `maxDeliver` and then dead-letters — unless the handler declared the failure permanent, which dead-letters it at once — `retry()` re-drives the dead stream onto the queue, and `getQueueSize()` reports pending (consumer `num_pending`) or failed (dead stream) counts. `reap()` is a no-op — redelivery after `ackWait` reclaims jobs stranded by a dead worker. Requires [`utopia-php/nats`](https://github.com/utopia-php/nats).
 
 ### Shaping a queue
 
 Beyond redelivery, the constructor carries what a queue holds and how much of it is in flight. `maxMsgSize`, `maxMsgs`, `maxBytes` and `discard` bound the work stream — `discard: DiscardPolicy::New` turns a full stream into backpressure, where the publish fails rather than the oldest message being dropped, and it needs one of the two limits to apply to. `maxMsgSize` also applies to the dead stream, so a message the queue accepted can always be dead-lettered. `maxAckPending`, `maxWaiting` and `inactiveThreshold` shape the worker consumers; `maxAckPending` is the one to set, because JetStream's default of 1000 hands out far more than a worker can hold and the surplus spends its `ackWait` window waiting to be picked up. `maxAge` states the message TTL directly instead of deriving it from the queue's `jobTtl`, which each side builds separately.
+
+Size `maxAckPending` above the worker's concurrency, with room to spare. The ceiling is per consumer, so replicas of a worker share one, and it counts messages parked in `backoff` as well as messages being worked — those are asleep waiting for the next attempt, and each holds a slot for the whole of it. A ceiling sized at the handler count is therefore filled by exactly as many failures as there are handlers, after which the consumer has no slot to deliver into and the queue stops moving behind workers that look idle. `Server::start()` refuses a coroutine cap at or above the ceiling for that reason, the way it refuses concurrency on a `Consumer\Exclusive` consumer.
+
+### Permanent failures
+
+Redelivery is the right answer to a timeout, a leader election or a restart. It is the wrong answer to a credential the server rejected or a payload naming a resource that does not exist: every attempt fails the same way, and on JetStream each attempt holds one of the consumer's `maxAckPending` slots for the whole of its backoff. Enough of those and one bad payload takes the queue down with it.
+
+A handler ends a message's life by throwing `PermanentFailure`:
+
+```php
+use Utopia\Queue\PermanentFailure;
+
+$server->job('v1-region-manager')->action(function (array $payload) use ($regions) {
+    $hostname = $regions[$payload['region']] ?? null;
+    if ($hostname === null) {
+        // No attempt will find it. Dead-letter now rather than in 21 minutes.
+        throw new PermanentFailure("Region hostname not configured: {$payload['region']}");
+    }
+    // ...
+});
+```
+
+The broker dead-letters it on the first failure instead of scheduling the next attempt: on NATS the delivery is terminated and the payload copied to the dead stream, on Redis it goes to the dead list rather than the failed list the `retry()` sweep reads. Either way the payload is still there to inspect, and `retry()` re-drives it once the underlying fault is fixed. A handler that cannot reach the throw site — an exception type owned by a library, or a classification made elsewhere — calls `$message->terminal()` instead and throws the exception it already had. The failure is reported to the error hooks either way.
+
+Keep it to failures that are permanent for this payload. A database that is down is what the redelivery budget is for; dead-lettering it converts an outage into lost work.
 
 ### Provisioning
 

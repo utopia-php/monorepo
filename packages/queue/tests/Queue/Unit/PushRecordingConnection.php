@@ -86,6 +86,9 @@ final class PushRecordingConnection implements Connection
 
     public function leftPush(string $queue, string $payload): bool
     {
+        $this->calls[] = ['leftPush', $queue];
+        $this->pushed[] = $payload;
+
         return true;
     }
 

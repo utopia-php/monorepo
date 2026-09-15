@@ -9,6 +9,7 @@ use Utopia\NATS\Connection as NatsConnection;
 use Utopia\Queue\Adapter;
 use Utopia\Queue\Broker\Nats;
 use Utopia\Queue\Consumer;
+use Utopia\Queue\Consumer\Bounded;
 use Utopia\Queue\Consumer\Exclusive;
 use Utopia\Queue\Job;
 use Utopia\Queue\Message;
@@ -200,6 +201,58 @@ final class ServerJobsTest extends TestCase
     }
 
     /**
+     * A consumer that hands out at most N messages before it waits for an ack
+     * cannot keep N handlers fed once any of them fail: a message sleeping in
+     * backoff holds one of those N slots, so the handlers themselves fill the
+     * ceiling and the queue stops being delivered into. Refuse it at boot.
+     */
+    public function testStartRefusesACoroutineCapAtTheInFlightCeiling(): void
+    {
+        $adapter = new RecordingAdapter(ceiling: 8);
+        $server = new Server($adapter);
+        $server->job('v1-functions', 8);
+
+        $refusal = null;
+
+        try {
+            $server->start();
+        } catch (\Exception $error) {
+            $refusal = $error;
+        }
+
+        $this->assertInstanceOf(\Exception::class, $refusal, 'the cap must be refused');
+        $this->assertStringContainsString("job('v1-functions', 8)", $refusal->getMessage());
+        $this->assertStringContainsString('at most 8 message(s) in flight', $refusal->getMessage());
+        $this->assertSame([], $adapter->consumed, 'the refusal must land before the loops start');
+    }
+
+    public function testStartAcceptsACoroutineCapBelowTheInFlightCeiling(): void
+    {
+        $adapter = new RecordingAdapter(ceiling: 16);
+        $server = new Server($adapter);
+        $server->job('v1-functions', 8);
+
+        $server->start();
+
+        $this->assertSame([['queue' => 'v1-functions', 'maxCoroutines' => 8]], $adapter->consumed);
+    }
+
+    /**
+     * An unbounded consumer refuses nothing: null is "this broker sets no ceiling
+     * of its own", not "a ceiling of zero".
+     */
+    public function testStartKeepsConcurrencyOnAnUnboundedConsumer(): void
+    {
+        $adapter = new RecordingAdapter(bounded: true);
+        $server = new Server($adapter);
+        $server->job('v1-functions', 8);
+
+        $server->start();
+
+        $this->assertSame([['queue' => 'v1-functions', 'maxCoroutines' => 8]], $adapter->consumed);
+    }
+
+    /**
      * The guard is carried by the consumer, not by the concurrency. A consumer
      * without the marker (Redis serialises its shared connection) keeps running
      * above one coroutine.
@@ -218,6 +271,27 @@ final class ServerJobsTest extends TestCase
 
 final class FakeConsumer implements Consumer
 {
+    public function receive(Queue $queue, int $timeout): ?Message
+    {
+        return null;
+    }
+
+    public function commit(Queue $queue, Message $message): void {}
+
+    public function reject(Queue $queue, Message $message): void {}
+
+    public function close(): void {}
+}
+
+final readonly class BoundedFakeConsumer implements Consumer, Bounded
+{
+    public function __construct(private ?int $ceiling) {}
+
+    public function inFlightCeiling(): ?int
+    {
+        return $this->ceiling;
+    }
+
     public function receive(Queue $queue, int $timeout): ?Message
     {
         return null;
@@ -254,16 +328,29 @@ final class RecordingAdapter extends Adapter
     /** @var callable[] */
     private array $onWorkerStart = [];
 
-    public function __construct(string $namespace = 'utopia-queue', bool $shared = false, bool $exclusive = false)
-    {
+    public function __construct(
+        string $namespace = 'utopia-queue',
+        bool $shared = false,
+        bool $exclusive = false,
+        ?int $ceiling = null,
+        bool $bounded = false,
+    ) {
+        $make = static function () use ($exclusive, $ceiling, $bounded): Consumer {
+            if ($exclusive) {
+                return new ExclusiveFakeConsumer();
+            }
+
+            if ($bounded || $ceiling !== null) {
+                return new BoundedFakeConsumer($ceiling);
+            }
+
+            return new FakeConsumer();
+        };
+
         if ($shared) {
-            parent::__construct($exclusive ? new ExclusiveFakeConsumer() : new FakeConsumer(), 1, $namespace);
+            parent::__construct($make(), 1, $namespace);
         } else {
-            parent::__construct(
-                static fn(string $q): Consumer => $exclusive ? new ExclusiveFakeConsumer() : new FakeConsumer(),
-                1,
-                $namespace,
-            );
+            parent::__construct(static fn(string $q): Consumer => $make(), 1, $namespace);
         }
     }
 

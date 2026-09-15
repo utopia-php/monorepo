@@ -5,6 +5,7 @@ namespace Utopia\Queue;
 use Exception;
 use Throwable;
 use Utopia\DI\Container;
+use Utopia\Queue\Consumer\Bounded;
 use Utopia\Queue\Consumer\Exclusive;
 use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Servers\Hook;
@@ -454,6 +455,27 @@ class Server
                             $maxCoroutines,
                             $consumer::class,
                             $queueName,
+                        ));
+                    }
+
+                    // A bounded consumer hands out at most N messages before it waits for
+                    // an acknowledgment, and a message parked in redelivery backoff is one
+                    // of those N -- asleep rather than being worked, holding a slot the
+                    // whole time. So a ceiling at or below the coroutine cap is filled by
+                    // as many failures as there are handlers, after which the queue is not
+                    // delivered into at all: the wedge looks like a backlog with idle
+                    // workers in front of it. Refuse it here, the way an exclusive
+                    // consumer's cap is refused, rather than let it be found in a graph.
+                    $ceiling = $consumer instanceof Bounded ? $consumer->inFlightCeiling() : null;
+                    if ($ceiling !== null && $ceiling <= $maxCoroutines) {
+                        throw new Exception(\sprintf(
+                            "Queue '%s' is registered with job('%s', %d), but its consumer %s holds at most %d message(s) in flight. Messages sleeping in backoff hold a slot each, so the handlers can take every slot the consumer has and the queue stops being delivered into. Raise the in-flight ceiling (Broker\\Nats: maxAckPending) above %d, or lower the coroutine cap.",
+                            $queueName,
+                            $queueName,
+                            $maxCoroutines,
+                            $consumer::class,
+                            $ceiling,
+                            $maxCoroutines,
                         ));
                     }
 

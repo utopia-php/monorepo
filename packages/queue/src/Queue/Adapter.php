@@ -329,7 +329,8 @@ abstract class Adapter
      * both of those the handler has already run to completion:
      *
      *  - handler threw       — the work did not happen; the message is rejected
-     *                          and will be retried.
+     *                          and will be retried, unless the handler threw
+     *                          {@see PermanentFailure} and it is dead-lettered.
      *  - commit threw        — the work happened; nothing is rejected, and the
      *                          broker may still redeliver on its own deadline.
      *  - success hook threw  — the work happened and is acked; nothing will
@@ -374,7 +375,17 @@ abstract class Adapter
                 $messageCallback($message);
             });
         } catch (\Throwable $error) {
-            // The work did not happen, so hand the message back to be retried.
+            // A handler that knows the work can never succeed says so by throwing
+            // PermanentFailure, and the verdict has to be on the message before it
+            // is rejected: reject() is where the broker decides between another
+            // attempt and the dead letter, and it runs here — ahead of the error
+            // report below, which is the only other place a host sees the failure.
+            if ($error instanceof PermanentFailure) {
+                $message->terminal();
+            }
+
+            // The work did not happen, so hand the message back to be retried
+            // (or, for a terminal verdict, to be dead-lettered now).
             try {
                 $consumer->reject($queue, $message);
             } catch (\Throwable) {

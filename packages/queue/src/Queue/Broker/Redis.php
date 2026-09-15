@@ -110,11 +110,23 @@ class Redis implements Synchronous, Consumer
         $this->commands->decrement("{$queue->namespace}.stats.{$queue->name}.processing");
     }
 
+    /**
+     * Park a failed message for the retry() sweep -- or, where the handler
+     * declared the failure permanent, on the dead list the sweep never reads.
+     *
+     * The failed list is a retry queue in all but name: retry() pops it and
+     * re-enqueues, so a message that fails the same way on every attempt
+     * circulates until maxAttempts or newerThan finally parks it. A terminal
+     * message skips that circuit and goes where an exhausted one ends up
+     * anyway, on the first failure instead of after N of them.
+     */
     public function reject(Queue $queue, Message $message): void
     {
         $pid = $message->getPid();
 
-        $this->commands->leftPush("{$queue->namespace}.failed.{$queue->name}", $pid);
+        $list = $message->isTerminal() ? 'dead' : 'failed';
+
+        $this->commands->leftPush("{$queue->namespace}.{$list}.{$queue->name}", $pid);
         $this->commands->increment("{$queue->namespace}.stats.{$queue->name}.failed");
         $this->commands->listRemove("{$queue->namespace}.processing.{$queue->name}", $pid);
         $this->commands->decrement("{$queue->namespace}.stats.{$queue->name}.processing");

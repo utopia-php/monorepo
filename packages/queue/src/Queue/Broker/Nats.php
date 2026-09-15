@@ -18,6 +18,7 @@ use Utopia\NATS\JetStream\RetentionPolicy;
 use Utopia\NATS\JetStream\StorageType;
 use Utopia\NATS\JetStream\StreamConfig;
 use Utopia\Queue\Consumer;
+use Utopia\Queue\Consumer\Bounded;
 use Utopia\Queue\Message;
 use Utopia\Queue\Publisher\Synchronous;
 use Utopia\Queue\Queue;
@@ -67,7 +68,7 @@ use Utopia\Queue\Queue;
  * publish. Its commands connection is opened lazily on the first ack, so a publisher
  * never pays for a socket it will not use.
  */
-class Nats implements Synchronous, Consumer
+class Nats implements Synchronous, Consumer, Bounded
 {
     // Wire-level identifiers (stream/subject naming, durable consumers, advisories).
     private const string STREAM_PREFIX = 'Q_';
@@ -222,8 +223,13 @@ class Nats implements Synchronous, Consumer
      * @param int|null $maxAckPending In-flight ceiling per worker consumer: how many
      *        messages JetStream will hand out before it waits for an ack. The server
      *        default (1000) lets messages sit with the ack clock running while nothing
-     *        is working them, which surfaces as redelivery of jobs that never started —
-     *        set it near the worker's concurrency.
+     *        is working them, which surfaces as redelivery of jobs that never started.
+     *        Set it above the worker's concurrency, with room to spare: the count
+     *        includes messages parked in $backoff, which are asleep rather than being
+     *        worked and still hold a slot each, so a ceiling sized at the handler count
+     *        is filled by exactly as many failures as there are handlers and the queue
+     *        stops being delivered into. The ceiling is per consumer, so replicas share
+     *        it — {@see \Utopia\Queue\Server::start()} refuses a coroutine cap at or above it.
      * @param int|null $maxWaiting Pull requests a consumer may have parked at once.
      * @param float|null $inactiveThreshold Idle time after which JetStream deletes a
      *        durable consumer, in seconds. Null keeps it forever, which is what a
@@ -741,13 +747,27 @@ class Nats implements Synchronous, Consumer
 
         $numDelivered = $jsMessage->metadata()->numDelivered;
 
-        $this->command(function () use ($queue, $jsMessage, $numDelivered): void {
+        // Read before the closure: the verdict belongs to this delivery, and the
+        // message object is the handler's, not the broker's.
+        $terminal = $message->isTerminal();
+
+        $this->command(function () use ($queue, $jsMessage, $numDelivered, $terminal): void {
             $onCommands = $this->onCommands($jsMessage);
 
-            if ($numDelivered >= $this->maxDeliver) {
-                // Exhausted: park on the dead stream and drop it from the work stream.
+            if ($terminal || $numDelivered >= $this->maxDeliver) {
+                // Exhausted, or declared unrepeatable by the handler: park on the dead
+                // stream and drop it from the work stream.
+                //
+                // The terminal case is what keeps one bad payload from taking the queue
+                // down with it. A NAK holds a maxAckPending slot for the whole of its
+                // backoff -- the message is asleep, not being worked, and JetStream
+                // counts it in flight regardless -- so enough messages that fail the
+                // same way every time leave the consumer no slot to deliver into, and
+                // it stops handing out work it could have run. Terminating here returns
+                // the slot immediately and loses nothing: the payload is on the dead
+                // stream, where retry() can re-drive it once the fault is fixed.
                 $this->commandsJs()->publish($this->deadSubject($queue), $jsMessage->getData());
-                $onCommands->term('max deliveries exceeded');
+                $onCommands->term($terminal ? 'permanent failure' : 'max deliveries exceeded');
 
                 return;
             }
@@ -870,6 +890,15 @@ class Nats implements Synchronous, Consumer
                 throw $e;
             }
         });
+    }
+
+    /**
+     * The consumer's in-flight ceiling, so a worker can be refused a coroutine cap
+     * this queue cannot deliver into. See {@see Bounded}.
+     */
+    public function inFlightCeiling(): ?int
+    {
+        return $this->maxAckPending;
     }
 
     /**
