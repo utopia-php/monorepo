@@ -1057,7 +1057,8 @@ class Gitea extends Git
          */
     public function generateCloneCommand(string $owner, string $repositoryName, string $version, string $versionType, string $directory, string $rootDirectory): string
     {
-        if ($rootDirectory === '' || $rootDirectory === '0') {
+        $rootDirectory = $this->normalizeRepositoryPath($rootDirectory);
+        if ($rootDirectory === '') {
             $rootDirectory = '*';
         }
         $cloneUrl = "{$this->giteaUrl}/{$owner}/{$repositoryName}";
