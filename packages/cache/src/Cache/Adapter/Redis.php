@@ -6,6 +6,7 @@ use Exception;
 use Redis as Client;
 use Throwable;
 use Utopia\Cache\Adapter;
+use Utopia\Cache\Adapter\Redis\DecodedEnvelopes;
 use Utopia\Cache\Adapter\Redis\Envelope;
 use Utopia\Cache\Adapter\Redis\Leasable;
 use Utopia\Cache\Adapter\Redis\NoScript;
@@ -44,6 +45,8 @@ class Redis extends Leasable implements Adapter, Batchable, Retryable
     private bool $persistent = false;
 
     private int $dbIndex = 0;
+
+    private ?DecodedEnvelopes $decoded = null;
 
     /**
      * Redis constructor.
@@ -110,7 +113,7 @@ class Redis extends Leasable implements Adapter, Batchable, Retryable
             return false;
         }
 
-        return Envelope::decode($redis_string, $ttl, time());
+        return ($this->decoded ??= new DecodedEnvelopes())->decode($key . ' ' . $hash, $redis_string, $ttl, time());
     }
 
     /**

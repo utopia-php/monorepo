@@ -35,8 +35,8 @@ final class Envelope
      */
     public static function decode(string $value, int $ttl, int $now): mixed
     {
-        $cache = Json::decode($value);
-        if (! \is_array($cache) || ! isset($cache['time'], $cache['data']) || ! \is_int($cache['time'])) {
+        $cache = self::unwrap($value);
+        if ($cache === null) {
             return false;
         }
 
@@ -45,6 +45,22 @@ final class Envelope
         }
 
         return false;
+    }
+
+    /**
+     * Decode a stored envelope without applying a TTL. Returns null when the
+     * value is not a well-formed envelope.
+     *
+     * @return array{time: int, data: mixed}|null
+     */
+    public static function unwrap(string $value): ?array
+    {
+        $cache = Json::decode($value);
+        if (! \is_array($cache) || ! isset($cache['time'], $cache['data']) || ! \is_int($cache['time'])) {
+            return null;
+        }
+
+        return ['time' => $cache['time'], 'data' => $cache['data']];
     }
 
     /**

@@ -38,6 +38,8 @@ class Multiplexing extends Leasable implements Adapter, Batchable, TelemetryFeat
 
     private ?UpDownCounter $pendingDepth = null;
 
+    private ?DecodedEnvelopes $decoded = null;
+
     /**
      * @param  float  $timeout connect timeout in seconds
      * @param  float  $readTimeout per-call read deadline in seconds — how long
@@ -130,7 +132,7 @@ class Multiplexing extends Leasable implements Adapter, Batchable, TelemetryFeat
             return false;
         }
 
-        return Envelope::decode($value, $ttl, time());
+        return ($this->decoded ??= new DecodedEnvelopes())->decode($key . ' ' . $hash, $value, $ttl, time());
     }
 
     /**
