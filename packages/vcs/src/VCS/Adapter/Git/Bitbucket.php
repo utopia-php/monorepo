@@ -339,7 +339,7 @@ class Bitbucket extends Git
     {
         $url = "/repositories/{$owner}?page={$page}&pagelen={$per_page}";
 
-        if ($search !== '' && $search !== '0') {
+        if ($search !== '') {
             // Bitbucket's filter grammar quotes string literals, so escape the
             // characters that would otherwise break out of the quoted value.
             $escaped = str_replace(['\\', '"'], ['\\\\', '\\"'], $search);

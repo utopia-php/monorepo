@@ -158,7 +158,7 @@ class Gitea extends Git
                 'limit' => 100,
             ];
 
-            if ($search !== '' && $search !== '0') {
+            if ($search !== '') {
                 $queryParams['q'] = $search;
             }
 
