@@ -654,26 +654,30 @@ final class HttpTest extends TestCase
             [
                 'path' => '/d/:id',
                 'url' => '/d/',
+                'params' => ['id' => ''],
             ],
             [
                 'path' => '/d/:id/e/:id2',
                 'url' => '/d/123/e/',
+                'params' => ['id' => '123', 'id2' => ''],
             ],
             [
                 'path' => '/d/:id/e/:id2/f/:id3',
                 'url' => '/d/123/e/456/f/',
+                'params' => ['id' => '123', 'id2' => '456', 'id3' => ''],
             ],
         ];
 
         foreach ($requests as $request) {
-            Http::get($request['path']);
+            $route = Http::get($request['path']);
 
             $_SERVER['REQUEST_METHOD'] = Http::REQUEST_METHOD_GET;
             $_SERVER['REQUEST_URI'] = $request['url'];
 
-            $route = $this->http->match(new Request());
+            $match = $this->http->match(new Request());
 
-            $this->assertNull($route);
+            $this->assertSame($route, $match?->route);
+            $this->assertSame($request['params'], $match->params);
         }
     }
 
