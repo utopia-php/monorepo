@@ -11,6 +11,7 @@ use Utopia\Psr7\Stream;
 use Utopia\Storage\Device\Local;
 use Utopia\Storage\DeviceType;
 use Utopia\Storage\Exception\NotFoundException;
+use Utopia\Storage\Exception\StorageException;
 use Utopia\Storage\Exception\UploadException;
 use Utopia\Storage\FileInfo;
 
@@ -243,6 +244,24 @@ final class LocalTest extends TestCase
 
         // An empty path is an error, not the filesystem root.
         $this->assertSame(-1, $this->object->getDirectorySize(''));
+    }
+
+    public function testDirectoryWalksAbortPastTheEntryBudget(): void
+    {
+        $device = new Local($this->object->getRoot(), maxEntries: 1);
+        $directory = $device->getPath('walk-budget');
+
+        $this->assertTrue($device->createDirectory($directory));
+        $this->assertTrue($device->write($directory . DIRECTORY_SEPARATOR . 'a.txt', new Stream('a')));
+        $this->assertTrue($device->write($directory . DIRECTORY_SEPARATOR . 'b.txt', new Stream('b')));
+
+        try {
+            $this->expectException(StorageException::class);
+            $this->expectExceptionMessage('exceeds the 1 entry walk budget');
+            $device->getDirectorySize($directory);
+        } finally {
+            $this->assertTrue($this->object->delete($directory, true));
+        }
     }
 
     /** Without a started multipart upload there is nothing to reclaim — aborting could delete a pre-existing destination. */

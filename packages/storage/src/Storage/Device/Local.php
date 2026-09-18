@@ -25,8 +25,10 @@ class Local extends Device
 
     /**
      * Local constructor.
+     *
+     * @param  int  $maxEntries  Entry budget for a single recursive walk (`delete`, `deletePath`, `getDirectorySize`). Walks abort with a `StorageException` past it rather than pinning the worker; raise it for background jobs that must cover an arbitrarily large tree.
      */
-    public function __construct(protected readonly string $root = '') {}
+    public function __construct(protected readonly string $root = '', protected readonly int $maxEntries = 100_000) {}
 
     public function getType(): DeviceType
     {
@@ -327,20 +329,12 @@ class Local extends Device
     public function delete(string $path, bool $recursive = false): bool
     {
         if (is_dir($path) && $recursive) {
-            $entries = scandir($path);
+            foreach ($this->walk($path, \RecursiveIteratorIterator::CHILD_FIRST) as $entry) {
+                $removed = $entry->isDir() && ! $entry->isLink()
+                    ? rmdir($entry->getPathname())
+                    : unlink($entry->getPathname());
 
-            if ($entries === false) {
-                return false;
-            }
-
-            foreach ($entries as $entry) {
-                if ($entry === '.') {
-                    continue;
-                }
-                if ($entry === '..') {
-                    continue;
-                }
-                if (! $this->delete($path . DIRECTORY_SEPARATOR . $entry, true)) {
+                if (! $removed) {
                     return false;
                 }
             }
@@ -357,26 +351,14 @@ class Local extends Device
 
     /**
      * Delete files in given path, path must be a directory. Return true on success and false on failure.
+     *
+     * @throws StorageException when the tree exceeds the walk budget
      */
     public function deletePath(string $path): bool
     {
         $path = realpath($this->getRoot() . DIRECTORY_SEPARATOR . $path);
 
-        if ($path === false || ! is_dir($path)) {
-            return false;
-        }
-
-        $files = $this->scanDirectory($path);
-
-        foreach ($files as $file) {
-            if (is_dir($file)) {
-                $this->deletePath(substr_replace($file, '', 0, \strlen($this->getRoot() . DIRECTORY_SEPARATOR)));
-            } else {
-                $this->delete($file, true);
-            }
-        }
-
-        return rmdir($path);
+        return $path !== false && is_dir($path) && $this->delete($path, true);
     }
 
     /**
@@ -451,40 +433,53 @@ class Local extends Device
      *
      * Return -1 on error
      *
-     * Based on http://www.jonasjohn.de/snippets/php/dir-size.htm
+     * @throws StorageException when the tree exceeds the walk budget
      */
     public function getDirectorySize(string $path): int
     {
-        if ($path === '') {
+        if ($path === '' || ! is_dir($path)) {
             return -1;
         }
 
         $size = 0;
-        $path = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-
-        $directory = opendir($path);
-
-        if (! $directory) {
-            return -1;
+        foreach ($this->walk($path) as $entry) {
+            $size += $entry->isFile() ? $entry->getSize() : 0;
         }
 
-        while (($file = readdir($directory)) !== false) {
-            // Skip file pointers
-            if ($file[0] === '.') {
+        return $size;
+    }
+
+    /**
+     * Walk a directory tree lazily, aborting once the entry budget is spent.
+     *
+     * These walks run on the request path, where an unbounded tree would hold a
+     * worker for minutes; a tenant with millions of files gets a clear error
+     * instead of a hung request.
+     *
+     * @param  0|1|2  $mode  `RecursiveIteratorIterator` mode — leaves only for reads, child first for deletes
+     * @return \Generator<\SplFileInfo>
+     *
+     * @throws StorageException
+     */
+    private function walk(string $path, int $mode = \RecursiveIteratorIterator::LEAVES_ONLY): \Generator
+    {
+        $entries = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            $mode,
+        );
+
+        $seen = 0;
+        foreach ($entries as $entry) {
+            if (! $entry instanceof \SplFileInfo) {
                 continue;
             }
 
-            // Go recursive down, or add the file size
-            if (is_dir($path . $file)) {
-                $size += $this->getDirectorySize($path . $file . DIRECTORY_SEPARATOR);
-            } else {
-                $size += filesize($path . $file);
+            if (++$seen > $this->maxEntries) {
+                throw new StorageException('Directory ' . $path . ' exceeds the ' . $this->maxEntries . ' entry walk budget, walk it in the background instead');
             }
+
+            yield $entry;
         }
-
-        closedir($directory);
-
-        return $size;
     }
 
     /**
