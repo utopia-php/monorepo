@@ -188,7 +188,7 @@ try {
 }
 ```
 
-When Fastly domain management owns the domain lifecycle, use the managed provider instead. It creates domains without a service version on the configured service and removes both the domain and TLS subscription on deletion. Classic domains are removed by cloning and activating their service version first.
+When Fastly domain management owns the domain lifecycle, use the managed provider instead. It creates domains without a service version on the configured service and removes both the domain and TLS subscription on deletion. A domain already attached to another service is moved to the configured service before its certificate is requested: the service decides routing only, and the TLS subscription belongs to the account, so it follows the hostname. Classic domains are removed by cloning and activating their service version first.
 
 ```php
 use Utopia\Cdn\Certificates\Provider\Fastly;

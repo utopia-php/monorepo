@@ -5,9 +5,7 @@ namespace Utopia\Cdn\Certificates\Provider;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Utopia\Cdn\Certificates\Provider;
-use Utopia\Cdn\Certificates\Status;
 use Utopia\Cdn\Domain;
-use Utopia\Cdn\Exception\Certificate;
 use Utopia\Client;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Psr7\Header;
@@ -73,30 +71,17 @@ class Fastly implements Provider
                     throw new \RuntimeException('Fastly domain response was missing its ID.');
                 }
 
-                // Finish the certificate lifecycle while ownership is still
-                // unchanged. A TLS failure must not move a live hostname.
-                $renewDate = $this->tls->issueCertificate($certName, $domain, $domainType);
-
-                try {
-                    $status = $this->tls->getCertificateStatus($domain, $domainType);
-                } catch (Certificate) {
-                    // Waiting on the domain owner: nothing is issued yet, so
-                    // the hostname stays on its current service.
-                    return $renewDate;
-                }
-
-                if (!\in_array($status, [Status::ISSUED, Status::RENEWING], true)) {
-                    return $renewDate;
-                }
-
+                // The service decides routing only; the subscription belongs
+                // to the account and follows the hostname wherever it goes.
+                // Issuance is asked for by the one rule that owns this domain,
+                // after its DNS verified, so this service is where the
+                // hostname belongs, whatever its certificate is doing.
                 $result = $this->request(
                     'PATCH',
                     '/domain-management/v1/domains/' . rawurlencode($domainId),
                     ['service_id' => $this->serviceId],
                 );
                 $this->assertSuccess('reassign Fastly domain', $result);
-
-                return $renewDate;
             }
         }
 
