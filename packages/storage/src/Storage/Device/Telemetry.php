@@ -7,6 +7,7 @@ namespace Utopia\Storage\Device;
 use Psr\Http\Message\StreamInterface;
 use Utopia\Storage\Device;
 use Utopia\Storage\DeviceType;
+use Utopia\Storage\FileInfo;
 use Utopia\Storage\FileList;
 use Utopia\Telemetry\Adapter;
 use Utopia\Telemetry\Histogram;
@@ -120,9 +121,9 @@ class Telemetry extends Device
      * @param  int<0, max>  $offset
      * @param  int<0, max>|null  $length
      */
-    public function read(string $path, int $offset = 0, ?int $length = null): StreamInterface
+    public function read(string $path, int $offset = 0, ?int $length = null, ?string $etag = null): StreamInterface
     {
-        return $this->measure(__FUNCTION__, fn(): StreamInterface => $this->device->read($path, $offset, $length));
+        return $this->measure(__FUNCTION__, fn(): StreamInterface => $this->device->read($path, $offset, $length, $etag));
     }
 
     #[\Override]
@@ -131,9 +132,19 @@ class Telemetry extends Device
         return $this->measure(__FUNCTION__, fn(): bool => $this->device->copy($source, $target, $to, $chunkSize));
     }
 
-    public function write(string $path, StreamInterface $data, string $contentType): bool
+    public function write(string $path, StreamInterface $data, string $contentType): string
     {
-        return $this->measure(__FUNCTION__, fn(): bool => $this->device->write($path, $data, $contentType));
+        return $this->measure(__FUNCTION__, fn(): string => $this->device->write($path, $data, $contentType));
+    }
+
+    public function create(string $path, StreamInterface $data, string $contentType = ''): string
+    {
+        return $this->measure(__FUNCTION__, fn(): string => $this->device->create($path, $data, $contentType));
+    }
+
+    public function replace(string $path, StreamInterface $data, string $etag, string $contentType = ''): string
+    {
+        return $this->measure(__FUNCTION__, fn(): string => $this->device->replace($path, $data, $etag, $contentType));
     }
 
     public function delete(string $path, bool $recursive = false): bool
@@ -157,6 +168,11 @@ class Telemetry extends Device
     public function listFiles(string $prefix = '', int $max = 1000, ?string $cursor = null): FileList
     {
         return $this->measure(__FUNCTION__, fn(): FileList => $this->device->listFiles($prefix, $max, $cursor));
+    }
+
+    public function getFileInfo(string $path): FileInfo
+    {
+        return $this->measure(__FUNCTION__, fn(): FileInfo => $this->device->getFileInfo($path));
     }
 
     public function getFileSize(string $path): int

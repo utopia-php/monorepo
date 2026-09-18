@@ -11,6 +11,7 @@ use Utopia\Psr7\Stream;
 use Utopia\Storage\Device\Local;
 use Utopia\Storage\DeviceType;
 use Utopia\Storage\Exception\NotFoundException;
+use Utopia\Storage\Exception\PreconditionFailedException;
 use Utopia\Storage\Exception\UploadException;
 use Utopia\Storage\FileInfo;
 
@@ -80,7 +81,7 @@ final class LocalTest extends TestCase
 
     public function testWrite(): void
     {
-        $this->assertEquals(true, $this->object->write($this->object->getPath('text.txt'), new Stream('Hello World')));
+        $this->assertSame(md5('Hello World'), $this->object->write($this->object->getPath('text.txt'), new Stream('Hello World')));
         $this->assertFileExists($this->object->getPath('text.txt'));
         $this->assertIsReadable($this->object->getPath('text.txt'));
 
@@ -89,7 +90,7 @@ final class LocalTest extends TestCase
 
     public function testRead(): void
     {
-        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-read.txt'), new Stream('Hello World')));
+        $this->assertSame(md5('Hello World'), $this->object->write($this->object->getPath('text-for-read.txt'), new Stream('Hello World')));
         $this->assertSame('Hello World', (string) $this->object->read($this->object->getPath('text-for-read.txt')));
 
         $this->object->delete($this->object->getPath('text-for-read.txt'));
@@ -101,7 +102,7 @@ final class LocalTest extends TestCase
         $stream->read(6); // consume a prefix — seekable streams are sent from the beginning
 
         $path = $this->object->getPath('text-for-rewind.txt');
-        $this->assertTrue($this->object->write($path, $stream));
+        $this->assertSame(md5('Hello World'), $this->object->write($path, $stream));
         $this->assertSame('Hello World', (string) $this->object->read($path));
 
         $this->object->delete($path);
@@ -115,7 +116,7 @@ final class LocalTest extends TestCase
 
     public function testFileExists(): void
     {
-        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-test-exists.txt'), new Stream('Hello World')));
+        $this->assertSame(md5('Hello World'), $this->object->write($this->object->getPath('text-for-test-exists.txt'), new Stream('Hello World')));
         $this->assertEquals(true, $this->object->exists($this->object->getPath('text-for-test-exists.txt')));
         $this->assertEquals(false, $this->object->exists($this->object->getPath('text-for-test-doesnt-exist.txt')));
 
@@ -124,7 +125,7 @@ final class LocalTest extends TestCase
 
     public function testMove(): void
     {
-        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-move.txt'), new Stream('Hello World')));
+        $this->assertSame(md5('Hello World'), $this->object->write($this->object->getPath('text-for-move.txt'), new Stream('Hello World')));
         $this->assertSame('Hello World', (string) $this->object->read($this->object->getPath('text-for-move.txt')));
         $this->assertEquals(true, $this->object->move($this->object->getPath('text-for-move.txt'), $this->object->getPath('text-for-move-new.txt')));
         $this->assertSame('Hello World', (string) $this->object->read($this->object->getPath('text-for-move-new.txt')));
@@ -182,7 +183,7 @@ final class LocalTest extends TestCase
 
     public function testDelete(): void
     {
-        $this->assertEquals(true, $this->object->write($this->object->getPath('text-for-delete.txt'), new Stream('Hello World')));
+        $this->assertSame(md5('Hello World'), $this->object->write($this->object->getPath('text-for-delete.txt'), new Stream('Hello World')));
         $this->assertSame('Hello World', (string) $this->object->read($this->object->getPath('text-for-delete.txt')));
         $this->assertEquals(true, $this->object->delete($this->object->getPath('text-for-delete.txt')));
         $this->assertFileDoesNotExist($this->object->getPath('text-for-delete.txt'));
@@ -194,8 +195,8 @@ final class LocalTest extends TestCase
         $directory = $this->object->getPath('delete-hidden');
 
         $this->assertTrue($this->object->createDirectory($directory));
-        $this->assertTrue($this->object->write($directory . DIRECTORY_SEPARATOR . '.hidden', new Stream('secret')));
-        $this->assertTrue($this->object->write($directory . DIRECTORY_SEPARATOR . 'visible', new Stream('visible')));
+        $this->assertSame(md5('secret'), $this->object->write($directory . DIRECTORY_SEPARATOR . '.hidden', new Stream('secret')));
+        $this->assertSame(md5('visible'), $this->object->write($directory . DIRECTORY_SEPARATOR . 'visible', new Stream('visible')));
 
         $this->assertTrue($this->object->delete($directory, true));
         $this->assertFalse($this->object->exists($directory));
@@ -493,7 +494,7 @@ final class LocalTest extends TestCase
         // Test Single Object
         $path = $this->object->getPath('text-for-delete-path.txt');
         $path = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path);
-        $this->assertEquals(true, $this->object->write($path, new Stream('Hello World'), 'text/plain'));
+        $this->assertSame(md5('Hello World'), $this->object->write($path, new Stream('Hello World'), 'text/plain'));
         $this->assertEquals(true, $this->object->exists($path));
         $this->assertEquals(true, $this->object->deletePath('bucket'));
         $this->assertEquals(false, $this->object->exists($path));
@@ -501,17 +502,17 @@ final class LocalTest extends TestCase
         // Test Multiple Objects
         $path = $this->object->getPath('text-for-delete-path1.txt');
         $path = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path);
-        $this->assertEquals(true, $this->object->write($path, new Stream('Hello World'), 'text/plain'));
+        $this->assertSame(md5('Hello World'), $this->object->write($path, new Stream('Hello World'), 'text/plain'));
         $this->assertEquals(true, $this->object->exists($path));
 
         $path2 = $this->object->getPath('text-for-delete-path2.txt');
         $path2 = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path2);
-        $this->assertEquals(true, $this->object->write($path2, new Stream('Hello World'), 'text/plain'));
+        $this->assertSame(md5('Hello World'), $this->object->write($path2, new Stream('Hello World'), 'text/plain'));
         $this->assertEquals(true, $this->object->exists($path2));
 
         $path3 = $this->object->getPath('.hidden.txt');
         $path3 = str_ireplace($this->object->getRoot(), $this->object->getRoot() . DIRECTORY_SEPARATOR . 'bucket', $path3);
-        $this->assertEquals(true, $this->object->write($path3, new Stream('Hello World'), 'text/plain'));
+        $this->assertSame(md5('Hello World'), $this->object->write($path3, new Stream('Hello World'), 'text/plain'));
         $this->assertEquals(true, $this->object->exists($path3));
 
         $this->assertEquals(true, $this->object->deletePath('bucket/'));
@@ -734,5 +735,114 @@ final class LocalTest extends TestCase
         $this->assertSame('AAAABBBB', file_get_contents($dest), 'File content must not be corrupted');
 
         $storage->delete($storage->getRoot(), true);
+    }
+
+    public function testFileInfoReportsSizeModificationAndHash(): void
+    {
+        $path = $this->object->getPath('info.txt');
+        $this->object->write($path, new Stream('Hello World'), 'text/plain');
+
+        $info = $this->object->getFileInfo($path);
+
+        $this->assertSame($path, $info->path);
+        $this->assertSame(11, $info->size);
+        $this->assertSame(md5('Hello World'), $info->etag);
+        $this->assertEqualsWithDelta(time(), $info->modifiedAt?->getTimestamp() ?? 0, 5);
+
+        $this->object->delete($path);
+    }
+
+    public function testFileInfoOfAMissingFileThrowsNotFound(): void
+    {
+        $this->expectException(NotFoundException::class);
+        $this->object->getFileInfo($this->object->getPath('missing.txt'));
+    }
+
+    public function testCreateWritesOnlyWhereNothingIs(): void
+    {
+        $path = $this->object->getPath('created.txt');
+
+        $this->assertSame(md5('first'), $this->object->create($path, new Stream('first'), 'text/plain'));
+        $this->assertSame('first', file_get_contents($path));
+
+        try {
+            $this->object->create($path, new Stream('second'), 'text/plain');
+            self::fail('Expected precondition failure');
+        } catch (PreconditionFailedException) {
+            $this->assertSame('first', file_get_contents($path), 'the file is left alone');
+        }
+
+        $this->object->delete($path);
+    }
+
+    public function testReplaceWritesOverTheNamedVersionOnly(): void
+    {
+        $path = $this->object->getPath('replaced.txt');
+        $etag = $this->object->create($path, new Stream('first'), 'text/plain');
+
+        $this->assertSame(md5('second'), $this->object->replace($path, new Stream('second'), $etag, 'text/plain'));
+        $this->assertSame('second', file_get_contents($path));
+
+        try {
+            $this->object->replace($path, new Stream('third'), $etag, 'text/plain');
+            self::fail('Expected precondition failure');
+        } catch (PreconditionFailedException) {
+            $this->assertSame('second', file_get_contents($path), 'a stale ETag changes nothing');
+        }
+
+        $this->object->delete($path);
+
+        $this->expectException(PreconditionFailedException::class);
+        $this->object->replace($path, new Stream('third'), md5('second'), 'text/plain');
+    }
+
+    public function testReadWithEtagRefusesAReplacedFile(): void
+    {
+        $path = $this->object->getPath('conditional.txt');
+        $etag = $this->object->create($path, new Stream('Hello World'), 'text/plain');
+
+        $this->assertSame('World', (string) $this->object->read($path, 6, 5, $etag));
+
+        $this->object->write($path, new Stream('Goodbye World'), 'text/plain');
+
+        try {
+            $this->expectException(PreconditionFailedException::class);
+            $this->object->read($path, 6, 5, $etag);
+        } finally {
+            $this->object->delete($path);
+        }
+    }
+
+    public function testASingleChunkOfAnUploadWithUnknownCountIsJoined(): void
+    {
+        $path = $this->object->getPath('single-chunk.txt');
+        $this->object->write($path, new Stream('old contents'), 'text/plain');
+
+        $metadata = [];
+        $this->object->upload(new Stream('new contents'), $path, 'text/plain', 1, 0, $metadata);
+        $this->assertSame('old contents', file_get_contents($path), 'a chunk of an upload with unknown count is not the file yet');
+
+        $this->assertTrue($this->object->finalize($path, 1, $metadata));
+        $this->assertSame('new contents', file_get_contents($path));
+        $this->assertTrue($this->object->finalize($path, 1, $metadata), 'finalizing again is not an error');
+
+        $this->object->delete($path);
+    }
+
+    public function testFinalizeReplacesAnExistingFile(): void
+    {
+        $path = $this->object->getPath('replaced-by-upload.txt');
+        $this->object->write($path, new Stream('old contents'), 'text/plain');
+
+        $metadata = [];
+        $this->object->upload(new Stream('new '), $path, 'text/plain', 1, 0, $metadata);
+        $this->object->upload(new Stream('contents'), $path, 'text/plain', 2, 0, $metadata);
+        $this->assertSame('old contents', file_get_contents($path), 'nothing changes before finalize');
+
+        $this->assertTrue($this->object->finalize($path, 2, $metadata));
+        $this->assertSame('new contents', file_get_contents($path));
+        $this->assertTrue($this->object->finalize($path, 2, $metadata), 'finalizing again is not an error');
+
+        $this->object->delete($path);
     }
 }

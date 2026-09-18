@@ -224,3 +224,4 @@ WhatsApp
 YAML
 Yandex
 zstd
+ETags?
