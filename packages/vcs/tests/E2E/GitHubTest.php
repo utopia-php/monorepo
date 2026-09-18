@@ -12,14 +12,15 @@ use Utopia\VCS\Adapter\Git\GitHub;
 final class GitHubTest extends Base
 {
     protected static string $owner = '';
-    protected static string $defaultBranch = 'main';
+    protected static string $existingUser = '';
+    protected static string $installationId = '';
 
+    protected static string $userHandleField = 'login';
     protected static string $avatarDomain = 'githubusercontent.com';
     protected static bool $supportsPullRequestCreation = false;
     protected static bool $supportsNamespaceListing = false;
     protected static bool $supportsCommitStatusLookup = false;
     protected static bool $supportsTags = false;
-    protected static bool $supportsUserLookup = false;
     protected static bool $computesLanguagesAsynchronously = true;
     protected static bool $supportsWebhookDelivery = false;
     protected static bool $resolvesOwnerFromRepositoryId = false;
@@ -52,6 +53,9 @@ final class GitHubTest extends Base
         if (self::$owner === '' || self::$owner === '0') {
             self::$owner = $adapter->getOwnerName(self::$installationId);
         }
+
+        // The account the app is installed on is the one user known to exist
+        self::$existingUser = self::$owner;
 
         $this->vcsAdapter = $adapter;
     }
@@ -90,7 +94,7 @@ final class GitHubTest extends Base
             $noMatch = $adapter->listBranches(self::$owner, $repositoryName, 100, 1, 'xyz');
             $this->assertEmpty($noMatch);
         } finally {
-            $this->vcsAdapter->deleteRepository(self::$owner, $repositoryName);
+            $this->discardRepositories($repositoryName);
         }
     }
 }

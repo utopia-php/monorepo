@@ -14,6 +14,9 @@ final class ForgejoTest extends GiteaBase
     protected static string $owner = '';
     protected static string $avatarDomain = '/avatars/';
 
+    // Forgejo's API user carries html_url, which Gitea 1.21's does not
+    protected static bool $reportsCommitAuthorUrl = true;
+
     protected function setupAdapter(): void
     {
         $adapter = new Forgejo(new Cache(new None()));

@@ -449,7 +449,7 @@ class Gogs extends Gitea
     #[\Override]
     public function listRepositoryLanguages(string $owner, string $repositoryName): array
     {
-        throw new Exception('Listing repository languages is not supported by Gogs');
+        throw new Exception('listRepositoryLanguages() is not supported by ' . $this->getName());
     }
 
     /**
@@ -494,7 +494,7 @@ class Gogs extends Gitea
     #[\Override]
     public function createPullRequest(string $owner, string $repositoryName, string $title, string $head, string $base, string $body = ''): array
     {
-        throw new Exception('Pull request API is not supported by Gogs');
+        throw new Exception('createPullRequest() is not supported by ' . $this->getName());
     }
 
     /**
@@ -505,7 +505,7 @@ class Gogs extends Gitea
     #[\Override]
     public function getPullRequest(string $owner, string $repositoryName, int $pullRequestNumber): array
     {
-        throw new Exception('Pull request API is not supported by Gogs');
+        throw new Exception('getPullRequest() is not supported by ' . $this->getName());
     }
 
     /**
@@ -516,7 +516,7 @@ class Gogs extends Gitea
     #[\Override]
     public function getPullRequestFromBranch(string $owner, string $repositoryName, string $branch): array
     {
-        throw new Exception('Pull request API is not supported by Gogs');
+        throw new Exception('getPullRequestFromBranch() is not supported by ' . $this->getName());
     }
 
     /**
@@ -527,7 +527,7 @@ class Gogs extends Gitea
     #[\Override]
     public function getPullRequestFiles(string $owner, string $repositoryName, int $pullRequestNumber): array
     {
-        throw new Exception('Pull request API is not supported by Gogs');
+        throw new Exception('getPullRequestFiles() is not supported by ' . $this->getName());
     }
 
     /**
@@ -538,7 +538,7 @@ class Gogs extends Gitea
     #[\Override]
     public function updateCommitStatus(string $repositoryName, string $commitHash, string $owner, string $state, string $description = '', string $target_url = '', string $context = ''): void
     {
-        throw new Exception('Commit status API is not supported by Gogs');
+        throw new Exception('updateCommitStatus() is not supported by ' . $this->getName());
     }
 
     /**
@@ -551,7 +551,7 @@ class Gogs extends Gitea
     #[\Override]
     public function getCommitStatuses(string $owner, string $repositoryName, string $commitHash): array
     {
-        throw new Exception('Commit status API is not supported by Gogs');
+        throw new Exception('getCommitStatuses() is not supported by ' . $this->getName());
     }
 
     /**

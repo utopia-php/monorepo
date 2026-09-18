@@ -10,14 +10,33 @@ namespace Utopia\Tests\Unit;
  */
 abstract class GiteaBase extends Base
 {
+    /**
+     * Gitea says 'synchronized' for a pushed head, which the adapter normalizes.
+     *
+     * @var array<string, string>
+     */
+    protected static array $pullRequestActions = [
+        'opened' => 'opened',
+        'reopened' => 'reopened',
+        'synchronized' => 'synchronize',
+        'closed' => 'closed',
+    ];
+
     protected function signWebhookPayload(string $payload, string $secret): string
     {
         return hash_hmac('sha256', $payload, $secret);
     }
 
-    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false): string
+    protected function pushPayload(string $branch, array $added = [], array $removed = [], array $modified = [], bool $created = false, bool $deleted = false, array $olderCommits = []): string
     {
         $repositoryUrl = 'http://gitea:3000/' . self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME;
+
+        $olderEntries = array_map(fn(string $hash): array => [
+            'id' => $hash,
+            'message' => 'Older commit',
+            'url' => $repositoryUrl . '/commit/' . $hash,
+            'author' => ['name' => 'Older Author', 'email' => 'older@example.com'],
+        ], $olderCommits);
 
         return (string) json_encode([
             'ref' => 'refs/heads/' . $branch,
@@ -43,7 +62,7 @@ abstract class GiteaBase extends Base
                 'url' => $repositoryUrl . '/commit/' . self::EVENT_COMMIT_HASH,
                 'author' => ['name' => self::EVENT_AUTHOR_NAME, 'email' => self::EVENT_AUTHOR_EMAIL],
             ],
-            'commits' => [[
+            'commits' => [...$olderEntries, [
                 'id' => self::EVENT_COMMIT_HASH,
                 'added' => $added,
                 'removed' => $removed,
@@ -52,7 +71,7 @@ abstract class GiteaBase extends Base
         ]);
     }
 
-    protected function pullRequestPayload(bool $external = false): string
+    protected function pullRequestPayload(bool $external = false, string $action = 'opened'): string
     {
         $repositoryUrl = 'http://gitea:3000/' . self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME;
         $headRepository = $external
@@ -60,7 +79,7 @@ abstract class GiteaBase extends Base
             : self::EVENT_OWNER . '/' . self::EVENT_REPOSITORY_NAME;
 
         return (string) json_encode([
-            'action' => 'opened',
+            'action' => $action,
             'number' => self::EVENT_PULL_REQUEST_NUMBER,
             'pull_request' => [
                 'id' => 1,
