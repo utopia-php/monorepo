@@ -307,6 +307,37 @@ abstract class Adapter
     }
 
     /**
+     * Whether a failure is a fault in the code rather than in the world.
+     *
+     * A handler that cannot say so itself still should not be retried when the
+     * throw is a type error: the payload and the signature disagree, and they
+     * will disagree identically on every delivery. Retrying spends the whole
+     * redelivery budget to reach the conclusion the first attempt already
+     * reached, and on JetStream each of those attempts holds one of the
+     * consumer's maxAckPending slots for the length of its backoff -- so enough
+     * of them stop the queue for the healthy messages behind them.
+     *
+     * Measured on staging: 701 messages whose payload carried an object where
+     * the handler constructs from an array took `new Document(Document)` to a
+     * TypeError. Each burned maxDeliver=5 over ~22 minutes of backoff while
+     * holding one of 60 slots, and worker-webhooks delivered nothing else for
+     * hours. Terminal on the first attempt, they would have been 701 dead
+     * letters and no outage.
+     *
+     * Deliberately narrow. \Error also covers exhaustion -- OutOfMemoryError and
+     * the stack overflow \Error carries -- which says the host was short at that
+     * moment, not that the work is impossible, and that is what the redelivery
+     * budget is for. Only the ones that mean "this value can never satisfy this
+     * signature" are listed.
+     */
+    private function isUnrepeatable(\Throwable $error): bool
+    {
+        // ArgumentCountError is a TypeError, so the first test already covers it.
+        return $error instanceof \TypeError
+            || $error instanceof \ValueError;
+    }
+
+    /**
      * Claim up to $max messages at once, where the consumer can.
      *
      * A consumer that is not {@see Batched} degrades to a single receive rather
@@ -420,7 +451,7 @@ abstract class Adapter
             // is rejected: reject() is where the broker decides between another
             // attempt and the dead letter, and it runs here — ahead of the error
             // report below, which is the only other place a host sees the failure.
-            if ($error instanceof PermanentFailure) {
+            if ($error instanceof PermanentFailure || $this->isUnrepeatable($error)) {
                 $message->terminal();
             }
 
