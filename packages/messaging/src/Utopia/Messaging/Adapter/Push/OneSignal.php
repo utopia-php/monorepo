@@ -76,7 +76,7 @@ class OneSignal extends PushAdapter
             $body['chrome_web_icon'] = $message->getIcon();
         }
         if (!\is_null($message->getColor())) {
-            $body['android_accent_color'] = 'FF' . \ltrim($message->getColor(), '#');
+            $body['android_accent_color'] = 'FF' . ltrim($message->getColor(), '#');
         }
         if (!\is_null($message->getTag())) {
             $body['collapse_id'] = $message->getTag();
