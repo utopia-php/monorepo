@@ -116,6 +116,7 @@ $messaging->send($message);
 
 use \Utopia\Messaging\Messages\Push;
 use \Utopia\Messaging\Adapter\Push\FCM;
+use \Utopia\Messaging\Adapter\Push\OneSignal;
 
 $message = new Push(
     to: ['eyJhGc...ssw5c'],
@@ -123,6 +124,9 @@ $message = new Push(
 );
 
 $messaging = new FCM('YOUR_SERVICE_ACCOUNT_JSON');
+$messaging->send($message);
+
+$messaging = new OneSignal('YOUR_APP_ID', 'YOUR_REST_API_KEY');
 $messaging->send($message);
 ```
 
@@ -164,7 +168,7 @@ $messaging->send($message);
 ### Push
 - [x] [FCM](https://firebase.google.com/docs/cloud-messaging)
 - [x] [APNS](https://developer.apple.com/documentation/usernotifications)
-- [ ] [OneSignal](https://onesignal.com/)
+- [x] [OneSignal](https://onesignal.com/)
 - [ ] [Pusher](https://pusher.com/)
 - [ ] [WebPush](https://developer.mozilla.org/en-US/docs/Web/API/Push_API)
 - [ ] [UrbanAirship](https://www.urbanairship.com/)
