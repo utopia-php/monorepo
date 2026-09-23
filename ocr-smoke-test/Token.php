@@ -29,4 +29,12 @@ final class Token
 
         return \intdiv($total, $perPage) + ($total % $perPage === 0 ? 0 : 1);
     }
+
+    /**
+     * Extract the token from an "Authorization: Bearer <token>" header value.
+     */
+    public static function fromHeader(string $header): string
+    {
+        return substr($header, 6);
+    }
 }
