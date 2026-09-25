@@ -1,5 +1,0 @@
-/vendor/
-/.idea/
-*.cache
-/tools/rector/vendor/
-composer.lock
