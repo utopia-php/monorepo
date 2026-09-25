@@ -7,6 +7,11 @@ namespace Utopia\Queue;
 /**
  * Turns a message envelope into the bytes a broker carries, and back.
  *
+ * Whatever the format, decode() answers arrays and scalars. A handler is written
+ * against the shape it is handed, so making that shape a property of the format would
+ * mean the configured codec could silently change every handler's input -- which is why
+ * a codec that can carry an object applies {@see Codec\Plain} in both directions.
+ *
  * Both directions throw on failure: an unencodable value, or bytes that are
  * not a payload this codec wrote. A broker treats a decode failure as a poison
  * message and parks it -- unlike a cache, it cannot shrug one off as a miss,

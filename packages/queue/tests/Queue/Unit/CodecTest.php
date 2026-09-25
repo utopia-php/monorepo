@@ -141,6 +141,67 @@ final class CodecTest extends TestCase
         $this->assertSame('application/vnd.php.igbinary', new Compat(new Igbinary())->contentType());
     }
 
+    /**
+     * The shape a handler receives is the package's contract, not a property of the
+     * format. Written as one expected value for every codec, because the point is that
+     * a consumer cannot tell which one is configured.
+     */
+    #[DataProvider('codecs')]
+    public function testEveryCodecHandsAConsumerArrays(Codec $codec): void
+    {
+        $envelope = [
+            'pid' => '65e2a1b8c9d0e1.23456789',
+            'queue' => 'v1-functions',
+            'timestamp' => 1758067200,
+            'payload' => [
+                'project' => new \ArrayObject(['$id' => 'p1', 'team' => new \ArrayObject(['$id' => 't1'])]),
+                'prefs' => new \stdClass(),
+                'events' => ['users.*.create'],
+            ],
+        ];
+
+        $this->assertSame([
+            'pid' => '65e2a1b8c9d0e1.23456789',
+            'queue' => 'v1-functions',
+            'timestamp' => 1758067200,
+            'payload' => [
+                'project' => ['$id' => 'p1', 'team' => ['$id' => 't1']],
+                'prefs' => [],
+                'events' => ['users.*.create'],
+            ],
+        ], $codec->decode($codec->encode($envelope)));
+    }
+
+    public function testBytesAnEarlierReleaseWroteDecodePlain(): void
+    {
+        if (!\function_exists('igbinary_serialize')) {
+            $this->markTestSkipped('ext-igbinary is not loaded.');
+        }
+
+        // Written past the codec, the way a pod that has not rolled yet writes them.
+        // Bytes outlive the build that wrote them -- queued, in flight, and on dead
+        // letters that have no deadline -- so the read side has to answer this too.
+        $bytes = igbinary_serialize(['payload' => ['project' => new \ArrayObject(['$id' => 'p1'])]]);
+        $this->assertIsString($bytes);
+
+        $this->assertSame(['payload' => ['project' => ['$id' => 'p1']]], new Igbinary()->decode($bytes));
+    }
+
+    public function testCompatReadsOldBytesPlainThroughEitherWriter(): void
+    {
+        if (!\function_exists('igbinary_serialize')) {
+            $this->markTestSkipped('ext-igbinary is not loaded.');
+        }
+
+        // The cutover deploy reads both and still writes JSON. That build is the one
+        // holding the queue when the first igbinary bytes appear on it.
+        $bytes = igbinary_serialize(['payload' => ['project' => new \ArrayObject(['$id' => 'p1'])]]);
+        $this->assertIsString($bytes);
+
+        $this->assertSame(['payload' => ['project' => ['$id' => 'p1']]], new Compat()->decode($bytes));
+        $this->assertSame(['payload' => ['project' => ['$id' => 'p1']]], new Compat(new Igbinary())->decode($bytes));
+    }
+
     public function testIgbinaryRejectsEmptyInput(): void
     {
         if (!\function_exists('igbinary_serialize')) {
