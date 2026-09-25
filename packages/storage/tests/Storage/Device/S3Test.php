@@ -560,6 +560,58 @@ final class S3Test extends TestCase
         $this->assertNotContains('s3:completeMultipartUpload', $this->s3->calls);
     }
 
+    /**
+     * `Device::delete()` takes a `$recursive` flag and `Local` honours it, but
+     * `S3` ignored it and sent one DELETE for the directory key, which removes
+     * nothing. A caller deleting a tree left every object behind.
+     */
+    public function testRecursiveDeleteRemovesEveryObjectUnderThePath(): void
+    {
+        $listing = '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><KeyCount>2</KeyCount><IsTruncated>false</IsTruncated>'
+            . '<Contents><Key>root/dir/a.txt</Key></Contents>'
+            . '<Contents><Key>root/dir/nested/b.txt</Key></Contents>'
+            . '</ListBucketResult>';
+        $client = new ScriptedClient([
+            new Response(200, body: new Stream($listing))->withHeader('content-type', 'application/xml'),
+            new Response(200),
+            new Response(204),
+        ]);
+
+        $this->assertTrue($this->device($client)->delete('/root/dir', true));
+        $this->assertCount(3, $client->requests);
+
+        $this->assertSame('GET', $client->requests[0]->getMethod());
+        $this->assertStringContainsString('prefix=root%2Fdir%2F', $client->requests[0]->getUri()->getQuery());
+
+        $this->assertSame('POST', $client->requests[1]->getMethod());
+        $this->assertSame('delete=', $client->requests[1]->getUri()->getQuery());
+        $body = (string) $client->requests[1]->getBody();
+        $this->assertStringContainsString('<Key>root/dir/a.txt</Key>', $body);
+        $this->assertStringContainsString('<Key>root/dir/nested/b.txt</Key>', $body);
+
+        $this->assertSame('DELETE', $client->requests[2]->getMethod());
+        $this->assertSame('/root/dir', $client->requests[2]->getUri()->getPath());
+    }
+
+    public function testDeleteWithoutRecursiveSendsOnlyTheSingleDelete(): void
+    {
+        $client = new ScriptedClient([new Response(204)]);
+
+        $this->assertTrue($this->device($client)->delete('/root/dir'));
+        $this->assertCount(1, $client->requests);
+        $this->assertSame('DELETE', $client->requests[0]->getMethod());
+    }
+
+    /** `app-1` and `app-12` share a prefix, so the listing has to be bounded by a separator. */
+    public function testDeletePathDoesNotReachASiblingWithASharedPrefix(): void
+    {
+        $listing = '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><KeyCount>0</KeyCount><IsTruncated>false</IsTruncated></ListBucketResult>';
+        $client = new ScriptedClient([new Response(200, body: new Stream($listing))->withHeader('content-type', 'application/xml')]);
+
+        $this->assertTrue($this->device($client)->deletePath('app-1'));
+        $this->assertSame('list-type=2&prefix=root%2Fapp-1%2F&max-keys=1000', $client->requests[0]->getUri()->getQuery());
+    }
+
     public function testXmlListingIsDecodedIntoTypedFiles(): void
     {
         $body = '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><KeyCount>2</KeyCount><IsTruncated>true</IsTruncated><MaxKeys>1000</MaxKeys><NextContinuationToken>next-token</NextContinuationToken>'

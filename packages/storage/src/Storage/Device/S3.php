@@ -404,6 +404,10 @@ class S3 extends Device
      */
     public function delete(string $path, bool $recursive = false): bool
     {
+        if ($recursive && $path !== '') {
+            $this->deleteByPrefix($path);
+        }
+
         $uri = ($path !== '') ? '/' . str_replace('%2F', '/', rawurlencode($path)) : '/';
 
         $this->call(Method::DELETE, $uri);
@@ -535,12 +539,26 @@ class S3 extends Device
      */
     public function deletePath(string $path): bool
     {
-        $path = $this->getRoot() . '/' . $path;
+        return $this->deleteByPrefix($this->getRoot() . '/' . $path);
+    }
+
+    /**
+     * Delete every object under a directory key.
+     *
+     * The listing prefix ends with a separator so that it cannot reach a
+     * sibling whose name merely starts with the same characters: deleting
+     * `app-1` must not touch `app-12`.
+     *
+     * @throws StorageException
+     */
+    private function deleteByPrefix(string $path): bool
+    {
+        $prefix = rtrim($path, '/') . '/';
 
         $uri = '/';
         $continuationToken = '';
         do {
-            $objects = $this->listObjects($path, continuationToken: $continuationToken);
+            $objects = $this->listObjects($prefix, continuationToken: $continuationToken);
             $token = $objects['NextContinuationToken'] ?? '';
             $continuationToken = \is_string($token) ? $token : '';
 
