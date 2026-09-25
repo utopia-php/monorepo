@@ -2,7 +2,7 @@
 
 The source of truth for the [utopia-php](https://github.com/utopia-php) libraries. Each `packages/<name>` is an independent Composer library; development happens here, and every push is mirrored to its read-only repository (e.g. `utopia-php/http`), so Composer/Packagist distribution is unchanged — mechanics in [docs/distribution.md](docs/distribution.md).
 
-[`utopia-php/cache`](https://github.com/appwrite/appwrite/tree/main/packages/cache), [`utopia-php/circuit-breaker`](https://github.com/appwrite/appwrite/tree/main/packages/circuit-breaker), [`utopia-php/client`](https://github.com/appwrite/appwrite/tree/main/packages/client), [`utopia-php/compression`](https://github.com/appwrite/appwrite/tree/main/packages/compression), [`utopia-php/image`](https://github.com/appwrite/appwrite/tree/main/packages/image), [`utopia-php/messaging`](https://github.com/appwrite/appwrite/tree/main/packages/messaging), [`utopia-php/openapi`](https://github.com/appwrite/appwrite/tree/main/packages/openapi), [`utopia-php/pools`](https://github.com/appwrite/appwrite/tree/main/packages/pools), [`utopia-php/smtp`](https://github.com/appwrite/appwrite/tree/main/packages/smtp), [`utopia-php/span`](https://github.com/appwrite/appwrite/tree/main/packages/span), [`utopia-php/system`](https://github.com/appwrite/appwrite/tree/main/packages/system), [`utopia-php/telemetry`](https://github.com/appwrite/appwrite/tree/main/packages/telemetry), [`utopia-php/user-agent`](https://github.com/appwrite/appwrite/tree/main/packages/user-agent) and [`utopia-php/websocket`](https://github.com/appwrite/appwrite/tree/main/packages/websocket) are maintained in Appwrite. Their distribution mirrors and Packagist packages remain available.
+[`utopia-php/cache`](https://github.com/appwrite/appwrite/tree/main/packages/cache), [`utopia-php/circuit-breaker`](https://github.com/appwrite/appwrite/tree/main/packages/circuit-breaker), [`utopia-php/client`](https://github.com/appwrite/appwrite/tree/main/packages/client), [`utopia-php/compression`](https://github.com/appwrite/appwrite/tree/main/packages/compression), [`utopia-php/image`](https://github.com/appwrite/appwrite/tree/main/packages/image), [`utopia-php/messaging`](https://github.com/appwrite/appwrite/tree/main/packages/messaging), [`utopia-php/openapi`](https://github.com/appwrite/appwrite/tree/main/packages/openapi), [`utopia-php/pools`](https://github.com/appwrite/appwrite/tree/main/packages/pools), [`utopia-php/schedule`](https://github.com/appwrite/appwrite/tree/main/packages/schedule), [`utopia-php/smtp`](https://github.com/appwrite/appwrite/tree/main/packages/smtp), [`utopia-php/span`](https://github.com/appwrite/appwrite/tree/main/packages/span), [`utopia-php/system`](https://github.com/appwrite/appwrite/tree/main/packages/system), [`utopia-php/telemetry`](https://github.com/appwrite/appwrite/tree/main/packages/telemetry), [`utopia-php/user-agent`](https://github.com/appwrite/appwrite/tree/main/packages/user-agent) and [`utopia-php/websocket`](https://github.com/appwrite/appwrite/tree/main/packages/websocket) are maintained in Appwrite. Their distribution mirrors and Packagist packages remain available.
 
 ## Quickstart
 
@@ -77,7 +77,6 @@ graph TD
     nats
     replication
     reputation
-    schedule
     vcs
 ```
 <!-- /graph -->
