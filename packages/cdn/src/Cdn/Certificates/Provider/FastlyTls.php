@@ -105,6 +105,12 @@ class FastlyTls implements Provider
             return;
         }
 
+        // `force=true` deletes a subscription along with every domain on it, so
+        // a subscription shared with another hostname is not ours to remove.
+        if ($this->getSubscriptionDomains($subscription) !== [strtolower(rtrim($domain, '.'))]) {
+            throw new \RuntimeException('Refusing to delete a Fastly TLS subscription without exclusive ownership of the requested domain.');
+        }
+
         $result = $this->request(
             'DELETE',
             '/tls/subscriptions/' . $subscription['resource']['id'] . '?force=true',
@@ -137,7 +143,7 @@ class FastlyTls implements Provider
         }
 
         $data = $result['response']['data'] ?? null;
-        if (!\is_array($data)) {
+        if (!\is_array($data) || !array_is_list($data)) {
             throw new \RuntimeException('Fastly TLS subscriptions response was missing its data list.');
         }
 
@@ -146,7 +152,7 @@ class FastlyTls implements Provider
             return null;
         }
 
-        if (!\is_array($resource)) {
+        if (!\is_array($resource) || !\is_string($resource['id'] ?? null) || $resource['id'] === '') {
             throw new \RuntimeException('Fastly TLS subscription resource was malformed.');
         }
 
@@ -156,6 +162,32 @@ class FastlyTls implements Provider
         }
 
         return ['resource' => $resource, 'included' => array_values(array_filter($included, is_array(...)))];
+    }
+
+    /**
+     * Every domain the subscription covers, or null when Fastly's references
+     * are unreadable and exclusive ownership cannot be established.
+     *
+     * @param array{resource:array<string, mixed>,included:array<int, array<string, mixed>>} $subscription
+     * @return list<string>|null
+     */
+    private function getSubscriptionDomains(array $subscription): ?array
+    {
+        $references = $subscription['resource']['relationships']['tls_domains']['data'] ?? null;
+        if (!\is_array($references) || !array_is_list($references)) {
+            return null;
+        }
+
+        $domains = [];
+        foreach ($references as $reference) {
+            if (!\is_array($reference) || ($reference['type'] ?? null) !== 'tls_domain' || !\is_string($reference['id'] ?? null) || $reference['id'] === '') {
+                return null;
+            }
+
+            $domains[] = strtolower(rtrim($reference['id'], '.'));
+        }
+
+        return $domains;
     }
 
     /**
@@ -464,7 +496,7 @@ class FastlyTls implements Provider
 
     /**
      * @param array<string, mixed>|null $body
-     * @return array{statusCode:int,response:array<string, mixed>|string|null,error:string|null}
+     * @return array{statusCode:int,response:mixed,error:string|null}
      */
     private function request(string $method, string $path, ?array $body = null): array
     {
@@ -496,7 +528,7 @@ class FastlyTls implements Provider
     }
 
     /**
-     * @param array{statusCode:int,response:array<string, mixed>|string|null,error:string|null} $result
+     * @param array{statusCode:int,response:mixed,error:string|null} $result
      */
     private function formatError(string $prefix, array $result): string
     {

@@ -65,7 +65,7 @@ final class FastlyTlsTest extends TestCase
     public function testDeleteCertificateRemovesSubscription(): void
     {
         $client = new TestClient([
-            new Response(200, body: new Stream('{"data":[{"id":"sub_123","attributes":{"state":"issued"}}]}')),
+            new Response(200, body: new Stream(json_encode($this->subscriptionForDomains(['example.com']), JSON_THROW_ON_ERROR))),
             new Response(204),
         ]);
 
@@ -75,6 +75,70 @@ final class FastlyTlsTest extends TestCase
         $this->assertCount(2, $client->calls);
         $this->assertSame('DELETE', $client->calls[1]['method']);
         $this->assertSame('https://api.fastly.com/tls/subscriptions/sub_123?force=true', $client->calls[1]['url']);
+    }
+
+    /**
+     * `force=true` takes every domain on the subscription with it, so a
+     * subscription another hostname still uses is not ours to delete.
+     *
+     * @param list<string> $domains
+     */
+    #[DataProvider('subscriptionsOwnedByAnotherDomain')]
+    public function testDeletePreservesSubscriptionsForOtherDomains(array $domains): void
+    {
+        $client = new TestClient([
+            new Response(200, body: new Stream(json_encode($this->subscriptionForDomains($domains), JSON_THROW_ON_ERROR))),
+        ]);
+
+        try {
+            new FastlyTls('token', 'tls-config-id', 'certainly', $client)->deleteCertificate('example.com');
+            $this->fail('Expected the shared subscription to be left alone.');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('exclusive ownership', $error->getMessage());
+        }
+
+        $this->assertCount(1, $client->calls);
+    }
+
+    /** @return iterable<string, array{list<string>}> */
+    public static function subscriptionsOwnedByAnotherDomain(): iterable
+    {
+        yield 'shared with another domain' => [['example.com', 'other.com']];
+        yield 'belongs to another domain' => [['other.com']];
+    }
+
+    public function testDeleteRequiresReadableSubscriptionDomains(): void
+    {
+        $subscription = $this->subscriptionForDomains(['example.com']);
+        unset($subscription['data'][0]['relationships']['tls_domains']);
+        $client = new TestClient([
+            new Response(200, body: new Stream(json_encode($subscription, JSON_THROW_ON_ERROR))),
+        ]);
+
+        try {
+            new FastlyTls('token', 'tls-config-id', 'certainly', $client)->deleteCertificate('example.com');
+            $this->fail('Expected unreadable ownership to stop the deletion.');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('exclusive ownership', $error->getMessage());
+        }
+
+        $this->assertCount(1, $client->calls);
+    }
+
+    /**
+     * @param list<string> $domains
+     * @return array<string, mixed>
+     */
+    private function subscriptionForDomains(array $domains): array
+    {
+        return ['data' => [[
+            'id' => 'sub_123',
+            'attributes' => ['state' => 'issued'],
+            'relationships' => ['tls_domains' => ['data' => array_map(
+                static fn(string $domain): array => ['type' => 'tls_domain', 'id' => $domain],
+                $domains,
+            )]],
+        ]]];
     }
 
     public function testIssueCertificateReturnsRenewDateFromIncludedCertificate(): void

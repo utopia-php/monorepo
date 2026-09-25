@@ -199,6 +199,8 @@ $fastlyCertificates = new Fastly(
 );
 ```
 
+Before creating or linking an unassociated domain, the managed provider checks classic exact and wildcard routes across services. Establishing that no classic route owns the hostname requires a token with access to all services and a user without service restrictions. Failed or incomplete ownership lookups stop the operation. Deletion uses the same checks for unassociated or missing domains and refuses to delete a TLS subscription shared by several domains.
+
 ### Cloudflare certificates
 
 Cloudflare certificates use Cloudflare for SaaS custom hostnames, which must be enabled for the zone and plan.
@@ -247,11 +249,13 @@ Utopia CDN requires PHP 8.1 or later. We recommend using the latest PHP version 
 
 ## Tests
 
-Run the test suite:
+Run the unit test suite:
 
 ```bash
 composer test
 ```
+
+Provider tests use scripted HTTP responses. They verify request construction, ownership decisions, and certificate states without contacting Fastly, resolving DNS, or issuing certificates. This package has no end-to-end suite; a staging validation must exercise domain association and certificate issuance through the consuming application.
 
 Run static analysis:
 
