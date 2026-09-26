@@ -57,6 +57,29 @@ final class RouterTest extends TestCase
         $this->assertEquals($routeBlogPostCommentsSingle, Router::match(Http::REQUEST_METHOD_GET, '/blog/test/comments/:comment')?->route);
     }
 
+    public function testCanMatchTrailingSlashAsEmptyParam(): void
+    {
+        $routeBlog = new Route(Http::REQUEST_METHOD_GET, '/blog');
+        $routeBlogPost = new Route(Http::REQUEST_METHOD_GET, '/blog/:post');
+
+        Router::addRoute($routeBlog);
+        Router::addRoute($routeBlogPost);
+
+        $match = Router::match(Http::REQUEST_METHOD_GET, '/blog/');
+
+        $this->assertEquals($routeBlogPost, $match?->route);
+        $this->assertSame(['post' => ''], $match?->params);
+    }
+
+    public function testCanMatchTrailingSlashWithoutParamRoute(): void
+    {
+        $routeAbout = new Route(Http::REQUEST_METHOD_GET, '/about');
+
+        Router::addRoute($routeAbout);
+
+        $this->assertEquals($routeAbout, Router::match(Http::REQUEST_METHOD_GET, '/about/')?->route);
+    }
+
     public function testCanMatchUrlWithWildcard(): void
     {
         $routeIndex = new Route('GET', '/');
