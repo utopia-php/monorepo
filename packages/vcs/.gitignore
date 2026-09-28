@@ -1,8 +1,0 @@
-/vendor/
-/.idea/
-.phpunit.result.cache
-.phpunit.cache
-.env
-.DS_Store
-/tests/.tokens/
-composer.lock
