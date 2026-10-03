@@ -105,6 +105,12 @@ jobs:
       # request, which is what makes pull_request_target safe here.
       - id: review
         uses: alibaba/open-code-review@bccbc15f785269400735d5255540c231e6c02b6d # ratchet:alibaba/open-code-review@v1.12.9
+        env:
+          # The ocr launcher otherwise runs a detached `npm i -g ...@latest`
+          # whenever a newer release exists, which reinstalls the CLI while
+          # the action is still calling it (MODULE_NOT_FOUND mid-step), and
+          # would move it off the pinned ocr_version below.
+          OCR_NO_UPDATE: '1'
         with:
           llm_url: ${{ secrets.OCR_LLM_URL }}
           llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
