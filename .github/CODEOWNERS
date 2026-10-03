@@ -17,7 +17,6 @@
 /packages/console/      @eldadfux @lohanidamodar
 /packages/di/           @eldadfux @ChiragAgg5k
 /packages/domains/      @ChiragAgg5k @eldadfux @lohanidamodar
-/packages/fastly/       @loks0n
 /packages/http/         @lohanidamodar @eldadfux @Meldiron
 /packages/nats/         @loks0n @levivannoort
 /packages/platform/     @lohanidamodar @shimonewman
