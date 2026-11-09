@@ -12,6 +12,6 @@ permissions:
 
 jobs:
   redirect:
-    uses: utopia-php/monorepo/.github/workflows/mirror-redirect.yml@main
+    uses: utopia-php/monorepo/.github/workflows/mirror-redirect.yml@117efc7c469bdd346014d0ebc84290ca2fc7b0b2 # main
     with:
       package: replication
