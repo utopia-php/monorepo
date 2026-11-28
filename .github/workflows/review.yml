@@ -104,7 +104,7 @@ jobs:
       # base-to-head diff from git objects; it never runs code from the pull
       # request, which is what makes pull_request_target safe here.
       - id: review
-        uses: alibaba/open-code-review@bccbc15f785269400735d5255540c231e6c02b6d # ratchet:alibaba/open-code-review@v1.12.9
+        uses: alibaba/open-code-review@d29ca2044a42ea297a7fa93692d0f5ac8f38d84e # v1.14.0
         env:
           # The ocr launcher otherwise runs a detached `npm i -g ...@latest`
           # whenever a newer release exists, which reinstalls the CLI while

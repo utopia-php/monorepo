@@ -1,6 +1,6 @@
 services:
   mysql:
-    image: mysql:8.0
+    image: mysql:8.3
     command: >
       --server-id=1
       --log-bin=mysql-bin
